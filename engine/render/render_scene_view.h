@@ -15,6 +15,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "engine/core/dse_export.h"
+#include "engine/render/rhi/rhi_handle.h"
 
 class World;
 
@@ -56,7 +57,7 @@ struct RenderReflectionProbe {
     glm::vec3 position{0.0f};
     glm::vec3 box_min{-1.0f};
     glm::vec3 box_max{1.0f};
-    uint32_t  cubemap_handle = 0;
+    TextureHandle cubemap_handle;
     float     intensity = 1.0f;
     float     influence_radius = 10.0f;
     bool      box_projection = false;
@@ -70,7 +71,7 @@ struct RenderLightProbe {
 };
 
 struct RenderSkybox {
-    uint32_t cubemap_handle = 0;
+    TextureHandle cubemap_handle;
     float    intensity = 1.0f;
     float    rotation  = 0.0f;
     bool     present   = false;

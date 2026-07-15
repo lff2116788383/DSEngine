@@ -72,17 +72,17 @@ RenderTargetReadback RenderGBufferAttachment(RhiDevice& device, int attachment) 
     mrt_desc.has_color = true;
     mrt_desc.has_depth = true;
     mrt_desc.color_attachment_count = 3;  // gAlbedo / gNormal / gPosition
-    unsigned int mrt = device.CreateRenderTarget(mrt_desc);
+    const auto mrt = device.CreateRenderTarget(mrt_desc);
 
     RenderTargetDesc dst_desc;
     dst_desc.width = kRtSize;
     dst_desc.height = kRtSize;
     dst_desc.has_color = true;
     dst_desc.has_depth = false;
-    unsigned int dst = device.CreateRenderTarget(dst_desc);
+    const auto dst = device.CreateRenderTarget(dst_desc);
 
-    if (mrt == 0 || dst == 0 ||
-        device.GetBuiltinProgram(BuiltinProgram::GBufferMesh) == 0) {
+    if (!mrt || !dst ||
+        !device.GetBuiltinProgram(BuiltinProgram::GBufferMesh)) {
         if (mrt) device.DeleteRenderTarget(mrt);
         if (dst) device.DeleteRenderTarget(dst);
         return {};
@@ -104,7 +104,7 @@ RenderTargetReadback RenderGBufferAttachment(RhiDevice& device, int attachment) 
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
-        renderer.DrawGBuffer(*cmd, device, g_verts, g_indices, model, view, proj, /*albedo_tex=*/0);
+        renderer.DrawGBuffer(*cmd, device, g_verts, g_indices, model, view, proj, {});
         cmd->EndRenderPass();
 
         // pass 2：把目标 attachment 全屏拷到 dst（单附件）后回读

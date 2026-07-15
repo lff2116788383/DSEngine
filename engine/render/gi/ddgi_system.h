@@ -47,7 +47,7 @@ public:
     /// @param light_dir  主方向光方向（归一化）
     /// @param light_color 主方向光颜色 * 强度
     void UpdateProbes(RhiDevice* rhi,
-                      unsigned int rsm_position, unsigned int rsm_normal, unsigned int rsm_flux,
+                      TextureHandle rsm_position, TextureHandle rsm_normal, TextureHandle rsm_flux,
                       int rsm_width, int rsm_height,
                       const glm::vec3& light_dir, const glm::vec3& light_color);
 

@@ -1700,7 +1700,7 @@ TEST_F(EditorFunctionalTest, SceneIO_UIRendererRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "UIRenEnt");
     auto& ui = reg().emplace<UIRendererComponent>(e);
-    ui.texture_handle = 42;
+    ui.texture_handle = dse::render::TextureHandle::from_raw(42);
     ui.color = glm::vec4(0.8f, 0.6f, 0.4f, 0.9f);
     ui.uv = glm::vec4(0.1f, 0.2f, 0.9f, 0.8f);
     ui.visible = false;
@@ -1718,7 +1718,8 @@ TEST_F(EditorFunctionalTest, SceneIO_UIRendererRoundTrip) {
         if (!loaded.all_of<UIRendererComponent>(en)) continue;
         found = true;
         const auto& r = loaded.get<UIRendererComponent>(en);
-        EXPECT_EQ(r.texture_handle, 42u);
+        EXPECT_EQ(r.texture_handle,
+                  dse::render::TextureHandle::from_raw(42));
         EXPECT_NEAR(r.color.r, 0.8f, 0.01f);
         EXPECT_NEAR(r.uv.x, 0.1f, 0.01f);
         EXPECT_FALSE(r.visible);

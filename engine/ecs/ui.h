@@ -10,6 +10,7 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include "engine/render/rhi/rhi_handle.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -24,7 +25,7 @@ using Entity = entt::entity;
  */
 struct UIRendererComponent {
     std::shared_ptr<TextureAsset> texture;
-    unsigned int texture_handle = 0;
+    dse::render::TextureHandle texture_handle;
     glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     glm::vec4 uv = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     int order = 0;                                       ///< UI 遮挡排序层级
@@ -101,7 +102,7 @@ struct UILabelComponent {
     std::unordered_map<std::string, std::string> localization_params; ///< 本地化参数表
     long long number_value = 0;                          ///< 数字模式下的值
     bool numeric_mode = false;                           ///< 开启数字模式可避免字符串分配开销
-    unsigned int font_texture_handle = 0;                ///< 位图字体图集句柄
+    dse::render::TextureHandle font_texture_handle;      ///< 位图字体图集句柄
     glm::vec2 glyph_size = glm::vec2(16.0f, 16.0f);      ///< 单个字符的基础尺寸
     glm::vec2 offset = glm::vec2(0.0f);                  ///< 整体偏移
     float spacing = 0.0f;                                ///< 字间距
@@ -290,7 +291,7 @@ struct UITextInputComponent {
     glm::vec4 selection_color = glm::vec4(0.3f, 0.5f, 0.8f, 0.5f);   ///< 选区高亮颜色
     float cursor_blink_rate = 0.53f;                     ///< 光标闪烁间隔（秒）
 
-    unsigned int font_texture_handle = 0;                ///< 字体图集句柄
+    dse::render::TextureHandle font_texture_handle;      ///< 字体图集句柄
 
     // Runtime state
     float cursor_blink_timer = 0.0f;                     ///< 闪烁计时器

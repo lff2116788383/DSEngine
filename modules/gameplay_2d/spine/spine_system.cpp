@@ -137,7 +137,8 @@ public:
 
         auto tex = RequireAssetManager(asset_manager).LoadTexture(path.buffer());
         if (tex) {
-            page.texture = reinterpret_cast<void*>(static_cast<uintptr_t>(tex->GetHandle()));
+            page.texture =
+                reinterpret_cast<void*>(static_cast<uintptr_t>(tex->GetHandle().raw()));
             page.width = tex->GetWidth();
             page.height = tex->GetHeight();
             current_textures->push_back(tex);
@@ -328,7 +329,7 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::ren
                 continue;
             }
 
-            unsigned int texture_handle = 0;
+            dse::render::TextureHandle texture_handle;
             verts.clear();
             indices.clear();
 
@@ -336,7 +337,8 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::ren
                 auto* region = static_cast<RegionAttachment*>(attachment);
                 auto* page = static_cast<AtlasPage*>(static_cast<AtlasRegion*>(region->getRegion())->page);
                 if (page) {
-                    texture_handle = static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture));
+                    texture_handle = dse::render::TextureHandle::from_raw(
+                        static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture)));
                 }
 
                 float vertices[8];
@@ -356,7 +358,8 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::ren
                 auto* mesh = static_cast<MeshAttachment*>(attachment);
                 auto* page = static_cast<AtlasPage*>(static_cast<AtlasRegion*>(mesh->getRegion())->page);
                 if (page) {
-                    texture_handle = static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture));
+                    texture_handle = dse::render::TextureHandle::from_raw(
+                        static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture)));
                 }
 
                 const size_t num_vertices = mesh->getWorldVerticesLength() / 2;

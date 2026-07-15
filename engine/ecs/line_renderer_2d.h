@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
+#include "engine/render/rhi/rhi_handle.h"
 
 class TextureAsset;
 
@@ -39,7 +40,7 @@ struct LineRenderer2DComponent {
     std::vector<glm::vec2> points;               ///< 折线顶点 (局部坐标)
     std::vector<glm::vec4> colors;               ///< 每顶点颜色 (可选，空时用 start/end_color)
     std::shared_ptr<TextureAsset> texture;       ///< 可选纹理 (沿折线 UV 平铺)
-    unsigned int texture_handle = 0;
+    dse::render::TextureHandle texture_handle;
 
     float width = 0.1f;                          ///< 线宽
     float start_width = -1.0f;                   ///< 起始宽度 (<0 时用 width)

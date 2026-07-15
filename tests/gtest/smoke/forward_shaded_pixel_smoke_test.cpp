@@ -83,10 +83,10 @@ RenderTargetReadback RenderShadedScene(RhiDevice& device, const ShadedMaterial& 
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    if (device.GetBuiltinProgram(BuiltinProgram::ForwardShaded) == 0) {
+    if (!device.GetBuiltinProgram(BuiltinProgram::ForwardShaded)) {
         device.DeleteRenderTarget(rt);
         return {};
     }
@@ -200,7 +200,7 @@ void CheckCrossBackend(const dse::test::RenderFn& fn, double threshold) {
 // 此法绕开多 pass 深度附件采样的跨后端 layout 差异，确定性地验证 CSM 采样/级联/门控的着色逻辑。
 constexpr int kShadowTexSize = 64;
 
-unsigned int CreateAuthoredShadowMap(RhiDevice& device) {
+TextureHandle CreateAuthoredShadowMap(RhiDevice& device) {
     std::vector<unsigned char> px(static_cast<size_t>(kShadowTexSize) * kShadowTexSize * 4, 255);  // 远 (1.0)
     const int lo = kShadowTexSize * 5 / 16;    // ~20
     const int hi = kShadowTexSize * 11 / 16;   // ~44
@@ -228,14 +228,14 @@ RenderTargetReadback RenderShadowReceiver(RhiDevice& device, bool receive_shadow
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
-    if (device.GetBuiltinProgram(BuiltinProgram::ForwardShaded) == 0) {
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
+    if (!device.GetBuiltinProgram(BuiltinProgram::ForwardShaded)) {
         device.DeleteRenderTarget(rt);
         return {};
     }
-    unsigned int shadow_tex = CreateAuthoredShadowMap(device);
-    if (shadow_tex == 0) {
+    const auto shadow_tex = CreateAuthoredShadowMap(device);
+    if (!shadow_tex) {
         device.DeleteRenderTarget(rt);
         return {};
     }
@@ -287,7 +287,7 @@ RenderTargetReadback RenderShadowReceiver(RhiDevice& device, bool receive_shadow
 
     RenderTargetReadback rb = device.ReadRenderTargetColorRgba8WithSize(rt);
     renderer.Shutdown(device);
-    device.SetGlobalShadowMap(0, 0);  // 复位，避免影响同 device 后续绘制
+    device.SetGlobalShadowMap(0, {});  // 复位，避免影响同 device 后续绘制
     device.DeleteTexture(shadow_tex);
     device.DeleteRenderTarget(rt);
     return rb;
@@ -412,11 +412,11 @@ RenderTargetReadback RenderSplat(RhiDevice& device, bool splat_enabled) {
         const unsigned char px[16] = { r,g,b,a, r,g,b,a, r,g,b,a, r,g,b,a };  // 2x2 RGBA
         return device.CreateTexture2D(2, 2, px, false);
     };
-    unsigned int w_map = solid(255, 0, 0, 0);    // 权重：100% layer0
-    unsigned int l0 = solid(0, 255, 0, 255);     // layer0 纯绿
-    unsigned int l1 = solid(255, 0, 0, 255);     // layer1 纯红（权重 0，不显）
-    unsigned int l2 = solid(0, 0, 255, 255);     // layer2 纯蓝（权重 0）
-    unsigned int l3 = solid(255, 255, 0, 255);   // layer3 纯黄（权重 0）
+    const auto w_map = solid(255, 0, 0, 0);    // 权重：100% layer0
+    const auto l0 = solid(0, 255, 0, 255);     // layer0 纯绿
+    const auto l1 = solid(255, 0, 0, 255);     // layer1 纯红（权重 0，不显）
+    const auto l2 = solid(0, 0, 255, 255);     // layer2 纯蓝（权重 0）
+    const auto l3 = solid(255, 255, 0, 255);   // layer3 纯黄（权重 0）
 
     ShadedMaterial m;
     m.albedo = glm::vec3(1.0f);
@@ -674,7 +674,7 @@ RenderTargetReadback RenderDDGI(RhiDevice& device, bool ddgi_on) {
     for (size_t i = 0; i < atlas.size(); i += 4) {
         atlas[i + 0] = 0; atlas[i + 1] = 0; atlas[i + 2] = 255; atlas[i + 3] = 255;  // 纯蓝
     }
-    unsigned int atlas_tex = device.CreateTexture2D(aw, ah, atlas.data(), false);
+    const auto atlas_tex = device.CreateTexture2D(aw, ah, atlas.data(), false);
 
     ShadedMaterial m;
     m.albedo = glm::vec3(0.6f);

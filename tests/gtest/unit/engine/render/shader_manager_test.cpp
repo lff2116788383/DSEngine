@@ -67,10 +67,10 @@ TEST(VulkanComputeProgramTest, DefaultValues) {
 // 测试 Vulkan着色器管理器：默认
 TEST(VulkanShaderManagerTest, Default) {
     VulkanShaderManager mgr;
-    EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
-    EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.sprite_shader_handle(), 0u);
-    EXPECT_EQ(mgr.postprocess_shader_handle(), 0u);
+    EXPECT_FALSE(mgr.pbr_shader_handle());
+    EXPECT_FALSE(mgr.skybox_shader_handle());
+    EXPECT_FALSE(mgr.sprite_shader_handle());
+    EXPECT_FALSE(mgr.postprocess_shader_handle());
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
@@ -110,10 +110,10 @@ TEST(DX11ComputeProgramTest, DefaultValues) {
 // 测试 DX 11着色器管理器：默认
 TEST(DX11ShaderManagerTest, Default) {
     DX11ShaderManager mgr;
-    EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
-    EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.sprite_shader_handle(), 0u);
-    EXPECT_EQ(mgr.postprocess_shader_handle(), 0u);
+    EXPECT_FALSE(mgr.pbr_shader_handle());
+    EXPECT_FALSE(mgr.skybox_shader_handle());
+    EXPECT_FALSE(mgr.sprite_shader_handle());
+    EXPECT_FALSE(mgr.postprocess_shader_handle());
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }

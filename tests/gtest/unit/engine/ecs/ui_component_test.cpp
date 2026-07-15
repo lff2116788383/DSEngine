@@ -27,7 +27,7 @@
 // 测试 UI渲染器组件：默认值
 TEST(UIRendererComponentTest, DefaultValues) {
     UIRendererComponent ui;
-    EXPECT_EQ(ui.texture_handle, 0u);
+    EXPECT_FALSE(ui.texture_handle);
     EXPECT_FLOAT_EQ(ui.color.r, 1.0f);
     EXPECT_FLOAT_EQ(ui.color.a, 1.0f);
     EXPECT_EQ(ui.order, 0);

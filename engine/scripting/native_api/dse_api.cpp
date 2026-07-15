@@ -262,7 +262,7 @@ extern "C" float dse_input_get_gamepad_axis(int gamepad_id, int axis) {
 extern "C" uint32_t dse_assets_load_texture(const char* path) {
     if (!g_ctx.asset_manager || !path) return 0;
     auto tex = g_ctx.asset_manager->LoadTexture(path);
-    return tex ? tex->GetHandle() : 0;
+    return tex ? tex->GetHandle().raw() : 0;
 }
 
 extern "C" void dse_assets_set_data_root(const char* path) {

@@ -102,7 +102,7 @@ RenderTargetReadback RunImpostorLifecycle(RhiDevice& device) {
     const auto& imp_after = world.registry().get<ImpostorComponent>(e);
     EXPECT_TRUE(imp_after.atlas_loaded_)
         << "ImpostorSystem 应在持有 GL 上下文的 RenderOpaque 中烘焙 atlas";
-    EXPECT_NE(imp_after.atlas_texture_handle_, 0u);
+    EXPECT_TRUE(imp_after.atlas_texture_handle_);
 
     // (4) 次帧：atlas 已就绪 → Update 产出批次，RenderOpaque 正常绘制不崩溃。
     sys.Update(world, glm::vec3(0.0f), device);

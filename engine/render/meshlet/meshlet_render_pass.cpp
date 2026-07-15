@@ -73,8 +73,8 @@ void MeshletCullRenderPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
     // Try GPU cull first, fall back to CPU
     auto* rhi = ctx_.rhi_device;
-    if (rhi && rhi->SupportsCompute() && ctx_.meshlet_cull_shader != 0 &&
-        ctx_.render_targets.hiz_texture != 0) {
+    if (rhi && rhi->SupportsCompute() && ctx_.meshlet_cull_shader &&
+        ctx_.render_targets.hiz_texture) {
         DispatchGPUCull();
     } else {
         ExecuteCPUFallback();
@@ -202,16 +202,16 @@ void MeshletCullRenderPass::DispatchGPUCull() {
     auto* rhi = ctx_.rhi_device;
     if (!rhi) return;
 
-    const unsigned int shader = ctx_.meshlet_cull_shader;
-    if (shader == 0) return;
+    const ShaderHandle shader = ctx_.meshlet_cull_shader;
+    if (!shader) return;
 
     // Bind SSBOs
     rhi->BindGpuBuffer(ctx_.meshlet_gpu_data_ssbo, 0, false);   // read-only meshlet data
     rhi->BindGpuBuffer(ctx_.meshlet_draw_cmd_ssbo, 1, true);    // read-write draw commands
 
     // Bind Hi-Z texture
-    const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
-    if (hiz_gpu_tex != 0) {
+    const TextureHandle hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+    if (hiz_gpu_tex) {
         rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
     }
 
@@ -329,8 +329,8 @@ void MeshletDrawRenderPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     }
 
     // Issue multi-draw indirect
-    if (ctx_.meshlet_draw_cmd_ssbo.id != 0) {
-        rhi->MultiDrawIndexedIndirect(ctx_.meshlet_draw_cmd_ssbo.id,
+    if (ctx_.meshlet_draw_cmd_ssbo) {
+        rhi->MultiDrawIndexedIndirect(ctx_.meshlet_draw_cmd_ssbo,
                                        ctx_.meshlet_draw_count,
                                        sizeof(MeshletDrawCommand), 0);
     }

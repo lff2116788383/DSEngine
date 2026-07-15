@@ -165,73 +165,73 @@ public:
     // 2D batch program (Web/ESSL300): replaces PBR on the sprite batch
     // path where the 3D PBR shader cannot lower to GLES 3.0 / WebGL2.
     void InitSprite2DShader();
-    unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
+    ShaderHandle sprite2d_shader_handle() const { return ShaderHandle{sprite2d_shader_handle_}; }
     const PBRShaderLocations& sprite2d_locations() const { return sprite2d_locations_; }
     // SpriteBatchRenderer SDF/VFX 路径：sprite_fx.vert + sprite_fx_{sdf,vfx}.frag，
     // 参数走 SpriteFx push-block UBO\@slot0，纹理\@slot0。
     void InitSpriteFxSdfShader();
     void InitSpriteFxVfxShader();
-    unsigned int sprite_fx_sdf_shader_handle() const { return sprite_fx_sdf_shader_handle_; }
-    unsigned int sprite_fx_vfx_shader_handle() const { return sprite_fx_vfx_shader_handle_; }
+    ShaderHandle sprite_fx_sdf_shader_handle() const { return ShaderHandle{sprite_fx_sdf_shader_handle_}; }
+    ShaderHandle sprite_fx_vfx_shader_handle() const { return ShaderHandle{sprite_fx_vfx_shader_handle_}; }
 
     // --- 静态 forward PBR 着色器（B2b-1）：forward_pbr.vert/.frag。
     // PerFrame\@0 / PerScene\@1 / PerMaterial\@2 UBO + 5 纹理槽（flat unit 0..4）。
     void InitForwardPbrShader();
-    unsigned int forward_pbr_shader_handle() const { return forward_pbr_shader_handle_; }
+    ShaderHandle forward_pbr_shader_handle() const { return ShaderHandle{forward_pbr_shader_handle_}; }
 
     // --- 蒙皮 forward PBR 着色器（B2b-2）：forward_pbr_skinned.vert + forward_pbr.frag。
     // PerFrame\@0 UBO + 骨骼矩阵 SSBO\@set3.b0（通用原语 BindStorageBuffer(0)）。
     void InitForwardPbrSkinnedShader();
-    unsigned int forward_pbr_skinned_shader_handle() const { return forward_pbr_skinned_shader_handle_; }
+    ShaderHandle forward_pbr_skinned_shader_handle() const { return ShaderHandle{forward_pbr_skinned_shader_handle_}; }
 
     // --- 实例化 forward PBR 着色器（B2b-3）：forward_pbr_instanced.vert + forward_pbr.frag。
     // PerFrame\@0 UBO + 每实例 model SSBO\@set3.b0（通用原语 BindStorageBuffer(0)）。
     void InitForwardPbrInstancedShader();
-    unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
+    ShaderHandle forward_pbr_instanced_shader_handle() const { return ShaderHandle{forward_pbr_instanced_shader_handle_}; }
 
     // --- 仅深度 forward PBR 着色器（B2b-4）：forward_pbr.vert + shadow.frag（空片元）。
     // PerFrame\@0 UBO；只写深度、不输出颜色，配 has_color=false RT。
     void InitForwardPbrDepthShader();
-    unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
+    ShaderHandle forward_pbr_depth_shader_handle() const { return ShaderHandle{forward_pbr_depth_shader_handle_}; }
 
     // --- 实例化仅深度着色器（B2b-6）：forward_shaded_instanced.vert + shadow.frag（空片元）。
     // PerFrame\@0 UBO + 每实例 model SSBO\@binding0 + 植被风；只写深度、不输出颜色，配 has_color=false RT。
     void InitForwardInstancedDepthShader();
-    unsigned int forward_instanced_depth_shader_handle() const { return forward_instanced_depth_shader_handle_; }
+    ShaderHandle forward_instanced_depth_shader_handle() const { return ShaderHandle{forward_instanced_depth_shader_handle_}; }
 
     // --- 3D 粒子广告牌着色器（B3）：particle_instanced.vert + particle.frag。
     // PerFrame\@0 UBO + 每实例 pos/size/color SSBO\@binding0 + u_texture\@flat unit 0。
     void InitParticle3DShader();
-    unsigned int particle3d_shader_handle() const { return particle3d_shader_handle_; }
+    ShaderHandle particle3d_shader_handle() const { return ShaderHandle{particle3d_shader_handle_}; }
 
     // 毛发线带着色器（B4；hair.vert vertexless + hair.frag；position/tangent SSBO\@0/1 + HairUniforms\@0）。
     void InitHairStrandShader();
-    unsigned int hair_strand_shader_handle() const { return hair_strand_shader_handle_; }
+    ShaderHandle hair_strand_shader_handle() const { return ShaderHandle{hair_strand_shader_handle_}; }
 
     // --- 高级 shading forward 着色器（B2c-1）：forward_pbr.vert + forward_shaded.frag。
     // PerFrame\@0 / PerScene\@1 / PerMaterial(扩展)\@2 UBO + 5 纹理槽（flat unit 0..4）。
     void InitForwardShadedShader();
-    unsigned int forward_shaded_shader_handle() const { return forward_shaded_shader_handle_; }
+    ShaderHandle forward_shaded_shader_handle() const { return ShaderHandle{forward_shaded_shader_handle_}; }
 
     // --- 蒙皮 + 高级 shading 组合着色器（Final-Feat-2）：forward_shaded_skinned.vert + forward_shaded.frag。
     // 骨骼矩阵 SSBO\@set7.b0（避开 frag set0-6）+ 高级 shading frag 全套 UBO/纹理槽。
     void InitForwardSkinnedShadedShader();
-    unsigned int forward_skinned_shaded_shader_handle() const { return forward_skinned_shaded_shader_handle_; }
+    ShaderHandle forward_skinned_shaded_shader_handle() const { return ShaderHandle{forward_skinned_shaded_shader_handle_}; }
 
     // --- 实例化 + 高级 shading 组合着色器（Final-Feat-3）：forward_shaded_instanced.vert + forward_shaded.frag。
     // 每实例 model 矩阵 SSBO\@set7.b0（避开 frag set0-6）+ 高级 shading frag 全套 UBO/纹理槽。
     void InitForwardInstancedShadedShader();
-    unsigned int forward_instanced_shaded_shader_handle() const { return forward_instanced_shaded_shader_handle_; }
+    ShaderHandle forward_instanced_shaded_shader_handle() const { return ShaderHandle{forward_instanced_shaded_shader_handle_}; }
 
     // --- 蒙皮 + 硬件实例化 + 高级 shading 组合着色器（阶段4-M1）：forward_shaded_skinned_instanced.vert + forward_shaded.frag。
     // 实例 SSBO\@set8.b0 + 骨骼 SSBO\@set8.b1（避开 frag set0-6 与 set7.b1 聚光灯 UBO）+ 高级 shading frag 全套 UBO/纹理槽。
     void InitForwardSkinnedInstancedShadedShader();
-    unsigned int forward_skinned_instanced_shaded_shader_handle() const { return forward_skinned_instanced_shaded_shader_handle_; }
+    ShaderHandle forward_skinned_instanced_shaded_shader_handle() const { return ShaderHandle{forward_skinned_instanced_shaded_shader_handle_}; }
 
     // --- Morph target + 高级 shading 组合着色器（Final-Feat-5）：forward_shaded_morph.vert + forward_shaded.frag。
     // morph 增量 SSBO\@set7.b0（避开 frag set0-6）+ morph 权重 UBO\@set7.b3 + 高级 shading frag 全套 UBO/纹理槽。
     void InitForwardMorphShadedShader();
-    unsigned int forward_morph_shaded_shader_handle() const { return forward_morph_shaded_shader_handle_; }
+    ShaderHandle forward_morph_shaded_shader_handle() const { return ShaderHandle{forward_morph_shaded_shader_handle_}; }
 
     // --- SDF 文本着色器 ---
     struct TextSdfLocations {
@@ -260,7 +260,7 @@ public:
 
     // --- Impostor LOD billboard 着色器（impostor.vert + impostor.frag；per-instance SSBO）---
     void InitImpostorShader();
-    unsigned int impostor_shader_handle() const { return impostor_shader_handle_; }
+    ShaderHandle impostor_shader_handle() const { return ShaderHandle{impostor_shader_handle_}; }
 
     // --- GBuffer 着色器（延迟渲染几何通道） ---
     void InitGBufferShader();

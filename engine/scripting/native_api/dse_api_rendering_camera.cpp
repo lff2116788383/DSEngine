@@ -65,7 +65,7 @@ extern "C" void dse_sprite_add(uint32_t e, float r, float g, float b, float a,
     auto& sprite = world->registry().emplace_or_replace<SpriteRendererComponent>(TE(e));
     sprite.color = glm::vec4(r, g, b, a);
     sprite.order_in_layer = order_in_layer;
-    sprite.texture_handle = texture_handle;
+    sprite.texture_handle = dse::render::TextureHandle::from_raw(texture_handle);
     sprite.visible = true;
 }
 
@@ -82,4 +82,3 @@ extern "C" void dse_sprite_set_uv_offset(uint32_t e, float ox, float oy) {
     auto* sp = world->registry().try_get<SpriteRendererComponent>(TE(e));
     if (sp) sp->uv_offset = glm::vec2(ox, oy);
 }
-

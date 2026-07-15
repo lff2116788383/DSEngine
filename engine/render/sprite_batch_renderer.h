@@ -50,7 +50,7 @@ private:
     PipelineHandle pso_alpha_;
     PipelineHandle pso_additive_;
     PipelineHandle pso_multiply_;
-    unsigned int white_tex_ = 0;
+    TextureHandle white_tex_;
 
     /// 动态顶点缓冲（按需扩容）。每帧覆写 → 每在飞帧缓冲（规避 2 帧在飞下的覆写竞争，D9）。
     PerInFlightBuffer vbo_;

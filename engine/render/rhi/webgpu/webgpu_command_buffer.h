@@ -32,12 +32,12 @@ public:
     void ClearColor(const glm::vec4& color) override { device_->CmdClearColor(color); }
     void SetViewport(int x, int y, int width, int height) override { device_->CmdSetViewport(x, y, width, height); }
 
-    void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalShadowMap(index, texture_handle); }
-    void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalSpotShadowMap(index, texture_handle); }
-    void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalPointShadowMap(index, texture_handle); }
+    void BindGlobalShadowMap(unsigned int index, TextureHandle texture_handle) override { device_->CmdBindGlobalShadowMap(index, texture_handle); }
+    void BindGlobalSpotShadowMap(unsigned int index, TextureHandle texture_handle) override { device_->CmdBindGlobalSpotShadowMap(index, texture_handle); }
+    void BindGlobalPointShadowMap(unsigned int index, TextureHandle texture_handle) override { device_->CmdBindGlobalPointShadowMap(index, texture_handle); }
 
     void BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) override { device_->CmdBindPipeline(graphics_pipeline_handle.raw()); }
-    void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+    void BindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride,
                           const std::vector<VertexAttr>& attrs,
                           VertexInputRate rate) override {
         device_->CmdBindVertexBuffer(slot, buffer_handle, stride, attrs, rate);
@@ -47,14 +47,14 @@ public:
     }
     void Draw(uint32_t vertex_count, uint32_t first_vertex) override { device_->CmdDraw(vertex_count, first_vertex); }
 
-    void BindIndexBuffer(unsigned int buffer_handle, IndexType type) override { device_->CmdBindIndexBuffer(buffer_handle, type); }
-    void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) override {
+    void BindIndexBuffer(BufferHandle buffer_handle, IndexType type) override { device_->CmdBindIndexBuffer(buffer_handle, type); }
+    void BindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) override {
         device_->CmdBindTexture(slot, texture_handle, dim);
     }
-    void BindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) override {
+    void BindUniformBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size) override {
         device_->CmdBindUniformBuffer(slot, buffer_handle, offset, size);
     }
-    void BindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) override {
+    void BindStorageBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size) override {
         device_->CmdBindStorageBuffer(slot, buffer_handle, offset, size);
     }
     void DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) override {
@@ -66,7 +66,7 @@ public:
                               uint32_t first_instance) override {
         device_->CmdDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
     }
-    void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) override {
+    void DrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset) override {
         device_->CmdDrawIndexedIndirect(indirect_buffer, byte_offset);
     }
 

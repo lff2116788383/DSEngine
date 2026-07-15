@@ -31,7 +31,7 @@ TEST(ReflectionProbeComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(comp.box_size_z, 10.0f);
     EXPECT_FALSE(comp.use_box_projection);
     EXPECT_EQ(comp.resolution, 128);
-    EXPECT_EQ(comp.cubemap_handle, 0u);
+    EXPECT_FALSE(comp.cubemap_handle);
     EXPECT_TRUE(comp.needs_rebake);
     EXPECT_TRUE(comp.show_debug);
 }
@@ -43,7 +43,7 @@ TEST(ReflectionProbeComponentTest, DefaultValues) {
 // 测试 反射探针系统：默认未初始化
 TEST(ReflectionProbeSystemTest, DefaultUninitialized) {
     ReflectionProbeSystem sys;
-    EXPECT_EQ(sys.brdf_lut_handle(), 0u);
+    EXPECT_FALSE(sys.brdf_lut_handle());
     EXPECT_FALSE(sys.IsIBLAvailable());
 }
 
@@ -51,7 +51,7 @@ TEST(ReflectionProbeSystemTest, DefaultUninitialized) {
 TEST(ReflectionProbeSystemTest, Init_NullptrSafety) {
     ReflectionProbeSystem sys;
     sys.Init(nullptr);
-    EXPECT_EQ(sys.brdf_lut_handle(), 0u);
+    EXPECT_FALSE(sys.brdf_lut_handle());
     EXPECT_FALSE(sys.IsIBLAvailable());
 }
 
@@ -59,7 +59,7 @@ TEST(ReflectionProbeSystemTest, Init_NullptrSafety) {
 TEST(ReflectionProbeSystemTest, ShutdownUninitializedSecurity) {
     ReflectionProbeSystem sys;
     sys.Shutdown(nullptr);
-    EXPECT_EQ(sys.brdf_lut_handle(), 0u);
+    EXPECT_FALSE(sys.brdf_lut_handle());
 }
 
 // 测试 反射探针系统：关闭安全
@@ -89,9 +89,10 @@ TEST(ReflectionProbeComponentTest, Reviseresolution) {
 // 测试 反射探针组件：Revisecubemap句柄
 TEST(ReflectionProbeComponentTest, Revisecubemap_handle) {
     dse::ReflectionProbeComponent comp;
-    comp.cubemap_handle = 42;
+    comp.cubemap_handle = dse::render::TextureHandle::from_raw(42);
     comp.needs_rebake = false;
-    EXPECT_EQ(comp.cubemap_handle, 42u);
+    EXPECT_EQ(comp.cubemap_handle,
+              dse::render::TextureHandle::from_raw(42));
     EXPECT_FALSE(comp.needs_rebake);
 }
 

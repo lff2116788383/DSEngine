@@ -69,7 +69,7 @@ public:
 
     /// 对单个位置渲染 cubemap 并积分 SH L2（CPU 端）
     static SHL2 BakeSHAtPosition(const glm::vec3& position, int face_resolution,
-                                  RhiDevice* rhi_device, unsigned int cubemap_rt,
+                                  RhiDevice* rhi_device, RenderTargetHandle cubemap_rt,
                                   RenderPassContext& ctx,
                                   SkyboxRenderer* skybox_renderer = nullptr);
 
@@ -78,7 +78,7 @@ public:
                                  int face_index, SHL2& out_sh);
 
 private:
-    unsigned int cubemap_rt_ = 0;       ///< 用于 bake 的 cubemap 渲染目标
+    RenderTargetHandle cubemap_rt_;     ///< 用于 bake 的 cubemap 渲染目标
     int face_resolution_ = 64;          ///< cubemap 单面分辨率
     std::vector<BakedProbe> baked_probes_;
     SkyboxRenderer skybox_renderer_;    ///< A1：天空盒用通用原语绘制（取代 DrawSkybox）

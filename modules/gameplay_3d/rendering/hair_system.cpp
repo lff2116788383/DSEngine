@@ -255,20 +255,24 @@ void HairSystem::InitComputeShaders() {
         khair_update_tangent_comp_glsl430, khair_update_tangent_comp_glsl450, khair_update_tangent_comp_hlsl,
         3, 0, 0, 48, render::kHairUpdateTangentSourceWGSL);
 
-    gpu_compute_enabled_ = (cs_integrate_ != 0 && cs_length_ != 0 &&
-                            cs_local_shape_ != 0 && cs_update_tangent_ != 0);
+    gpu_compute_enabled_ =
+        cs_integrate_ && cs_length_ && cs_local_shape_ && cs_update_tangent_;
     if (!gpu_compute_enabled_) {
         DEBUG_LOG_WARN("[HairSystem] Some compute shaders failed to compile, "
                        "integrate={} length={} local_shape={} tangent={}",
-                       cs_integrate_, cs_length_, cs_local_shape_, cs_update_tangent_);
+                       cs_integrate_.raw(), cs_length_.raw(),
+                       cs_local_shape_.raw(), cs_update_tangent_.raw());
         ShutdownComputeResources();
     }
 }
 
 void HairSystem::ShutdownComputeResources() {
     if (!rhi_) return;
-    auto del = [this](unsigned int& h) {
-        if (h != 0) { rhi_->DeleteComputeShader(h); h = 0; }
+    auto del = [this](dse::render::ShaderHandle& h) {
+        if (h) {
+            rhi_->DeleteComputeShader(h);
+            h = {};
+        }
     };
     del(cs_integrate_);
     del(cs_length_);

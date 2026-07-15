@@ -26,7 +26,12 @@ AnimationState MakeWalkState() {
     s.name = "walk";
     s.frame_rate = 10.0f;  // 每帧 0.1s
     s.loop = true;
-    s.frame_handles = {1u, 2u, 3u, 4u};
+    s.frame_handles = {
+        dse::render::TextureHandle::from_raw(1),
+        dse::render::TextureHandle::from_raw(2),
+        dse::render::TextureHandle::from_raw(3),
+        dse::render::TextureHandle::from_raw(4),
+    };
     return s;
 }
 

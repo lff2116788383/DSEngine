@@ -261,7 +261,7 @@ void EngineInstance::RegisterRuntimeServices() {
                     sampler.wrap = TextureWrap::ClampToEdge;
                     return rhi->CreateTexture2D(w, h, data, sampler);
                 },
-                [rhi](unsigned int handle) {
+                [rhi](dse::render::TextureHandle handle) {
                     rhi->DeleteTexture(handle);
                 });
         }

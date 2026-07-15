@@ -76,11 +76,11 @@ struct MeshMaterial {
     float alpha_cutoff = 0.5f;    ///< alpha test 阈值
     bool alpha_test = false;      ///< 开启 alpha test（< cutoff 丢弃）
 
-    unsigned int albedo_tex = 0;              ///< u_texture
-    unsigned int normal_tex = 0;              ///< u_normal_map
-    unsigned int metallic_roughness_tex = 0;  ///< u_metallic_roughness_map
-    unsigned int emissive_tex = 0;            ///< u_emissive_map
-    unsigned int occlusion_tex = 0;           ///< u_occlusion_map
+    TextureHandle albedo_tex;              ///< u_texture
+    TextureHandle normal_tex;              ///< u_normal_map
+    TextureHandle metallic_roughness_tex;  ///< u_metallic_roughness_map
+    TextureHandle emissive_tex;            ///< u_emissive_map
+    TextureHandle occlusion_tex;           ///< u_occlusion_map
 };
 
 /// 高级 shading 材质（B2c-1）：在 MeshMaterial 基础上扩展 shading_mode 0/2-6 +
@@ -117,16 +117,16 @@ struct ShadedMaterial {
     float watercolor_color_bleed = 0.2f;     ///< 水彩色彩渗透
     float watercolor_pigment_density = 1.0f; ///< 水彩颜料浓度
 
-    unsigned int albedo_tex = 0;              ///< u_texture（FaceSDF 模式为 SDF 图）
-    unsigned int normal_tex = 0;              ///< u_normal_map（.a = POM 高度）
-    unsigned int metallic_roughness_tex = 0;  ///< u_metallic_roughness_map
-    unsigned int emissive_tex = 0;            ///< u_emissive_map
-    unsigned int occlusion_tex = 0;           ///< u_occlusion_map
+    TextureHandle albedo_tex;              ///< u_texture（FaceSDF 模式为 SDF 图）
+    TextureHandle normal_tex;              ///< u_normal_map（.a = POM 高度）
+    TextureHandle metallic_roughness_tex;  ///< u_metallic_roughness_map
+    TextureHandle emissive_tex;            ///< u_emissive_map
+    TextureHandle occlusion_tex;           ///< u_occlusion_map
 
     // 地形 splatmap（B2c-3）。splat_enabled 时 albedo 由 4 层权重混合取代。
     bool splat_enabled = false;                       ///< 开启 splatmap 4 层混合
-    unsigned int splat_weight_map = 0;                ///< 权重图（rgba = 4 层权重）
-    unsigned int splat_layers[4] = {0, 0, 0, 0};      ///< 4 个 layer albedo
+    TextureHandle splat_weight_map;                   ///< 权重图（rgba = 4 层权重）
+    TextureHandle splat_layers[4];                    ///< 4 个 layer albedo
     glm::vec4 splat_tiling{10.0f};                    ///< 每 layer UV tiling
 
     // 积雪（B2c-3）。snow_coverage>0 时朝上表面按阈值/锐利度混入雪面。
@@ -152,7 +152,7 @@ struct ShadedMaterial {
 
     // Shader Graph 自定义命名程序（RHI 句柄）。非 0 时 DrawShaded 用它替换内建 ForwardShaded 程序。
     // 仅 OpenGL 有效（GLSL 源码只有 GL 后端能编译）；其余后端此值恒为 0 → 走内建。
-    unsigned int custom_program = 0;
+    ShaderHandle custom_program;
 };
 
 /// 单方向光。
@@ -198,7 +198,7 @@ struct ShadedGI {
 
     // DDGI 探针体。irradiance_atlas=0 或 ddgi_enabled=false 时不启用。
     bool ddgi_enabled = false;
-    unsigned int ddgi_irradiance_atlas = 0;
+    TextureHandle ddgi_irradiance_atlas;
     glm::vec3 ddgi_grid_origin{0.0f};
     glm::vec3 ddgi_grid_spacing{1.0f};
     glm::ivec3 ddgi_grid_resolution{0};
@@ -518,7 +518,7 @@ public:
                      const glm::mat4& model,
                      const glm::mat4& view,
                      const glm::mat4& proj,
-                     unsigned int albedo_tex = 0);
+                     TextureHandle albedo_tex = {});
 
     /// 构建一份**局部空间**模板顶点缓冲（GpuMeshVertex 布局，Final-Feat-7）。与 BuildShadedWorldVertexBuffer
     /// 不同：**不**做 model 预变换（顶点保持局部空间），因为每个实例各有 model 矩阵、由 VS 按实例变换。
@@ -569,7 +569,7 @@ public:
                      const std::vector<uint16_t>& indices,
                      const glm::mat4& view,
                      const glm::mat4& proj,
-                     unsigned int texture,
+                     TextureHandle texture,
                      unsigned int blend_mode = 0);
 
     /// 记录一次硬件实例化仅深度绘制（B2b-6：grass 深度/阴影 pass）。顶点为局部空间，每实例 model
@@ -652,8 +652,8 @@ private:
     BufferHandle per_light_probe_ubo_;      ///< LightProbe SH UBO（160B，slot=5，B2c-5）
     BufferHandle per_ddgi_ubo_;             ///< DDGI 参数 UBO（64B，slot=6，B2c-5）
     BufferHandle per_spot_lights_ubo_;      ///< 聚光灯 UBO（4112B，set7.b1，slot=7，Final-Feat-4；count=0 时无聚光灯）
-    unsigned int white_tex_ = 0;
-    unsigned int white_cube_tex_ = 0;       ///< 1x1 白色 cube：点光 shadow cube 缺省槽回退（Final-Feat-8）
+    TextureHandle white_tex_;
+    TextureHandle white_cube_tex_;          ///< 1x1 白色 cube：点光 shadow cube 缺省槽回退（Final-Feat-8）
     BufferHandle vbo_;
     BufferHandle ibo_;
     BufferHandle per_frame_ubo_;

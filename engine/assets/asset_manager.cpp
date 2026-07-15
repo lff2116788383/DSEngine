@@ -260,21 +260,21 @@ bool AssetManager::ReadFromPak(const std::string& relative_path, std::vector<uin
     return false;
 }
 
-TextureAsset::TextureAsset(const std::string& path, unsigned int handle, int width, int height, int channels)
+TextureAsset::TextureAsset(const std::string& path, dse::render::TextureHandle handle, int width, int height, int channels)
     : path_(path), handle_(handle), width_(width), height_(height), channels_(channels) {
 }
 
 TextureAsset::~TextureAsset() {
 }
 
-CubemapAsset::CubemapAsset(const std::string& path, unsigned int handle, int width, int height)
+CubemapAsset::CubemapAsset(const std::string& path, dse::render::TextureHandle handle, int width, int height)
     : path_(path), handle_(handle), width_(width), height_(height) {
 }
 
 CubemapAsset::~CubemapAsset() {
 }
 
-ShaderAsset::ShaderAsset(const std::string& name, unsigned int handle)
+ShaderAsset::ShaderAsset(const std::string& name, dse::render::ShaderHandle handle)
     : name_(name), handle_(handle) {
 }
 
@@ -529,10 +529,10 @@ std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const 
                                 const std::string& albedo, const std::string& normal,
                                 const std::string& mr,     const std::string& emissive,
                                 const std::string& occ) {
-        auto try_tex = [this](const std::string& p) -> unsigned int {
-            if (p.empty()) return 0;
+        auto try_tex = [this](const std::string& p) -> dse::render::TextureHandle {
+            if (p.empty()) return {};
             auto t = LoadTexture(p);
-            return t ? t->GetHandle() : 0;
+            return t ? t->GetHandle() : dse::render::TextureHandle{};
         };
         MaterialAsset::TextureSlots s;
         s.albedo             = try_tex(albedo);
@@ -651,12 +651,12 @@ std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const 
     }
     material->SetScalarOverrides(scalars);
 
-    auto try_load_texture = [this](const rapidjson::Value& object, const char* key) -> unsigned int {
-        if (!object.HasMember(key) || !object[key].IsString()) return 0;
+    auto try_load_texture = [this](const rapidjson::Value& object, const char* key) -> dse::render::TextureHandle {
+        if (!object.HasMember(key) || !object[key].IsString()) return {};
         const char* texture_path = object[key].GetString();
-        if (!texture_path || texture_path[0] == '\0') return 0;
+        if (!texture_path || texture_path[0] == '\0') return {};
         auto texture = LoadTexture(texture_path);
-        return texture ? texture->GetHandle() : 0;
+        return texture ? texture->GetHandle() : dse::render::TextureHandle{};
     };
     MaterialAsset::TextureSlots slots;
     slots.albedo             = try_load_texture(mat, "base_color_texture");
@@ -779,24 +779,24 @@ void AssetManager::ReleaseGpuResources() {
         return;
     }
 
-    for (const unsigned int handle : gpu_texture_handles_) {
-        if (handle != 0) {
+    for (const dse::render::TextureHandle handle : gpu_texture_handles_) {
+        if (handle) {
             device->DeleteTexture(handle);
         }
     }
     gpu_texture_handles_.clear();
     textures_.clear();
 
-    for (const unsigned int handle : gpu_cubemap_handles_) {
-        if (handle != 0) {
+    for (const dse::render::TextureHandle handle : gpu_cubemap_handles_) {
+        if (handle) {
             device->DeleteTexture(handle);
         }
     }
     gpu_cubemap_handles_.clear();
     cubemaps_.clear();
 
-    for (const unsigned int handle : gpu_shader_handles_) {
-        if (handle != 0) {
+    for (const dse::render::ShaderHandle handle : gpu_shader_handles_) {
+        if (handle) {
             device->DeleteShaderProgram(handle);
         }
     }
@@ -956,5 +956,3 @@ void AssetManager::LoadMaterialAsync(const std::string& dmat_path, std::size_t m
 // ============================================================
 // LRU 淘汰与内存预算
 // ============================================================
-
-

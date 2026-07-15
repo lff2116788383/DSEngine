@@ -10,6 +10,7 @@
 #define DSE_RHI_COMPUTE_H
 
 #include <string>
+#include "engine/render/rhi/rhi_handle.h"
 
 namespace dse {
 namespace render {
@@ -35,15 +36,15 @@ public:
 
     /// 创建 compute shader（source 为后端原生语言：GLSL/SPIR-V binary/HLSL）
     /// @return shader 句柄，0 表示失败
-    virtual unsigned int CreateComputeShader(const std::string& source) { (void)source; return 0; }
+    virtual ShaderHandle CreateComputeShader(const std::string& source) { (void)source; return {}; }
 
     /// 删除 compute shader
-    virtual void DeleteComputeShader(unsigned int handle) { (void)handle; }
+    virtual void DeleteComputeShader(ShaderHandle handle) { (void)handle; }
 
     // --- Compute Shader 调度 ---
 
     /// 调度 compute shader 执行
-    virtual void DispatchCompute(unsigned int shader_handle,
+    virtual void DispatchCompute(ShaderHandle shader_handle,
                                  unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
         (void)shader_handle; (void)groups_x; (void)groups_y; (void)groups_z;
     }
@@ -60,45 +61,45 @@ public:
     // --- Compute Texture 绑定 ---
 
     /// 将纹理绑定到 compute shader 的 image 单元（image load/store）
-    virtual void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
+    virtual void SetComputeTextureImage(unsigned int binding, TextureHandle texture_handle, bool read_only) {
         (void)binding; (void)texture_handle; (void)read_only;
     }
 
     /// 将纹理的指定 mip level 绑定到 compute shader 的 image 单元
-    virtual void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+    virtual void SetComputeTextureImageMip(unsigned int binding, TextureHandle texture_handle,
                                            int mip_level, bool read_only, bool r32f = false) {
         (void)binding; (void)texture_handle; (void)mip_level; (void)read_only; (void)r32f;
     }
 
     /// 将纹理绑定到 compute shader 的采样器单元（用于 textureLod 采样）
-    virtual void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+    virtual void SetComputeTextureSampler(unsigned int unit, TextureHandle texture_handle) {
         (void)unit; (void)texture_handle;
     }
 
     // --- Compute Uniform 设置 ---
 
-    virtual void SetComputeUniformInt(unsigned int shader, const char* name, int value) {
+    virtual void SetComputeUniformInt(ShaderHandle shader, const char* name, int value) {
         (void)shader; (void)name; (void)value;
     }
-    virtual void SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
+    virtual void SetComputeUniformFloat(ShaderHandle shader, const char* name, float value) {
         (void)shader; (void)name; (void)value;
     }
-    virtual void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+    virtual void SetComputeUniformVec2i(ShaderHandle shader, const char* name, int x, int y) {
         (void)shader; (void)name; (void)x; (void)y;
     }
-    virtual void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+    virtual void SetComputeUniformVec2f(ShaderHandle shader, const char* name, float x, float y) {
         (void)shader; (void)name; (void)x; (void)y;
     }
-    virtual void SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+    virtual void SetComputeUniformVec3(ShaderHandle shader, const char* name, float x, float y, float z) {
         (void)shader; (void)name; (void)x; (void)y; (void)z;
     }
-    virtual void SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+    virtual void SetComputeUniformIVec3(ShaderHandle shader, const char* name, int x, int y, int z) {
         (void)shader; (void)name; (void)x; (void)y; (void)z;
     }
-    virtual void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+    virtual void SetComputeUniformVec4(ShaderHandle shader, const char* name, float x, float y, float z, float w) {
         (void)shader; (void)name; (void)x; (void)y; (void)z; (void)w;
     }
-    virtual void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
+    virtual void SetComputeUniformMat4(ShaderHandle shader, const char* name, const float* data) {
         (void)shader; (void)name; (void)data;
     }
 
@@ -108,7 +109,7 @@ public:
     /// wgsl_src（B3b 新增）：WebGPU 后端专用的手写 WGSL compute 源（首非空行 `// dse-wgsl`）；
     ///   引擎无离线 GLSL/SPIR-V→WGSL 工具，故各 compute 特性按需手译并经此槽传入。其余后端忽略。
     /// 默认回退到 CreateComputeShader(gl_src)，各后端 override 以使用正确源
-    virtual unsigned int CreateComputeShaderEx(
+    virtual ShaderHandle CreateComputeShaderEx(
         const std::string& gl_src,
         const std::string& vk_src,
         const std::string& hlsl_src,
@@ -125,8 +126,8 @@ public:
 
     /// 创建可供 compute shader 写入的 2D 纹理（storage image / UAV）
     /// GL: 等同 CreateTexture2D；VK: 含 STORAGE 用法位；DX11: 含 UAV 绑定标志
-    virtual unsigned int CreateComputeWriteTexture2D(int width, int height) {
-        (void)width; (void)height; return 0;
+    virtual TextureHandle CreateComputeWriteTexture2D(int width, int height) {
+        (void)width; (void)height; return {};
     }
 };
 

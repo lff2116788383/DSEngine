@@ -16,9 +16,9 @@ void BloomRenderer::BeginFrame() {
 }
 
 void BloomRenderer::Downsample(CommandBuffer& cmd, RhiDevice& device,
-                               unsigned int source_tex, float src_res_x, float src_res_y) {
-    const unsigned int cs = device.GetBloomComputeShader(/*upsample=*/false);
-    if (cs != 0) {
+                               TextureHandle source_tex, float src_res_x, float src_res_y) {
+    const ShaderHandle cs = device.GetBloomComputeShader(/*upsample=*/false);
+    if (cs) {
         cmd.DispatchComputePass(ComputeDispatch{cs, source_tex, 1.0f});
         return;
     }
@@ -27,9 +27,9 @@ void BloomRenderer::Downsample(CommandBuffer& cmd, RhiDevice& device,
 }
 
 void BloomRenderer::Upsample(CommandBuffer& cmd, RhiDevice& device,
-                             unsigned int source_tex, float filter_radius, float blend_weight) {
-    const unsigned int cs = device.GetBloomComputeShader(/*upsample=*/true);
-    if (cs != 0) {
+                             TextureHandle source_tex, float filter_radius, float blend_weight) {
+    const ShaderHandle cs = device.GetBloomComputeShader(/*upsample=*/true);
+    if (cs) {
         cmd.DispatchComputePass(ComputeDispatch{cs, source_tex, blend_weight});
         return;
     }

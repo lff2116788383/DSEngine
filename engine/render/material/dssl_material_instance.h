@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <glm/glm.hpp>
+#include "engine/render/rhi/rhi_handle.h"
 
 class AssetManager;
 
@@ -49,14 +50,14 @@ public:
     void SetVec3(const std::string& name, const glm::vec3& value);
     void SetVec4(const std::string& name, const glm::vec4& value);
     void SetInt(const std::string& name, int value);
-    void SetTexture(const std::string& name, unsigned int texture_handle);
+    void SetTexture(const std::string& name, TextureHandle texture_handle);
 
     float GetFloat(const std::string& name, float fallback = 0.0f) const;
     glm::vec2 GetVec2(const std::string& name, const glm::vec2& fallback = glm::vec2(0)) const;
     glm::vec3 GetVec3(const std::string& name, const glm::vec3& fallback = glm::vec3(0)) const;
     glm::vec4 GetVec4(const std::string& name, const glm::vec4& fallback = glm::vec4(0)) const;
     int GetInt(const std::string& name, int fallback = 0) const;
-    unsigned int GetTexture(const std::string& name) const;
+    TextureHandle GetTexture(const std::string& name) const;
 
     // === 应用到 MeshRendererComponent 的便捷接口 ===
     // 将 DSSL uniform 值映射到引擎标准材质属性
@@ -69,11 +70,11 @@ public:
     float GetAlphaCutoff() const;
     bool GetAlphaTest() const;
     bool GetDoubleSided() const;
-    unsigned int GetAlbedoTexture() const;
-    unsigned int GetNormalTexture() const;
-    unsigned int GetMetallicRoughnessTexture() const;
-    unsigned int GetEmissiveTexture() const;
-    unsigned int GetOcclusionTexture() const;
+    TextureHandle GetAlbedoTexture() const;
+    TextureHandle GetNormalTexture() const;
+    TextureHandle GetMetallicRoughnessTexture() const;
+    TextureHandle GetEmissiveTexture() const;
+    TextureHandle GetOcclusionTexture() const;
 
     // 渲染模式
     struct RenderModes {
@@ -99,7 +100,7 @@ private:
     std::unordered_map<std::string, glm::vec3> vec3s_;
     std::unordered_map<std::string, glm::vec4> vec4s_;
     std::unordered_map<std::string, int> ints_;
-    std::unordered_map<std::string, unsigned int> textures_;
+    std::unordered_map<std::string, TextureHandle> textures_;
 };
 
 } // namespace render

@@ -40,14 +40,14 @@ class FileSystem;
  */
 class DSE_EXPORT TextureAsset {
 public:
-    TextureAsset(const std::string& path, unsigned int handle, int width, int height, int channels);
+    TextureAsset(const std::string& path, dse::render::TextureHandle handle, int width, int height, int channels);
     ~TextureAsset();
 
     /**
      * @brief 获取 RHI 纹理句柄
      * @return 纹理句柄(unsigned int)
      */
-    unsigned int GetHandle() const { return handle_; }
+    dse::render::TextureHandle GetHandle() const { return handle_; }
     /**
      * @brief 获取纹理宽度
      * @return 宽度(像素)
@@ -67,7 +67,7 @@ public:
 
 private:
     std::string path_;
-    unsigned int handle_;
+    dse::render::TextureHandle handle_;
     int width_;
     int height_;
     int channels_;
@@ -79,17 +79,17 @@ private:
  */
 class DSE_EXPORT CubemapAsset {
 public:
-    CubemapAsset(const std::string& path, unsigned int handle, int width, int height);
+    CubemapAsset(const std::string& path, dse::render::TextureHandle handle, int width, int height);
     ~CubemapAsset();
 
-    unsigned int GetHandle() const { return handle_; }
+    dse::render::TextureHandle GetHandle() const { return handle_; }
     int GetWidth() const { return width_; }
     int GetHeight() const { return height_; }
     const std::string& GetPath() const { return path_; }
 
 private:
     std::string path_;
-    unsigned int handle_;
+    dse::render::TextureHandle handle_;
     int width_;
     int height_;
 };
@@ -100,18 +100,18 @@ private:
  */
 class DSE_EXPORT ShaderAsset {
 public:
-    ShaderAsset(const std::string& name, unsigned int handle);
+    ShaderAsset(const std::string& name, dse::render::ShaderHandle handle);
     ~ShaderAsset();
 
     /**
      * @brief 获取 RHI 着色器句柄
      * @return 着色器句柄
      */
-    unsigned int GetHandle() const { return handle_; }
+    dse::render::ShaderHandle GetHandle() const { return handle_; }
 
 private:
     std::string name_;
-    unsigned int handle_;
+    dse::render::ShaderHandle handle_;
 };
 
 /**
@@ -179,11 +179,11 @@ enum class MaterialBlendMode {
 class DSE_EXPORT MaterialAsset {
 public:
     struct TextureSlots {
-        unsigned int albedo = 0;
-        unsigned int normal = 0;
-        unsigned int metallic_roughness = 0;
-        unsigned int emissive = 0;
-        unsigned int occlusion = 0;
+        dse::render::TextureHandle albedo;
+        dse::render::TextureHandle normal;
+        dse::render::TextureHandle metallic_roughness;
+        dse::render::TextureHandle emissive;
+        dse::render::TextureHandle occlusion;
     };
 
     struct ScalarOverrides {
@@ -210,7 +210,7 @@ public:
     unsigned int GetId() const { return id_; }
     const std::string& GetName() const { return name_; }
     const std::string& GetShaderVariant() const { return shader_variant_; }
-    unsigned int GetTextureHandle() const { return texture_handle_; }
+    dse::render::TextureHandle GetTextureHandle() const { return texture_handle_; }
     const glm::vec4& GetTint() const { return tint_; }
     const glm::vec4& GetUvRect() const { return uv_rect_; }
     const glm::vec4& GetBaseColor() const { return base_color_; }
@@ -238,7 +238,7 @@ public:
      * @brief 设置纹理句柄
      * @param texture_handle 新的纹理句柄
      */
-    void SetTextureHandle(unsigned int texture_handle) { texture_handle_ = texture_handle; }
+    void SetTextureHandle(dse::render::TextureHandle texture_handle) { texture_handle_ = texture_handle; }
     /**
      * @brief 设置材质染色(Tint)
      * @param tint 颜色向量(RGBA)
@@ -264,7 +264,7 @@ private:
     unsigned int id_ = 0;
     std::string name_;
     std::string shader_variant_ = "SPRITE_UNLIT";
-    unsigned int texture_handle_ = 0;
+    dse::render::TextureHandle texture_handle_;
     glm::vec4 tint_ = glm::vec4(1.0f);
     glm::vec4 uv_rect_ = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     glm::vec4 base_color_ = glm::vec4(1.0f);
@@ -340,7 +340,7 @@ public:
      *        缓存键含采样参数，同图不同采样各自独立。默认 {Linear, Repeat} 等价旧 LoadTexture。
      */
     std::shared_ptr<TextureAsset> LoadTexture(const std::string& path, const TextureSamplerDesc& sampler);
-    std::string FindTexturePathByHandle(unsigned int handle) const;
+    std::string FindTexturePathByHandle(dse::render::TextureHandle handle) const;
     bool LoadImageRgba(const std::string& path, std::vector<unsigned char>& out_pixels, int& out_width, int& out_height, int& out_channels);
     /**
      * @brief 从目录加载六面天空盒立方体贴图。
@@ -382,7 +382,7 @@ public:
      * @param name 着色器名（LoadShader 时给定；Shader Graph 用作 MeshRendererComponent::shader_variant）
      * @return RHI 着色器程序句柄；未加载 / 已释放返回 0
      */
-    unsigned int GetShaderHandle(const std::string& name) const;
+    dse::render::ShaderHandle GetShaderHandle(const std::string& name) const;
     /**
      * @brief 执行 LoadAudioClip 操作
      * @param path 参数说明
@@ -571,9 +571,9 @@ private:
     std::unordered_map<std::string, std::shared_ptr<TextureAsset>> textures_;
     std::unordered_map<std::string, std::weak_ptr<CubemapAsset>> cubemaps_;
     std::unordered_map<std::string, std::weak_ptr<ShaderAsset>> shaders_;
-    std::unordered_set<unsigned int> gpu_texture_handles_;
-    std::unordered_set<unsigned int> gpu_cubemap_handles_;
-    std::unordered_set<unsigned int> gpu_shader_handles_;
+    std::unordered_set<dse::render::TextureHandle> gpu_texture_handles_;
+    std::unordered_set<dse::render::TextureHandle> gpu_cubemap_handles_;
+    std::unordered_set<dse::render::ShaderHandle> gpu_shader_handles_;
     std::unordered_map<std::string, std::weak_ptr<AudioClipAsset>> audio_clips_;
     std::unordered_map<std::string, std::weak_ptr<DmeshAsset>> dmeshes_;
     std::unordered_map<std::string, std::weak_ptr<DanimAsset>> danims_;

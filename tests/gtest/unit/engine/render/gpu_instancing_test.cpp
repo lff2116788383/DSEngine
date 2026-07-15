@@ -75,7 +75,7 @@ TEST(MaterialBlendModeTest, EnumerationValue) {
 // 测试 网格绘制项实例化：默认值
 TEST(MeshDrawItemInstancingTest, DefaultValues) {
     MeshDrawItem item;
-    EXPECT_EQ(item.texture_handle, 0u);
+    EXPECT_FALSE(item.texture_handle);
     EXPECT_EQ(item.blend_mode, 0u);
     EXPECT_TRUE(item.instance_transforms.empty());
     EXPECT_FALSE(item.skinned);

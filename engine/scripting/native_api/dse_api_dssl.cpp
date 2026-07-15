@@ -66,7 +66,7 @@ extern "C" void dse_dssl_set_texture(uint32_t instance, const char* name, const 
 extern "C" void dse_dssl_set_texture_handle(uint32_t instance, const char* name, uint32_t handle) {
     auto* dssl = GetDSSL();
     auto inst = dssl ? dssl->GetInstance(instance) : nullptr;
-    if (inst) inst->SetTexture(name, handle);
+    if (inst) inst->SetTexture(name, dse::render::TextureHandle::from_raw(handle));
 }
 extern "C" void dse_dssl_apply_material(uint32_t e, uint32_t instance) {
     World* world = static_cast<World*>(dse_get_world_ptr());
@@ -105,15 +105,15 @@ extern "C" void dse_dssl_apply_material(uint32_t e, uint32_t instance) {
     mesh->material_alpha_test = inst->GetAlphaTest();
     mesh->material_double_sided = inst->GetDoubleSided();
 
-    unsigned int albedo_tex = inst->GetAlbedoTexture();
+    dse::render::TextureHandle albedo_tex = inst->GetAlbedoTexture();
     if (albedo_tex) mesh->albedo_texture_handle = albedo_tex;
-    unsigned int normal_tex = inst->GetNormalTexture();
+    dse::render::TextureHandle normal_tex = inst->GetNormalTexture();
     if (normal_tex) mesh->normal_texture_handle = normal_tex;
-    unsigned int mr_tex = inst->GetMetallicRoughnessTexture();
+    dse::render::TextureHandle mr_tex = inst->GetMetallicRoughnessTexture();
     if (mr_tex) mesh->metallic_roughness_texture_handle = mr_tex;
-    unsigned int emissive_tex = inst->GetEmissiveTexture();
+    dse::render::TextureHandle emissive_tex = inst->GetEmissiveTexture();
     if (emissive_tex) mesh->emissive_texture_handle = emissive_tex;
-    unsigned int occlusion_tex = inst->GetOcclusionTexture();
+    dse::render::TextureHandle occlusion_tex = inst->GetOcclusionTexture();
     if (occlusion_tex) mesh->occlusion_texture_handle = occlusion_tex;
 
     mesh->receive_shadow = inst->GetRenderModes().shadows_enabled;
@@ -148,4 +148,3 @@ extern "C" void dse_dssl_get_color(uint32_t instance, const char* name, float* o
     if (inst) v = inst->GetVec4(name);
     out_rgba[0] = v.r; out_rgba[1] = v.g; out_rgba[2] = v.b; out_rgba[3] = v.a;
 }
-

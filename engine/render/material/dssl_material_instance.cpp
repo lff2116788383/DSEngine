@@ -28,7 +28,7 @@ void DSSLMaterialInstance::SetInt(const std::string& name, int value) {
     ints_[name] = value;
 }
 
-void DSSLMaterialInstance::SetTexture(const std::string& name, unsigned int texture_handle) {
+void DSSLMaterialInstance::SetTexture(const std::string& name, TextureHandle texture_handle) {
     textures_[name] = texture_handle;
 }
 
@@ -59,9 +59,9 @@ int DSSLMaterialInstance::GetInt(const std::string& name, int fallback) const {
     return it != ints_.end() ? it->second : fallback;
 }
 
-unsigned int DSSLMaterialInstance::GetTexture(const std::string& name) const {
+TextureHandle DSSLMaterialInstance::GetTexture(const std::string& name) const {
     auto it = textures_.find(name);
-    return it != textures_.end() ? it->second : 0;
+    return it != textures_.end() ? it->second : TextureHandle{};
 }
 
 // === 映射到引擎标准材质属性 ===
@@ -132,40 +132,40 @@ bool DSSLMaterialInstance::GetDoubleSided() const {
     return render_modes_.cull == "disabled";
 }
 
-unsigned int DSSLMaterialInstance::GetAlbedoTexture() const {
-    unsigned int h = GetTexture("albedo_tex");
+TextureHandle DSSLMaterialInstance::GetAlbedoTexture() const {
+    TextureHandle h = GetTexture("albedo_tex");
     if (h) return h;
     h = GetTexture("base_texture");
     if (h) return h;
     return GetTexture("albedo_texture");
 }
 
-unsigned int DSSLMaterialInstance::GetNormalTexture() const {
-    unsigned int h = GetTexture("normal_tex");
+TextureHandle DSSLMaterialInstance::GetNormalTexture() const {
+    TextureHandle h = GetTexture("normal_tex");
     if (h) return h;
     h = GetTexture("normal_map");
     if (h) return h;
     return GetTexture("normal_texture");
 }
 
-unsigned int DSSLMaterialInstance::GetMetallicRoughnessTexture() const {
-    unsigned int h = GetTexture("orm_tex");
+TextureHandle DSSLMaterialInstance::GetMetallicRoughnessTexture() const {
+    TextureHandle h = GetTexture("orm_tex");
     if (h) return h;
     h = GetTexture("metallic_roughness_tex");
     if (h) return h;
     return GetTexture("metallic_roughness_texture");
 }
 
-unsigned int DSSLMaterialInstance::GetEmissiveTexture() const {
-    unsigned int h = GetTexture("emissive_tex");
+TextureHandle DSSLMaterialInstance::GetEmissiveTexture() const {
+    TextureHandle h = GetTexture("emissive_tex");
     if (h) return h;
     h = GetTexture("emission_tex");
     if (h) return h;
     return GetTexture("emissive_texture");
 }
 
-unsigned int DSSLMaterialInstance::GetOcclusionTexture() const {
-    unsigned int h = GetTexture("occlusion_tex");
+TextureHandle DSSLMaterialInstance::GetOcclusionTexture() const {
+    TextureHandle h = GetTexture("occlusion_tex");
     if (h) return h;
     return GetTexture("occlusion_texture");
 }

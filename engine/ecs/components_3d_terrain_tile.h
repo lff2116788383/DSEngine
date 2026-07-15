@@ -51,12 +51,12 @@ struct TerrainTileManagerComponent {
 
     // Splat textures (shared across all tiles)
     std::string splat_texture_paths[4];
-    unsigned int splat_texture_handles[4] = {0, 0, 0, 0};
+    dse::render::TextureHandle splat_texture_handles[4]{};
     glm::vec4 splat_tiling = glm::vec4(10.0f);
 
     // Base texture for tiles without splatmap
     std::string base_texture_path;
-    unsigned int base_texture_handle = 0;
+    dse::render::TextureHandle base_texture_handle;
 
     // Runtime tile storage - maps (tile_x, tile_z) encoded as int64 to tile data
     std::unordered_map<int64_t, TerrainTileData> tiles;

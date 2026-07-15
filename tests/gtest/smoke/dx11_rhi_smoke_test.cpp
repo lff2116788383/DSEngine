@@ -152,8 +152,8 @@ TEST_F(DX11RhiSmokeTest, CreateAndDestroyWithoutCrashing) {
         255,255,255,255, 255,255,255,255,
         255,255,255,255, 255,255,255,255
     };
-    unsigned int tex = device_.CreateTexture2D(2, 2, pixels, true);
-    EXPECT_NE(tex, 0u);
+    const auto tex = device_.CreateTexture2D(2, 2, pixels, true);
+    EXPECT_TRUE(tex);
     device_.DeleteTexture(tex);
     SUCCEED();
 }
@@ -182,9 +182,9 @@ TEST_F(DX11RhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     desc.width = 64;
     desc.height = 64;
     desc.has_depth = true;
-    unsigned int rt = device_.CreateRenderTarget(desc);
-    EXPECT_NE(rt, 0u);
-    device_.resource_mgr().DeleteRenderTarget(rt);
+    const auto rt = device_.CreateRenderTarget(desc);
+    EXPECT_TRUE(rt);
+    device_.resource_mgr().DeleteRenderTarget(rt.raw());
     SUCCEED();
 }
 
@@ -194,8 +194,8 @@ TEST_F(DX11RhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
         GTEST_SKIP() << "No D3D11";
     }
     float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
-    unsigned int buf = device_.CreateBuffer(sizeof(data), data, false, false);
-    EXPECT_NE(buf, 0u);
+    const auto buf = device_.CreateBuffer(sizeof(data), data, false, false);
+    EXPECT_TRUE(buf);
     device_.DeleteBuffer(buf);
     SUCCEED();
 }
@@ -214,8 +214,8 @@ TEST_F(DX11RhiSmokeTest, Correct) {
     desc.height = kRtSize;
     desc.has_color = true;
     desc.has_depth = false;
-    unsigned int rt = device_.CreateRenderTarget(desc);
-    ASSERT_NE(rt, 0u);
+    const auto rt = device_.CreateRenderTarget(desc);
+    ASSERT_TRUE(rt);
 
     // 清屏到已知颜色（SDR/WARP 下 RT 为 R8G8B8A8_UNORM，无 sRGB / tonemap 转换）
     const glm::vec4 kClear(0.25f, 0.50f, 0.75f, 1.0f);
@@ -254,7 +254,7 @@ TEST_F(DX11RhiSmokeTest, Correct) {
         ASSERT_TRUE(within_tol(px[3], exp_a)) << "pixel " << p << " A=" << int(px[3]) << " expected~" << int(exp_a);
     }
 
-    device_.resource_mgr().DeleteRenderTarget(rt);
+    device_.resource_mgr().DeleteRenderTarget(rt.raw());
 }
 
 // Draw-call 级回读校验：用全屏四边形 + passthrough 着色器把 source RT 拷到 dest RT，
@@ -272,10 +272,10 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int src = device_.CreateRenderTarget(rt_desc);
-    unsigned int dst = device_.CreateRenderTarget(rt_desc);
-    ASSERT_NE(src, 0u);
-    ASSERT_NE(dst, 0u);
+    const auto src = device_.CreateRenderTarget(rt_desc);
+    const auto dst = device_.CreateRenderTarget(rt_desc);
+    ASSERT_TRUE(src);
+    ASSERT_TRUE(dst);
 
     const glm::vec4 kSrcColor(0.75f, 0.25f, 0.50f, 1.0f); // ~ (191,64,128,255)
 
@@ -311,7 +311,7 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
-        cmd->BindPipeline(device_.GetGraphicsPipeline(ps, 0));
+        cmd->BindPipeline(device_.GetGraphicsPipeline(ps, {}));
         pp_renderer.Draw(*cmd, device_,
             dse::render::PostProcessRequest("copy", device_.GetRenderTargetColorTexture(src)));
         cmd->EndRenderPass();
@@ -341,8 +341,8 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
     }
 
     pp_renderer.Shutdown(device_);
-    device_.resource_mgr().DeleteRenderTarget(src);
-    device_.resource_mgr().DeleteRenderTarget(dst);
+    device_.resource_mgr().DeleteRenderTarget(src.raw());
+    device_.resource_mgr().DeleteRenderTarget(dst.raw());
 }
 
 #endif // DSE_ENABLE_D3D11

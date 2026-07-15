@@ -122,11 +122,11 @@ RenderTargetReadback RenderInstancedVertexRate(RhiDevice& device,
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    unsigned int program = device.CreateShaderProgram(vert_src, frag_src);
-    if (program == 0) {
+    const auto program = device.CreateShaderProgram(vert_src, frag_src);
+    if (!program) {
         device.DeleteRenderTarget(rt);
         return {};
     }
@@ -182,10 +182,10 @@ RenderTargetReadback RenderInstancedVertexRate(RhiDevice& device,
         cmd->BeginRenderPass(rp);
         cmd->BindPipeline(device.GetGraphicsPipeline(pso, program));
         // A：slot 0 per-vertex + slot 1 per-instance 实例顶点流。
-        cmd->BindVertexBuffer(0u, vbo.raw(), static_cast<uint32_t>(sizeof(float) * 2), slot0_attrs);
-        cmd->BindVertexBuffer(1u, inst_vbo.raw(), static_cast<uint32_t>(sizeof(InstanceVertex)),
+        cmd->BindVertexBuffer(0u, vbo, static_cast<uint32_t>(sizeof(float) * 2), slot0_attrs);
+        cmd->BindVertexBuffer(1u, inst_vbo, static_cast<uint32_t>(sizeof(InstanceVertex)),
                               slot1_attrs, VertexInputRate::PerInstance);
-        cmd->BindIndexBuffer(ibo.raw(), IndexType::UInt16);
+        cmd->BindIndexBuffer(ibo, IndexType::UInt16);
         cmd->DrawIndexedInstanced(6, kInstanceCount, 0, 0, 0);
         cmd->EndRenderPass();
         device.Submit(cmd);

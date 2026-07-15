@@ -6,42 +6,46 @@
 
 namespace dse::runtime {
 
+using dse::render::RenderTargetHandle;
+using dse::render::ShaderHandle;
+using dse::render::TextureHandle;
+
 struct RenderPipelineResources {
-    unsigned int main_render_target = 0;
-    unsigned int scene_render_target = 0;
-    unsigned int ui_render_target = 0;
-    unsigned int prez_render_target = 0;
+    RenderTargetHandle main_render_target = {};
+    RenderTargetHandle scene_render_target = {};
+    RenderTargetHandle ui_render_target = {};
+    RenderTargetHandle prez_render_target = {};
 
-    unsigned int pp_bloom_extract_rt = 0;
-    std::vector<unsigned int> pp_bloom_mip_rts;
+    RenderTargetHandle pp_bloom_extract_rt = {};
+    std::vector<RenderTargetHandle> pp_bloom_mip_rts;
 
-    unsigned int pp_ssao_rt = 0;       // 半分辨率 AO
-    unsigned int pp_ssao_blur_rt = 0;  // 模糊后 AO
-    unsigned int pp_contact_shadow_rt = 0;  // 接触阴影
-    unsigned int pp_fxaa_rt = 0;       // FXAA 输出
-    unsigned int pp_taa_rt = 0;        // TAA resolve 输出
-    unsigned int pp_dof_rt = 0;        // DOF 输出
-    unsigned int pp_ssr_rt = 0;        // SSR 输出
-    unsigned int pp_motion_vector_rt = 0; // Motion Vector (RG16F)
-    unsigned int pp_outline_rt = 0;       // Outline / Edge Detection
-    unsigned int pp_fog_rt = 0;           // Volumetric Fog
-    unsigned int pp_cloud_rt = 0;         // Volumetric Cloud
-    unsigned int wboit_accum_rt = 0;      // WBOIT accumulation (RGBA16F)
-    unsigned int wboit_reveal_rt = 0;     // WBOIT revealage (RGBA16F)
+    RenderTargetHandle pp_ssao_rt = {};       // 半分辨率 AO
+    RenderTargetHandle pp_ssao_blur_rt = {};  // 模糊后 AO
+    RenderTargetHandle pp_contact_shadow_rt = {};  // 接触阴影
+    RenderTargetHandle pp_fxaa_rt = {};       // FXAA 输出
+    RenderTargetHandle pp_taa_rt = {};        // TAA resolve 输出
+    RenderTargetHandle pp_dof_rt = {};        // DOF 输出
+    RenderTargetHandle pp_ssr_rt = {};        // SSR 输出
+    RenderTargetHandle pp_motion_vector_rt = {}; // Motion Vector (RG16F)
+    RenderTargetHandle pp_outline_rt = {};       // Outline / Edge Detection
+    RenderTargetHandle pp_fog_rt = {};           // Volumetric Fog
+    RenderTargetHandle pp_cloud_rt = {};         // Volumetric Cloud
+    RenderTargetHandle wboit_accum_rt = {};      // WBOIT accumulation (RGBA16F)
+    RenderTargetHandle wboit_reveal_rt = {};     // WBOIT revealage (RGBA16F)
 
-    unsigned int pp_sss_temp_rt = 0;        // SSS blur intermediate (RGBA16F)
+    RenderTargetHandle pp_sss_temp_rt = {};        // SSS blur intermediate (RGBA16F)
 
-    unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
-    unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
+    RenderTargetHandle pp_lum_temp_rt = {};     // 64x64 log luminance
+    RenderTargetHandle pp_lum_adapted_rt[2]{}; // 1x1 ping-pong (EMA adapted exposure)
 
     static constexpr size_t kHiZMaxObjects = 65536;
-    unsigned int hiz_texture = 0;        // Hi-Z depth mipmap (R32F, RHI handle)
+    TextureHandle hiz_texture = {};        // Hi-Z depth mipmap (R32F, RHI handle)
     dse::render::BufferHandle hiz_visibility_ssbo; // Visibility SSBO for Hi-Z culling
     dse::render::BufferHandle hiz_aabb_ssbo;         // AABB SSBO for Hi-Z culling
     size_t hiz_ssbo_capacity = 0;        // SSBO 当前容量（对象数）
-    unsigned int hiz_copy_shader = 0;    // Compute: depth → Hi-Z mip 0
-    unsigned int hiz_downsample_shader = 0; // Compute: mip N-1 → mip N
-    unsigned int hiz_cull_shader = 0;    // Compute: AABB 過濾
+    ShaderHandle hiz_copy_shader = {};    // Compute: depth → Hi-Z mip 0
+    ShaderHandle hiz_downsample_shader = {}; // Compute: mip N-1 → mip N
+    ShaderHandle hiz_cull_shader = {};    // Compute: AABB 過濾
 
     // --- GPU Driven Rendering ---
     dse::render::BufferHandle gpu_indirect_buffer;       // Indirect draw argument buffer
@@ -54,7 +58,7 @@ struct RenderPipelineResources {
     dse::render::BufferHandle gpu_mega_vbo;              // 统一顶点缓冲区
     dse::render::BufferHandle gpu_mega_ibo;              // 统一索引缓冲区
     dse::render::VertexArrayHandle gpu_mega_vao;              // Mega buffer VAO
-    unsigned int gpu_cull_shader = 0;           // GPU Driven culling compute shader
+    ShaderHandle gpu_cull_shader = {};           // GPU Driven culling compute shader
     size_t gpu_aabb_capacity = 0;
     size_t gpu_instance_capacity = 0;           // instance SSBO 当前容量
     size_t gpu_material_capacity = 0;           // material SSBO 当前容量
@@ -66,63 +70,63 @@ struct RenderPipelineResources {
     dse::render::PipelineHandle mesh_pipeline_state;
     dse::render::PipelineHandle prez_pipeline_state;
     dse::render::PipelineHandle composite_pipeline_state;
-    unsigned int shadow_render_target[CSM_CASCADES] = {0, 0, 0};
-    unsigned int shadow_atlas_render_target = 0;  ///< CSM shadow atlas (4096×2048 depth-only)
-    unsigned int spot_shadow_render_target[4] = {0, 0, 0, 0};
-    unsigned int point_shadow_render_target[4] = {0, 0, 0, 0};
-    unsigned int rsm_render_target = 0;    // RSM MRT (position+normal+flux, 3 color + depth)
+    RenderTargetHandle shadow_render_target[CSM_CASCADES]{};
+    RenderTargetHandle shadow_atlas_render_target = {};  ///< CSM shadow atlas (4096×2048 depth-only)
+    RenderTargetHandle spot_shadow_render_target[4]{};
+    RenderTargetHandle point_shadow_render_target[4]{};
+    RenderTargetHandle rsm_render_target = {};    // RSM MRT (position+normal+flux, 3 color + depth)
     dse::render::PipelineHandle shadow_pipeline_state;
     dse::render::PipelineHandle decal_blend_pipeline_state;
     dse::render::PipelineHandle wboit_accum_pipeline_state;
     dse::render::PipelineHandle wboit_reveal_pipeline_state;
 
     void Reset() {
-        main_render_target = 0;
-        scene_render_target = 0;
-        ui_render_target = 0;
-        prez_render_target = 0;
+        main_render_target = {};
+        scene_render_target = {};
+        ui_render_target = {};
+        prez_render_target = {};
         for (int i = 0; i < CSM_CASCADES; ++i) {
-            shadow_render_target[i] = 0;
+            shadow_render_target[i] = {};
         }
         for (int i = 0; i < 4; ++i) {
-            spot_shadow_render_target[i] = 0;
-            point_shadow_render_target[i] = 0;
+            spot_shadow_render_target[i] = {};
+            point_shadow_render_target[i] = {};
         }
-        pp_bloom_extract_rt = 0;
+        pp_bloom_extract_rt = {};
         pp_bloom_mip_rts.clear();
-        pp_ssao_rt = 0;
-        pp_ssao_blur_rt = 0;
-        pp_contact_shadow_rt = 0;
-        pp_fxaa_rt = 0;
-        pp_taa_rt = 0;
-        pp_dof_rt = 0;
-        pp_ssr_rt = 0;
-        pp_motion_vector_rt = 0;
-        pp_outline_rt = 0;
-        pp_fog_rt = 0;
-        pp_cloud_rt = 0;
-        wboit_accum_rt = 0;
-        wboit_reveal_rt = 0;
-        pp_sss_temp_rt = 0;
-        pp_lum_temp_rt = 0;
-        pp_lum_adapted_rt[0] = 0;
-        pp_lum_adapted_rt[1] = 0;
+        pp_ssao_rt = {};
+        pp_ssao_blur_rt = {};
+        pp_contact_shadow_rt = {};
+        pp_fxaa_rt = {};
+        pp_taa_rt = {};
+        pp_dof_rt = {};
+        pp_ssr_rt = {};
+        pp_motion_vector_rt = {};
+        pp_outline_rt = {};
+        pp_fog_rt = {};
+        pp_cloud_rt = {};
+        wboit_accum_rt = {};
+        wboit_reveal_rt = {};
+        pp_sss_temp_rt = {};
+        pp_lum_temp_rt = {};
+        pp_lum_adapted_rt[0] = {};
+        pp_lum_adapted_rt[1] = {};
         sprite_pipeline_state = {};
         mesh_pipeline_state = {};
         prez_pipeline_state = {};
         composite_pipeline_state = {};
-        rsm_render_target = 0;
+        rsm_render_target = {};
         shadow_pipeline_state = {};
         decal_blend_pipeline_state = {};
         wboit_accum_pipeline_state = {};
         wboit_reveal_pipeline_state = {};
-        hiz_texture = 0;
+        hiz_texture = {};
         hiz_visibility_ssbo = {};
         hiz_aabb_ssbo = {};
         hiz_ssbo_capacity = 0;
-        hiz_copy_shader = 0;
-        hiz_downsample_shader = 0;
-        hiz_cull_shader = 0;
+        hiz_copy_shader = {};
+        hiz_downsample_shader = {};
+        hiz_cull_shader = {};
         gpu_indirect_buffer = {};
         gpu_instance_ssbo = {};
         gpu_material_ssbo = {};
@@ -133,7 +137,7 @@ struct RenderPipelineResources {
         gpu_mega_vbo = {};
         gpu_mega_ibo = {};
         gpu_mega_vao = {};
-        gpu_cull_shader = 0;
+        gpu_cull_shader = {};
         gpu_aabb_capacity = 0;
         gpu_instance_capacity = 0;
         gpu_material_capacity = 0;

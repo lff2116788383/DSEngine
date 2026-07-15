@@ -90,12 +90,12 @@ bool BakeAtlasForEntity(entt::registry& registry, entt::entity entity, RhiDevice
         return false;
     }
 
-    const unsigned int tex = device.CreateTexture2D(res.atlas_width, res.atlas_height,
-                                                    res.albedo_rgba.data(), true);
-    if (tex == 0) return false;
+    const TextureHandle tex = device.CreateTexture2D(res.atlas_width, res.atlas_height,
+                                                     res.albedo_rgba.data(), true);
+    if (!tex) return false;
 
     impostor.atlas_texture_handle_ = tex;
-    impostor.normal_texture_handle_ = 0;
+    impostor.normal_texture_handle_ = {};
     impostor.atlas_loaded_ = true;
     impostor.cached_bounds_radius_ = glm::length(bmax - bmin) * 0.5f;
     return true;
@@ -107,7 +107,7 @@ void ImpostorSystem::Update(World& world, const glm::vec3& camera_pos, RhiDevice
     batches_.clear();
 
     // 按 atlas 纹理句柄分组
-    std::unordered_map<unsigned int, size_t> batch_map;  // atlas_handle → batch index
+    std::unordered_map<TextureHandle, size_t> batch_map;  // atlas_handle → batch index
 
     auto& registry = world.registry();
     auto view = registry.view<ImpostorComponent, TransformComponent>();
@@ -115,7 +115,7 @@ void ImpostorSystem::Update(World& world, const glm::vec3& camera_pos, RhiDevice
     for (auto entity : view) {
         auto& impostor = view.get<ImpostorComponent>(entity);
         if (!impostor.enabled) continue;
-        if (!impostor.atlas_loaded_ || impostor.atlas_texture_handle_ == 0) {
+        if (!impostor.atlas_loaded_ || !impostor.atlas_texture_handle_) {
             // 暂无 atlas：排队到 RenderOpaque（GL 线程）烘焙，下一帧再绘制。
             const uint32_t eid = static_cast<uint32_t>(entity);
             if (bake_attempted_.find(eid) == bake_attempted_.end()) {
@@ -187,7 +187,7 @@ void ImpostorSystem::Update(World& world, const glm::vec3& camera_pos, RhiDevice
         inst.fade = fade;
 
         // 按 atlas 纹理分批
-        unsigned int key = impostor.atlas_texture_handle_;
+        TextureHandle key = impostor.atlas_texture_handle_;
         auto it = batch_map.find(key);
         if (it == batch_map.end()) {
             batch_map[key] = batches_.size();

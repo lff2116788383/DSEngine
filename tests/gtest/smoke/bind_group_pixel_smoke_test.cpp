@@ -97,11 +97,11 @@ RenderTargetReadback RenderBindGroupQuad(RhiDevice& device,
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    unsigned int program = device.CreateShaderProgram(vert_src, frag_src);
-    if (program == 0) {
+    const auto program = device.CreateShaderProgram(vert_src, frag_src);
+    if (!program) {
         device.DeleteRenderTarget(rt);
         return {};
     }
@@ -149,12 +149,12 @@ RenderTargetReadback RenderBindGroupQuad(RhiDevice& device,
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
         cmd->BindPipeline(device.GetGraphicsPipeline(pso, program));
-        cmd->BindVertexBuffer(0u, vbo.raw(), sizeof(float) * 2, {});  // 占位
-        cmd->BindIndexBuffer(ibo.raw(), IndexType::UInt16);
+        cmd->BindVertexBuffer(0u, vbo, sizeof(float) * 2, {});  // 占位
+        cmd->BindIndexBuffer(ibo, IndexType::UInt16);
         // B：两个 UBO 成组，一次 BindGroup 绑定 b0/b1。
         BindGroupDesc group;
-        group.uniform_buffers.push_back({0u, ubo_a.raw(), 0u, 0u});
-        group.uniform_buffers.push_back({1u, ubo_b.raw(), 0u, 0u});
+        group.uniform_buffers.push_back({0u, ubo_a, 0u, 0u});
+        group.uniform_buffers.push_back({1u, ubo_b, 0u, 0u});
         cmd->BindGroup(group);
         cmd->DrawIndexed(6, 0, 0);
         cmd->EndRenderPass();

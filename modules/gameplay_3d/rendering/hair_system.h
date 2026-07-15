@@ -83,10 +83,10 @@ private:
     std::vector<int> free_slots_;
 
     /// Compute shader 句柄
-    unsigned int cs_integrate_      = 0;
-    unsigned int cs_length_         = 0;
-    unsigned int cs_local_shape_    = 0;
-    unsigned int cs_update_tangent_ = 0;
+    dse::render::ShaderHandle cs_integrate_;
+    dse::render::ShaderHandle cs_length_;
+    dse::render::ShaderHandle cs_local_shape_;
+    dse::render::ShaderHandle cs_update_tangent_;
     bool gpu_compute_enabled_       = false;
 
     /// 累计时间（用于风场 phase）

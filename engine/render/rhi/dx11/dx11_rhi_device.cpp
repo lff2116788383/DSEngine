@@ -97,13 +97,13 @@ void DX11CommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_ha
     device_->state_mgr().ApplyPipelineState(desc->pso_state.raw(), device_->context().device_context());
     const auto* ps = device_->state_mgr().GetPipelineState(desc->pso_state.raw());
     device_->draw_executor().PrimSetTopology(ps ? ps->desc.topology : PrimitiveTopology::TriangleList);
-    if (desc->program != 0) device_->draw_executor().PrimBindShaderProgram(desc->program);
+    if (desc->program) device_->draw_executor().PrimBindShaderProgram(desc->program.raw());
 }
 
-void DX11CommandBuffer::BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+void DX11CommandBuffer::BindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride,
                                           const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
     if (!device_) return;
-    device_->draw_executor().PrimBindVertexBuffer(slot, buffer_handle, stride, attrs, rate);
+    device_->draw_executor().PrimBindVertexBuffer(slot, buffer_handle.raw(), stride, attrs, rate);
 }
 
 void DX11CommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
@@ -119,26 +119,26 @@ void DX11CommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
 
 // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
 
-void DX11CommandBuffer::BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+void DX11CommandBuffer::BindIndexBuffer(BufferHandle buffer_handle, IndexType type) {
     if (!device_) return;
-    device_->draw_executor().PrimBindIndexBuffer(buffer_handle, type);
+    device_->draw_executor().PrimBindIndexBuffer(buffer_handle.raw(), type);
 }
 
-void DX11CommandBuffer::BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+void DX11CommandBuffer::BindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) {
     if (!device_) return;
-    device_->draw_executor().PrimBindTexture(slot, texture_handle, dim);
+    device_->draw_executor().PrimBindTexture(slot, texture_handle.raw(), dim);
 }
 
-void DX11CommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+void DX11CommandBuffer::BindUniformBuffer(uint32_t slot, BufferHandle buffer_handle,
                                           uint32_t offset, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle, offset, size);
+    device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle.raw(), offset, size);
 }
 
-void DX11CommandBuffer::BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+void DX11CommandBuffer::BindStorageBuffer(uint32_t slot, BufferHandle buffer_handle,
                                           uint32_t offset, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle, offset, size);
+    device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle.raw(), offset, size);
 }
 
 void DX11CommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
@@ -155,9 +155,9 @@ void DX11CommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t inst
         base_vertex, first_instance, device_->shader_mgr(), device_->resource_mgr());
 }
 
-void DX11CommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+void DX11CommandBuffer::DrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset) {
     if (!device_) return;
-    device_->draw_executor().PrimDrawIndexedIndirect(indirect_buffer, byte_offset,
+    device_->draw_executor().PrimDrawIndexedIndirect(indirect_buffer.raw(), byte_offset,
         device_->shader_mgr(), device_->resource_mgr());
 }
 
@@ -179,7 +179,7 @@ struct DX11RhiDevice::HiZImpl {
         int height = 0;
         int mip_count = 0;
     };
-    std::unordered_map<unsigned int, HiZTextureInfo> textures;
+    std::unordered_map<TextureHandle, HiZTextureInfo> textures;
     unsigned int next_handle = 850000;
 };
 
@@ -264,7 +264,7 @@ void DX11RhiDevice::Shutdown() {
 
     // 清理外部着色器
     for (auto h : external_shader_programs_) {
-        shader_mgr_.DeleteProgram(h);
+        shader_mgr_.DeleteProgram(h.raw());
     }
     external_shader_programs_.clear();
 
@@ -309,43 +309,43 @@ void DX11RhiDevice::BeginFrame() {
     dc->RSSetViewports(1, &vp);
 }
 
-unsigned int DX11RhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
-    return resource_mgr_.CreateRenderTarget(
+RenderTargetHandle DX11RhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
+    return RenderTargetHandle{resource_mgr_.CreateRenderTarget(
         desc.width, desc.height, desc.has_color, desc.has_depth,
         desc.generate_mipmaps, desc.cube_map, desc.msaa_samples, desc.allow_uav,
-        desc.color_attachment_count);
+        desc.color_attachment_count)};
 }
 
-void DX11RhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
-    resource_mgr_.DeleteRenderTarget(render_target_handle);
+void DX11RhiDevice::DeleteRenderTarget(RenderTargetHandle render_target_handle) {
+    resource_mgr_.DeleteRenderTarget(render_target_handle.raw());
 }
 
-unsigned int DX11RhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
-    return resource_mgr_.GetRenderTargetColorTextureHandle(render_target_handle);
+TextureHandle DX11RhiDevice::GetRenderTargetColorTexture(RenderTargetHandle render_target_handle) const {
+    return TextureHandle{resource_mgr_.GetRenderTargetColorTextureHandle(render_target_handle.raw())};
 }
 
-unsigned int DX11RhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
-    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
-    if (!rt) return 0;
+TextureHandle DX11RhiDevice::GetRenderTargetColorTexture(RenderTargetHandle render_target_handle, int index) const {
+    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
+    if (!rt) return {};
     if (!rt->color_texture_handles_mrt.empty()) {
         if (index >= 0 && index < static_cast<int>(rt->color_texture_handles_mrt.size()))
-            return rt->color_texture_handles_mrt[index];
-        return 0;
+            return TextureHandle{rt->color_texture_handles_mrt[index]};
+        return {};
     }
-    return (index == 0) ? rt->color_texture_handle : 0;
+    return (index == 0) ? TextureHandle{rt->color_texture_handle} : TextureHandle{};
 }
 
-unsigned int DX11RhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const {
-    return resource_mgr_.GetRenderTargetDepthTextureHandle(render_target_handle);
+TextureHandle DX11RhiDevice::GetRenderTargetDepthTexture(RenderTargetHandle render_target_handle) const {
+    return TextureHandle{resource_mgr_.GetRenderTargetDepthTextureHandle(render_target_handle.raw())};
 }
 
-std::vector<unsigned char> DX11RhiDevice::ReadRenderTargetColorRgba8(unsigned int render_target_handle) const {
-    auto result = resource_mgr_.ReadRenderTargetColor(render_target_handle);
+std::vector<unsigned char> DX11RhiDevice::ReadRenderTargetColorRgba8(RenderTargetHandle render_target_handle) const {
+    auto result = resource_mgr_.ReadRenderTargetColor(render_target_handle.raw());
     return std::move(result.pixels);
 }
 
-RenderTargetReadback DX11RhiDevice::ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const {
-    auto result = resource_mgr_.ReadRenderTargetColor(render_target_handle);
+RenderTargetReadback DX11RhiDevice::ReadRenderTargetColorRgba8WithSize(RenderTargetHandle render_target_handle) const {
+    auto result = resource_mgr_.ReadRenderTargetColor(render_target_handle.raw());
     RenderTargetReadback readback;
     readback.width = result.width;
     readback.height = result.height;
@@ -353,8 +353,8 @@ RenderTargetReadback DX11RhiDevice::ReadRenderTargetColorRgba8WithSize(unsigned 
     return readback;
 }
 
-RenderTargetDepthReadback DX11RhiDevice::ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
-    auto result = resource_mgr_.ReadRenderTargetDepth(render_target_handle);
+RenderTargetDepthReadback DX11RhiDevice::ReadRenderTargetDepthFloatWithSize(RenderTargetHandle render_target_handle) const {
+    auto result = resource_mgr_.ReadRenderTargetDepth(render_target_handle.raw());
     RenderTargetDepthReadback readback;
     readback.width = result.width;
     readback.height = result.height;
@@ -376,23 +376,23 @@ DXGI_FORMAT ImmAttrFormat(int components) {
 } // namespace
 
 void DX11RhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
-    if (!initialized_ || desc.shader_program == 0) return;
+    if (!initialized_ || !desc.shader_program) return;
     ID3D11Device* dev = context_.device();
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dev || !dc) return;
 
-    const DX11ShaderProgram* prog = shader_mgr_.GetProgram(desc.shader_program);
+    const DX11ShaderProgram* prog = shader_mgr_.GetProgram(desc.shader_program.raw());
     if (!prog || !prog->vertex_shader || !prog->pixel_shader || !prog->vs_blob) return;
 
     // 目标 RTV / DSV / 全尺寸（0 = 交换链后备缓冲）
     ID3D11RenderTargetView* rtv = nullptr;
     ID3D11DepthStencilView* dsv = nullptr;
     int rt_w = context_.width(), rt_h = context_.height();
-    if (desc.render_target == 0) {
+    if (!desc.render_target) {
         rtv = context_.backbuffer_rtv();
         if (desc.depth_test) dsv = context_.backbuffer_dsv();
     } else {
-        const auto* rt = resource_mgr_.GetRenderTarget(desc.render_target);
+        const auto* rt = resource_mgr_.GetRenderTarget(desc.render_target.raw());
         if (!rt || !rt->color_rtv) return;
         rtv = rt->color_rtv.Get();
         if (desc.depth_test && rt->depth_dsv) dsv = rt->depth_dsv.Get();
@@ -426,7 +426,7 @@ void DX11RhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
             "TEXCOORD", static_cast<UINT>(a.location), ImmAttrFormat(a.components),
             0u, static_cast<UINT>(a.offset_bytes), D3D11_INPUT_PER_VERTEX_DATA, 0u});
     }
-    ID3D11InputLayout* layout = shader_mgr_.GetOrCreatePrimInputLayout(desc.shader_program, elems);
+    ID3D11InputLayout* layout = shader_mgr_.GetOrCreatePrimInputLayout(desc.shader_program.raw(), elems);
     if (!layout) return;
     dc->IASetInputLayout(layout);
 
@@ -534,11 +534,11 @@ void DX11RhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     dc->Draw(static_cast<UINT>(desc.vertex_count), 0);
 }
 
-void DX11RhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+void DX11RhiDevice::BlitRenderTarget(RenderTargetHandle src_rt, RenderTargetHandle dst_rt) {
     if (!initialized_) return;
     ID3D11DeviceContext* dc = context_.device_context();
-    const auto* src = resource_mgr_.GetRenderTarget(src_rt);
-    const auto* dst = resource_mgr_.GetRenderTarget(dst_rt);
+    const auto* src = resource_mgr_.GetRenderTarget(src_rt.raw());
+    const auto* dst = resource_mgr_.GetRenderTarget(dst_rt.raw());
     if (!dc || !src || !dst) return;
     ID3D11Texture2D* src_tex = src->color_texture.Get();
     ID3D11Texture2D* dst_tex = dst->color_texture.Get();
@@ -555,51 +555,52 @@ void DX11RhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
     }
 }
 
-unsigned int DX11RhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
-    return resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter);
+TextureHandle DX11RhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
+    return TextureHandle{resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter)};
 }
 
-unsigned int DX11RhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
+TextureHandle DX11RhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
                                                        const std::vector<CompressedMipLevel>& mips,
                                                        bool linear_filter) {
-    return resource_mgr_.CreateCompressedTexture2D(format, mips, linear_filter);
+    return TextureHandle{resource_mgr_.CreateCompressedTexture2D(format, mips, linear_filter)};
 }
 
-unsigned int DX11RhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
-    return resource_mgr_.CreateTextureCube(width, height, rgba8_faces, linear_filter);
+TextureHandle DX11RhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
+    return TextureHandle{resource_mgr_.CreateTextureCube(width, height, rgba8_faces, linear_filter)};
 }
 
-unsigned int DX11RhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
-    return resource_mgr_.CreateTexture3D(width, height, depth, rgba8_data, linear_filter);
+TextureHandle DX11RhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
+    return TextureHandle{resource_mgr_.CreateTexture3D(width, height, depth, rgba8_data, linear_filter)};
 }
 
-void DX11RhiDevice::DeleteTexture(unsigned int texture_handle) {
-    resource_mgr_.DeleteTexture(texture_handle);
+void DX11RhiDevice::DeleteTexture(TextureHandle texture_handle) {
+    resource_mgr_.DeleteTexture(texture_handle.raw());
 }
 
-unsigned int DX11RhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
+ShaderHandle DX11RhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
     unsigned int handle = shader_mgr_.CreateProgram(vert_src, frag_src);
-    if (handle) external_shader_programs_.insert(handle);
-    return handle;
+    ShaderHandle shader_handle{handle};
+    if (shader_handle) external_shader_programs_.insert(shader_handle);
+    return shader_handle;
 }
 
-void DX11RhiDevice::DeleteShaderProgram(unsigned int program_handle) {
+void DX11RhiDevice::DeleteShaderProgram(ShaderHandle program_handle) {
     external_shader_programs_.erase(program_handle);
-    shader_mgr_.DeleteProgram(program_handle);
+    shader_mgr_.DeleteProgram(program_handle.raw());
 }
 
 PipelineHandle DX11RhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
     return PipelineHandle{state_mgr_.CreatePipelineState(desc)};
 }
 
-unsigned int DX11RhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
-    return resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index);
+BufferHandle DX11RhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    return BufferHandle{resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index)};
 }
 
 // --- 内建资源访问器 ---
 // 内建着色器在 InitD3D11→ShaderManager 初始化时已创建（DXBC），此处仅取句柄。
 
-unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
+ShaderHandle DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     switch (program) {
         case BuiltinProgram::Skybox:      return shader_mgr_.skybox_shader_handle();
         case BuiltinProgram::Sprite2D:    return shader_mgr_.sprite2d_shader_handle();
@@ -620,10 +621,10 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::GBufferMesh: return shader_mgr_.gbuffer_mesh_shader_handle();
         case BuiltinProgram::Impostor: return shader_mgr_.impostor_shader_handle();
     }
-    return 0;
+    return {};
 }
 
-unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
+ShaderHandle DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
     // 无参 sampler-only 效果共用内建 passthrough（fullscreen quad 采样源纹理）。
     // PostProcessRenderer 按 effect 名取 gen-PP 程序句柄；未映射效果返回 0（调用方跳过）。
     if (effect_name == "postprocess_passthrough" || effect_name == "copy" ||
@@ -656,16 +657,16 @@ unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name
     if (effect_name == "atmosphere_transmittance_lut") return shader_mgr_.atmosphere_transmittance_lut_shader_handle();
     if (effect_name == "atmosphere_sky") return shader_mgr_.atmosphere_sky_shader_handle();
     if (effect_name == "bloom_composite") return shader_mgr_.bloom_composite_ssao_ae_shader_handle();
-    return 0;
+    return {};
 }
 
-unsigned int DX11RhiDevice::GetBloomComputeShader(bool upsample) const {
+ShaderHandle DX11RhiDevice::GetBloomComputeShader(bool upsample) const {
     return upsample ? shader_mgr_.bloom_upsample_cs_handle()
                     : shader_mgr_.bloom_downsample_cs_handle();
 }
 
-unsigned int DX11RhiDevice::GetSkyboxCubeVertexBuffer() {
-    if (skybox_cube_vbo_handle_ == 0) {
+BufferHandle DX11RhiDevice::GetSkyboxCubeVertexBuffer() {
+    if (!skybox_cube_vbo_handle_) {
         static const float kSkyboxVertices[] = {
             -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
              1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
@@ -680,8 +681,8 @@ unsigned int DX11RhiDevice::GetSkyboxCubeVertexBuffer() {
             -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
              1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
         };
-        skybox_cube_vbo_handle_ = resource_mgr_.CreateBuffer(
-            sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
+        skybox_cube_vbo_handle_ = BufferHandle{resource_mgr_.CreateBuffer(
+            sizeof(kSkyboxVertices), kSkyboxVertices, false, false)};
     }
     return skybox_cube_vbo_handle_;
 }
@@ -699,12 +700,12 @@ BufferHandle DX11RhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const voi
     return RhiDevice::CreateGpuBuffer(desc, initial_data);
 }
 
-void DX11RhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
-    resource_mgr_.UpdateBuffer(handle, offset, size, data, is_index);
+void DX11RhiDevice::UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) {
+    resource_mgr_.UpdateBuffer(handle.raw(), offset, size, data, is_index);
 }
 
-void DX11RhiDevice::DeleteBuffer(unsigned int handle) {
-    resource_mgr_.DeleteBuffer(handle);
+void DX11RhiDevice::DeleteBuffer(BufferHandle handle) {
+    resource_mgr_.DeleteBuffer(handle.raw());
 }
 
 VertexArrayHandle DX11RhiDevice::CreateVertexArray() {
@@ -772,17 +773,17 @@ const RenderStats& DX11RhiDevice::LastFrameStats() const {
 
 // --- SSBO ---
 
-unsigned int DX11RhiDevice::CreateSSBO(size_t size, const void* data) {
-    return resource_mgr_.CreateSSBO(size, data);
+BufferHandle DX11RhiDevice::CreateSSBO(size_t size, const void* data) {
+    return BufferHandle{resource_mgr_.CreateSSBO(size, data)};
 }
 
-void DX11RhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
-    resource_mgr_.UpdateSSBO(handle, offset, size, data);
+void DX11RhiDevice::UpdateSSBO(BufferHandle handle, size_t offset, size_t size, const void* data) {
+    resource_mgr_.UpdateSSBO(handle.raw(), offset, size, data);
 }
 
-void DX11RhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
-    resource_mgr_.BindSSBO(handle, binding_point);
-    bound_ssbos_[binding_point] = {handle, false};
+void DX11RhiDevice::BindSSBO(BufferHandle handle, unsigned int binding_point) {
+    resource_mgr_.BindSSBO(handle.raw(), binding_point);
+    bound_ssbos_[binding_point] = {handle.raw(), false};
 }
 
 void DX11RhiDevice::BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) {
@@ -790,26 +791,26 @@ void DX11RhiDevice::BindGpuBuffer(BufferHandle handle, uint32_t binding_point, b
     bound_ssbos_[binding_point] = {handle.raw(), writable};
 }
 
-void DX11RhiDevice::DeleteSSBO(unsigned int handle) {
-    resource_mgr_.DeleteSSBO(handle);
+void DX11RhiDevice::DeleteSSBO(BufferHandle handle) {
+    resource_mgr_.DeleteSSBO(handle.raw());
 }
 
 // --- Compute Shader ---
 
-unsigned int DX11RhiDevice::CreateComputeShader(const std::string& source) {
-    return shader_mgr_.CreateComputeProgram(source);
+ShaderHandle DX11RhiDevice::CreateComputeShader(const std::string& source) {
+    return ShaderHandle{shader_mgr_.CreateComputeProgram(source)};
 }
 
-void DX11RhiDevice::DeleteComputeShader(unsigned int handle) {
+void DX11RhiDevice::DeleteComputeShader(ShaderHandle handle) {
     // 委托给 shader_mgr_ 实际销毁 ID3D11ComputeShader 资源
-    shader_mgr_.DeleteComputeProgram(handle);
+    shader_mgr_.DeleteComputeProgram(handle.raw());
 }
 
-void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
+void DX11RhiDevice::DispatchCompute(ShaderHandle shader_handle,
                                      unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
-    if (!initialized_ || shader_handle == 0) return;
+    if (!initialized_ || !shader_handle) return;
 
-    const auto* prog = shader_mgr_.GetComputeProgram(shader_handle);
+    const auto* prog = shader_mgr_.GetComputeProgram(shader_handle.raw());
     if (!prog || !prog->cs) return;
 
     ID3D11DeviceContext* dc = context_.device_context();
@@ -858,7 +859,7 @@ void DX11RhiDevice::DispatchCompute(unsigned int shader_handle,
 // RenderGraph 自动屏障（D3D11: 驱动隐式管理，从 UAV 离开时解绑）
 // ============================================================
 
-void DX11RhiDevice::TransitionRenderTarget(unsigned int rt_handle,
+void DX11RhiDevice::TransitionRenderTarget(RenderTargetHandle rt_handle,
                                             ResourceState from, ResourceState to) {
     (void)rt_handle;
     if (from == to) return;
@@ -897,7 +898,7 @@ void DX11RhiDevice::ComputeMemoryBarrier() {
     bound_ssbos_.clear();
 }
 
-void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
+void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, TextureHandle texture_handle, bool read_only) {
     if (!initialized_) return;
 
     ID3D11DeviceContext* dc = context_.device_context();
@@ -905,21 +906,21 @@ void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int te
 
     if (read_only) {
         // 绑定为 SRV 到 CS
-        const auto* tex = resource_mgr_.GetTexture(texture_handle);
+        const auto* tex = resource_mgr_.GetTexture(texture_handle.raw());
         if (tex && tex->srv) {
             ID3D11ShaderResourceView* srv = tex->srv.Get();
             dc->CSSetShaderResources(binding, 1, &srv);
         }
     } else {
         // 先尝试按纹理字典的 UAV（CreateComputeWriteTexture2D 创建）
-        const auto* tex = resource_mgr_.GetTexture(texture_handle);
+        const auto* tex = resource_mgr_.GetTexture(texture_handle.raw());
         if (tex && tex->uav) {
             ID3D11UnorderedAccessView* uav = tex->uav.Get();
             UINT ic = static_cast<UINT>(-1);
             dc->CSSetUnorderedAccessViews(binding, 1, &uav, &ic);
         } else {
             // 备用：尝试按 render target 的 UAV
-            const auto* rt = resource_mgr_.GetRenderTarget(texture_handle);
+            const auto* rt = resource_mgr_.GetRenderTarget(texture_handle.raw());
             if (rt && rt->color_uav) {
                 ID3D11UnorderedAccessView* uav = rt->color_uav.Get();
                 UINT ic = static_cast<UINT>(-1);
@@ -929,7 +930,7 @@ void DX11RhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int te
     }
 }
 
-void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, TextureHandle texture_handle,
                                                int mip_level, bool read_only, bool r32f) {
     if (!initialized_) return;
     ID3D11DeviceContext* dc = context_.device_context();
@@ -955,7 +956,7 @@ void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int
     }
 
     // 普通纹理回退：创建临时 per-mip view（只对 Hi-Z 适用的简化路径）
-    const auto* tex = resource_mgr_.GetTexture(texture_handle);
+    const auto* tex = resource_mgr_.GetTexture(texture_handle.raw());
     if (!tex) return;
 
     if (read_only) {
@@ -972,7 +973,7 @@ void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int
     (void)r32f;
 }
 
-void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, TextureHandle texture_handle) {
     if (!initialized_) return;
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
@@ -987,7 +988,7 @@ void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int tex
         }
     }
 
-    const auto* tex = resource_mgr_.GetTexture(texture_handle);
+    const auto* tex = resource_mgr_.GetTexture(texture_handle.raw());
     if (tex && tex->srv) {
         ID3D11ShaderResourceView* srv = tex->srv.Get();
         dc->CSSetShaderResources(unit, 1, &srv);
@@ -998,12 +999,12 @@ void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int tex
     }
 }
 
-unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
-    if (!initialized_ || width <= 0 || height <= 0) return 0;
+TextureHandle DX11RhiDevice::CreateHiZTexture(int width, int height) {
+    if (!initialized_ || width <= 0 || height <= 0) return {};
     if (!hiz_impl_) hiz_impl_ = std::make_unique<HiZImpl>();
 
     ID3D11Device* dev = context_.device();
-    if (!dev) return 0;
+    if (!dev) return {};
 
     int mip_count = 1;
     {
@@ -1033,7 +1034,7 @@ unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
     HRESULT hr = dev->CreateTexture2D(&desc, nullptr, info.texture.GetAddressOf());
     if (FAILED(hr)) {
         DEBUG_LOG_ERROR("[DX11] Failed to create Hi-Z texture: hr=0x{:08X}", static_cast<unsigned>(hr));
-        return 0;
+        return {};
     }
 
     // 全 mip SRV
@@ -1045,7 +1046,7 @@ unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
     hr = dev->CreateShaderResourceView(info.texture.Get(), &srv_desc, info.full_srv.GetAddressOf());
     if (FAILED(hr)) {
         DEBUG_LOG_ERROR("[DX11] Hi-Z full SRV creation failed: hr=0x{:08X}", static_cast<unsigned>(hr));
-        return 0;
+        return {};
     }
 
     // Per-mip SRV + UAV
@@ -1060,7 +1061,7 @@ unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
         hr = dev->CreateShaderResourceView(info.texture.Get(), &mip_srv, info.mip_srvs[i].GetAddressOf());
         if (FAILED(hr)) {
             DEBUG_LOG_ERROR("[DX11] Hi-Z mip {} SRV failed: hr=0x{:08X}", i, static_cast<unsigned>(hr));
-            return 0;
+            return {};
         }
 
         D3D11_UNORDERED_ACCESS_VIEW_DESC mip_uav{};
@@ -1070,32 +1071,32 @@ unsigned int DX11RhiDevice::CreateHiZTexture(int width, int height) {
         hr = dev->CreateUnorderedAccessView(info.texture.Get(), &mip_uav, info.mip_uavs[i].GetAddressOf());
         if (FAILED(hr)) {
             DEBUG_LOG_ERROR("[DX11] Hi-Z mip {} UAV failed: hr=0x{:08X}", i, static_cast<unsigned>(hr));
-            return 0;
+            return {};
         }
     }
 
-    unsigned int handle = hiz_impl_->next_handle++;
+    TextureHandle handle{hiz_impl_->next_handle++};
     hiz_impl_->textures[handle] = std::move(info);
 
-    DEBUG_LOG_INFO("[DX11] Hi-Z texture created: handle={} {}x{} mips={}", handle, width, height, mip_count);
+    DEBUG_LOG_INFO("[DX11] Hi-Z texture created: handle={} {}x{} mips={}", handle.raw(), width, height, mip_count);
     return handle;
 }
 
-void DX11RhiDevice::DeleteHiZTexture(unsigned int handle) {
+void DX11RhiDevice::DeleteHiZTexture(TextureHandle handle) {
     if (!hiz_impl_) return;
     hiz_impl_->textures.erase(handle);
 }
 
-int DX11RhiDevice::GetHiZMipCount(unsigned int handle) const {
+int DX11RhiDevice::GetHiZMipCount(TextureHandle handle) const {
     if (!hiz_impl_) return 0;
     auto it = hiz_impl_->textures.find(handle);
     return it != hiz_impl_->textures.end() ? it->second.mip_count : 0;
 }
 
-unsigned int DX11RhiDevice::GetHiZGpuTexture(unsigned int handle) const {
-    if (!hiz_impl_) return 0;
+TextureHandle DX11RhiDevice::GetHiZGpuTexture(TextureHandle handle) const {
+    if (!hiz_impl_) return {};
     auto it = hiz_impl_->textures.find(handle);
-    return it != hiz_impl_->textures.end() ? handle : 0;
+    return it != hiz_impl_->textures.end() ? handle : TextureHandle{};
 }
 
 size_t DX11RhiDevice::GetOrCreateUniformOffset(unsigned int shader, const char* name, size_t data_size) {
@@ -1148,55 +1149,55 @@ static void EnsureStagingCapacity(std::vector<uint8_t>& buf, size_t offset, size
     if (buf.size() < needed) buf.resize(needed, 0);
 }
 
-void DX11RhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int v) {
-    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(int));
+void DX11RhiDevice::SetComputeUniformInt(ShaderHandle shader, const char* name, int v) {
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, sizeof(int));
     EnsureStagingCapacity(compute_params_staging_, off, sizeof(int));
     memcpy(compute_params_staging_.data() + off, &v, sizeof(int));
 }
-void DX11RhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float v) {
-    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(float));
+void DX11RhiDevice::SetComputeUniformFloat(ShaderHandle shader, const char* name, float v) {
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, sizeof(float));
     EnsureStagingCapacity(compute_params_staging_, off, sizeof(float));
     memcpy(compute_params_staging_.data() + off, &v, sizeof(float));
 }
-void DX11RhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+void DX11RhiDevice::SetComputeUniformVec2i(ShaderHandle shader, const char* name, int x, int y) {
     int d[2]{x,y};
-    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, sizeof(d));
     EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
     memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
-void DX11RhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+void DX11RhiDevice::SetComputeUniformVec2f(ShaderHandle shader, const char* name, float x, float y) {
     float d[2]{x,y};
-    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, sizeof(d));
     EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
     memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
-void DX11RhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+void DX11RhiDevice::SetComputeUniformVec3(ShaderHandle shader, const char* name, float x, float y, float z) {
     float d[3]{x,y,z};
-    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, sizeof(d));
     EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
     memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
-void DX11RhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+void DX11RhiDevice::SetComputeUniformIVec3(ShaderHandle shader, const char* name, int x, int y, int z) {
     int d[3]{x,y,z};
-    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, sizeof(d));
     EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
     memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
-void DX11RhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+void DX11RhiDevice::SetComputeUniformVec4(ShaderHandle shader, const char* name, float x, float y, float z, float w) {
     float d[4]{x,y,z,w};
-    size_t off = GetOrCreateUniformOffset(shader, name, sizeof(d));
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, sizeof(d));
     EnsureStagingCapacity(compute_params_staging_, off, sizeof(d));
     memcpy(compute_params_staging_.data() + off, d, sizeof(d));
 }
-void DX11RhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
-    size_t off = GetOrCreateUniformOffset(shader, name, 64);
+void DX11RhiDevice::SetComputeUniformMat4(ShaderHandle shader, const char* name, const float* data) {
+    size_t off = GetOrCreateUniformOffset(shader.raw(), name, 64);
     EnsureStagingCapacity(compute_params_staging_, off, 64);
     memcpy(compute_params_staging_.data() + off, data, 64);
 }
-void DX11RhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
+void DX11RhiDevice::ReadSSBO(BufferHandle handle, size_t offset, size_t size, void* dst) {
     if (!initialized_ || !dst || size == 0) return;
 
-    const auto* ssbo = resource_mgr_.GetSSBO(handle);
+    const auto* ssbo = resource_mgr_.GetSSBO(handle.raw());
     if (!ssbo || !ssbo->buffer) return;
 
     ID3D11Device* dev = context_.device();
@@ -1295,48 +1296,48 @@ const void* DX11RhiDevice::GetLastReadbackResult(size_t* out_size) const {
     return async_readback_.result.empty() ? nullptr : async_readback_.result.data();
 }
 
-unsigned int DX11RhiDevice::CreateComputeShaderEx(
+ShaderHandle DX11RhiDevice::CreateComputeShaderEx(
     const std::string& /*gl_src*/, const std::string& /*vk_src*/, const std::string& hlsl_src,
     uint32_t /*ssbo_count*/, uint32_t /*storage_image_count*/,
     uint32_t /*sampler_count*/, uint32_t /*push_constant_bytes*/, const std::string& /*wgsl_src*/) {
-    return shader_mgr_.CreateComputeProgram(hlsl_src, "main");
+    return ShaderHandle{shader_mgr_.CreateComputeProgram(hlsl_src, "main")};
 }
 
-unsigned int DX11RhiDevice::CreateComputeWriteTexture2D(int width, int height) {
-    if (!initialized_) return 0;
-    return resource_mgr_.CreateComputeWriteTexture2D(width, height);
+TextureHandle DX11RhiDevice::CreateComputeWriteTexture2D(int width, int height) {
+    if (!initialized_) return {};
+    return TextureHandle{resource_mgr_.CreateComputeWriteTexture2D(width, height)};
 }
 
 // ============================================================
 // Indirect Draw Buffer
 // ============================================================
 
-unsigned int DX11RhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
-    return resource_mgr_.CreateIndirectBuffer(size, data);
+BufferHandle DX11RhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
+    return BufferHandle{resource_mgr_.CreateIndirectBuffer(size, data)};
 }
 
-void DX11RhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset,
+void DX11RhiDevice::UpdateIndirectBuffer(BufferHandle handle, size_t offset,
                                           size_t size, const void* data) {
-    resource_mgr_.UpdateIndirectBuffer(handle, offset, size, data);
+    resource_mgr_.UpdateIndirectBuffer(handle.raw(), offset, size, data);
 }
 
-void DX11RhiDevice::DeleteIndirectBuffer(unsigned int handle) {
-    resource_mgr_.DeleteIndirectBuffer(handle);
+void DX11RhiDevice::DeleteIndirectBuffer(BufferHandle handle) {
+    resource_mgr_.DeleteIndirectBuffer(handle.raw());
 }
 
-void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
+void DX11RhiDevice::MultiDrawIndexedIndirect(BufferHandle indirect_buffer,
                                               int draw_count, size_t stride, size_t byte_offset) {
-    if (draw_count <= 0 || indirect_buffer == 0) return;
+    if (draw_count <= 0 || !indirect_buffer) return;
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
 
     // 查找 ID3D11Buffer*：先查 indirect buffer map，再查 SSBO map（draw cmd SSBO）
     ID3D11Buffer* d3d_buf = nullptr;
-    const DX11IndirectBuffer* ibuf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
+    const DX11IndirectBuffer* ibuf = resource_mgr_.GetIndirectBuffer(indirect_buffer.raw());
     if (ibuf && ibuf->buffer) {
         d3d_buf = ibuf->buffer.Get();
     } else {
-        const DX11SSBO* sbuf = resource_mgr_.GetSSBO(indirect_buffer);
+        const DX11SSBO* sbuf = resource_mgr_.GetSSBO(indirect_buffer.raw());
         if (sbuf && sbuf->buffer) d3d_buf = sbuf->buffer.Get();
     }
     if (!d3d_buf) return;
@@ -1344,7 +1345,7 @@ void DX11RhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer,
     // GPU-Driven per-draw：更新 draw_id（VS 从 ByteAddressBuffer t16 读 model）
     // 同时保留 PerObjectCB 回退（gpu_driven shader 不可用时）
     const auto* inst_data = static_cast<const GPUInstanceData*>(cached_gpu_models_);
-    const bool use_gpu_driven = (shader_mgr_.gpu_driven_pbr_shader_handle() != 0);
+    const bool use_gpu_driven = static_cast<bool>(shader_mgr_.gpu_driven_pbr_shader_handle());
 
     // 绑定 instance SSBO 到 VS t16（GPU-driven VS 从 ByteAddressBuffer 读 model）
     if (use_gpu_driven) {
@@ -1504,7 +1505,7 @@ void DX11RhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
 // ============================================================
 
 bool DX11RhiDevice::HasGPUDrivenPBRShader() const {
-    return shader_mgr_.gpu_driven_pbr_shader_handle() != 0;
+    return static_cast<bool>(shader_mgr_.gpu_driven_pbr_shader_handle());
 }
 
 void DX11RhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
@@ -1523,9 +1524,9 @@ void DX11RhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, cons
     draw_executor_.SetupGPUDrivenShadow(light_view, light_proj, state_mgr_, shader_mgr_);
 }
 
-void DX11RhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
-                                            unsigned int metallic_roughness,
-                                            unsigned int emissive, unsigned int occlusion) {
+void DX11RhiDevice::BindGPUDrivenTextures(TextureHandle albedo, TextureHandle normal,
+                                            TextureHandle metallic_roughness,
+                                            TextureHandle emissive, TextureHandle occlusion) {
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
 
@@ -1533,9 +1534,9 @@ void DX11RhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int norm
     ID3D11ShaderResourceView* white_srv = draw_executor_.white_srv();
     ID3D11SamplerState* white_sam = draw_executor_.white_sampler();
 
-    auto bind_slot = [&](int slot, unsigned int handle) {
-        if (handle != 0) {
-            const auto* tex = resource_mgr_.GetTexture(handle);
+    auto bind_slot = [&](int slot, TextureHandle handle) {
+        if (handle) {
+            const auto* tex = resource_mgr_.GetTexture(handle.raw());
             if (tex && tex->srv) {
                 dc->PSSetShaderResources(static_cast<UINT>(slot), 1, tex->srv.GetAddressOf());
                 if (tex->sampler)
@@ -1650,4 +1651,3 @@ void DX11RhiDevice::SetOverdrawMode(bool enable) {
 
 } // namespace render
 } // namespace dse
-

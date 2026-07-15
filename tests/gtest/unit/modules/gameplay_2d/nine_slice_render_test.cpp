@@ -15,7 +15,7 @@
 
 static SpriteDrawItem MakeBase() {
     SpriteDrawItem item;
-    item.texture_handle = 42u;
+    item.texture_handle = dse::render::TextureHandle::from_raw(42);
     item.sorting_layer = 1000;
     item.order_in_layer = 5;
     item.color = glm::vec4(1.0f);
@@ -142,7 +142,7 @@ TEST(Expand9SliceTest, ModelAnd) {
 // 测试 展开9切片：基正确
 TEST(Expand9SliceTest, BaseCorrect) {
     SpriteDrawItem base = MakeBase();
-    base.texture_handle = 77u;
+    base.texture_handle = dse::render::TextureHandle::from_raw(77);
     base.order_in_layer = 12;
 
     std::vector<SpriteDrawItem> out;
@@ -155,7 +155,8 @@ TEST(Expand9SliceTest, BaseCorrect) {
                       out);
     ASSERT_FALSE(out.empty());
     for (const auto& item : out) {
-        EXPECT_EQ(item.texture_handle, 77u);
+        EXPECT_EQ(item.texture_handle,
+                  dse::render::TextureHandle::from_raw(77));
         EXPECT_EQ(item.order_in_layer, 12);
     }
 }

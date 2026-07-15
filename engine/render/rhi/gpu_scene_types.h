@@ -12,6 +12,8 @@
 #include <glm/glm.hpp>
 #include <cstdint>
 
+#include "engine/render/rhi/rhi_handle.h"
+
 namespace dse {
 namespace render {
 
@@ -54,18 +56,18 @@ namespace gpu_driven {
 
 /// GPU-Driven 每个 draw 的纹理句柄组合（用于分桶排序）
 struct GPUDrawTextures {
-    unsigned int albedo = 0;
-    unsigned int normal = 0;
-    unsigned int metallic_roughness = 0;
-    unsigned int emissive = 0;
-    unsigned int occlusion = 0;
+    TextureHandle albedo;
+    TextureHandle normal;
+    TextureHandle metallic_roughness;
+    TextureHandle emissive;
+    TextureHandle occlusion;
 
     bool operator<(const GPUDrawTextures& o) const {
-        if (albedo != o.albedo) return albedo < o.albedo;
-        if (normal != o.normal) return normal < o.normal;
-        if (metallic_roughness != o.metallic_roughness) return metallic_roughness < o.metallic_roughness;
-        if (emissive != o.emissive) return emissive < o.emissive;
-        return occlusion < o.occlusion;
+        if (albedo != o.albedo) return albedo.raw() < o.albedo.raw();
+        if (normal != o.normal) return normal.raw() < o.normal.raw();
+        if (metallic_roughness != o.metallic_roughness) return metallic_roughness.raw() < o.metallic_roughness.raw();
+        if (emissive != o.emissive) return emissive.raw() < o.emissive.raw();
+        return occlusion.raw() < o.occlusion.raw();
     }
     bool operator==(const GPUDrawTextures& o) const {
         return albedo == o.albedo && normal == o.normal

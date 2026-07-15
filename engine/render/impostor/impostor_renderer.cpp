@@ -122,8 +122,8 @@ void ImpostorRenderer::DrawImpostors(CommandBuffer& cmd, RhiDevice& device,
                                      const glm::vec3& light_dir,
                                      const glm::vec3& ambient_color) {
     if (batches.empty()) return;
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Impostor);
-    if (program == 0) return;  // 不支持 → 静默跳过
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::Impostor);
+    if (!program) return;  // 不支持 → 静默跳过
     EnsureResources(device);
     if (!per_frame_ubo_ || !quad_vbo_ || !quad_ibo_) return;
 
@@ -140,9 +140,9 @@ void ImpostorRenderer::DrawImpostors(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
-    cmd.BindVertexBuffer(0u, quad_vbo_.raw(), static_cast<uint32_t>(sizeof(QuadVertex)), attrs);
-    cmd.BindIndexBuffer(quad_ibo_.raw(), IndexType::UInt16);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);  // PerFrame @ set0.b0
+    cmd.BindVertexBuffer(0u, quad_vbo_, static_cast<uint32_t>(sizeof(QuadVertex)), attrs);
+    cmd.BindIndexBuffer(quad_ibo_, IndexType::UInt16);
 
     for (const auto& batch : batches) {
         if (batch.instances.empty()) continue;
@@ -180,7 +180,7 @@ void ImpostorRenderer::DrawImpostors(CommandBuffer& cmd, RhiDevice& device,
         params.light_dir = glm::vec4(light_dir, batch.normal_strength);
         params.ambient_color = glm::vec4(ambient_color, batch.alpha_cutoff);
         device.UpdateGpuBuffer(params_ubo_, 0, sizeof(params), &params);
-        cmd.BindUniformBuffer(1u, params_ubo_.raw());  // ImpostorParams @ set1.b0
+        cmd.BindUniformBuffer(1u, params_ubo_);  // ImpostorParams @ set1.b0
 
         // 绑定纹理
         cmd.BindTexture(0u, batch.atlas_texture ? batch.atlas_texture : white_tex_, TextureDim::Tex2D);
@@ -188,7 +188,7 @@ void ImpostorRenderer::DrawImpostors(CommandBuffer& cmd, RhiDevice& device,
 
         // 绑定实例 SSBO
         const uint32_t inst_bytes = static_cast<uint32_t>(count) * static_cast<uint32_t>(sizeof(ImpostorGpuInstance));
-        cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, inst_bytes);
+        cmd.BindStorageBuffer(0u, instance_ssbo_, 0u, inst_bytes);
 
         // 绘制
         cmd.DrawIndexedInstanced(6u, static_cast<uint32_t>(count), 0u, 0, 0u);
@@ -203,7 +203,7 @@ void ImpostorRenderer::Shutdown(RhiDevice& device) {
     if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
     if (white_tex_) device.DeleteTexture(white_tex_);
     quad_vbo_ = quad_ibo_ = per_frame_ubo_ = params_ubo_ = instance_ssbo_ = BufferHandle{};
-    white_tex_ = 0;
+    white_tex_ = {};
     pso_ = {};
     instance_ssbo_capacity_ = 0;
     init_ = false;

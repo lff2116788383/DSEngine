@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file vulkan_rhi_device_compute.cpp
  * @brief VulkanRhiDevice compute, HiZ, and uniform management.
  */
@@ -16,13 +16,13 @@
 namespace dse {
 namespace render {
 
-unsigned int VulkanRhiDevice::CreateComputeShader(const std::string& source) {
-    if (!initialized_) return 0u;
-    return shader_mgr_.CreateComputeProgram(source);
+ShaderHandle VulkanRhiDevice::CreateComputeShader(const std::string& source) {
+    if (!initialized_) return {};
+    return ShaderHandle{shader_mgr_.CreateComputeProgram(source)};
 }
 
-void VulkanRhiDevice::DeleteComputeShader(unsigned int handle) {
-    shader_mgr_.DeleteComputeProgram(handle);
+void VulkanRhiDevice::DeleteComputeShader(ShaderHandle handle) {
+    shader_mgr_.DeleteComputeProgram(handle.raw());
 }
 
 void VulkanRhiDevice::BeginComputePass() {
@@ -44,11 +44,11 @@ void VulkanRhiDevice::EndComputePass() {
     pending_compute_samplers_.clear();
 }
 
-void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
+void VulkanRhiDevice::DispatchCompute(ShaderHandle shader_handle,
                                        unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
-    if (!initialized_ || shader_handle == 0) return;
+    if (!initialized_ || !shader_handle) return;
 
-    const auto* prog = shader_mgr_.GetComputeProgram(shader_handle);
+    const auto* prog = shader_mgr_.GetComputeProgram(shader_handle.raw());
     if (!prog || prog->pipeline == VK_NULL_HANDLE) return;
 
     // 确定录制目标 cmd buffer
@@ -105,7 +105,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                 }
                 // 普通纹理
                 if (view == VK_NULL_HANDLE) {
-                    const auto* tex = resource_mgr_.GetTexture(img_bind.texture_handle);
+                    const auto* tex = resource_mgr_.GetTexture(img_bind.texture_handle.raw());
                     if (tex) view = tex->image_view;
                 }
                 if (view == VK_NULL_HANDLE) continue;
@@ -141,7 +141,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                 }
                 // 普通纹理
                 if (view == VK_NULL_HANDLE) {
-                    const auto* tex = resource_mgr_.GetTexture(tex_handle);
+                    const auto* tex = resource_mgr_.GetTexture(tex_handle.raw());
                     if (tex && tex->image_view != VK_NULL_HANDLE) {
                         view = tex->image_view;
                         sampler = tex->sampler != VK_NULL_HANDLE ? tex->sampler : resource_mgr_.default_sampler();
@@ -150,7 +150,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                 // Render target depth attachment（Hi-Z 使用 PreZ depth）
                 bool is_depth_attachment = false;
                 if (view == VK_NULL_HANDLE) {
-                    VkImageView depth_view = resource_mgr_.GetRenderTargetDepthImageView(tex_handle);
+                    VkImageView depth_view = resource_mgr_.GetRenderTargetDepthImageView(tex_handle.raw());
                     if (depth_view != VK_NULL_HANDLE) {
                         view = depth_view;
                         sampler = resource_mgr_.default_sampler();
@@ -447,18 +447,18 @@ VkPipeline VulkanRhiDevice::GetOrCreateImmediatePipeline(
 
 void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     EnsureInitialized();
-    if (!initialized_ || desc.shader_program == 0) return;
-    if (desc.render_target == 0) {
+    if (!initialized_ || !desc.shader_program) return;
+    if (!desc.render_target) {
         // 即时绘制目标须为离屏 RT；swapchain 直绘走呈现层（§5.3），此处不支持。
         DEBUG_LOG_WARN("[Vulkan] ImmediateDraw: default framebuffer target unsupported");
         return;
     }
 
-    const VulkanShaderProgram* program = shader_mgr_.GetProgram(desc.shader_program);
-    const VulkanRenderTarget* rt = resource_mgr_.GetRenderTarget(desc.render_target);
+    const VulkanShaderProgram* program = shader_mgr_.GetProgram(desc.shader_program.raw());
+    const VulkanRenderTarget* rt = resource_mgr_.GetRenderTarget(desc.render_target.raw());
     if (!program || !rt || !rt->has_color ||
         rt->framebuffer == VK_NULL_HANDLE || rt->color_texture.image == VK_NULL_HANDLE) {
-        DEBUG_LOG_WARN("[Vulkan] ImmediateDraw: invalid program/RT {}", desc.render_target);
+        DEBUG_LOG_WARN("[Vulkan] ImmediateDraw: invalid program/RT {}", desc.render_target.raw());
         return;
     }
 
@@ -473,13 +473,13 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     if (pipeline == VK_NULL_HANDLE) return;
 
     // 顶点数据上传到临时 GPU 顶点缓冲（同步提交后删除）。
-    unsigned int vbo_handle = 0;
+    BufferHandle vbo_handle;
     const VulkanBuffer* vbuf = nullptr;
     if (desc.vertices && desc.vertex_bytes > 0) {
-        vbo_handle = resource_mgr_.CreateBuffer(desc.vertex_bytes, desc.vertices, true, false);
-        vbuf = resource_mgr_.GetBuffer(vbo_handle);
+        vbo_handle = BufferHandle{resource_mgr_.CreateBuffer(desc.vertex_bytes, desc.vertices, true, false)};
+        vbuf = resource_mgr_.GetBuffer(vbo_handle.raw());
         if (!vbuf || vbuf->buffer == VK_NULL_HANDLE) {
-            if (vbo_handle) resource_mgr_.DeleteBuffer(vbo_handle);
+            if (vbo_handle) resource_mgr_.DeleteBuffer(vbo_handle.raw());
             return;
         }
     }
@@ -579,20 +579,20 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
 
     resource_mgr_.EndSingleTimeCommands(cmd);  // 提交 + 等待完成
 
-    if (vbo_handle) resource_mgr_.DeleteBuffer(vbo_handle);
+    if (vbo_handle) resource_mgr_.DeleteBuffer(vbo_handle.raw());
 
     current_frame_stats_.draw_calls++;
 }
 
-void VulkanRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+void VulkanRhiDevice::BlitRenderTarget(RenderTargetHandle src_rt, RenderTargetHandle dst_rt) {
     EnsureInitialized();
     if (!initialized_ || src_rt == dst_rt) return;
 
-    const VulkanRenderTarget* src = resource_mgr_.GetRenderTarget(src_rt);
-    const VulkanRenderTarget* dst = resource_mgr_.GetRenderTarget(dst_rt);
+    const VulkanRenderTarget* src = resource_mgr_.GetRenderTarget(src_rt.raw());
+    const VulkanRenderTarget* dst = resource_mgr_.GetRenderTarget(dst_rt.raw());
     if (!src || !dst || !src->has_color || !dst->has_color ||
         src->color_texture.image == VK_NULL_HANDLE || dst->color_texture.image == VK_NULL_HANDLE) {
-        DEBUG_LOG_WARN("[Vulkan] BlitRenderTarget: invalid src {} / dst {}", src_rt, dst_rt);
+        DEBUG_LOG_WARN("[Vulkan] BlitRenderTarget: invalid src {} / dst {}", src_rt.raw(), dst_rt.raw());
         return;
     }
 
@@ -653,11 +653,11 @@ void VulkanRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt)
     resource_mgr_.EndSingleTimeCommands(cmd);
 }
 
-void VulkanRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
+void VulkanRhiDevice::TransitionRenderTarget(RenderTargetHandle rt_handle,
                                               ResourceState from, ResourceState to) {
     if (from == to) return;
 
-    const auto* rt = resource_mgr_.GetRenderTarget(rt_handle);
+    const auto* rt = resource_mgr_.GetRenderTarget(rt_handle.raw());
     if (!rt) return;
 
     // 确定要转换的 VkImage 和 aspect mask
@@ -725,21 +725,21 @@ void VulkanRhiDevice::ComputeMemoryBarrier() {
                          0, 1, &barrier, 0, nullptr, 0, nullptr);
 }
 
-void VulkanRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
+void VulkanRhiDevice::SetComputeTextureImage(unsigned int binding, TextureHandle texture_handle, bool read_only) {
     pending_compute_images_[binding] = { texture_handle, read_only, -1, false };
 }
 
-void VulkanRhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+void VulkanRhiDevice::SetComputeTextureImageMip(unsigned int binding, TextureHandle texture_handle,
                                                  int mip_level, bool read_only, bool r32f) {
     pending_compute_images_[binding] = { texture_handle, read_only, mip_level, r32f };
 }
 
-void VulkanRhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+void VulkanRhiDevice::SetComputeTextureSampler(unsigned int unit, TextureHandle texture_handle) {
     pending_compute_samplers_[unit] = texture_handle;
 }
 
-unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
-    if (!initialized_ || width <= 0 || height <= 0) return 0;
+TextureHandle VulkanRhiDevice::CreateHiZTexture(int width, int height) {
+    if (!initialized_ || width <= 0 || height <= 0) return {};
     if (!hiz_impl_) hiz_impl_ = std::make_unique<HiZImpl>();
 
     VkDevice device = context_.device();
@@ -773,7 +773,7 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
 
     if (vkCreateImage(device, &img_ci, nullptr, &info.image) != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create Hi-Z image");
-        return 0;
+        return {};
     }
 
     VkMemoryRequirements mem_reqs;
@@ -785,7 +785,7 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
     if (vkAllocateMemory(device, &alloc_ci, nullptr, &info.memory) != VK_SUCCESS) {
         vkDestroyImage(device, info.image, nullptr);
         DEBUG_LOG_ERROR("[Vulkan] Failed to allocate Hi-Z memory");
-        return 0;
+        return {};
     }
     vkBindImageMemory(device, info.image, info.memory, 0);
 
@@ -835,15 +835,15 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
     // 注册为纹理资源（供 GetHiZGpuTexture 通过 handle 返回）
     // 使用 resource_mgr_ 的 compute write texture 创建方式简化
     // 这里直接返回一个自管理 handle
-    unsigned int handle = hiz_impl_->next_handle++;
-    info.texture_handle = handle;
+    TextureHandle handle{hiz_impl_->next_handle++};
+    info.texture_handle = handle.raw();
     hiz_impl_->textures[handle] = std::move(info);
 
-    DEBUG_LOG_INFO("[Vulkan] Hi-Z texture created: handle={} {}x{} mips={}", handle, width, height, mip_count);
+    DEBUG_LOG_INFO("[Vulkan] Hi-Z texture created: handle={} {}x{} mips={}", handle.raw(), width, height, mip_count);
     return handle;
 }
 
-void VulkanRhiDevice::DeleteHiZTexture(unsigned int handle) {
+void VulkanRhiDevice::DeleteHiZTexture(TextureHandle handle) {
     if (!hiz_impl_) return;
     auto it = hiz_impl_->textures.find(handle);
     if (it == hiz_impl_->textures.end()) return;
@@ -859,16 +859,16 @@ void VulkanRhiDevice::DeleteHiZTexture(unsigned int handle) {
     hiz_impl_->textures.erase(it);
 }
 
-int VulkanRhiDevice::GetHiZMipCount(unsigned int handle) const {
+int VulkanRhiDevice::GetHiZMipCount(TextureHandle handle) const {
     if (!hiz_impl_) return 0;
     auto it = hiz_impl_->textures.find(handle);
     return it != hiz_impl_->textures.end() ? it->second.mip_count : 0;
 }
 
-unsigned int VulkanRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
-    if (!hiz_impl_) return 0;
+TextureHandle VulkanRhiDevice::GetHiZGpuTexture(TextureHandle handle) const {
+    if (!hiz_impl_) return {};
     auto it = hiz_impl_->textures.find(handle);
-    return it != hiz_impl_->textures.end() ? handle : 0;
+    return it != hiz_impl_->textures.end() ? handle : TextureHandle{};
 }
 
 static void EnsurePushConstantCapacity(std::vector<uint8_t>& buf, size_t offset, size_t write_size) {
@@ -889,68 +889,67 @@ size_t VulkanRhiDevice::GetOrCreateUniformOffset(unsigned int shader, const char
     return offset;
 }
 
-void VulkanRhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
-    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(int));
+void VulkanRhiDevice::SetComputeUniformInt(ShaderHandle shader, const char* name, int value) {
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, sizeof(int));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(int));
     memcpy(compute_push_constants_.data() + offset, &value, sizeof(int));
 }
-void VulkanRhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
-    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(float));
+void VulkanRhiDevice::SetComputeUniformFloat(ShaderHandle shader, const char* name, float value) {
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, sizeof(float));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(float));
     memcpy(compute_push_constants_.data() + offset, &value, sizeof(float));
 }
-void VulkanRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+void VulkanRhiDevice::SetComputeUniformVec2i(ShaderHandle shader, const char* name, int x, int y) {
     int data[2] = { x, y };
-    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
-void VulkanRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+void VulkanRhiDevice::SetComputeUniformVec2f(ShaderHandle shader, const char* name, float x, float y) {
     float data[2] = { x, y };
-    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
-void VulkanRhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+void VulkanRhiDevice::SetComputeUniformVec3(ShaderHandle shader, const char* name, float x, float y, float z) {
     float data[3] = { x, y, z };
-    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
-void VulkanRhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+void VulkanRhiDevice::SetComputeUniformIVec3(ShaderHandle shader, const char* name, int x, int y, int z) {
     int data[3] = { x, y, z };
-    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
-void VulkanRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+void VulkanRhiDevice::SetComputeUniformVec4(ShaderHandle shader, const char* name, float x, float y, float z, float w) {
     float data[4] = { x, y, z, w };
-    size_t offset = GetOrCreateUniformOffset(shader, name, sizeof(data));
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, sizeof(data));
     EnsurePushConstantCapacity(compute_push_constants_, offset, sizeof(data));
     memcpy(compute_push_constants_.data() + offset, data, sizeof(data));
 }
-void VulkanRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
-    size_t offset = GetOrCreateUniformOffset(shader, name, 64);
+void VulkanRhiDevice::SetComputeUniformMat4(ShaderHandle shader, const char* name, const float* data) {
+    size_t offset = GetOrCreateUniformOffset(shader.raw(), name, 64);
     EnsurePushConstantCapacity(compute_push_constants_, offset, 64);
     memcpy(compute_push_constants_.data() + offset, data, 64);
 }
-unsigned int VulkanRhiDevice::CreateComputeShaderEx(
+ShaderHandle VulkanRhiDevice::CreateComputeShaderEx(
 
     const std::string& /*gl_src*/, const std::string& vk_src, const std::string& /*hlsl_src*/,
     uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count,
     uint32_t push_constant_bytes, const std::string& /*wgsl_src*/) {
-    if (!initialized_) return 0u;
+    if (!initialized_) return {};
     if (ssbo_count == 0 && storage_image_count == 0 && sampler_count == 0)
-        return shader_mgr_.CreateComputeProgramSSBO(vk_src, 0, push_constant_bytes);
-    return shader_mgr_.CreateComputeProgramFull(
-        vk_src, ssbo_count, storage_image_count, sampler_count, push_constant_bytes);
+        return ShaderHandle{shader_mgr_.CreateComputeProgramSSBO(vk_src, 0, push_constant_bytes)};
+    return ShaderHandle{shader_mgr_.CreateComputeProgramFull(
+        vk_src, ssbo_count, storage_image_count, sampler_count, push_constant_bytes)};
 }
 
-unsigned int VulkanRhiDevice::CreateComputeWriteTexture2D(int width, int height) {
-    if (!initialized_) return 0;
-    return resource_mgr_.CreateComputeWriteTexture2D(width, height);
+TextureHandle VulkanRhiDevice::CreateComputeWriteTexture2D(int width, int height) {
+    if (!initialized_) return {};
+    return TextureHandle{resource_mgr_.CreateComputeWriteTexture2D(width, height)};
 }
 
 } // namespace render
 } // namespace dse
-

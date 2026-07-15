@@ -135,7 +135,7 @@ struct OpenGLRhiDevice::HiZImpl {
         int height = 0;
         int mip_count = 0;
     };
-    std::unordered_map<unsigned int, HiZTextureInfo> textures;
+    std::unordered_map<TextureHandle, HiZTextureInfo> textures;
     unsigned int next_handle = 500000;
 };
 
@@ -188,7 +188,7 @@ void OpenGLCommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_
 }
 
 
-void OpenGLCommandBuffer::BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+void OpenGLCommandBuffer::BindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride,
                                            const std::vector<VertexAttr>& attrs,
                                            VertexInputRate rate) {
     if (!device_) return;
@@ -205,23 +205,23 @@ void OpenGLCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
     device_->RealDraw(vertex_count, first_vertex);
 }
 
-void OpenGLCommandBuffer::BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+void OpenGLCommandBuffer::BindIndexBuffer(BufferHandle buffer_handle, IndexType type) {
     if (!device_) return;
     device_->RealBindIndexBuffer(buffer_handle, type);
 }
 
-void OpenGLCommandBuffer::BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+void OpenGLCommandBuffer::BindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) {
     if (!device_) return;
     device_->RealBindTexture(slot, texture_handle, dim);
 }
 
-void OpenGLCommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+void OpenGLCommandBuffer::BindUniformBuffer(uint32_t slot, BufferHandle buffer_handle,
                                             uint32_t offset, uint32_t size) {
     if (!device_) return;
     device_->RealBindUniformBuffer(slot, buffer_handle, offset, size);
 }
 
-void OpenGLCommandBuffer::BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+void OpenGLCommandBuffer::BindStorageBuffer(uint32_t slot, BufferHandle buffer_handle,
                                             uint32_t offset, uint32_t size) {
     if (!device_) return;
     device_->RealBindStorageBuffer(slot, buffer_handle, offset, size);
@@ -239,7 +239,7 @@ void OpenGLCommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t in
     device_->RealDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
 }
 
-void OpenGLCommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+void OpenGLCommandBuffer::DrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset) {
     if (!device_) return;
     device_->RealDrawIndexedIndirect(indirect_buffer, byte_offset);
 }
@@ -280,22 +280,22 @@ void OpenGLRhiDevice::EnsureInitialized() {
         return CreateVertexArray();
     });
     draw_executor_.set_create_buffer_fn([this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int {
-        return CreateBuffer(size, data, is_dynamic, is_index);
+        return CreateBuffer(size, data, is_dynamic, is_index).raw();
     });
     draw_executor_.set_update_buffer_fn([this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
-        UpdateBuffer(handle, offset, size, data, is_index);
+        UpdateBuffer(BufferHandle{handle}, offset, size, data, is_index);
     });
     draw_executor_.set_delete_vao_fn([this](VertexArrayHandle handle) {
         DeleteVertexArray(handle);
     });
     draw_executor_.set_delete_buffer_fn([this](unsigned int handle) {
-        DeleteBuffer(handle);
+        DeleteBuffer(BufferHandle{handle});
     });
     draw_executor_.set_delete_texture_fn([this](unsigned int handle) {
-        DeleteTexture(handle);
+        DeleteTexture(TextureHandle{handle});
     });
     draw_executor_.set_create_texture_fn([this](int w, int h, const unsigned char* data, bool linear) -> unsigned int {
-        return CreateTexture2D(w, h, data, linear);
+        return CreateTexture2D(w, h, data, linear).raw();
     });
 
     // 检测 SSBO 支持（需要 GL 4.3+）
@@ -344,8 +344,8 @@ void OpenGLRhiDevice::EnsureInitialized() {
     // 初始化几何缓冲区：2D 精灵 + 3D 网格 + 白色纹理
     draw_executor_.InitGeometryBuffers(
         [this]() -> VertexArrayHandle { return CreateVertexArray(); },
-        [this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int { return CreateBuffer(size, data, is_dynamic, is_index); },
-        [this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) { UpdateBuffer(handle, offset, size, data, is_index); }
+        [this](size_t size, const void* data, bool is_dynamic, bool is_index) -> unsigned int { return CreateBuffer(size, data, is_dynamic, is_index).raw(); },
+        [this](unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) { UpdateBuffer(BufferHandle{handle}, offset, size, data, is_index); }
     );
 
     gpu_timer_.Init();
@@ -365,7 +365,7 @@ void OpenGLRhiDevice::Shutdown() {
         // shader_mgr_ 管理的着色器由 Shutdown 自行销毁，这里只处理 external 部分
         if (live_external > 0 && !external_shader_programs_.empty()) {
             for (auto handle : external_shader_programs_) {
-                glDeleteProgram(handle);
+                glDeleteProgram(handle.raw());
                 resource_mgr_.ledger().shader_programs_destroyed += 1;
             }
             external_shader_programs_.clear();
@@ -386,7 +386,7 @@ void OpenGLRhiDevice::Shutdown() {
 
     // 清理 compute shader programs
     for (auto handle : compute_programs_) {
-        glDeleteProgram(handle);
+        glDeleteProgram(handle.raw());
     }
     compute_programs_.clear();
 
@@ -430,21 +430,21 @@ const RenderStats& OpenGLRhiDevice::LastFrameStats() const {
 
 // --- 缓冲区 ---
 
-unsigned int OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
-    if (!initialized_) return 0u;
+BufferHandle OpenGLRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    if (!initialized_) return {};
     unsigned int handle = 0;
     glGenBuffers(1, &handle);
     resource_mgr_.ledger().buffers_created += 1;
     unsigned int target = is_index ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
     glBindBuffer(target, handle);
     glBufferData(target, size, data, is_dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
-    return handle;
+    return BufferHandle{handle};
 }
 
-void OpenGLRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
+void OpenGLRhiDevice::UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) {
     if (!initialized_) return;
     // 使用 GL_COPY_WRITE_BUFFER 避免修改当前 VAO 的 EBO 绑定状态
-    glBindBuffer(GL_COPY_WRITE_BUFFER, handle);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, handle.raw());
     if (offset == 0) {
         // Buffer orphaning: 驱动可立即分配新 storage 而无需等待 GPU 释放旧数据
         glBufferData(GL_COPY_WRITE_BUFFER, static_cast<GLsizeiptr>(size), data, GL_STREAM_DRAW);
@@ -455,8 +455,9 @@ void OpenGLRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t si
     glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 }
 
-void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
-    glDeleteBuffers(1, &handle);
+void OpenGLRhiDevice::DeleteBuffer(BufferHandle handle) {
+    unsigned int raw = handle.raw();
+    glDeleteBuffers(1, &raw);
     resource_mgr_.ledger().buffers_destroyed += 1;
 }
 
@@ -479,12 +480,12 @@ void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
 
 // --- 纹理 ---
 
-unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
+TextureHandle OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
     return CreateTexture2D(width, height, rgba8_data,
                            TextureSamplerDesc::FromLinearFlag(linear_filter));
 }
 
-unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
+TextureHandle OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
                                               const TextureSamplerDesc& sampler) {
     EnsureInitialized();
     const GLint filter = (sampler.filter == TextureFilter::Linear) ? GL_LINEAR : GL_NEAREST;
@@ -499,13 +500,13 @@ unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsig
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_data);
     glBindTexture(GL_TEXTURE_2D, 0);
-    return texture_handle;
+    return TextureHandle{texture_handle};
 }
 
-unsigned int OpenGLRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
+TextureHandle OpenGLRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
                                                          const std::vector<CompressedMipLevel>& mips,
                                                          bool linear_filter) {
-    if (mips.empty()) return 0;
+    if (mips.empty()) return {};
 
     GLenum gl_format = 0;
     switch (format) {
@@ -518,7 +519,7 @@ unsigned int OpenGLRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat 
         case CompressedTextureFormat::BC5_UNORM: gl_format = GL_COMPRESSED_RG_RGTC2; break;
         case CompressedTextureFormat::BC7_UNORM: gl_format = GL_COMPRESSED_RGBA_BPTC_UNORM_ARB; break;
         case CompressedTextureFormat::BC7_SRGB:  gl_format = GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB; break;
-        default: return 0;
+        default: return {};
     }
 
     unsigned int texture_handle = 0;
@@ -540,18 +541,18 @@ unsigned int OpenGLRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat 
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
-    return texture_handle;
+    return TextureHandle{texture_handle};
 }
 
-unsigned int OpenGLRhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
+TextureHandle OpenGLRhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
     if (width <= 0 || height <= 0) {
-        return 0;
+        return {};
     }
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
     if (texture_handle == 0) {
-        return 0;
+        return {};
     }
     glBindTexture(GL_TEXTURE_CUBE_MAP, texture_handle);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
@@ -563,19 +564,19 @@ unsigned int OpenGLRhiDevice::CreateTextureCube(int width, int height, const uns
         glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_faces[face]);
     }
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-    return texture_handle;
+    return TextureHandle{texture_handle};
 }
 
-unsigned int OpenGLRhiDevice::CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
+TextureHandle OpenGLRhiDevice::CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
                                                         bool linear_filter) {
     if (mips.empty() || mips[0].width <= 0 || mips[0].height <= 0) {
-        return 0;
+        return {};
     }
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
     if (texture_handle == 0) {
-        return 0;
+        return {};
     }
     const bool has_mips = mips.size() > 1;
     glBindTexture(GL_TEXTURE_CUBE_MAP, texture_handle);
@@ -596,15 +597,15 @@ unsigned int OpenGLRhiDevice::CreateTextureCubeWithMips(const std::vector<CubeMi
         }
     }
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-    return texture_handle;
+    return TextureHandle{texture_handle};
 }
 
-unsigned int OpenGLRhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
-    if (width <= 0 || height <= 0 || depth <= 0) return 0;
+TextureHandle OpenGLRhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
+    if (width <= 0 || height <= 0 || depth <= 0) return {};
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
-    if (texture_handle == 0) return 0;
+    if (texture_handle == 0) return {};
     glBindTexture(GL_TEXTURE_3D, texture_handle);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
@@ -613,20 +614,21 @@ unsigned int OpenGLRhiDevice::CreateTexture3D(int width, int height, int depth, 
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, width, height, depth, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_data);
     glBindTexture(GL_TEXTURE_3D, 0);
-    return texture_handle;
+    return TextureHandle{texture_handle};
 }
 
-void OpenGLRhiDevice::DeleteTexture(unsigned int texture_handle) {
-    if (texture_handle == 0) {
+void OpenGLRhiDevice::DeleteTexture(TextureHandle texture_handle) {
+    if (!texture_handle) {
         return;
     }
-    glDeleteTextures(1, &texture_handle);
+    unsigned int raw = texture_handle.raw();
+    glDeleteTextures(1, &raw);
     resource_mgr_.ledger().textures_destroyed += 1;
 }
 
 // --- 渲染目标 ---
 
-unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
+RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     EnsureInitialized();
     unsigned int handle = resource_mgr_.AllocateRenderTargetHandle();
     unsigned int depth_texture_handle = 0;
@@ -662,7 +664,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
             DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for color attachment {} ({}x{})",
                 ci, desc.width, desc.height);
             cleanup_failed_rt();
-            return 0;
+            return {};
         }
     }
 
@@ -673,7 +675,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
             DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenTextures returned 0 for depth attachment ({}x{})",
                 desc.width, desc.height);
             cleanup_failed_rt();
-            return 0;
+            return {};
         }
     }
 
@@ -683,7 +685,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
         DEBUG_LOG_ERROR("OpenGL CreateRenderTarget failed: glGenFramebuffers returned 0 ({}x{})",
             desc.width, desc.height);
         cleanup_failed_rt();
-        return 0;
+        return {};
     }
 
     for (int ci = 0; ci < num_color; ++ci) {
@@ -769,7 +771,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
         cleanup_failed_rt();
-        return 0;
+        return {};
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -858,11 +860,11 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     rt.msaa_color_rb_handles = std::move(msaa_color_rb_handles);
     rt.msaa_depth_rb_handle = msaa_depth_rb_handle;
     resource_mgr_.StoreRenderTarget(handle, rt);
-    return handle;
+    return RenderTargetHandle{handle};
 }
 
-void OpenGLRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
-    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+void OpenGLRhiDevice::DeleteRenderTarget(RenderTargetHandle render_target_handle) {
+    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
     if (!rt) return;
 
     if (rt->fbo_handle != 0) {
@@ -893,32 +895,32 @@ void OpenGLRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
         GLuint depth_rb = rt->msaa_depth_rb_handle;
         glDeleteRenderbuffers(1, &depth_rb);
     }
-    resource_mgr_.RemoveRenderTarget(render_target_handle);
+    resource_mgr_.RemoveRenderTarget(render_target_handle.raw());
 }
 
-unsigned int OpenGLRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
-    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
-    return rt ? rt->color_texture_handle : 0;
+TextureHandle OpenGLRhiDevice::GetRenderTargetColorTexture(RenderTargetHandle render_target_handle) const {
+    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
+    return rt ? TextureHandle{rt->color_texture_handle} : TextureHandle{};
 }
 
-unsigned int OpenGLRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
-    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
-    if (!rt) return 0;
-    if (index < 0 || index >= static_cast<int>(rt->color_texture_handles.size())) return 0;
-    return rt->color_texture_handles[index];
+TextureHandle OpenGLRhiDevice::GetRenderTargetColorTexture(RenderTargetHandle render_target_handle, int index) const {
+    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
+    if (!rt) return {};
+    if (index < 0 || index >= static_cast<int>(rt->color_texture_handles.size())) return {};
+    return TextureHandle{rt->color_texture_handles[index]};
 }
 
-unsigned int OpenGLRhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const {
-    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
-    return rt ? rt->depth_texture_handle : 0;
+TextureHandle OpenGLRhiDevice::GetRenderTargetDepthTexture(RenderTargetHandle render_target_handle) const {
+    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
+    return rt ? TextureHandle{rt->depth_texture_handle} : TextureHandle{};
 }
 
-std::vector<unsigned char> OpenGLRhiDevice::ReadRenderTargetColorRgba8(unsigned int render_target_handle) const {
+std::vector<unsigned char> OpenGLRhiDevice::ReadRenderTargetColorRgba8(RenderTargetHandle render_target_handle) const {
     return ReadRenderTargetColorRgba8WithSize(render_target_handle).pixels;
 }
 
-RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const {
-    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(RenderTargetHandle render_target_handle) const {
+    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
     if (!rt || !rt->desc.has_color || rt->desc.width <= 0 || rt->desc.height <= 0) {
         return {};
     }
@@ -943,8 +945,8 @@ RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
     return readback;
 }
 
-RenderTargetDepthReadback OpenGLRhiDevice::ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
-    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+RenderTargetDepthReadback OpenGLRhiDevice::ReadRenderTargetDepthFloatWithSize(RenderTargetHandle render_target_handle) const {
+    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
     if (!rt || !rt->desc.has_depth || rt->desc.width <= 0 || rt->desc.height <= 0) {
         return {};
     }
@@ -972,13 +974,13 @@ RenderTargetDepthReadback OpenGLRhiDevice::ReadRenderTargetDepthFloatWithSize(un
 // --- 通用即时绘制 / RT blit（编辑器架构 §5.A/§5.B）---
 
 void OpenGLRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
-    if (!initialized_ || desc.shader_program == 0) return;
+    if (!initialized_ || !desc.shader_program) return;
 
     // 解析目标 FBO（0 = 默认帧缓冲）与全尺寸
     GLuint target_fbo = 0;
     int rt_w = 0, rt_h = 0;
-    if (desc.render_target != 0) {
-        auto* rt = resource_mgr_.GetRenderTarget(desc.render_target);
+    if (desc.render_target) {
+        auto* rt = resource_mgr_.GetRenderTarget(desc.render_target.raw());
         if (!rt) return;
         target_fbo = static_cast<GLuint>(rt->fbo_handle);
         rt_w = rt->desc.width;
@@ -1012,17 +1014,17 @@ void OpenGLRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     }
     if (desc.depth_test) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
 
-    glUseProgram(static_cast<GLuint>(desc.shader_program));
+    glUseProgram(static_cast<GLuint>(desc.shader_program.raw()));
     for (const auto& u : desc.uniforms_f) {
-        GLint loc = glGetUniformLocation(desc.shader_program, u.first.c_str());
+        GLint loc = glGetUniformLocation(desc.shader_program.raw(), u.first.c_str());
         if (loc >= 0) glUniform1f(loc, u.second);
     }
     for (const auto& u : desc.uniforms_vec2) {
-        GLint loc = glGetUniformLocation(desc.shader_program, u.first.c_str());
+        GLint loc = glGetUniformLocation(desc.shader_program.raw(), u.first.c_str());
         if (loc >= 0) glUniform2f(loc, u.second.x, u.second.y);
     }
     for (const auto& u : desc.uniforms_vec4) {
-        GLint loc = glGetUniformLocation(desc.shader_program, u.first.c_str());
+        GLint loc = glGetUniformLocation(desc.shader_program.raw(), u.first.c_str());
         if (loc >= 0) glUniform4f(loc, u.second.x, u.second.y, u.second.z, u.second.w);
     }
 
@@ -1057,10 +1059,10 @@ void OpenGLRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     if (prev_depth) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
 }
 
-void OpenGLRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+void OpenGLRhiDevice::BlitRenderTarget(RenderTargetHandle src_rt, RenderTargetHandle dst_rt) {
     if (!initialized_) return;
-    auto* src = resource_mgr_.GetRenderTarget(src_rt);
-    auto* dst = resource_mgr_.GetRenderTarget(dst_rt);
+    auto* src = resource_mgr_.GetRenderTarget(src_rt.raw());
+    auto* dst = resource_mgr_.GetRenderTarget(dst_rt.raw());
     if (!src || !dst || !src->desc.has_color || !dst->desc.has_color) return;
 
     GLint prev_fbo = 0;
@@ -1083,16 +1085,17 @@ void OpenGLRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt)
 
 // --- 着色器 ---
 
-unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
-    if (!initialized_) return 0u;
+ShaderHandle OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
+    if (!initialized_) return {};
     unsigned int shader_program = GLShaderManager::CompileProgram(vert_src.c_str(), frag_src.c_str());
     resource_mgr_.ledger().shader_programs_created += 1;
-    external_shader_programs_.insert(shader_program);
-    return shader_program;
+    ShaderHandle handle{shader_program};
+    external_shader_programs_.insert(handle);
+    return handle;
 }
 
-void OpenGLRhiDevice::DeleteShaderProgram(unsigned int program_handle) {
-    shader_mgr_.DeleteProgram(program_handle);
+void OpenGLRhiDevice::DeleteShaderProgram(ShaderHandle program_handle) {
+    shader_mgr_.DeleteProgram(program_handle.raw());
     resource_mgr_.ledger().shader_programs_destroyed += 1;
     external_shader_programs_.erase(program_handle);
 }
@@ -1140,12 +1143,12 @@ void OpenGLRhiDevice::RealBindPipeline(GraphicsPipelineHandle graphics_pipeline_
     state_mgr_.ApplyState(desc->pso_state.raw());
     const PipelineStateDesc* ps = state_mgr_.GetPipelineState(desc->pso_state.raw());
     draw_executor_.PrimSetTopology(ps ? ps->topology : PrimitiveTopology::TriangleList);
-    if (desc->program != 0) draw_executor_.PrimBindShaderProgram(desc->program);
+    if (desc->program) draw_executor_.PrimBindShaderProgram(desc->program.raw());
 }
 
-void OpenGLRhiDevice::RealBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+void OpenGLRhiDevice::RealBindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride,
                                            const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
-    draw_executor_.PrimBindVertexBuffer(slot, buffer_handle, stride, attrs, rate);
+    draw_executor_.PrimBindVertexBuffer(slot, buffer_handle.raw(), stride, attrs, rate);
 }
 
 void OpenGLRhiDevice::RealPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
@@ -1158,20 +1161,20 @@ void OpenGLRhiDevice::RealDraw(uint32_t vertex_count, uint32_t first_vertex) {
 
 // --- 通用绘制原语 (B0) ---
 
-void OpenGLRhiDevice::RealBindIndexBuffer(unsigned int buffer_handle, IndexType type) {
-    draw_executor_.PrimBindIndexBuffer(buffer_handle, type);
+void OpenGLRhiDevice::RealBindIndexBuffer(BufferHandle buffer_handle, IndexType type) {
+    draw_executor_.PrimBindIndexBuffer(buffer_handle.raw(), type);
 }
 
-void OpenGLRhiDevice::RealBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
-    draw_executor_.PrimBindTexture(slot, texture_handle, dim);
+void OpenGLRhiDevice::RealBindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) {
+    draw_executor_.PrimBindTexture(slot, texture_handle.raw(), dim);
 }
 
-void OpenGLRhiDevice::RealBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) {
-    draw_executor_.PrimBindUniformBuffer(slot, buffer_handle, offset, size);
+void OpenGLRhiDevice::RealBindUniformBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size) {
+    draw_executor_.PrimBindUniformBuffer(slot, buffer_handle.raw(), offset, size);
 }
 
-void OpenGLRhiDevice::RealBindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) {
-    draw_executor_.PrimBindStorageBuffer(slot, buffer_handle, offset, size);
+void OpenGLRhiDevice::RealBindStorageBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size) {
+    draw_executor_.PrimBindStorageBuffer(slot, buffer_handle.raw(), offset, size);
 }
 
 void OpenGLRhiDevice::RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
@@ -1184,15 +1187,15 @@ void OpenGLRhiDevice::RealDrawIndexedInstanced(uint32_t index_count, uint32_t in
     draw_executor_.PrimDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
 }
 
-void OpenGLRhiDevice::RealDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
-    if (indirect_buffer == 0) return;
+void OpenGLRhiDevice::RealDrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset) {
+    if (!indirect_buffer) return;
     InitComputeProcAddresses();
     if (!pfn_glMultiDrawElementsIndirect) {
         DEBUG_LOG_WARN("glMultiDrawElementsIndirect not available (indirect draw skipped)");
         return;
     }
     // 解析 indirect buffer handle → GL buffer：先查 indirect map，找不到当作 raw GL handle。
-    unsigned int gl_buf = indirect_buffer;
+    unsigned int gl_buf = indirect_buffer.raw();
     auto it = indirect_buffers_.find(indirect_buffer);
     if (it != indirect_buffers_.end()) gl_buf = it->second;
 
@@ -1216,76 +1219,76 @@ void OpenGLRhiDevice::RealDrawIndexedIndirect(unsigned int indirect_buffer, uint
 
 // --- 内建资源访问器 (A1) ---
 
-unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
+ShaderHandle OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     EnsureInitialized();
     switch (program) {
         case BuiltinProgram::Skybox:
-            if (shader_mgr_.skybox_shader_handle() == 0) shader_mgr_.InitSkyboxShader();
+            if (!shader_mgr_.skybox_shader_handle()) shader_mgr_.InitSkyboxShader();
             return shader_mgr_.skybox_shader_handle();
         case BuiltinProgram::Sprite2D:
-            if (shader_mgr_.sprite2d_shader_handle() == 0) shader_mgr_.InitSprite2DShader();
+            if (!shader_mgr_.sprite2d_shader_handle()) shader_mgr_.InitSprite2DShader();
             return shader_mgr_.sprite2d_shader_handle();
         case BuiltinProgram::SpriteFxSdf:
-            if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) shader_mgr_.InitSpriteFxSdfShader();
+            if (!shader_mgr_.sprite_fx_sdf_shader_handle()) shader_mgr_.InitSpriteFxSdfShader();
             return shader_mgr_.sprite_fx_sdf_shader_handle();
         case BuiltinProgram::SpriteFxVfx:
-            if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) shader_mgr_.InitSpriteFxVfxShader();
+            if (!shader_mgr_.sprite_fx_vfx_shader_handle()) shader_mgr_.InitSpriteFxVfxShader();
             return shader_mgr_.sprite_fx_vfx_shader_handle();
         case BuiltinProgram::ForwardPbr:
-            if (shader_mgr_.forward_pbr_shader_handle() == 0) shader_mgr_.InitForwardPbrShader();
+            if (!shader_mgr_.forward_pbr_shader_handle()) shader_mgr_.InitForwardPbrShader();
             return shader_mgr_.forward_pbr_shader_handle();
         case BuiltinProgram::ForwardPbrSkinned:
-            if (shader_mgr_.forward_pbr_skinned_shader_handle() == 0) shader_mgr_.InitForwardPbrSkinnedShader();
+            if (!shader_mgr_.forward_pbr_skinned_shader_handle()) shader_mgr_.InitForwardPbrSkinnedShader();
             return shader_mgr_.forward_pbr_skinned_shader_handle();
         case BuiltinProgram::ForwardPbrInstanced:
-            if (shader_mgr_.forward_pbr_instanced_shader_handle() == 0) shader_mgr_.InitForwardPbrInstancedShader();
+            if (!shader_mgr_.forward_pbr_instanced_shader_handle()) shader_mgr_.InitForwardPbrInstancedShader();
             return shader_mgr_.forward_pbr_instanced_shader_handle();
         case BuiltinProgram::ForwardPbrDepth:
-            if (shader_mgr_.forward_pbr_depth_shader_handle() == 0) shader_mgr_.InitForwardPbrDepthShader();
+            if (!shader_mgr_.forward_pbr_depth_shader_handle()) shader_mgr_.InitForwardPbrDepthShader();
             return shader_mgr_.forward_pbr_depth_shader_handle();
         case BuiltinProgram::ForwardInstancedDepth:
-            if (shader_mgr_.forward_instanced_depth_shader_handle() == 0) shader_mgr_.InitForwardInstancedDepthShader();
+            if (!shader_mgr_.forward_instanced_depth_shader_handle()) shader_mgr_.InitForwardInstancedDepthShader();
             return shader_mgr_.forward_instanced_depth_shader_handle();
         case BuiltinProgram::Particle3D:
-            if (shader_mgr_.particle3d_shader_handle() == 0) shader_mgr_.InitParticle3DShader();
+            if (!shader_mgr_.particle3d_shader_handle()) shader_mgr_.InitParticle3DShader();
             return shader_mgr_.particle3d_shader_handle();
         case BuiltinProgram::HairStrand:
-            if (shader_mgr_.hair_strand_shader_handle() == 0) shader_mgr_.InitHairStrandShader();
+            if (!shader_mgr_.hair_strand_shader_handle()) shader_mgr_.InitHairStrandShader();
             return shader_mgr_.hair_strand_shader_handle();
         case BuiltinProgram::ForwardShaded:
-            if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
+            if (!shader_mgr_.forward_shaded_shader_handle()) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedShaded:
-            if (shader_mgr_.forward_skinned_shaded_shader_handle() == 0) shader_mgr_.InitForwardSkinnedShadedShader();
+            if (!shader_mgr_.forward_skinned_shaded_shader_handle()) shader_mgr_.InitForwardSkinnedShadedShader();
             return shader_mgr_.forward_skinned_shaded_shader_handle();
         case BuiltinProgram::ForwardInstancedShaded:
-            if (shader_mgr_.forward_instanced_shaded_shader_handle() == 0) shader_mgr_.InitForwardInstancedShadedShader();
+            if (!shader_mgr_.forward_instanced_shaded_shader_handle()) shader_mgr_.InitForwardInstancedShadedShader();
             return shader_mgr_.forward_instanced_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedInstancedShaded:
-            if (shader_mgr_.forward_skinned_instanced_shaded_shader_handle() == 0) shader_mgr_.InitForwardSkinnedInstancedShadedShader();
+            if (!shader_mgr_.forward_skinned_instanced_shaded_shader_handle()) shader_mgr_.InitForwardSkinnedInstancedShadedShader();
             return shader_mgr_.forward_skinned_instanced_shaded_shader_handle();
         case BuiltinProgram::ForwardMorphShaded:
-            if (shader_mgr_.forward_morph_shaded_shader_handle() == 0) shader_mgr_.InitForwardMorphShadedShader();
+            if (!shader_mgr_.forward_morph_shaded_shader_handle()) shader_mgr_.InitForwardMorphShadedShader();
             return shader_mgr_.forward_morph_shaded_shader_handle();
         case BuiltinProgram::GBufferMesh:
-            if (shader_mgr_.gbuffer_mesh_shader_handle() == 0) shader_mgr_.InitGBufferShader();
+            if (!shader_mgr_.gbuffer_mesh_shader_handle()) shader_mgr_.InitGBufferShader();
             return shader_mgr_.gbuffer_mesh_shader_handle();
         case BuiltinProgram::Impostor:
-            if (shader_mgr_.impostor_shader_handle() == 0) shader_mgr_.InitImpostorShader();
+            if (!shader_mgr_.impostor_shader_handle()) shader_mgr_.InitImpostorShader();
             return shader_mgr_.impostor_shader_handle();
     }
-    return 0;
+    return {};
 }
 
-unsigned int OpenGLRhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
+ShaderHandle OpenGLRhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
     EnsureInitialized();
     // GL 侧 gen PP 程序经统一懒编译缓存（postprocess.vert + gen.h 片元），按 effect 名取用。
-    return shader_mgr_.GetOrCreateGenPPShader(effect_name);
+    return ShaderHandle{shader_mgr_.GetOrCreateGenPPShader(effect_name)};
 }
 
-unsigned int OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
+BufferHandle OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
     EnsureInitialized();
-    if (skybox_cube_vbo_ == 0) {
+    if (!skybox_cube_vbo_) {
         static const float kSkyboxVertices[] = {
             -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
              1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
@@ -1307,10 +1310,10 @@ unsigned int OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
 
 // --- SSBO (Shader Storage Buffer Object) ---
 
-unsigned int OpenGLRhiDevice::CreateSSBO(size_t size, const void* data) {
+BufferHandle OpenGLRhiDevice::CreateSSBO(size_t size, const void* data) {
     unsigned int handle = 0;
     glGenBuffers(1, &handle);
-    if (handle == 0) return 0;
+    if (handle == 0) return {};
     resource_mgr_.ledger().buffers_created += 1;
     if (!supports_ssbo_) {
         glBindBuffer(GL_UNIFORM_BUFFER, handle);
@@ -1321,52 +1324,53 @@ unsigned int OpenGLRhiDevice::CreateSSBO(size_t size, const void* data) {
         glBufferData(GL_SHADER_STORAGE_BUFFER, size, data, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
-    return handle;
+    return BufferHandle{handle};
 }
 
-void OpenGLRhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
-    if (handle == 0) return;
+void OpenGLRhiDevice::UpdateSSBO(BufferHandle handle, size_t offset, size_t size, const void* data) {
+    if (!handle) return;
     if (!supports_ssbo_) {
-        glBindBuffer(GL_UNIFORM_BUFFER, handle);
+        glBindBuffer(GL_UNIFORM_BUFFER, handle.raw());
         glBufferSubData(GL_UNIFORM_BUFFER, offset, size, data);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     } else {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle.raw());
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 }
 
-void OpenGLRhiDevice::BindSSBO(unsigned int handle, unsigned int binding_point) {
+void OpenGLRhiDevice::BindSSBO(BufferHandle handle, unsigned int binding_point) {
     if (!supports_ssbo_) {
         // UBO fallback 映射：SSBO 绑定点 1→3（PointLights），2→4（SpotLights），3/4（cluster grid）no-op
         if (binding_point == 1u) {
-            glBindBufferBase(GL_UNIFORM_BUFFER, 3u, handle);
+            glBindBufferBase(GL_UNIFORM_BUFFER, 3u, handle.raw());
         } else if (binding_point == 2u) {
-            glBindBufferBase(GL_UNIFORM_BUFFER, 4u, handle);
+            glBindBufferBase(GL_UNIFORM_BUFFER, 4u, handle.raw());
         }
         return;
     }
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding_point, handle);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding_point, handle.raw());
 }
 
-void OpenGLRhiDevice::DeleteSSBO(unsigned int handle) {
-    if (handle == 0) return;
-    glDeleteBuffers(1, &handle);
+void OpenGLRhiDevice::DeleteSSBO(BufferHandle handle) {
+    if (!handle) return;
+    unsigned int raw = handle.raw();
+    glDeleteBuffers(1, &raw);
     resource_mgr_.ledger().buffers_destroyed += 1;
 }
 
 // --- Compute Shader (GL 4.3+) ---
 
-unsigned int OpenGLRhiDevice::CreateComputeShader(const std::string& source) {
+ShaderHandle OpenGLRhiDevice::CreateComputeShader(const std::string& source) {
     if (!supports_ssbo_) {
         DEBUG_LOG_WARN("CreateComputeShader: GL 4.3+ required for compute shaders");
-        return 0;
+        return {};
     }
-    if (source.empty()) return 0;
+    if (source.empty()) return {};
 
     GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
-    if (shader == 0) return 0;
+    if (shader == 0) return {};
 
     const char* src = source.c_str();
     glShaderSource(shader, 1, &src, nullptr);
@@ -1379,7 +1383,7 @@ unsigned int OpenGLRhiDevice::CreateComputeShader(const std::string& source) {
         glGetShaderInfoLog(shader, sizeof(info_log), nullptr, info_log);
         DEBUG_LOG_ERROR("Compute shader compile error: {}", info_log);
         glDeleteShader(shader);
-        return 0;
+        return {};
     }
 
     GLuint program = glCreateProgram();
@@ -1394,27 +1398,28 @@ unsigned int OpenGLRhiDevice::CreateComputeShader(const std::string& source) {
         glGetProgramInfoLog(program, sizeof(info_log), nullptr, info_log);
         DEBUG_LOG_ERROR("Compute shader link error: {}", info_log);
         glDeleteProgram(program);
-        return 0;
+        return {};
     }
 
-    compute_programs_.insert(program);
-    return program;
+    ShaderHandle handle{program};
+    compute_programs_.insert(handle);
+    return handle;
 }
 
-void OpenGLRhiDevice::DeleteComputeShader(unsigned int handle) {
-    if (handle == 0) return;
+void OpenGLRhiDevice::DeleteComputeShader(ShaderHandle handle) {
+    if (!handle) return;
     auto it = compute_programs_.find(handle);
     if (it != compute_programs_.end()) {
-        glDeleteProgram(handle);
+        glDeleteProgram(handle.raw());
         compute_programs_.erase(it);
     }
 }
 
-void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
+void OpenGLRhiDevice::DispatchCompute(ShaderHandle shader_handle,
                                        unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
-    if (!supports_ssbo_ || shader_handle == 0) return;
+    if (!supports_ssbo_ || !shader_handle) return;
     InitComputeProcAddresses();
-    glUseProgram(shader_handle);
+    glUseProgram(shader_handle.raw());
 
     // push 常量（降级后的 DsePushCS）→ backing UBO 整块上传 + 绑保留 binding。
     if (!compute_uniform_staging_.empty()) {
@@ -1443,7 +1448,7 @@ void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
 // RenderGraph 自动屏障（GL: glMemoryBarrier / glTextureBarrier）
 // ============================================================
 
-void OpenGLRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
+void OpenGLRhiDevice::TransitionRenderTarget(RenderTargetHandle rt_handle,
                                               ResourceState from, ResourceState to) {
     (void)rt_handle;
     if (from == to) return;
@@ -1488,33 +1493,33 @@ void OpenGLRhiDevice::ComputeMemoryBarrier() {
         GL_TEXTURE_FETCH_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
 }
 
-void OpenGLRhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) {
-    if (!supports_ssbo_ || texture_handle == 0) return;
+void OpenGLRhiDevice::SetComputeTextureImage(unsigned int binding, TextureHandle texture_handle, bool read_only) {
+    if (!supports_ssbo_ || !texture_handle) return;
     InitComputeProcAddresses();
     if (pfn_glBindImageTexture) {
         GLenum access = read_only ? GL_READ_ONLY : GL_READ_WRITE;
-        pfn_glBindImageTexture(binding, texture_handle, 0, GL_FALSE, 0, access, GL_RGBA32F);
+        pfn_glBindImageTexture(binding, texture_handle.raw(), 0, GL_FALSE, 0, access, GL_RGBA32F);
     }
 }
 
-void OpenGLRhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+void OpenGLRhiDevice::SetComputeTextureImageMip(unsigned int binding, TextureHandle texture_handle,
                                                   int mip_level, bool read_only, bool r32f) {
-    if (!supports_ssbo_ || texture_handle == 0) return;
+    if (!supports_ssbo_ || !texture_handle) return;
     InitComputeProcAddresses();
     if (pfn_glBindImageTexture) {
         GLenum access = read_only ? GL_READ_ONLY : GL_READ_WRITE;
         GLenum format = r32f ? GL_R32F : GL_RGBA32F;
-        pfn_glBindImageTexture(binding, texture_handle, mip_level, GL_FALSE, 0, access, format);
+        pfn_glBindImageTexture(binding, texture_handle.raw(), mip_level, GL_FALSE, 0, access, format);
     }
 }
 
-void OpenGLRhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+void OpenGLRhiDevice::SetComputeTextureSampler(unsigned int unit, TextureHandle texture_handle) {
     if (!supports_ssbo_) return;
     glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_2D, texture_handle);
+    glBindTexture(GL_TEXTURE_2D, texture_handle.raw());
 }
 
-unsigned int OpenGLRhiDevice::CreateComputeWriteTexture2D(int width, int height) {
+TextureHandle OpenGLRhiDevice::CreateComputeWriteTexture2D(int width, int height) {
     GLuint tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -1524,13 +1529,13 @@ unsigned int OpenGLRhiDevice::CreateComputeWriteTexture2D(int width, int height)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
-    return static_cast<unsigned int>(tex);
+    return TextureHandle{static_cast<unsigned int>(tex)};
 }
 
 // --- Hi-Z Occlusion Culling ---
 
-unsigned int OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
-    if (!supports_ssbo_ || width <= 0 || height <= 0) return 0;
+TextureHandle OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
+    if (!supports_ssbo_ || width <= 0 || height <= 0) return {};
 
     int mip_count = 1;
     {
@@ -1544,7 +1549,7 @@ unsigned int OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
 
     GLuint tex = 0;
     glGenTextures(1, &tex);
-    if (tex == 0) return 0;
+    if (tex == 0) return {};
 
     glBindTexture(GL_TEXTURE_2D, tex);
     // 分配所有 mip level 的存储
@@ -1561,14 +1566,14 @@ unsigned int OpenGLRhiDevice::CreateHiZTexture(int width, int height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mip_count - 1);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    unsigned int handle = hiz_impl_->next_handle++;
+    TextureHandle handle{hiz_impl_->next_handle++};
     hiz_impl_->textures[handle] = {tex, width, height, mip_count};
     DEBUG_LOG_INFO("Hi-Z texture created: handle={} gl_tex={} {}x{} mips={}",
-                   handle, tex, width, height, mip_count);
+                   handle.raw(), tex, width, height, mip_count);
     return handle;
 }
 
-void OpenGLRhiDevice::DeleteHiZTexture(unsigned int handle) {
+void OpenGLRhiDevice::DeleteHiZTexture(TextureHandle handle) {
     auto it = hiz_impl_->textures.find(handle);
     if (it == hiz_impl_->textures.end()) return;
     if (it->second.gl_texture) {
@@ -1577,14 +1582,14 @@ void OpenGLRhiDevice::DeleteHiZTexture(unsigned int handle) {
     hiz_impl_->textures.erase(it);
 }
 
-int OpenGLRhiDevice::GetHiZMipCount(unsigned int handle) const {
+int OpenGLRhiDevice::GetHiZMipCount(TextureHandle handle) const {
     auto it = hiz_impl_->textures.find(handle);
     return it != hiz_impl_->textures.end() ? it->second.mip_count : 0;
 }
 
-unsigned int OpenGLRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
+TextureHandle OpenGLRhiDevice::GetHiZGpuTexture(TextureHandle handle) const {
     auto it = hiz_impl_->textures.find(handle);
-    return it != hiz_impl_->textures.end() ? it->second.gl_texture : 0;
+    return it != hiz_impl_->textures.end() ? TextureHandle{it->second.gl_texture} : TextureHandle{};
 }
 
 // --- Compute Uniform ---
@@ -1613,68 +1618,68 @@ static void GLWriteComputeStaging(std::vector<uint8_t>& staging, size_t offset,
     std::memcpy(staging.data() + offset, data, size);
 }
 
-void OpenGLRhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
-    if (!supports_ssbo_ || shader == 0 || !name) return;
+void OpenGLRhiDevice::SetComputeUniformInt(ShaderHandle shader, const char* name, int value) {
+    if (!supports_ssbo_ || !shader || !name) return;
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, sizeof(int)), &value, sizeof(int));
 }
 
-void OpenGLRhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
-    if (!supports_ssbo_ || shader == 0 || !name) return;
+void OpenGLRhiDevice::SetComputeUniformFloat(ShaderHandle shader, const char* name, float value) {
+    if (!supports_ssbo_ || !shader || !name) return;
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, sizeof(float)), &value, sizeof(float));
 }
 
-void OpenGLRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
-    if (!supports_ssbo_ || shader == 0 || !name) return;
+void OpenGLRhiDevice::SetComputeUniformVec2i(ShaderHandle shader, const char* name, int x, int y) {
+    if (!supports_ssbo_ || !shader || !name) return;
     int d[2]{x, y};
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
-void OpenGLRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
-    if (!supports_ssbo_ || shader == 0 || !name) return;
+void OpenGLRhiDevice::SetComputeUniformVec2f(ShaderHandle shader, const char* name, float x, float y) {
+    if (!supports_ssbo_ || !shader || !name) return;
     float d[2]{x, y};
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
-void OpenGLRhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
-    if (!supports_ssbo_ || shader == 0 || !name) return;
+void OpenGLRhiDevice::SetComputeUniformVec3(ShaderHandle shader, const char* name, float x, float y, float z) {
+    if (!supports_ssbo_ || !shader || !name) return;
     float d[3]{x, y, z};
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
-void OpenGLRhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
-    if (!supports_ssbo_ || shader == 0 || !name) return;
+void OpenGLRhiDevice::SetComputeUniformIVec3(ShaderHandle shader, const char* name, int x, int y, int z) {
+    if (!supports_ssbo_ || !shader || !name) return;
     int d[3]{x, y, z};
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
-void OpenGLRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
-    if (!supports_ssbo_ || shader == 0 || !name) return;
+void OpenGLRhiDevice::SetComputeUniformVec4(ShaderHandle shader, const char* name, float x, float y, float z, float w) {
+    if (!supports_ssbo_ || !shader || !name) return;
     float d[4]{x, y, z, w};
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
-void OpenGLRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
-    if (!supports_ssbo_ || shader == 0 || !name || !data) return;
+void OpenGLRhiDevice::SetComputeUniformMat4(ShaderHandle shader, const char* name, const float* data) {
+    if (!supports_ssbo_ || !shader || !name || !data) return;
     GLWriteComputeStaging(compute_uniform_staging_,
                           GetOrCreateComputeUniformOffset(name, 64), data, 64);
 }
 
-OpenGLRhiDevice::ComputePushUbo& OpenGLRhiDevice::EnsureComputePushUbo(unsigned int program) {
+OpenGLRhiDevice::ComputePushUbo& OpenGLRhiDevice::EnsureComputePushUbo(ShaderHandle program) {
     ComputePushUbo& st = compute_push_ubos_[program];
     if (st.initialized) return st;
     st.initialized = true;
-    unsigned int idx = glGetUniformBlockIndex(program, "DsePushCS");
+    unsigned int idx = glGetUniformBlockIndex(program.raw(), "DsePushCS");
     if (idx == GL_INVALID_INDEX) return st;  // 该程序无 push 块
-    glUniformBlockBinding(program, idx, kComputePushUboBinding);
+    glUniformBlockBinding(program.raw(), idx, kComputePushUboBinding);
     GLint data_size = 0;
-    glGetActiveUniformBlockiv(program, idx, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
+    glGetActiveUniformBlockiv(program.raw(), idx, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
     unsigned int ubo = 0;
     glGenBuffers(1, &ubo);
     glBindBuffer(GL_UNIFORM_BUFFER, ubo);
@@ -1687,9 +1692,9 @@ OpenGLRhiDevice::ComputePushUbo& OpenGLRhiDevice::EnsureComputePushUbo(unsigned 
 
 // --- SSBO 璇诲洖 ---
 
-void OpenGLRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
-    if (!supports_ssbo_ || handle == 0 || !dst || size == 0) return;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
+void OpenGLRhiDevice::ReadSSBO(BufferHandle handle, size_t offset, size_t size, void* dst) {
+    if (!supports_ssbo_ || !handle || !dst || size == 0) return;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle.raw());
 #if DSE_GL_ES_RUNTIME
     // GLES 无 glGetBufferSubData：用 glMapBufferRange 读回。
     if (void* mapped = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, static_cast<GLintptr>(offset),
@@ -1706,21 +1711,21 @@ void OpenGLRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, 
 
 // --- Indirect Draw Buffer ---
 
-unsigned int OpenGLRhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
-    if (!initialized_ || !supports_ssbo_) return 0;
+BufferHandle OpenGLRhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
+    if (!initialized_ || !supports_ssbo_) return {};
     InitComputeProcAddresses();
     unsigned int gl_buf = 0;
     glGenBuffers(1, &gl_buf);
-    if (gl_buf == 0) return 0;
+    if (gl_buf == 0) return {};
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, gl_buf);
     glBufferData(GL_DRAW_INDIRECT_BUFFER, static_cast<GLsizeiptr>(size), data, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
-    unsigned int handle = next_indirect_handle_++;
+    BufferHandle handle{next_indirect_handle_++};
     indirect_buffers_[handle] = gl_buf;
     return handle;
 }
 
-void OpenGLRhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+void OpenGLRhiDevice::UpdateIndirectBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) {
     if (!initialized_) return;
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end()) return;
@@ -1730,7 +1735,7 @@ void OpenGLRhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset, s
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 }
 
-void OpenGLRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
+void OpenGLRhiDevice::DeleteIndirectBuffer(BufferHandle handle) {
     if (!initialized_) return;
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end()) return;
@@ -1738,8 +1743,8 @@ void OpenGLRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
     indirect_buffers_.erase(it);
 }
 
-void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset) {
-    if (draw_count <= 0 || indirect_buffer == 0) return;
+void OpenGLRhiDevice::MultiDrawIndexedIndirect(BufferHandle indirect_buffer, int draw_count, size_t stride, size_t byte_offset) {
+    if (draw_count <= 0 || !indirect_buffer) return;
     InitComputeProcAddresses();
     if (!pfn_glMultiDrawElementsIndirect) {
         DEBUG_LOG_WARN("glMultiDrawElementsIndirect not available");
@@ -1747,7 +1752,7 @@ void OpenGLRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int
     }
 
     // 优先查找 indirect buffer map；找不到则当作 raw GL buffer handle（如 SSBO）
-    unsigned int gl_buf = indirect_buffer;
+    unsigned int gl_buf = indirect_buffer.raw();
     auto it = indirect_buffers_.find(indirect_buffer);
     if (it != indirect_buffers_.end()) {
         gl_buf = it->second;
@@ -1936,7 +1941,7 @@ void OpenGLRhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
 }
 
 bool OpenGLRhiDevice::HasGPUDrivenPBRShader() const {
-    return shader_mgr_.gpu_driven_pbr_shader_handle() != 0;
+    return static_cast<bool>(shader_mgr_.gpu_driven_pbr_shader_handle());
 }
 
 void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
@@ -1944,10 +1949,10 @@ void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
                                                const glm::vec3& light_dir, const glm::vec3& light_color,
                                                float light_intensity, float ambient_intensity,
                                                float shadow_strength) {
-    const unsigned int prog = shader_mgr_.gpu_driven_pbr_shader_handle();
-    if (prog == 0) return;
+    const ShaderHandle prog = shader_mgr_.gpu_driven_pbr_shader_handle();
+    if (!prog) return;
 
-    glUseProgram(prog);
+    glUseProgram(prog.raw());
 
     PerFrameUBO per_frame{};
     per_frame.vp = proj * view;
@@ -1983,32 +1988,32 @@ void OpenGLRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
     // CSM shadow map 纹理绑定（per-item 路径由 DrawMeshBatch 绑定，GPU-driven 需在此补齐）
     const auto& slots = shader_mgr_.pbr_texture_slots();
     for (int i = 0; i < 3; ++i) {
-        if (gs.shadow_map[i] != 0) {
+        if (gs.shadow_map[i]) {
             glActiveTexture(GL_TEXTURE0 + slots.shadow_base + i);
-            glBindTexture(GL_TEXTURE_2D, gs.shadow_map[i]);
+            glBindTexture(GL_TEXTURE_2D, gs.shadow_map[i].raw());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
         }
     }
     for (int i = 0; i < 4; ++i) {
-        if (gs.spot_shadow_map[i] != 0) {
+        if (gs.spot_shadow_map[i]) {
             glActiveTexture(GL_TEXTURE0 + slots.spot_shadow_base + i);
-            glBindTexture(GL_TEXTURE_2D, gs.spot_shadow_map[i]);
+            glBindTexture(GL_TEXTURE_2D, gs.spot_shadow_map[i].raw());
         }
     }
     for (int i = 0; i < 4; ++i) {
-        if (gs.point_shadow_map[i] != 0) {
+        if (gs.point_shadow_map[i]) {
             glActiveTexture(GL_TEXTURE0 + slots.point_shadow_base + i);
-            glBindTexture(GL_TEXTURE_CUBE_MAP, gs.point_shadow_map[i]);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, gs.point_shadow_map[i].raw());
         }
     }
 }
 
 void OpenGLRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
-    const unsigned int prog = shader_mgr_.gpu_driven_shadow_shader_handle();
-    if (prog == 0) return;
+    const ShaderHandle prog = shader_mgr_.gpu_driven_shadow_shader_handle();
+    if (!prog) return;
 
-    glUseProgram(prog);
+    glUseProgram(prog.raw());
 
     PerFrameUBO per_frame{};
     per_frame.vp = light_proj * light_view;
@@ -2021,26 +2026,26 @@ void OpenGLRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, co
     if (loc_skinned >= 0) glUniform1i(loc_skinned, 0);
 }
 
-void OpenGLRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
-                                              unsigned int metallic_roughness,
-                                              unsigned int emissive, unsigned int occlusion) {
+void OpenGLRhiDevice::BindGPUDrivenTextures(TextureHandle albedo, TextureHandle normal,
+                                             TextureHandle metallic_roughness,
+                                             TextureHandle emissive, TextureHandle occlusion) {
     const auto& slots = shader_mgr_.pbr_texture_slots();
     const unsigned int white = draw_executor_.white_texture_handle();
 
     glActiveTexture(GL_TEXTURE0 + slots.albedo);
-    glBindTexture(GL_TEXTURE_2D, albedo != 0 ? albedo : white);
+    glBindTexture(GL_TEXTURE_2D, albedo ? albedo.raw() : white);
 
     glActiveTexture(GL_TEXTURE0 + slots.normal);
-    glBindTexture(GL_TEXTURE_2D, normal != 0 ? normal : white);
+    glBindTexture(GL_TEXTURE_2D, normal ? normal.raw() : white);
 
     glActiveTexture(GL_TEXTURE0 + slots.metallic_roughness);
-    glBindTexture(GL_TEXTURE_2D, metallic_roughness != 0 ? metallic_roughness : white);
+    glBindTexture(GL_TEXTURE_2D, metallic_roughness ? metallic_roughness.raw() : white);
 
     glActiveTexture(GL_TEXTURE0 + slots.emissive);
-    glBindTexture(GL_TEXTURE_2D, emissive != 0 ? emissive : white);
+    glBindTexture(GL_TEXTURE_2D, emissive ? emissive.raw() : white);
 
     glActiveTexture(GL_TEXTURE0 + slots.occlusion);
-    glBindTexture(GL_TEXTURE_2D, occlusion != 0 ? occlusion : white);
+    glBindTexture(GL_TEXTURE_2D, occlusion ? occlusion.raw() : white);
 }
 
 // --- 编辑器场景视图模式 ---

@@ -427,7 +427,7 @@ void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
     std::vector<dse::render::ParticleDrawItem> p_items;
     for (auto entity : p_view) {
         const auto& ps = p_view.get<dse::ParticleSystem3DComponent>(entity);
-        if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo != 0) {
+        if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo) {
             dse::render::ParticleDrawItem item;
             item.texture_handle = ps.texture_handle;
             item.particle_count = ps.active_particle_count;
@@ -439,9 +439,9 @@ void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
     auto f_view = callback_world.registry().view<dse::FluidEmitterComponent>();
     for (auto entity : f_view) {
         const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
-        if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo != 0) {
+        if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo) {
             dse::render::ParticleDrawItem item;
-            item.texture_handle = 0;
+            item.texture_handle = {};
             item.particle_count = static_cast<int>(fluid.active_count);
             item.instance_buffer = fluid.instance_vbo;
             p_items.push_back(item);
@@ -537,4 +537,3 @@ void Gameplay3DModule::OnShutdown(World& world) {
 
 // Gameplay3DModule 已静态编入 dse_engine，FramePipeline 直接持有实例，
 // 不再需要 DLL 工厂函数 CreateModule/DestroyModule。
-

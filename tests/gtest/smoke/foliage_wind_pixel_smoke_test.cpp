@@ -73,10 +73,10 @@ RenderTargetReadback RenderStrip(RhiDevice& device, bool foliage) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    if (device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded) == 0) {
+    if (!device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded)) {
         device.DeleteRenderTarget(rt);
         return {};
     }

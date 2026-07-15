@@ -310,7 +310,7 @@ bool GLDrawExecutor::IsActiveRenderTargetAttachment(unsigned int texture_handle)
 void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
                                        GLResourceManager& resource_mgr) {
     bool has_depth = false;
-    if (render_pass.render_target == 0) {
+    if (!render_pass.render_target) {
         if (active_render_target_ != 0) {
             auto active_rt = resource_mgr.GetRenderTarget(active_render_target_);
             if (active_rt) {
@@ -321,9 +321,9 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
         active_rt_attachment_count_ = 0;  // 默认帧缓冲无可反馈的附件
         glViewport(0, 0, Screen::width(), Screen::height());
     } else {
-        auto rt = resource_mgr.GetRenderTarget(render_pass.render_target);
+        auto rt = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (rt) {
-            if (active_render_target_ != 0 && active_render_target_ != render_pass.render_target) {
+            if (active_render_target_ != 0 && active_render_target_ != render_pass.render_target.raw()) {
                 auto active_rt = resource_mgr.GetRenderTarget(active_render_target_);
                 if (active_rt) {
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -331,14 +331,14 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             }
             glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo_handle);
             glViewport(0, 0, rt->desc.width, rt->desc.height);
-            active_render_target_ = render_pass.render_target;
+            active_render_target_ = render_pass.render_target.raw();
             has_depth = rt->desc.has_depth;
 #if DSE_GL_ES_RUNTIME
             // 反馈环防护仅在严格 GLES/WebGL2 上需要：桌面 GL（含 llvmpipe）容忍采样仍挂在
             // 当前 FBO 上的纹理（仅警告），而严格 WebGL2 会丢弃整个 draw → 黑屏。故此逻辑
             // 门控在 GLES 运行期，桌面行为保持字节级不变。
             // 解除反馈环：若上一 pass 残留把本 FBO 的某个附件绑在某 texture unit 上，在此解绑。
-            UnbindRenderTargetFeedback(render_pass.render_target, resource_mgr);
+            UnbindRenderTargetFeedback(render_pass.render_target.raw(), resource_mgr);
             // 缓存本 FBO 的附件句柄，供 PrimBindTexture 在 pass 内逐次绑定时拒绝反馈环
             // （如阴影 pass 内 mesh_renderer 仍会把 shadow atlas 绑到单元 11，而它正是渲染目标）。
             active_rt_attachment_count_ = 0;
@@ -365,8 +365,8 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     }
     global_state_.current_frame_stats.render_passes += 1;
     is_depth_only_pass_ = false;
-    if (render_pass.render_target != 0) {
-        auto stat_rt = resource_mgr.GetRenderTarget(render_pass.render_target);
+    if (render_pass.render_target) {
+        auto stat_rt = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (stat_rt && !stat_rt->desc.has_color && stat_rt->desc.has_depth) {
             global_state_.current_frame_stats.shadow_passes += 1;
             is_depth_only_pass_ = true;

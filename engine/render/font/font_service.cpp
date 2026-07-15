@@ -186,13 +186,13 @@ bool FontService::LoadFont(const std::string& font_id, const std::string& ttf_pa
         instance->gpu_texture_handle = texture_create_fn_(atlas_w, atlas_h, rgba.data(), true);
     }
 
-    if (instance->gpu_texture_handle == 0) {
+    if (!instance->gpu_texture_handle) {
         DEBUG_LOG_WARN("FontService: GPU texture creation failed for '{}'", font_id);
     }
 
     DEBUG_LOG_INFO("FontService: loaded '{}' (SDF {}x{}, {}/{} glyphs packed, tex={})",
                    font_id, atlas_w, atlas_h, packed_count, codepoints.size(),
-                   instance->gpu_texture_handle);
+                   instance->gpu_texture_handle.raw());
 
     fonts_[font_id] = std::move(instance);
 
@@ -270,15 +270,15 @@ void FontService::Shutdown() {
     for (auto& [id, inst] : fonts_) {
         if (inst->gpu_texture_handle && texture_delete_fn_) {
             texture_delete_fn_(inst->gpu_texture_handle);
-            inst->gpu_texture_handle = 0;
+            inst->gpu_texture_handle = {};
         }
     }
     fonts_.clear();
     default_font_id_.clear();
 }
 
-unsigned int FontService::UploadAtlasToGPU(const TrueTypeFont& font) {
-    if (!texture_create_fn_ || !font.IsValid()) return 0;
+TextureHandle FontService::UploadAtlasToGPU(const TrueTypeFont& font) {
+    if (!texture_create_fn_ || !font.IsValid()) return {};
 
     int w = font.GetAtlasWidth();
     int h = font.GetAtlasHeight();

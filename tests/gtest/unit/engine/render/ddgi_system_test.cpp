@@ -223,10 +223,10 @@ TEST(OctahedralMapTest, UVinTheRangeZeroToOne) {
 // 测试 DDGI资源：默认值
 TEST(DDGIResourcesTest, DefaultValues) {
     DDGIResources res;
-    EXPECT_EQ(res.irradiance_atlas, 0u);
-    EXPECT_EQ(res.visibility_atlas, 0u);
+    EXPECT_FALSE(res.irradiance_atlas);
+    EXPECT_FALSE(res.visibility_atlas);
     EXPECT_FALSE(res.probe_state_ssbo);
-    EXPECT_EQ(res.update_compute_shader, 0u);
+    EXPECT_FALSE(res.update_compute_shader);
     EXPECT_FALSE(res.initialized);
 }
 

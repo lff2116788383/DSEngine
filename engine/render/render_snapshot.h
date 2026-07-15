@@ -11,6 +11,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "engine/render/rhi/rhi_handle.h"
+
 namespace dse {
 namespace render {
 
@@ -43,7 +45,7 @@ struct RenderThinSnapshot {
     // ── 天空盒 ──
     struct Skybox {
         bool valid = false;
-        unsigned int cubemap_handle = 0;
+        TextureHandle cubemap_handle;
         bool has_transform = false;
         glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
     } skybox;

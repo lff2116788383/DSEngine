@@ -78,15 +78,15 @@ RenderTargetReadback RenderUnlit2D(RhiDevice& device,
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    if (device.GetBuiltinProgram(BuiltinProgram::Sprite2D) == 0) {
+    if (!device.GetBuiltinProgram(BuiltinProgram::Sprite2D)) {
         device.DeleteRenderTarget(rt);
         return {};
     }
 
-    unsigned int green_tex = 0;
+    TextureHandle green_tex;
     if (use_green_tex) {
         const unsigned char green[4] = {0, 255, 0, 255};
         green_tex = device.CreateTexture2D(1, 1, green, /*linear_filter=*/true);

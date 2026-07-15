@@ -93,8 +93,8 @@ void ParticleRenderer::DrawParticles(CommandBuffer& cmd, RhiDevice& device,
                                      const std::vector<ParticleDrawItem>& items,
                                      const glm::mat4& view, const glm::mat4& proj) {
     if (items.empty()) return;
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Particle3D);
-    if (program == 0) return;  // SSBO 不支持的上下文（如 WebGL2）→ 静默跳过
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::Particle3D);
+    if (!program) return;  // SSBO 不支持的上下文（如 WebGL2）→ 静默跳过
     EnsureResources(device);
     if (!per_frame_ubo_ || !quad_vbo_ || !quad_ibo_) return;
 
@@ -109,12 +109,12 @@ void ParticleRenderer::DrawParticles(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
-    cmd.BindVertexBuffer(0u, quad_vbo_.raw(), static_cast<uint32_t>(sizeof(QuadVertex)), attrs);
-    cmd.BindIndexBuffer(quad_ibo_.raw(), IndexType::UInt16);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);  // PerFrame @ set0.b0
+    cmd.BindVertexBuffer(0u, quad_vbo_, static_cast<uint32_t>(sizeof(QuadVertex)), attrs);
+    cmd.BindIndexBuffer(quad_ibo_, IndexType::UInt16);
 
     for (const auto& item : items) {
-        if (item.particle_count <= 0 || item.instance_buffer == 0) continue;
+        if (item.particle_count <= 0 || !item.instance_buffer) continue;
         const uint32_t inst_bytes = static_cast<uint32_t>(item.particle_count) * kInstanceStrideBytes;
         cmd.BindTexture(0u, item.texture_handle ? item.texture_handle : white_tex_, TextureDim::Tex2D);
         // 每实例 pos/size/color SSBO\@slot 0（set7.b0）。子区间 [0, count*32)。
@@ -130,7 +130,7 @@ void ParticleRenderer::Shutdown(RhiDevice& device) {
     if (per_frame_ubo_) device.DeleteGpuBuffer(per_frame_ubo_);
     if (white_tex_) device.DeleteTexture(white_tex_);
     quad_vbo_ = quad_ibo_ = per_frame_ubo_ = BufferHandle{};
-    white_tex_ = 0;
+    white_tex_ = {};
     pso_ = {};
     init_ = false;
 }

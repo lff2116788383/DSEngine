@@ -165,7 +165,8 @@ TEST(IntegrateFaceSHTest, DoesNotCrash) {
 // 测试 积分面SH：烘焙SH在位置空指针安全
 TEST(IntegrateFaceSHTest, BakeSHAtPosition_NullptrSafety) {
     RenderPassContext ctx;
-    SHL2 sh = LightProbeSystem::BakeSHAtPosition(glm::vec3(0.0f), 64, nullptr, 0, ctx);
+    SHL2 sh = LightProbeSystem::BakeSHAtPosition(
+        glm::vec3(0.0f), 64, nullptr, {}, ctx);
     for (int i = 0; i < 9; ++i) {
         EXPECT_FLOAT_EQ(sh.coeffs[i].x, 0.0f);
     }

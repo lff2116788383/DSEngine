@@ -66,7 +66,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     bloom_renderer_.BeginFrame();
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_extract, glm::vec4(0.0f), false});
-    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
     const float bloom_threshold = ctx_.pipeline_overrides.bloom_threshold >= 0.0f
         ? ctx_.pipeline_overrides.bloom_threshold
         : pp_config.bloom_threshold;
@@ -74,7 +74,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
         {"bloom_extract", scene_color_tex, {bloom_threshold, pp_config.bloom_knee}});
     cmd_buffer.EndRenderPass();
 
-    unsigned int current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_extract);
+    TextureHandle current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_extract);
     int mip_w = Screen::width() / 2;
     int mip_h = Screen::height() / 2;
     for (size_t i = 0; i < ctx_.render_targets.bloom_mips.size(); ++i) {
@@ -91,7 +91,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     for (int i = static_cast<int>(ctx_.render_targets.bloom_mips.size()) - 1; i > 0; --i) {
-        unsigned int target_rt = ctx_.render_targets.bloom_mips[i - 1];
+        RenderTargetHandle target_rt = ctx_.render_targets.bloom_mips[i - 1];
         current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[i]);
         cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
         const float mip_texel = 1.0f / static_cast<float>(std::max(mip_w, 1));
@@ -148,29 +148,29 @@ void CompositePass::Setup(RenderGraph& graph) {
 }
 
 void CompositePass::Execute(CommandBuffer& cmd_buffer) {
-    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
-    const unsigned int ui_color_tex = ctx_.pipeline_features.ui
+    const TextureHandle scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle ui_color_tex = ctx_.pipeline_features.ui
         ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ui)
-        : 0;
+        : TextureHandle{};
 
     const auto& snap = *ctx_.snapshot;
     const auto& pp_config = snap.post_process;
     bool pp_enabled = pp_config.valid;
 
     // 获取 SSAO 纹理（如果启用）
-    unsigned int ssao_tex = 0;
-    if (ctx_.pipeline_features.ssao && pp_enabled && pp_config.ssao_enabled && ctx_.render_targets.ssao_blur != 0) {
+    TextureHandle ssao_tex;
+    if (ctx_.pipeline_features.ssao && pp_enabled && pp_config.ssao_enabled && ctx_.render_targets.ssao_blur) {
         ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao_blur);
     }
 
     // 获取 Contact Shadow 纹理（如果启用）
-    unsigned int contact_shadow_tex = 0;
-    if (ctx_.pipeline_features.contact_shadow && pp_enabled && pp_config.contact_shadow_enabled && ctx_.render_targets.contact_shadow != 0) {
+    TextureHandle contact_shadow_tex;
+    if (ctx_.pipeline_features.contact_shadow && pp_enabled && pp_config.contact_shadow_enabled && ctx_.render_targets.contact_shadow) {
         contact_shadow_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.contact_shadow);
     }
 
     // 获取 auto exposure 纹理（如果启用）
-    unsigned int ae_tex = 0;
+    TextureHandle ae_tex;
     if (ctx_.pipeline_features.auto_exposure && ctx_.auto_exposure_active) {
         // ping-pong 已翻转，当前帧结果在 1 - current_index
         const int result_idx = 1 - ctx_.lum_ping_pong_index;
@@ -178,10 +178,10 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     // Color Grading LUT
-    float lut_tex = 0.0f;
+    TextureHandle lut_handle;
     float lut_intensity = 0.0f;
     if (pp_enabled && pp_config.color_lut_handle != 0) {
-        lut_tex = static_cast<float>(pp_config.color_lut_handle);
+        lut_handle = TextureHandle::from_raw(pp_config.color_lut_handle);
         lut_intensity = pp_config.color_lut_intensity;
     }
 
@@ -198,26 +198,25 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
     const bool bloom_enabled = ctx_.pipeline_features.bloom && pp_config.bloom_enabled;
-    if (pp_enabled && (bloom_enabled || contact_shadow_tex != 0 || pp_config.vignette_enabled || pp_config.film_grain_enabled)) {
-        const unsigned int bloom_tex = (bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
+    if (pp_enabled && (bloom_enabled || contact_shadow_tex || pp_config.vignette_enabled || pp_config.film_grain_enabled)) {
+        const TextureHandle bloom_tex = (bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
             ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[0])
-            : 0;
+            : TextureHandle{};
         const float bloom_intensity = ctx_.pipeline_overrides.bloom_intensity >= 0.0f
             ? ctx_.pipeline_overrides.bloom_intensity
             : pp_config.bloom_intensity;
-        const unsigned int lut_handle = static_cast<unsigned int>(lut_tex);
         // bloom_composite 已迁到 PostProcessRenderer：params 纯 float UBO（16 标量，
         // 与 bloom_composite_ssao_ae.frag 字段同序）；纹理一律经 .Tex/.Tex3D 写入，
         // 使能标志按纹理在否派生（渲染器额外纹理循环遇 handle==0 即停，故仅挂非零纹理）。
         PostProcessRequest req{"bloom_composite", scene_color_tex, {
             pp_config.exposure,
             bloom_intensity,
-            bloom_tex != 0 ? 1.0f : 0.0f,
-            ssao_tex != 0 ? 1.0f : 0.0f,
-            ae_tex != 0 ? 1.0f : 0.0f,
-            lut_handle != 0 ? 1.0f : 0.0f,
+            bloom_tex ? 1.0f : 0.0f,
+            ssao_tex ? 1.0f : 0.0f,
+            ae_tex ? 1.0f : 0.0f,
+            lut_handle ? 1.0f : 0.0f,
             lut_intensity,
-            contact_shadow_tex != 0 ? 1.0f : 0.0f,
+            contact_shadow_tex ? 1.0f : 0.0f,
             pp_config.contact_shadow_strength,
             pp_config.vignette_enabled ? 1.0f : 0.0f,
             pp_config.vignette_intensity,
@@ -227,36 +226,36 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
             pp_config.film_grain_intensity,
             film_grain_time
         }};
-        if (bloom_tex != 0)          req.Tex(2, bloom_tex);
-        if (ssao_tex != 0)           req.Tex(3, ssao_tex);
-        if (ae_tex != 0)             req.Tex(4, ae_tex);
-        if (lut_handle != 0)         req.Tex3D(5, lut_handle);
-        if (contact_shadow_tex != 0) req.Tex(6, contact_shadow_tex);
+        if (bloom_tex)          req.Tex(2, bloom_tex);
+        if (ssao_tex)           req.Tex(3, ssao_tex);
+        if (ae_tex)             req.Tex(4, ae_tex);
+        if (lut_handle)         req.Tex3D(5, lut_handle);
+        if (contact_shadow_tex) req.Tex(6, contact_shadow_tex);
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
     } else {
         // tonemapping / ssao_apply 已迁到 PostProcessRenderer：UBO 为 4 标量
         // {manual_exposure, auto_exposure_enabled, lut_enabled, lut_intensity}ï¼›
         // enable 标志按纹理在否在调用点派生（旧 binder 原由 FindTex 推导）。
         // 可选纹理仅在非零时挂载——渲染器纹理循环遇 handle==0 即停，避免中断后续绑定。
-        const float ae_enabled  = ae_tex != 0 ? 1.0f : 0.0f;
-        const float lut_enabled = static_cast<unsigned int>(lut_tex) != 0 ? 1.0f : 0.0f;
-        if (ssao_tex != 0) {
+        const float ae_enabled  = ae_tex ? 1.0f : 0.0f;
+        const float lut_enabled = lut_handle ? 1.0f : 0.0f;
+        if (ssao_tex) {
             PostProcessRequest req{"ssao_apply", scene_color_tex,
                 {pp_config.exposure, ae_enabled, lut_enabled, lut_intensity}};
             req.Tex(2, ssao_tex);
-            if (ae_tex != 0) req.Tex(3, ae_tex);
-            if (static_cast<unsigned int>(lut_tex) != 0) req.Tex3D(5, static_cast<unsigned int>(lut_tex));
+            if (ae_tex) req.Tex(3, ae_tex);
+            if (lut_handle) req.Tex3D(5, lut_handle);
             post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
         } else {
             PostProcessRequest req{"tonemapping", scene_color_tex,
                 {pp_config.exposure, ae_enabled, lut_enabled, lut_intensity}};
-            if (ae_tex != 0) req.Tex(2, ae_tex);
-            if (static_cast<unsigned int>(lut_tex) != 0) req.Tex3D(5, static_cast<unsigned int>(lut_tex));
+            if (ae_tex) req.Tex(2, ae_tex);
+            if (lut_handle) req.Tex3D(5, lut_handle);
             post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
         }
     }
 
-    if (ui_color_tex != 0) {
+    if (ui_color_tex) {
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ui_overlay", ui_color_tex, {}, true});
     }
     cmd_buffer.EndRenderPass();
@@ -283,12 +282,12 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
 
     ctx_.auto_exposure_active = ae_enabled;
     if (!ae_enabled) return;
-    if (ctx_.render_targets.lum_temp == 0 ||
-        ctx_.render_targets.lum_adapted[0] == 0 ||
-        ctx_.render_targets.lum_adapted[1] == 0) return;
+    if (!ctx_.render_targets.lum_temp ||
+        !ctx_.render_targets.lum_adapted[0] ||
+        !ctx_.render_targets.lum_adapted[1]) return;
 
-    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
-    if (scene_color_tex == 0) return;
+    const TextureHandle scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    if (!scene_color_tex) return;
 
     const int write_idx = ctx_.lum_ping_pong_index;
     const int read_idx  = 1 - write_idx;
@@ -301,8 +300,8 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 64x64 â†’ 1x1 adapted exposure (EMA blend with previous frame)
-    const unsigned int lum_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_temp);
-    const unsigned int prev_adapted_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[read_idx]);
+    const TextureHandle lum_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_temp);
+    const TextureHandle prev_adapted_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[read_idx]);
 
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_adapted[write_idx], glm::vec4(1.0f), true});
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"lum_adapt", lum_temp_tex, {
@@ -340,12 +339,12 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& pp_config = snap.post_process;
     bool ssao_enabled = ctx_.pipeline_features.ssao && pp_config.valid && pp_config.ssao_enabled;
 
-    if (!ssao_enabled || ctx_.render_targets.ssao == 0 || ctx_.render_targets.ssao_blur == 0) {
+    if (!ssao_enabled || !ctx_.render_targets.ssao || !ctx_.render_targets.ssao_blur) {
         return;
     }
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
     float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
@@ -369,7 +368,7 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 双边模糊
-    const unsigned int ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
+    const TextureHandle ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao_blur, glm::vec4(1.0f), true});
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ssao_blur", ssao_tex});
     cmd_buffer.EndRenderPass();
@@ -394,12 +393,12 @@ void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& pp_config = snap.post_process;
     bool cs_enabled = ctx_.pipeline_features.contact_shadow && pp_config.valid && pp_config.contact_shadow_enabled;
 
-    if (!cs_enabled || ctx_.render_targets.contact_shadow == 0) {
+    if (!cs_enabled || !ctx_.render_targets.contact_shadow) {
         return;
     }
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     glm::vec3 light_dir(-0.4f, -1.0f, -0.3f);
     if (snap.directional_light.valid) {
@@ -443,13 +442,13 @@ void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     bool fxaa_enabled = ctx_.pipeline_features.fxaa && snap.post_process.valid && snap.post_process.fxaa_enabled;
 
-    ctx_.fxaa_active = fxaa_enabled && ctx_.render_targets.fxaa != 0;
+    ctx_.fxaa_active = fxaa_enabled && ctx_.render_targets.fxaa;
     if (!ctx_.fxaa_active) {
         return;
     }
 
-    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
-    if (main_color_tex == 0) return;
+    const TextureHandle main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    if (!main_color_tex) return;
 
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fxaa, glm::vec4(0.0f), true});
@@ -476,20 +475,20 @@ void PresentPass::Setup(RenderGraph& graph) {
 }
 
 void PresentPass::Execute(CommandBuffer& cmd_buffer) {
-    unsigned int present_tex = 0;
+    TextureHandle present_tex;
     if (ctx_.taa_active) {
         present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.taa);
     } else if (ctx_.fxaa_active) {
         present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fxaa);
     }
-    if (present_tex == 0) {
+    if (!present_tex) {
         present_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
     }
-    if (present_tex == 0) {
+    if (!present_tex) {
         return;
     }
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
-    cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
+    cmd_buffer.BeginRenderPass({{}, glm::vec4(0.0f), true});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", present_tex});
     cmd_buffer.EndRenderPass();
@@ -536,7 +535,7 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     bool taa_enabled = ctx_.pipeline_features.taa && snap.post_process.valid && snap.post_process.taa_enabled;
     float blend_factor = snap.post_process.valid ? snap.post_process.taa_blend_factor : 0.1f;
 
-    ctx_.taa_active = taa_enabled && ctx_.render_targets.taa != 0;
+    ctx_.taa_active = taa_enabled && ctx_.render_targets.taa;
     if (!ctx_.taa_active) {
         return;
     }
@@ -545,17 +544,17 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     const int sh = Screen::height();
     EnsureHistoryRT(sw, sh);
 
-    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
-    if (main_color_tex == 0) return;
+    const TextureHandle main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    if (!main_color_tex) return;
 
     // 读取 motion vector 纹理（如果可用）
-    const unsigned int mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
+    const TextureHandle mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
 
     // 历史帧读取来自上一帧写入的 RT
     const int read_idx = 1 - history_index_;
-    const unsigned int history_tex = has_valid_history_
+    const TextureHandle history_tex = has_valid_history_
         ? ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[read_idx])
-        : 0;
+        : TextureHandle{};
 
     // TAA resolve：写入当前帧的 history RT（直接做输出，省掉 copy）
     const int write_idx = history_index_;
@@ -572,8 +571,8 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // 将 TAA 结果 copy 到 taa RT（供 Present/FXAA 读取）
-    const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[write_idx]);
-    if (taa_out_tex != 0 && ctx_.render_targets.taa != 0) {
+    const TextureHandle taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[write_idx]);
+    if (taa_out_tex && ctx_.render_targets.taa) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", taa_out_tex});
         cmd_buffer.EndRenderPass();
@@ -586,7 +585,7 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
 
 void TAAPass::EnsureHistoryRT(int width, int height) {
     if (width == history_width_ && height == history_height_
-        && history_rt_[0] != 0 && history_rt_[1] != 0) {
+        && history_rt_[0] && history_rt_[1]) {
         return;
     }
     // 分辨率变化或首次创建（旧 RT 由 RhiDevice 资源管理器统一回收）
@@ -625,11 +624,11 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& pp_config = snap.post_process;
     bool dof_enabled = pp_config.valid && pp_config.dof_enabled;
 
-    if (!dof_enabled || ctx_.render_targets.dof == 0) return;
+    if (!dof_enabled || !ctx_.render_targets.dof) return;
 
-    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (main_color_tex == 0 || depth_tex == 0) return;
+    const TextureHandle main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!main_color_tex || !depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
     float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
@@ -650,8 +649,8 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // Pass 2: dof RT → main RT（回写）
-    const unsigned int dof_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
-    if (dof_tex != 0) {
+    const TextureHandle dof_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
+    if (dof_tex) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", dof_tex});
         cmd_buffer.EndRenderPass();
@@ -673,10 +672,10 @@ void MotionVectorPass::Setup(RenderGraph& graph) {
 }
 
 void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
-    if (ctx_.render_targets.motion_vector == 0) return;
+    if (!ctx_.render_targets.motion_vector) return;
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
         static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
@@ -736,11 +735,11 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& pp_config = snap.post_process;
     bool mb_enabled = pp_config.valid && pp_config.motion_blur_enabled;
 
-    if (!mb_enabled || ctx_.render_targets.dof == 0) return;
+    if (!mb_enabled || !ctx_.render_targets.dof) return;
 
-    const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
-    const unsigned int mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
-    if (main_color_tex == 0 || mv_tex == 0) return;
+    const TextureHandle main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
+    const TextureHandle mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
+    if (!main_color_tex || !mv_tex) return;
 
     // motion_blur 现在读 motion_vector RT 而非深度 + reproj
     // params: [0] intensity, [1] samples, [2] screen_w, [3] screen_h, [4] color_tex
@@ -755,8 +754,8 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // dof RT â†’ main RT
-    const unsigned int mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
-    if (mb_tex != 0) {
+    const TextureHandle mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
+    if (mb_tex) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", mb_tex});
         cmd_buffer.EndRenderPass();
@@ -784,11 +783,11 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& pp_config = snap.post_process;
     bool ssr_enabled = ctx_.pipeline_features.ssr && pp_config.valid && pp_config.ssr_enabled;
 
-    if (!ssr_enabled || ctx_.render_targets.ssr == 0) return;
+    if (!ssr_enabled || !ctx_.render_targets.ssr) return;
 
-    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (scene_color_tex == 0 || depth_tex == 0) return;
+    const TextureHandle scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!scene_color_tex || !depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
     float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
@@ -812,8 +811,8 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 将 SSR 结果叠加到 scene RT（利用 SSR alpha 作为混合权重）
-    const unsigned int ssr_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssr);
-    if (ssr_tex != 0) {
+    const TextureHandle ssr_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssr);
+    if (ssr_tex) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ui_overlay", ssr_tex, {}, true});
         cmd_buffer.EndRenderPass();
@@ -840,10 +839,10 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& pp = snap.post_process;
 
-    if (!pp.valid || !pp.outline_enabled || ctx_.render_targets.outline == 0) return;
+    if (!pp.valid || !pp.outline_enabled || !ctx_.render_targets.outline) return;
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
     float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
@@ -867,8 +866,8 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 将边缘结果叠加到 scene RT
-    const unsigned int outline_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.outline);
-    if (outline_tex != 0) {
+    const TextureHandle outline_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.outline);
+    if (outline_tex) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ui_overlay", outline_tex, {}, true});
         cmd_buffer.EndRenderPass();
@@ -894,8 +893,8 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& pp_snap = snap.post_process;
     if (!pp_snap.valid || !pp_snap.light_shaft_enabled) return;
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
         static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
@@ -921,7 +920,7 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
     float sun_uv_x = (d_right / (d_fwd * tan_fov_y * aspect)) * 0.5f + 0.5f;
     float sun_uv_y = (d_up / (d_fwd * tan_fov_y)) * 0.5f + 0.5f;
 
-    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     // params 布局（15 float）:
     // [0-1]  sun_screen_pos.xy (UV space)

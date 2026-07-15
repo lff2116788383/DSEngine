@@ -20,6 +20,7 @@
 #include <glm/glm.hpp>
 #include "engine/core/dse_export.h"
 #include "engine/render/font/truetype_font.h"
+#include "engine/render/rhi/rhi_handle.h"
 
 namespace dse {
 namespace render {
@@ -29,7 +30,7 @@ struct FontInstance {
     std::string font_id;
     std::string file_path;
     TrueTypeFont font;
-    unsigned int gpu_texture_handle = 0;   ///< GPU 纹理句柄（单通道 SDF → RGBA8）
+    TextureHandle gpu_texture_handle;   ///< GPU 纹理句柄（单通道 SDF → RGBA8）
     bool sdf_mode = true;                  ///< 是否使用 SDF 模式
 };
 
@@ -51,8 +52,8 @@ struct FontServiceConfig {
  */
 class DSE_EXPORT FontService {
 public:
-    using TextureCreateFn = std::function<unsigned int(int w, int h, const unsigned char* rgba8, bool linear)>;
-    using TextureDeleteFn = std::function<void(unsigned int handle)>;
+    using TextureCreateFn = std::function<TextureHandle(int w, int h, const unsigned char* rgba8, bool linear)>;
+    using TextureDeleteFn = std::function<void(TextureHandle handle)>;
 
     FontService() = default;
     ~FontService();
@@ -110,7 +111,7 @@ private:
     TextureCreateFn texture_create_fn_;
     TextureDeleteFn texture_delete_fn_;
 
-    unsigned int UploadAtlasToGPU(const TrueTypeFont& font);
+    TextureHandle UploadAtlasToGPU(const TrueTypeFont& font);
 };
 
 } // namespace render

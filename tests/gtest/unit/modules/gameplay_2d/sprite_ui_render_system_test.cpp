@@ -73,7 +73,7 @@ TEST(UIRenderSystemTest, ZeroDoesNotCrash) {
 // 测试 精灵UI渲染组件：默认值
 TEST(SpriteUIRenderComponentTest, DefaultValues) {
     UIRendererComponent ui;
-    EXPECT_EQ(ui.texture_handle, 0u);
+    EXPECT_FALSE(ui.texture_handle);
     EXPECT_FLOAT_EQ(ui.color.r, 1.0f);
     EXPECT_FLOAT_EQ(ui.color.a, 1.0f);
     EXPECT_EQ(ui.order, 0);
@@ -111,7 +111,7 @@ TEST(SpriteUIRenderComponentTest, StateDefaultValues) {
 // 测试 展开9切片：Zerogenerate 1项
 TEST(Expand9SliceTest, Zerogenerate1Item) {
     SpriteDrawItem base;
-    base.texture_handle = 42;
+    base.texture_handle = TextureHandle::from_raw(42);
     base.color = glm::vec4(1.0f);
     std::vector<SpriteDrawItem> out;
     Expand9SliceItems(base,
@@ -128,7 +128,7 @@ TEST(Expand9SliceTest, Zerogenerate1Item) {
 // 测试 展开9切片：Validgenerate多9项
 TEST(Expand9SliceTest, ValidgenerateMulti9Item) {
     SpriteDrawItem base;
-    base.texture_handle = 42;
+    base.texture_handle = TextureHandle::from_raw(42);
     base.color = glm::vec4(1.0f);
     std::vector<SpriteDrawItem> out;
     Expand9SliceItems(base,
@@ -145,7 +145,7 @@ TEST(Expand9SliceTest, ValidgenerateMulti9Item) {
 // 测试 展开9切片：带项
 TEST(Expand9SliceTest, WithItem) {
     SpriteDrawItem base;
-    base.texture_handle = 99;
+    base.texture_handle = TextureHandle::from_raw(99);
     base.color = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
     std::vector<SpriteDrawItem> out;
     Expand9SliceItems(base,
@@ -156,6 +156,6 @@ TEST(Expand9SliceTest, WithItem) {
                       glm::vec2(64, 64),
                       out);
     for (const auto& item : out) {
-        EXPECT_EQ(item.texture_handle, 99u);
+        EXPECT_EQ(item.texture_handle, TextureHandle::from_raw(99));
     }
 }

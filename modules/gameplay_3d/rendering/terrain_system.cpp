@@ -70,9 +70,9 @@ void TerrainSystem::DestroyTerrainGPU(TerrainComponent& terrain) {
         rhi_->DeleteGpuBuffer(terrain.shaded_vbo);
         terrain.shaded_vbo = {};
     }
-    if (terrain.splat_weight_texture != 0 && rhi_) {
+    if (terrain.splat_weight_texture && rhi_) {
         rhi_->DeleteTexture(terrain.splat_weight_texture);
-        terrain.splat_weight_texture = 0;
+        terrain.splat_weight_texture = {};
         terrain.splat_dirty = true;  // 几何重建后需重新上传权重图
     }
 }
@@ -87,9 +87,9 @@ void TerrainSystem::UploadSplatWeightMap(TerrainComponent& terrain) {
 
     // 无数据或尺寸不匹配：释放旧纹理并退出（渲染时回退到预烘焙权重图路径）。
     if (w < 1 || h < 1 || terrain.splat_data.size() < expected) {
-        if (terrain.splat_weight_texture != 0) {
+        if (terrain.splat_weight_texture) {
             rhi_->DeleteTexture(terrain.splat_weight_texture);
-            terrain.splat_weight_texture = 0;
+            terrain.splat_weight_texture = {};
         }
         terrain.splat_dirty = false;
         return;
@@ -103,9 +103,9 @@ void TerrainSystem::UploadSplatWeightMap(TerrainComponent& terrain) {
         rgba8[i] = static_cast<unsigned char>(v * 255.0f + 0.5f);
     }
 
-    if (terrain.splat_weight_texture != 0) {
+    if (terrain.splat_weight_texture) {
         rhi_->DeleteTexture(terrain.splat_weight_texture);
-        terrain.splat_weight_texture = 0;
+        terrain.splat_weight_texture = {};
     }
     // 权重图：线性采样 + ClampToEdge（避免边缘 wrap 串色）。
     TextureSamplerDesc sampler;
@@ -375,10 +375,10 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::r
         UploadSplatWeightMap(terrain);
         bool has_any_splat = false;
         for (int si = 0; si < 4; ++si) {
-            if (terrain.splat_texture_handles[si] != 0) { has_any_splat = true; break; }
+            if (terrain.splat_texture_handles[si]) { has_any_splat = true; break; }
         }
         // 优先使用 splat_data 上传的权重图；无则回退到预烘焙的 terrain.texture_handle。
-        const unsigned int splat_weight_handle = terrain.splat_weight_texture != 0
+        const dse::render::TextureHandle splat_weight_handle = terrain.splat_weight_texture
             ? terrain.splat_weight_texture : terrain.texture_handle;
 
         // Snow cover
@@ -827,7 +827,7 @@ void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const d
         // Splatmap 检查
         bool has_any_splat = false;
         for (int si = 0; si < 4; ++si) {
-            if (mgr.splat_texture_handles[si] != 0) { has_any_splat = true; break; }
+            if (mgr.splat_texture_handles[si]) { has_any_splat = true; break; }
         }
 
         // Snow cover

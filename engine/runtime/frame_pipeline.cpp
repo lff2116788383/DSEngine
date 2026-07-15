@@ -417,16 +417,16 @@ bool FramePipeline::Init() {
     InitResolutionDependentRTs();
 
     // 固定尺寸 RT（不随窗口缩放，Init 时创建一次）
-    if (render_resources_.pp_lum_temp_rt == 0)
+    if (!render_resources_.pp_lum_temp_rt)
         render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({64, 64, true, false, false});
     for (int i = 0; i < 2; ++i) {
-        if (render_resources_.pp_lum_adapted_rt[i] == 0)
+        if (!render_resources_.pp_lum_adapted_rt[i])
             render_resources_.pp_lum_adapted_rt[i] = runtime_context_.rhi_device->CreateRenderTarget({1, 1, true, false, false});
     }
 
     // Hi-Z Occlusion Culling shaders（不依赖分辨率，Init 时创建一次）
-    if (render_resources_.hiz_texture != 0 &&
-        render_resources_.hiz_copy_shader == 0 &&
+    if (render_resources_.hiz_texture &&
+        !render_resources_.hiz_copy_shader &&
         runtime_context_.rhi_device->SupportsCompute()) {
         render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
             dse::render::generated_shaders::khi_z_copy_comp_glsl430,
@@ -444,13 +444,13 @@ bool FramePipeline::Init() {
             dse::render::generated_shaders::khi_z_cull_comp_hlsl,
             2, 0, 1, 112, dse::render::kHiZCullShaderSourceWGSL);
         DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
-                       render_resources_.hiz_texture,
+                       render_resources_.hiz_texture.raw(),
                        render_resources_.hiz_visibility_ssbo.raw(),
                        render_resources_.hiz_aabb_ssbo.raw(),
                        render_resources_.hiz_ssbo_capacity,
-                       render_resources_.hiz_copy_shader,
-                       render_resources_.hiz_downsample_shader,
-                       render_resources_.hiz_cull_shader);
+                       render_resources_.hiz_copy_shader.raw(),
+                       render_resources_.hiz_downsample_shader.raw(),
+                       render_resources_.hiz_cull_shader.raw());
     }
 
     // CSM Shadow Atlas: single 4096Ã—2048 depth texture, cascades rendered via viewport
@@ -467,7 +467,7 @@ bool FramePipeline::Init() {
     }
 
     // RSM MRT: 3 color (position + normal + flux) + depth, 512x512
-    if (render_resources_.rsm_render_target == 0) {
+    if (!render_resources_.rsm_render_target) {
         RenderTargetDesc rsm_desc;
         rsm_desc.width = 512;
         rsm_desc.height = 512;
@@ -495,7 +495,7 @@ bool FramePipeline::Init() {
             dse::render::generated_shaders::kgpu_cull_comp_glsl450,
             dse::render::generated_shaders::kgpu_cull_comp_hlsl,
             2, 0, 1, 208, dse::render::kGPUCullShaderSourceWGSL);
-        render_resources_.gpu_driven_supported = (render_resources_.gpu_cull_shader != 0);
+        render_resources_.gpu_driven_supported = static_cast<bool>(render_resources_.gpu_cull_shader);
         // 二次验证：GPU-driven PBR shader 编译可能失败（如 HLSL patch 不匹配）
         if (render_resources_.gpu_driven_supported &&
             !runtime_context_.rhi_device->HasGPUDrivenPBRShader()) {
@@ -503,7 +503,8 @@ bool FramePipeline::Init() {
             DEBUG_LOG_WARN("GPU Driven Rendering: disabled â€” GPU-driven PBR shader unavailable");
         }
         DEBUG_LOG_INFO("GPU Driven Rendering: supported={}, cull_shader={}",
-                       render_resources_.gpu_driven_supported, render_resources_.gpu_cull_shader);
+                       render_resources_.gpu_driven_supported,
+                       render_resources_.gpu_cull_shader.raw());
     } else if (!gpu_driven_requested_) {
         render_resources_.gpu_driven_supported = false;
         DEBUG_LOG_INFO("GPU Driven Rendering: requested=false (policy/profile)");
@@ -835,21 +836,21 @@ void FramePipeline::Shutdown() {
 
     // Hi-Z: 释放 GPU 资源
     if (runtime_context_.rhi_device) {
-        if (render_resources_.hiz_copy_shader != 0) {
+        if (render_resources_.hiz_copy_shader) {
             runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_copy_shader);
-            render_resources_.hiz_copy_shader = 0;
+            render_resources_.hiz_copy_shader = {};
         }
-        if (render_resources_.hiz_downsample_shader != 0) {
+        if (render_resources_.hiz_downsample_shader) {
             runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_downsample_shader);
-            render_resources_.hiz_downsample_shader = 0;
+            render_resources_.hiz_downsample_shader = {};
         }
-        if (render_resources_.hiz_cull_shader != 0) {
+        if (render_resources_.hiz_cull_shader) {
             runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_cull_shader);
-            render_resources_.hiz_cull_shader = 0;
+            render_resources_.hiz_cull_shader = {};
         }
-        if (render_resources_.hiz_texture != 0) {
+        if (render_resources_.hiz_texture) {
             runtime_context_.rhi_device->DeleteHiZTexture(render_resources_.hiz_texture);
-            render_resources_.hiz_texture = 0;
+            render_resources_.hiz_texture = {};
         }
         if (render_resources_.hiz_visibility_ssbo) {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
@@ -871,7 +872,7 @@ void FramePipeline::Shutdown() {
         if (render_resources_.gpu_aabb_ssbo) {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_aabb_ssbo);
             render_resources_.gpu_aabb_ssbo = {};
-            render_resources_.gpu_aabb_capacity = 0;
+            render_resources_.gpu_aabb_capacity = {};
         }
         if (render_resources_.gpu_instance_ssbo) {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_instance_ssbo);
@@ -893,9 +894,9 @@ void FramePipeline::Shutdown() {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_atomic_counter_ssbo);
             render_resources_.gpu_atomic_counter_ssbo = {};
         }
-        if (render_resources_.gpu_cull_shader != 0) {
+        if (render_resources_.gpu_cull_shader) {
             runtime_context_.rhi_device->DeleteComputeShader(render_resources_.gpu_cull_shader);
-            render_resources_.gpu_cull_shader = 0;
+            render_resources_.gpu_cull_shader = {};
         }
     }
 
@@ -917,7 +918,7 @@ void FramePipeline::InitResolutionDependentRTs() {
     const int render_width  = Screen::render_width()  > 0 ? Screen::render_width()  : display_width;
     const int render_height = Screen::render_height() > 0 ? Screen::render_height() : display_height;
 
-    if (render_resources_.main_render_target == 0) {
+    if (!render_resources_.main_render_target) {
         RenderTargetDesc main_rt_desc{};
         main_rt_desc.width = render_width;
         main_rt_desc.height = render_height;
@@ -925,7 +926,7 @@ void FramePipeline::InitResolutionDependentRTs() {
         main_rt_desc.has_depth = false;
         render_resources_.main_render_target = runtime_context_.rhi_device->CreateRenderTarget(main_rt_desc);
     }
-    if (render_resources_.scene_render_target == 0) {
+    if (!render_resources_.scene_render_target) {
         RenderTargetDesc scene_desc{};
         scene_desc.width = render_width;
         scene_desc.height = render_height;
@@ -934,13 +935,13 @@ void FramePipeline::InitResolutionDependentRTs() {
         scene_desc.msaa_samples = 4;
         render_resources_.scene_render_target = runtime_context_.rhi_device->CreateRenderTarget(scene_desc);
     }
-    if (render_resources_.ui_render_target == 0) {
+    if (!render_resources_.ui_render_target) {
         render_resources_.ui_render_target = runtime_context_.rhi_device->CreateRenderTarget({display_width, display_height, true, false});
     }
-    if (render_resources_.prez_render_target == 0) {
+    if (!render_resources_.prez_render_target) {
         render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true});
     }
-    if (render_resources_.pp_bloom_extract_rt == 0) {
+    if (!render_resources_.pp_bloom_extract_rt) {
         render_resources_.pp_bloom_extract_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     }
     if (render_resources_.pp_bloom_mip_rts.empty()) {
@@ -953,37 +954,37 @@ void FramePipeline::InitResolutionDependentRTs() {
             mip_h = (std::max)(1, mip_h / 2);
         }
     }
-    if (render_resources_.pp_ssao_rt == 0)
+    if (!render_resources_.pp_ssao_rt)
         render_resources_.pp_ssao_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (render_resources_.pp_ssao_blur_rt == 0)
+    if (!render_resources_.pp_ssao_blur_rt)
         render_resources_.pp_ssao_blur_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (render_resources_.pp_contact_shadow_rt == 0)
+    if (!render_resources_.pp_contact_shadow_rt)
         render_resources_.pp_contact_shadow_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (render_resources_.pp_fxaa_rt == 0)
+    if (!render_resources_.pp_fxaa_rt)
         render_resources_.pp_fxaa_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.pp_taa_rt == 0)
+    if (!render_resources_.pp_taa_rt)
         render_resources_.pp_taa_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.pp_dof_rt == 0)
+    if (!render_resources_.pp_dof_rt)
         render_resources_.pp_dof_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.pp_ssr_rt == 0)
+    if (!render_resources_.pp_ssr_rt)
         render_resources_.pp_ssr_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (render_resources_.pp_motion_vector_rt == 0)
+    if (!render_resources_.pp_motion_vector_rt)
         render_resources_.pp_motion_vector_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.pp_outline_rt == 0)
+    if (!render_resources_.pp_outline_rt)
         render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.pp_fog_rt == 0)
+    if (!render_resources_.pp_fog_rt)
         render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width / 2, render_height / 2, true, false, false});
-    if (render_resources_.pp_cloud_rt == 0)
+    if (!render_resources_.pp_cloud_rt)
         render_resources_.pp_cloud_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width / 2, render_height / 2, true, false, false});
-    if (render_resources_.wboit_accum_rt == 0)
+    if (!render_resources_.wboit_accum_rt)
         render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.wboit_reveal_rt == 0)
+    if (!render_resources_.wboit_reveal_rt)
         render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.pp_sss_temp_rt == 0)
+    if (!render_resources_.pp_sss_temp_rt)
         render_resources_.pp_sss_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.hiz_texture == 0 && runtime_context_.rhi_device->SupportsCompute()) {
+    if (!render_resources_.hiz_texture && runtime_context_.rhi_device->SupportsCompute()) {
         render_resources_.hiz_texture = runtime_context_.rhi_device->CreateHiZTexture(render_width, render_height);
-        if (render_resources_.hiz_texture != 0) {
+        if (render_resources_.hiz_texture) {
             const size_t cap = dse::runtime::RenderPipelineResources::kHiZMaxObjects;
             render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(
                 {cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"}, nullptr);
@@ -997,7 +998,12 @@ void FramePipeline::InitResolutionDependentRTs() {
 void FramePipeline::FreeResolutionDependentRTs() {
     if (!runtime_context_.rhi_device) return;
     auto& d = *runtime_context_.rhi_device;
-    auto del = [&](unsigned int& h) { if (h) { d.DeleteRenderTarget(h); h = 0; } };
+    auto del = [&](dse::render::RenderTargetHandle& h) {
+        if (h) {
+            d.DeleteRenderTarget(h);
+            h = {};
+        }
+    };
     del(render_resources_.main_render_target);
     del(render_resources_.scene_render_target);
     del(render_resources_.ui_render_target);
@@ -1021,7 +1027,7 @@ void FramePipeline::FreeResolutionDependentRTs() {
     del(render_resources_.pp_sss_temp_rt);
     if (render_resources_.hiz_texture) {
         d.DeleteHiZTexture(render_resources_.hiz_texture);
-        render_resources_.hiz_texture = 0;
+        render_resources_.hiz_texture = {};
         if (render_resources_.hiz_visibility_ssbo) {
             d.DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
             render_resources_.hiz_visibility_ssbo = {};
@@ -1030,7 +1036,7 @@ void FramePipeline::FreeResolutionDependentRTs() {
             d.DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
             render_resources_.hiz_aabb_ssbo = {};
         }
-        render_resources_.hiz_ssbo_capacity = 0;
+        render_resources_.hiz_ssbo_capacity = {};
     }
 }
 
@@ -1252,38 +1258,38 @@ RhiBackend FramePipeline::GetRhiBackend() const {
 }
 
 unsigned int FramePipeline::GetSceneTextureId() const {
-    if (!runtime_context_.rhi_device || render_resources_.scene_render_target == 0) return 0;
-    return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);
+    if (!runtime_context_.rhi_device || !render_resources_.scene_render_target) return 0;
+    return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target).raw();
 }
 
 unsigned int FramePipeline::GetMainTextureId() const {
-    if (!runtime_context_.rhi_device || render_resources_.main_render_target == 0) return 0;
-    return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target);
+    if (!runtime_context_.rhi_device || !render_resources_.main_render_target) return 0;
+    return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target).raw();
 }
 
 std::vector<unsigned char> FramePipeline::ReadSceneColorRgba8() const {
-    if (!runtime_context_.rhi_device || render_resources_.scene_render_target == 0) {
+    if (!runtime_context_.rhi_device || !render_resources_.scene_render_target) {
         return {};
     }
     return runtime_context_.rhi_device->ReadRenderTargetColorRgba8(render_resources_.scene_render_target);
 }
 
 RenderTargetReadback FramePipeline::ReadSceneColorRgba8WithSize() const {
-    if (!runtime_context_.rhi_device || render_resources_.scene_render_target == 0) {
+    if (!runtime_context_.rhi_device || !render_resources_.scene_render_target) {
         return {};
     }
     return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.scene_render_target);
 }
 
 std::vector<unsigned char> FramePipeline::ReadMainColorRgba8() const {
-    if (!runtime_context_.rhi_device || render_resources_.main_render_target == 0) {
+    if (!runtime_context_.rhi_device || !render_resources_.main_render_target) {
         return {};
     }
     return runtime_context_.rhi_device->ReadRenderTargetColorRgba8(render_resources_.main_render_target);
 }
 
 RenderTargetReadback FramePipeline::ReadMainColorRgba8WithSize() const {
-    if (!runtime_context_.rhi_device || render_resources_.main_render_target == 0) {
+    if (!runtime_context_.rhi_device || !render_resources_.main_render_target) {
         return {};
     }
     return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.main_render_target);
@@ -1295,7 +1301,7 @@ RenderTargetReadback FramePipeline::ReadBloomMip0Rgba8WithSize() const {
 }
 
 RenderTargetReadback FramePipeline::ReadBloomExtractRgba8WithSize() const {
-    if (!runtime_context_.rhi_device || render_resources_.pp_bloom_extract_rt == 0) return {};
+    if (!runtime_context_.rhi_device || !render_resources_.pp_bloom_extract_rt) return {};
     return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.pp_bloom_extract_rt);
 }
 
@@ -1394,5 +1400,3 @@ void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
 // ============================================================
 // Phase 1 薄快照：一次性提取渲染线程所需的全部 ECS 数据
 // ============================================================
-
-

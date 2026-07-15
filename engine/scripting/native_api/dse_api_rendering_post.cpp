@@ -16,7 +16,8 @@ extern "C" void dse_decal_add(uint32_t e, uint32_t albedo_texture) {
     if (!world) return;
     auto& decal = world->registry().emplace_or_replace<DecalComponent>(TE(e));
     decal.enabled = true;
-    decal.albedo_texture = albedo_texture;
+    decal.albedo_texture =
+        dse::render::TextureHandle::from_raw(albedo_texture);
 }
 
 extern "C" void dse_decal_set(uint32_t e, float r, float g, float b, float a, float angle_fade) {
@@ -42,4 +43,3 @@ extern "C" int dse_post_process_get_state(uint32_t e, int* out_enabled, int* out
     if (out_dof) *out_dof = pp->dof_enabled ? 1 : 0;
     return 1;
 }
-

@@ -171,10 +171,10 @@ TEST(VulkanRhiDeviceTest, SystemCanCalls) {
 // 测试 Vulkan RHI设备：全部接口不崩溃
 TEST(VulkanRhiDeviceTest, AllTheInterfaceDoesNotCrash) {
     VulkanRhiDevice device;
-    device.SetGlobalShadowMap(0, 100);
-    device.SetGlobalShadowMap(2, 200);
-    device.SetGlobalSpotShadowMap(0, 300);
-    device.SetGlobalPointShadowMap(0, 400);
+    device.SetGlobalShadowMap(0, TextureHandle::from_raw(100));
+    device.SetGlobalShadowMap(2, TextureHandle::from_raw(200));
+    device.SetGlobalSpotShadowMap(0, TextureHandle::from_raw(300));
+    device.SetGlobalPointShadowMap(0, TextureHandle::from_raw(400));
     device.SetGlobalLightSpaceMatrix(0, glm::mat4(1.0f));
     device.SetGlobalCascadeSplit(0, 0.3f);
     device.SetGlobalSpotLightSpaceMatrix(0, glm::mat4(1.0f));
@@ -199,45 +199,45 @@ TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     desc.width = 256;
     desc.height = 256;
     desc.has_color = true;
-    unsigned int handle = device.CreateRenderTarget(desc);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateRenderTarget(desc);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 Vulkan RHI设备：当不已初始化创建纹理2D返回零
 TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateTexture2DReturnsZero) {
     VulkanRhiDevice device;
-    unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateTexture2D(4, 4, nullptr, false);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 Vulkan RHI设备：当不已初始化创建缓冲区返回零
 TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateBufferReturnsZero) {
     VulkanRhiDevice device;
     float data[] = {1.0f, 2.0f, 3.0f};
-    unsigned int handle = device.CreateBuffer(sizeof(data), data, false, false);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateBuffer(sizeof(data), data, false, false);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 Vulkan RHI设备：当不已初始化创建着色器程序返回零
 TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateShaderProgramReturnsZero) {
     VulkanRhiDevice device;
-    unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateShaderProgram("void main(){}", "void main(){}");
+    EXPECT_FALSE(handle);
 }
 
 // 测试 Vulkan RHI设备：当不已初始化删除安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedDeleteSafety) {
     VulkanRhiDevice device;
-    device.DeleteRenderTarget(999);
-    device.DeleteTexture(999);
-    device.DeleteShaderProgram(999);
+    device.DeleteRenderTarget(RenderTargetHandle::from_raw(999));
+    device.DeleteTexture(TextureHandle::from_raw(999));
+    device.DeleteShaderProgram(ShaderHandle::from_raw(999));
 }
 
 // 测试 Vulkan RHI设备：当不已初始化更新缓冲区安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedUpdateBufferSafety) {
     VulkanRhiDevice device;
     float data[] = {0.5f};
-    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+    device.UpdateBuffer(BufferHandle::from_raw(999), 0, sizeof(data), data, false);
 }
 
 // ============================================================
@@ -281,15 +281,16 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenClearColorSafety) {
 // 测试 Vulkan命令缓冲区：无设备当 compute 调度安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDispatchComputePassSafety) {
     VulkanCommandBuffer cmd;
-    cmd.DispatchComputePass(ComputeDispatch{1, 100, 0.5f});
+    cmd.DispatchComputePass(ComputeDispatch{
+        ShaderHandle::from_raw(1), TextureHandle::from_raw(100), 0.5f});
 }
 
 // 测试 Vulkan命令缓冲区：无设备当延迟阴影映射安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     VulkanCommandBuffer cmd;
-    cmd.BindGlobalShadowMap(0, 100);
-    cmd.BindGlobalSpotShadowMap(0, 200);
-    cmd.BindGlobalPointShadowMap(0, 300);
+    cmd.BindGlobalShadowMap(0, TextureHandle::from_raw(100));
+    cmd.BindGlobalSpotShadowMap(0, TextureHandle::from_raw(200));
+    cmd.BindGlobalPointShadowMap(0, TextureHandle::from_raw(300));
 }
 
 // 测试 Vulkan命令缓冲区：设置设备且设置Vulkan命令缓冲区
@@ -438,10 +439,10 @@ TEST(VulkanResourceManagerTest, WhenNotInitializedcommand_PoolIsEmpty) {
 // 测试 Vulkan着色器管理器：当不初始化为零
 TEST(VulkanShaderManagerTest, WhenNotInitializedisZero) {
     VulkanShaderManager mgr;
-    EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
-    EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.sprite_shader_handle(), 0u);
-    EXPECT_EQ(mgr.postprocess_shader_handle(), 0u);
+    EXPECT_FALSE(mgr.pbr_shader_handle());
+    EXPECT_FALSE(mgr.skybox_shader_handle());
+    EXPECT_FALSE(mgr.sprite_shader_handle());
+    EXPECT_FALSE(mgr.postprocess_shader_handle());
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
@@ -457,18 +458,18 @@ TEST(VulkanShaderManagerTest, GetProgramInvalidHandleReturnednullptr) {
 TEST(VulkanDrawExecutorTest, AllState) {
     DrawExecutorGlobalState state;
     // index < 3 / < 4 的有效索引
-    state.SetShadowMap(0, 100);
-    state.SetShadowMap(2, 200);
-    state.SetSpotShadowMap(3, 300);
-    state.SetPointShadowMap(3, 400);
+    state.SetShadowMap(0, TextureHandle::from_raw(100));
+    state.SetShadowMap(2, TextureHandle::from_raw(200));
+    state.SetSpotShadowMap(3, TextureHandle::from_raw(300));
+    state.SetPointShadowMap(3, TextureHandle::from_raw(400));
     state.SetLightSpaceMatrix(2, glm::mat4(1.0f));
     state.SetCascadeSplit(2, 0.5f);
     state.SetSpotLightSpaceMatrix(3, glm::mat4(1.0f));
 
     // 越界索引应静默忽略
-    state.SetShadowMap(3, 999);          // 越界
-    state.SetSpotShadowMap(4, 999);      // 越界
-    state.SetPointShadowMap(4, 999);     // 越界
+    state.SetShadowMap(3, TextureHandle::from_raw(999));     // 越界
+    state.SetSpotShadowMap(4, TextureHandle::from_raw(999)); // 越界
+    state.SetPointShadowMap(4, TextureHandle::from_raw(999));// 越界
     state.SetLightSpaceMatrix(3, glm::mat4(1.0f)); // 越界
     state.SetCascadeSplit(3, 1.0f);      // 越界
     state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f)); // 越界
@@ -584,8 +585,8 @@ TEST(VulkanContextTest, C2_HDRDisabledByDefault) {
 // 测试 Vulkan着色器管理器：C 3泛光C Shandle默认值到零
 TEST(VulkanShaderManagerTest, C3_BloomCShandleDefaultsToZero) {
     VulkanShaderManager mgr;
-    EXPECT_EQ(mgr.bloom_downsample_cs_handle(), 0u);
-    EXPECT_EQ(mgr.bloom_upsample_cs_handle(), 0u);
+    EXPECT_FALSE(mgr.bloom_downsample_cs_handle());
+    EXPECT_FALSE(mgr.bloom_upsample_cs_handle());
 }
 
 // C3 — GetComputeProgram 无效句柄返回 nullptr

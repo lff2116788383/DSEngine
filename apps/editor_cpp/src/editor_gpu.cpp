@@ -29,13 +29,15 @@ unsigned int EditorCreateTexture2D(int width, int height, const uint8_t* rgba8,
     TextureSamplerDesc sampler;
     sampler.filter = linear ? TextureFilter::Linear : TextureFilter::Nearest;
     sampler.wrap = clamp ? TextureWrap::ClampToEdge : TextureWrap::Repeat;
-    return g_rhi->CreateTexture2D(width, height, rgba8, sampler);
+    return g_rhi->CreateTexture2D(width, height, rgba8, sampler).raw();
 }
 
 void EditorDeleteTexture(unsigned int handle) {
     if (handle == 0) return;
     if (g_imgui_backend) g_imgui_backend->ReleaseTexture(handle);
-    if (g_rhi) g_rhi->DeleteTexture(handle);
+    if (g_rhi) {
+        g_rhi->DeleteTexture(dse::render::TextureHandle::from_raw(handle));
+    }
 }
 
 }  // namespace dse::editor

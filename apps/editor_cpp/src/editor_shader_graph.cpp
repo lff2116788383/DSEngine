@@ -723,12 +723,12 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                 std::string shader_name = GenerateUniqueShaderName();
                 auto shader = asset_mgr->LoadShader(shader_name, vert_glsl, frag_glsl);
 
-                if (shader && shader->GetHandle() != 0) {
+                if (shader && shader->GetHandle()) {
                     // AssetManager 只持有 weak_ptr；本 session 期间保活已应用的自定义着色器，
                     // 否则程序会被析构（GL 句柄删除）、运行时 GetShaderHandle 查不到。
                     static std::vector<decltype(shader)> s_applied_shaders;
                     s_applied_shaders.push_back(shader);
-                    EditorLog(LogLevel::Info, "[ShaderGraph] Created custom shader '" + shader_name + "' (handle=" + std::to_string(shader->GetHandle()) + ")");
+                    EditorLog(LogLevel::Info, "[ShaderGraph] Created custom shader '" + shader_name + "' (handle=" + std::to_string(shader->GetHandle().raw()) + ")");
 
                     // 应用到当前选中的实体（如果有材质组件）
                     if (ctx.selected_entity != entt::null && ctx.registry.valid(ctx.selected_entity)) {

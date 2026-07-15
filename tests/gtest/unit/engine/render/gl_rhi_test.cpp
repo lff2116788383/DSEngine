@@ -110,8 +110,8 @@ TEST(OpenGLRhiDeviceTest, SystemCanCalls) {
 // 测试 打开GL RHI设备：当不已初始化创建缓冲区返回零
 TEST(OpenGLRhiDeviceTest, WhenNotInitializedCreateBufferReturnsZero) {
     OpenGLRhiDevice device;
-    unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateBuffer(16, nullptr, false, false);
+    EXPECT_FALSE(handle);
 }
 
 // CreateTexture2D / CreateRenderTarget 使用 EnsureInitialized() 延迟初始化，
@@ -122,24 +122,24 @@ TEST(OpenGLRhiDeviceTest, WhenNotInitializedCreateBufferReturnsZero) {
 TEST(OpenGLRhiDeviceTest, WhenNotInitializedUpdateBufferSafety) {
     OpenGLRhiDevice device;
     float data[] = {0.5f};
-    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+    device.UpdateBuffer(BufferHandle::from_raw(999), 0, sizeof(data), data, false);
 }
 
 // 测试 打开GL RHI设备：设置全局阴影映射交叉边框静默忽略
 TEST(OpenGLRhiDeviceTest, SetGlobalShadowMapCrossBorderSilentlyIgnore) {
     OpenGLRhiDevice device;
-    device.SetGlobalShadowMap(0, 100);
-    device.SetGlobalShadowMap(2, 200);
-    device.SetGlobalShadowMap(3, 999);
-    device.SetGlobalShadowMap(100, 999);
+    device.SetGlobalShadowMap(0, TextureHandle::from_raw(100));
+    device.SetGlobalShadowMap(2, TextureHandle::from_raw(200));
+    device.SetGlobalShadowMap(3, TextureHandle::from_raw(999));
+    device.SetGlobalShadowMap(100, TextureHandle::from_raw(999));
 }
 
 // 测试 打开GL RHI设备：全部接口不崩溃
 TEST(OpenGLRhiDeviceTest, AllTheInterfaceDoesNotCrash) {
     OpenGLRhiDevice device;
-    device.SetGlobalShadowMap(0, 1);
-    device.SetGlobalSpotShadowMap(0, 2);
-    device.SetGlobalPointShadowMap(0, 3);
+    device.SetGlobalShadowMap(0, TextureHandle::from_raw(1));
+    device.SetGlobalSpotShadowMap(0, TextureHandle::from_raw(2));
+    device.SetGlobalPointShadowMap(0, TextureHandle::from_raw(3));
     device.SetGlobalLightSpaceMatrix(0, glm::mat4(1.0f));
     device.SetGlobalCascadeSplit(0, 0.1f);
     device.SetGlobalCascadeSplit(1, 0.3f);
@@ -158,8 +158,8 @@ TEST(OpenGLRhiDeviceTest, LightProbeSHTheInterfaceDoesNotCrash) {
 // 测试 打开GL RHI设备：G缓冲区接口不崩溃
 TEST(OpenGLRhiDeviceTest, GBufferTheInterfaceDoesNotCrash) {
     OpenGLRhiDevice device;
-    device.SetGlobalGBufferTexture(0, 100);
-    device.SetGlobalGBufferTexture(3, 200);
+    device.SetGlobalGBufferTexture(0, TextureHandle::from_raw(100));
+    device.SetGlobalGBufferTexture(3, TextureHandle::from_raw(200));
     device.SetGBufferRenderingMode(true);
     device.SetGBufferRenderingMode(false);
 }
@@ -216,7 +216,8 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
 // 测试 打开GL命令缓冲区：无设备当 compute 调度安全
 TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDispatchComputePassSafety) {
     OpenGLCommandBuffer cmd;
-    cmd.DispatchComputePass(ComputeDispatch{1, 100, 0.5f});
+    cmd.DispatchComputePass(ComputeDispatch{
+        ShaderHandle::from_raw(1), TextureHandle::from_raw(100), 0.5f});
 }
 
 // 测试 打开GL命令缓冲区：无设备当清空颜色安全
@@ -234,9 +235,9 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
 // 测试 打开GL命令缓冲区：无设备当延迟阴影映射安全
 TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     OpenGLCommandBuffer cmd;
-    cmd.BindGlobalShadowMap(0, 100);
-    cmd.BindGlobalSpotShadowMap(0, 200);
-    cmd.BindGlobalPointShadowMap(0, 300);
+    cmd.BindGlobalShadowMap(0, TextureHandle::from_raw(100));
+    cmd.BindGlobalSpotShadowMap(0, TextureHandle::from_raw(200));
+    cmd.BindGlobalPointShadowMap(0, TextureHandle::from_raw(300));
 }
 
 // ============================================================
@@ -246,17 +247,17 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
 // 测试 GL绘制执行器：全部状态
 TEST(GLDrawExecutorTest, AllState) {
     DrawExecutorGlobalState state;
-    state.SetShadowMap(0, 100);
-    state.SetShadowMap(2, 200);
-    state.SetSpotShadowMap(3, 300);
-    state.SetPointShadowMap(3, 400);
+    state.SetShadowMap(0, TextureHandle::from_raw(100));
+    state.SetShadowMap(2, TextureHandle::from_raw(200));
+    state.SetSpotShadowMap(3, TextureHandle::from_raw(300));
+    state.SetPointShadowMap(3, TextureHandle::from_raw(400));
     state.SetLightSpaceMatrix(2, glm::mat4(1.0f));
     state.SetCascadeSplit(2, 0.5f);
     state.SetSpotLightSpaceMatrix(3, glm::mat4(1.0f));
     // 越界静默忽略
-    state.SetShadowMap(3, 999);
-    state.SetSpotShadowMap(4, 999);
-    state.SetPointShadowMap(4, 999);
+    state.SetShadowMap(3, TextureHandle::from_raw(999));
+    state.SetSpotShadowMap(4, TextureHandle::from_raw(999));
+    state.SetPointShadowMap(4, TextureHandle::from_raw(999));
     state.SetLightSpaceMatrix(3, glm::mat4(1.0f));
     state.SetCascadeSplit(3, 1.0f);
     state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f));
@@ -274,8 +275,8 @@ TEST(GLDrawExecutorTest, LightProbeSHTheInterfaceDoesNotCrash) {
 // 测试 GL绘制执行器：G缓冲区接口不崩溃
 TEST(GLDrawExecutorTest, GBufferTheInterfaceDoesNotCrash) {
     DrawExecutorGlobalState state;
-    state.SetGBufferTexture(0, 100);
-    state.SetGBufferTexture(3, 200);
+    state.SetGBufferTexture(0, TextureHandle::from_raw(100));
+    state.SetGBufferTexture(3, TextureHandle::from_raw(200));
     state.gbuffer_rendering_mode = true;
     state.gbuffer_rendering_mode = false;
 }
@@ -302,7 +303,7 @@ TEST(GLDrawExecutorTest, BeginEndFrameDoesNotCrash) {
 TEST(GLDrawExecutorTest, DefaultisZero) {
     DrawExecutorGlobalState state;
     GLDrawExecutor exec(state);
-    EXPECT_EQ(exec.white_texture_handle(), 0u);
+    EXPECT_FALSE(exec.white_texture_handle());
     EXPECT_EQ(exec.vao_handle().raw(), 0u);
     EXPECT_EQ(exec.vbo_handle(), 0u);
     EXPECT_EQ(exec.ebo_handle(), 0u);
@@ -311,7 +312,7 @@ TEST(GLDrawExecutorTest, DefaultisZero) {
     EXPECT_EQ(exec.mesh_ibo_handle(), 0u);
     EXPECT_EQ(exec.skybox_vao_handle().raw(), 0u);
     EXPECT_EQ(exec.skybox_vbo_handle(), 0u);
-    EXPECT_EQ(exec.active_render_target(), 0u);
+    EXPECT_FALSE(exec.active_render_target());
 }
 
 // 测试 GL绘制执行器：关闭Geometry缓冲区未初始化不崩溃
@@ -328,8 +329,8 @@ TEST(GLDrawExecutorTest, ShutdownGeometryBuffersUninitializedDoesNotCrash) {
 // 测试 GL着色器管理器：当不初始化为零
 TEST(GLShaderManagerTest, WhenNotInitializedisZero) {
     GLShaderManager mgr;
-    EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
-    EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
+    EXPECT_FALSE(mgr.pbr_shader_handle());
+    EXPECT_FALSE(mgr.skybox_shader_handle());
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
@@ -588,12 +589,12 @@ TEST(GLEnumConvertTest, CullFaceFullEnumerationHasMapping) {
 TEST(DrawExecutorGlobalStateTest, DefaultValuesAllZero) {
     DrawExecutorGlobalState state;
     for (int i = 0; i < 3; ++i) {
-        EXPECT_EQ(state.shadow_map[i], 0u);
+        EXPECT_FALSE(state.shadow_map[i]);
         EXPECT_FLOAT_EQ(state.cascade_splits[i], 0.0f);
     }
     for (int i = 0; i < 4; ++i) {
-        EXPECT_EQ(state.spot_shadow_map[i], 0u);
-        EXPECT_EQ(state.point_shadow_map[i], 0u);
+        EXPECT_FALSE(state.spot_shadow_map[i]);
+        EXPECT_FALSE(state.point_shadow_map[i]);
     }
     EXPECT_FALSE(state.light_probe_enabled);
     EXPECT_FALSE(state.gbuffer_rendering_mode);
@@ -603,15 +604,15 @@ TEST(DrawExecutorGlobalStateTest, DefaultValuesAllZero) {
 // 测试 绘制执行器全局状态：Setter交叉边框静默忽略
 TEST(DrawExecutorGlobalStateTest, SetterCrossBorderSilentlyIgnore) {
     DrawExecutorGlobalState state;
-    state.SetShadowMap(3, 999);
-    state.SetSpotShadowMap(4, 999);
-    state.SetPointShadowMap(4, 999);
+    state.SetShadowMap(3, TextureHandle::from_raw(999));
+    state.SetSpotShadowMap(4, TextureHandle::from_raw(999));
+    state.SetPointShadowMap(4, TextureHandle::from_raw(999));
     state.SetLightSpaceMatrix(3, glm::mat4(1.0f));
     state.SetCascadeSplit(3, 1.0f);
     state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f));
     // 有效索引设置后可读回
-    state.SetShadowMap(1, 42);
-    EXPECT_EQ(state.shadow_map[1], 42u);
+    state.SetShadowMap(1, TextureHandle::from_raw(42));
+    EXPECT_EQ(state.shadow_map[1], TextureHandle::from_raw(42));
     state.SetCascadeSplit(2, 0.75f);
     EXPECT_FLOAT_EQ(state.cascade_splits[2], 0.75f);
 }
@@ -631,12 +632,12 @@ TEST(DrawExecutorGlobalStateTest, LightProbeSHSetReadback) {
 // 测试 绘制执行器全局状态：G缓冲区纹理设置读取返回
 TEST(DrawExecutorGlobalStateTest, GBufferTextureSettingsReadBack) {
     DrawExecutorGlobalState state;
-    state.SetGBufferTexture(0, 100);
-    state.SetGBufferTexture(3, 200);
-    EXPECT_EQ(state.gbuffer_texture[0], 100u);
-    EXPECT_EQ(state.gbuffer_texture[3], 200u);
+    state.SetGBufferTexture(0, TextureHandle::from_raw(100));
+    state.SetGBufferTexture(3, TextureHandle::from_raw(200));
+    EXPECT_EQ(state.gbuffer_texture[0], TextureHandle::from_raw(100));
+    EXPECT_EQ(state.gbuffer_texture[3], TextureHandle::from_raw(200));
     // 越界
-    state.SetGBufferTexture(4, 999);
+    state.SetGBufferTexture(4, TextureHandle::from_raw(999));
 }
 
 // 测试 绘制执行器全局状态：开始结束帧统计流
@@ -678,8 +679,8 @@ TEST(PipelineStateDescGLTest, DefaultValues) {
 // 测试 打开GL RHI设备：当不已初始化创建着色器程序返回零
 TEST(OpenGLRhiDeviceTest, WhenNotInitializedCreateShaderProgramReturnsZero) {
     OpenGLRhiDevice device;
-    unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateShaderProgram("void main(){}", "void main(){}");
+    EXPECT_FALSE(handle);
 }
 
 // ============================================================

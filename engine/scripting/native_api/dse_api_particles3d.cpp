@@ -70,7 +70,7 @@ extern "C" int dse_particle_system_3d_get_state(uint32_t e, int* out_active, int
     WriteStr(ps->texture_path, out_tex, tex_cap);
     if (out_enabled) *out_enabled = ps->enabled ? 1 : 0;
     if (out_initialized) *out_initialized = ps->initialized ? 1 : 0;
-    if (out_texture_handle) *out_texture_handle = ps->texture_handle;
+    if (out_texture_handle) *out_texture_handle = ps->texture_handle.raw();
     return 1;
 }
 
@@ -78,7 +78,7 @@ extern "C" void dse_particle_emitter_add(uint32_t e, uint32_t texture_handle, in
     World* world = GW();
     if (!world) return;
     auto& em = world->registry().emplace_or_replace<ParticleEmitterComponent>(TE(e));
-    em.texture_handle = texture_handle;
+    em.texture_handle = dse::render::TextureHandle::from_raw(texture_handle);
     em.max_particles = max_particles;
     em.emit_rate = emit_rate;
 }
@@ -212,4 +212,3 @@ extern "C" void dse_gameplay_tuning_set(uint32_t e, float leaf_min_distance,
     if (!Keep(jump_speed_max))    t->jump_speed_max = jump_speed_max;
     if (!Keep(camera_follow_damping)) t->camera_follow_damping = camera_follow_damping;
 }
-

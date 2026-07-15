@@ -43,8 +43,8 @@ RenderTargetReadback RenderHair(RhiDevice& device) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;  // HairRenderer PSO 测深度（不写）；给一个深度附件供其通过。
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
     // 水平 line strip：x 从 -0.7 → 0.7，y=0，NDC 居中横排（row≈128，DX 翻转不影响）。
     std::vector<glm::vec4> positions(kStrandVerts);

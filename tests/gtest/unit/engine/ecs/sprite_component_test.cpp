@@ -34,7 +34,7 @@ TEST(MaterialInstanceComponentTest, DefaultValues) {
     EXPECT_EQ(mat.material_id, 0u);
     EXPECT_EQ(mat.shader_variant, "SPRITE_UNLIT");
     EXPECT_EQ(mat.blend_mode, SpriteBlendMode::Alpha);
-    EXPECT_EQ(mat.texture_handle, 0u);
+    EXPECT_FALSE(mat.texture_handle);
     EXPECT_FLOAT_EQ(mat.tint.r, 1.0f);
     EXPECT_FLOAT_EQ(mat.tint.g, 1.0f);
     EXPECT_FLOAT_EQ(mat.tint.b, 1.0f);
@@ -45,9 +45,9 @@ TEST(MaterialInstanceComponentTest, DefaultValues) {
 TEST(MaterialInstanceComponentTest, CanRevise) {
     MaterialInstanceComponent mat;
     mat.blend_mode = SpriteBlendMode::Additive;
-    mat.texture_handle = 42;
+    mat.texture_handle = dse::render::TextureHandle::from_raw(42);
     EXPECT_EQ(mat.blend_mode, SpriteBlendMode::Additive);
-    EXPECT_EQ(mat.texture_handle, 42u);
+    EXPECT_EQ(mat.texture_handle, dse::render::TextureHandle::from_raw(42));
 }
 
 // ============================================================
@@ -57,7 +57,7 @@ TEST(MaterialInstanceComponentTest, CanRevise) {
 // 测试 精灵渲染器组件：默认值
 TEST(SpriteRendererComponentTest, DefaultValues) {
     SpriteRendererComponent sprite;
-    EXPECT_EQ(sprite.texture_handle, 0u);
+    EXPECT_FALSE(sprite.texture_handle);
     EXPECT_EQ(sprite.material_instance_id, 0u);
     EXPECT_EQ(sprite.blend_mode, SpriteBlendMode::Alpha);
     EXPECT_EQ(sprite.sorting_layer, 0);

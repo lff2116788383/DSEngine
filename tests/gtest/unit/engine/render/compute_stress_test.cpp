@@ -22,6 +22,22 @@
 
 using namespace dse::render;
 
+namespace {
+
+dse::render::ShaderHandle TestShaderHandle(unsigned int raw) {
+    return dse::render::ShaderHandle::from_raw(raw);
+}
+
+dse::render::TextureHandle TestTextureHandle(unsigned int raw) {
+    return dse::render::TextureHandle::from_raw(raw);
+}
+
+dse::render::BufferHandle TestBufferHandle(unsigned int raw) {
+    return dse::render::BufferHandle::from_raw(raw);
+}
+
+}  // namespace
+
 // ============================================================
 // Vulkan Compute Stress Tests
 // ============================================================
@@ -34,7 +50,7 @@ TEST(VulkanComputeStressTest, UniformsetUpDoesNotCrash) {
     VulkanRhiDevice device;
     for (int i = 0; i < 100; ++i) {
         std::string name = "u_param_" + std::to_string(i);
-        device.SetComputeUniformFloat(1, name.c_str(), static_cast<float>(i) * 0.1f);
+        device.SetComputeUniformFloat(TestShaderHandle(1), name.c_str(), static_cast<float>(i) * 0.1f);
     }
 }
 
@@ -42,7 +58,7 @@ TEST(VulkanComputeStressTest, UniformsetUpDoesNotCrash) {
 TEST(VulkanComputeStressTest, UniformsetUp) {
     VulkanRhiDevice device;
     for (int i = 0; i < 50; ++i) {
-        device.SetComputeUniformInt(1, "u_count", i);
+        device.SetComputeUniformInt(TestShaderHandle(1), "u_count", i);
     }
     // 最后一次设置应覆盖前面的，不应累积内存
 }
@@ -50,47 +66,47 @@ TEST(VulkanComputeStressTest, UniformsetUp) {
 // 测试 Vulkan计算压力：多Shaderset上
 TEST(VulkanComputeStressTest, MultiShadersetUp) {
     VulkanRhiDevice device;
-    device.SetComputeUniformFloat(1, "u_alpha", 0.5f);
-    device.SetComputeUniformFloat(2, "u_alpha", 0.8f);
-    device.SetComputeUniformInt(1, "u_count", 10);
-    device.SetComputeUniformInt(2, "u_count", 20);
-    device.SetComputeUniformVec3(1, "u_pos", 1.0f, 2.0f, 3.0f);
-    device.SetComputeUniformVec3(2, "u_pos", 4.0f, 5.0f, 6.0f);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_alpha", 0.5f);
+    device.SetComputeUniformFloat(TestShaderHandle(2), "u_alpha", 0.8f);
+    device.SetComputeUniformInt(TestShaderHandle(1), "u_count", 10);
+    device.SetComputeUniformInt(TestShaderHandle(2), "u_count", 20);
+    device.SetComputeUniformVec3(TestShaderHandle(1), "u_pos", 1.0f, 2.0f, 3.0f);
+    device.SetComputeUniformVec3(TestShaderHandle(2), "u_pos", 4.0f, 5.0f, 6.0f);
 }
 
 // 测试 Vulkan计算压力：清空参数设置稍后
 TEST(VulkanComputeStressTest, ClearParamsSetItLater) {
     VulkanRhiDevice device;
-    device.SetComputeUniformFloat(1, "u_value", 3.14f);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_value", 3.14f);
     float identity[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
-    device.SetComputeUniformMat4(1, "u_mvp", identity);
+    device.SetComputeUniformMat4(TestShaderHandle(1), "u_mvp", identity);
 }
 
 // 测试 Vulkan计算压力：点
 TEST(VulkanComputeStressTest, Point) {
     VulkanRhiDevice device;
-    device.SetComputeUniformFloat(1, "u_nan", std::numeric_limits<float>::quiet_NaN());
-    device.SetComputeUniformFloat(1, "u_inf", std::numeric_limits<float>::infinity());
-    device.SetComputeUniformFloat(1, "u_neg_inf", -std::numeric_limits<float>::infinity());
-    device.SetComputeUniformFloat(1, "u_denorm", std::numeric_limits<float>::denorm_min());
-    device.SetComputeUniformFloat(1, "u_max", std::numeric_limits<float>::max());
-    device.SetComputeUniformFloat(1, "u_min", std::numeric_limits<float>::lowest());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_nan", std::numeric_limits<float>::quiet_NaN());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_inf", std::numeric_limits<float>::infinity());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_neg_inf", -std::numeric_limits<float>::infinity());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_denorm", std::numeric_limits<float>::denorm_min());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_max", std::numeric_limits<float>::max());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_min", std::numeric_limits<float>::lowest());
 }
 
 // 测试 Vulkan计算压力：空名称不崩溃
 TEST(VulkanComputeStressTest, EmptyNameDoesNotCrash) {
     VulkanRhiDevice device;
-    device.SetComputeUniformInt(1, "", 42);
-    device.SetComputeUniformFloat(1, "", 1.0f);
-    device.SetComputeUniformVec2i(1, "", 1, 2);
-    device.SetComputeUniformVec3(1, "", 1.0f, 2.0f, 3.0f);
-    device.SetComputeUniformVec4(1, "", 1.0f, 2.0f, 3.0f, 4.0f);
+    device.SetComputeUniformInt(TestShaderHandle(1), "", 42);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "", 1.0f);
+    device.SetComputeUniformVec2i(TestShaderHandle(1), "", 1, 2);
+    device.SetComputeUniformVec3(TestShaderHandle(1), "", 1.0f, 2.0f, 3.0f);
+    device.SetComputeUniformVec4(TestShaderHandle(1), "", 1.0f, 2.0f, 3.0f, 4.0f);
 }
 
 // 测试 Vulkan计算压力：当不已初始化分发计算安全
 TEST(VulkanComputeStressTest, WhenNotInitializedDispatchComputeSafety) {
     VulkanRhiDevice device;
-    device.DispatchCompute(999, 64, 64, 1);
+    device.DispatchCompute(TestShaderHandle(999), 64, 64, 1);
 }
 
 // 测试 Vulkan计算压力：当不已初始化开始结束计算通道安全
@@ -103,10 +119,10 @@ TEST(VulkanComputeStressTest, WhenNotInitializedBeginEndComputePassSafety) {
 // 测试 Vulkan计算压力：当不已初始化设置计算纹理图像安全
 TEST(VulkanComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     VulkanRhiDevice device;
-    device.SetComputeTextureImage(0, 100, true);
-    device.SetComputeTextureImage(1, 200, false);
-    device.SetComputeTextureImageMip(0, 100, 3, true);
-    device.SetComputeTextureSampler(0, 100);
+    device.SetComputeTextureImage(0, TestTextureHandle(100), true);
+    device.SetComputeTextureImage(1, TestTextureHandle(200), false);
+    device.SetComputeTextureImageMip(0, TestTextureHandle(100), 3, true);
+    device.SetComputeTextureSampler(0, TestTextureHandle(100));
 }
 
 // 测试 Vulkan计算压力：当不已初始化计算内存屏障安全
@@ -118,22 +134,22 @@ TEST(VulkanComputeStressTest, WhenNotInitializedComputeMemoryBarrierSafety) {
 // 测试 Vulkan计算压力：当不已初始化删除计算着色器安全
 TEST(VulkanComputeStressTest, WhenNotInitializedDeleteComputeShaderSafety) {
     VulkanRhiDevice device;
-    device.DeleteComputeShader(0);
-    device.DeleteComputeShader(999);
+    device.DeleteComputeShader({});
+    device.DeleteComputeShader(TestShaderHandle(999));
 }
 
 // 测试 Vulkan计算压力：当不已初始化创建计算着色器返回零
 TEST(VulkanComputeStressTest, WhenNotInitializedCreateComputeShaderReturnsZero) {
     VulkanRhiDevice device;
-    unsigned int h = device.CreateComputeShader("void main() {}");
-    EXPECT_EQ(h, 0u);
+    const auto h = device.CreateComputeShader("void main() {}");
+    EXPECT_FALSE(h);
 }
 
 // 测试 Vulkan计算压力：SSBO当不已初始化读取SSBO安全
 TEST(VulkanComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
     VulkanRhiDevice device;
     int buf[4] = {};
-    device.ReadSSBO(999, 0, sizeof(buf), buf);
+    device.ReadSSBO(TestBufferHandle(999), 0, sizeof(buf), buf);
 }
 
 #endif // DSE_ENABLE_VULKAN
@@ -150,7 +166,7 @@ TEST(DX11ComputeStressTest, UniformsetUpDoesNotCrash) {
     DX11RhiDevice device;
     for (int i = 0; i < 100; ++i) {
         std::string name = "u_param_" + std::to_string(i);
-        device.SetComputeUniformFloat(1, name.c_str(), static_cast<float>(i) * 0.1f);
+        device.SetComputeUniformFloat(TestShaderHandle(1), name.c_str(), static_cast<float>(i) * 0.1f);
     }
     device.ClearComputeParams();
 }
@@ -159,7 +175,7 @@ TEST(DX11ComputeStressTest, UniformsetUpDoesNotCrash) {
 TEST(DX11ComputeStressTest, UniformsetUp) {
     DX11RhiDevice device;
     for (int i = 0; i < 50; ++i) {
-        device.SetComputeUniformInt(1, "u_count", i);
+        device.SetComputeUniformInt(TestShaderHandle(1), "u_count", i);
     }
     device.ClearComputeParams();
 }
@@ -167,49 +183,49 @@ TEST(DX11ComputeStressTest, UniformsetUp) {
 // 测试 DX 11计算压力：多Shaderset上
 TEST(DX11ComputeStressTest, MultiShadersetUp) {
     DX11RhiDevice device;
-    device.SetComputeUniformFloat(1, "u_alpha", 0.5f);
-    device.SetComputeUniformFloat(2, "u_alpha", 0.8f);
-    device.SetComputeUniformInt(1, "u_count", 10);
-    device.SetComputeUniformInt(2, "u_count", 20);
-    device.SetComputeUniformVec3(1, "u_pos", 1.0f, 2.0f, 3.0f);
-    device.SetComputeUniformVec3(2, "u_pos", 4.0f, 5.0f, 6.0f);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_alpha", 0.5f);
+    device.SetComputeUniformFloat(TestShaderHandle(2), "u_alpha", 0.8f);
+    device.SetComputeUniformInt(TestShaderHandle(1), "u_count", 10);
+    device.SetComputeUniformInt(TestShaderHandle(2), "u_count", 20);
+    device.SetComputeUniformVec3(TestShaderHandle(1), "u_pos", 1.0f, 2.0f, 3.0f);
+    device.SetComputeUniformVec3(TestShaderHandle(2), "u_pos", 4.0f, 5.0f, 6.0f);
     device.ClearComputeParams();
 }
 
 // 测试 DX 11计算压力：清空参数之后Condition为Clean
 TEST(DX11ComputeStressTest, ClearParamsAfterTheConditionIsClean) {
     DX11RhiDevice device;
-    device.SetComputeUniformFloat(1, "u_value", 3.14f);
-    device.SetComputeUniformVec4(1, "u_color", 1.0f, 0.0f, 0.0f, 1.0f);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_value", 3.14f);
+    device.SetComputeUniformVec4(TestShaderHandle(1), "u_color", 1.0f, 0.0f, 0.0f, 1.0f);
     device.ClearComputeParams();
     // 重新设置——偏移应从 0 开始
-    device.SetComputeUniformFloat(1, "u_value", 2.71f);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_value", 2.71f);
     device.ClearComputeParams();
 }
 
 // 测试 DX 11计算压力：点
 TEST(DX11ComputeStressTest, Point) {
     DX11RhiDevice device;
-    device.SetComputeUniformFloat(1, "u_nan", std::numeric_limits<float>::quiet_NaN());
-    device.SetComputeUniformFloat(1, "u_inf", std::numeric_limits<float>::infinity());
-    device.SetComputeUniformFloat(1, "u_neg_inf", -std::numeric_limits<float>::infinity());
-    device.SetComputeUniformFloat(1, "u_max", (std::numeric_limits<float>::max)());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_nan", std::numeric_limits<float>::quiet_NaN());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_inf", std::numeric_limits<float>::infinity());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_neg_inf", -std::numeric_limits<float>::infinity());
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_max", (std::numeric_limits<float>::max)());
     device.ClearComputeParams();
 }
 
 // 测试 DX 11计算压力：空名称不崩溃
 TEST(DX11ComputeStressTest, EmptyNameDoesNotCrash) {
     DX11RhiDevice device;
-    device.SetComputeUniformInt(1, "", 42);
-    device.SetComputeUniformFloat(1, "", 1.0f);
-    device.SetComputeUniformVec2f(1, "", 1.0f, 2.0f);
+    device.SetComputeUniformInt(TestShaderHandle(1), "", 42);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "", 1.0f);
+    device.SetComputeUniformVec2f(TestShaderHandle(1), "", 1.0f, 2.0f);
     device.ClearComputeParams();
 }
 
 // 测试 DX 11计算压力：当不已初始化分发计算安全
 TEST(DX11ComputeStressTest, WhenNotInitializedDispatchComputeSafety) {
     DX11RhiDevice device;
-    device.DispatchCompute(999, 64, 64, 1);
+    device.DispatchCompute(TestShaderHandle(999), 64, 64, 1);
 }
 
 // 测试 DX 11计算压力：当不已初始化开始结束计算通道安全
@@ -222,10 +238,10 @@ TEST(DX11ComputeStressTest, WhenNotInitializedBeginEndComputePassSafety) {
 // 测试 DX 11计算压力：当不已初始化设置计算纹理图像安全
 TEST(DX11ComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     DX11RhiDevice device;
-    device.SetComputeTextureImage(0, 100, true);
-    device.SetComputeTextureImage(1, 200, false);
-    device.SetComputeTextureImageMip(0, 100, 3, true);
-    device.SetComputeTextureSampler(0, 100);
+    device.SetComputeTextureImage(0, TestTextureHandle(100), true);
+    device.SetComputeTextureImage(1, TestTextureHandle(200), false);
+    device.SetComputeTextureImageMip(0, TestTextureHandle(100), 3, true);
+    device.SetComputeTextureSampler(0, TestTextureHandle(100));
 }
 
 // 测试 DX 11计算压力：当不已初始化计算内存屏障安全
@@ -237,21 +253,21 @@ TEST(DX11ComputeStressTest, WhenNotInitializedComputeMemoryBarrierSafety) {
 // 测试 DX 11计算压力：当不已初始化删除计算着色器安全
 TEST(DX11ComputeStressTest, WhenNotInitializedDeleteComputeShaderSafety) {
     DX11RhiDevice device;
-    device.DeleteComputeShader(0);
-    device.DeleteComputeShader(999);
+    device.DeleteComputeShader({});
+    device.DeleteComputeShader(TestShaderHandle(999));
 }
 
 // 测试 DX 11计算压力：当不已初始化创建计算着色器返回零
 TEST(DX11ComputeStressTest, WhenNotInitializedCreateComputeShaderReturnsZero) {
     DX11RhiDevice device;
-    unsigned int h = device.CreateComputeShader("void main() {}");
-    EXPECT_EQ(h, 0u);
+    const auto h = device.CreateComputeShader("void main() {}");
+    EXPECT_FALSE(h);
 }
 
 // 测试 DX 11计算压力：Flush计算参数回调未初始化安全
 TEST(DX11ComputeStressTest, FlushComputeParamsCBUninitializedSecurity) {
     DX11RhiDevice device;
-    device.SetComputeUniformFloat(1, "u_test", 1.0f);
+    device.SetComputeUniformFloat(TestShaderHandle(1), "u_test", 1.0f);
     device.FlushComputeParamsCB();  // 无 device context 应安全返回
     device.ClearComputeParams();
 }
@@ -260,7 +276,7 @@ TEST(DX11ComputeStressTest, FlushComputeParamsCBUninitializedSecurity) {
 TEST(DX11ComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
     DX11RhiDevice device;
     int buf[4] = {};
-    device.ReadSSBO(999, 0, sizeof(buf), buf);
+    device.ReadSSBO(TestBufferHandle(999), 0, sizeof(buf), buf);
 }
 
 #endif // DSE_ENABLE_D3D11

@@ -95,7 +95,7 @@ private:
     RhiDevice* rhi_ = nullptr;
     bool available_ = false;
 
-    unsigned int skinning_shader_ = 0;  ///< compute shader handle
+    ShaderHandle skinning_shader_;  ///< compute shader handle
 
     // SSBO 资源
     BufferHandle src_buffer_;           ///< 源顶点 SSBO

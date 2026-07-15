@@ -192,7 +192,7 @@ extern "C" int dse_mesh_renderer_set_texture(uint32_t e, const char* slot, const
     auto texture = assets->LoadTexture(path);
     if (!texture) return 0;
 
-    const unsigned int handle = texture->GetHandle();
+    const dse::render::TextureHandle handle = texture->GetHandle();
     const std::string s(slot);
     if (s == "albedo" || s == "base_color" || s == "diffuse") {
         mesh->albedo_texture_handle = handle;
@@ -209,7 +209,7 @@ extern "C" int dse_mesh_renderer_set_texture(uint32_t e, const char* slot, const
     }
 
     mesh->material_data_source = dse::MeshRendererComponent::MaterialDataSource::ComponentFallback;
-    if (out_handle) *out_handle = static_cast<uint32_t>(handle);
+    if (out_handle) *out_handle = handle.raw();
     if (out_width)  *out_width  = texture->GetWidth();
     if (out_height) *out_height = texture->GetHeight();
     return 1;

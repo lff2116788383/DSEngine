@@ -35,8 +35,8 @@ TEST(ImpostorComponentTest, DefaultValues) {
 
 TEST(ImpostorComponentTest, RuntimeState_DefaultUninitialized) {
     ImpostorComponent comp;
-    EXPECT_EQ(comp.atlas_texture_handle_, 0u);
-    EXPECT_EQ(comp.normal_texture_handle_, 0u);
+    EXPECT_FALSE(comp.atlas_texture_handle_);
+    EXPECT_FALSE(comp.normal_texture_handle_);
     EXPECT_FALSE(comp.atlas_loaded_);
     EXPECT_FLOAT_EQ(comp.cached_bounds_radius_, 0.0f);
 }

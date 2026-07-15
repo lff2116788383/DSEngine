@@ -237,11 +237,11 @@ ReflectionProbeSystem::ComputePrefilteredCube(const unsigned char* const faces[6
     return out;
 }
 
-unsigned int ReflectionProbeSystem::PrefilterAndUploadCubemap(RhiDevice* rhi_device,
-                                                              const unsigned char* const faces[6], int res) {
-    if (!rhi_device || res <= 0) return 0;
+TextureHandle ReflectionProbeSystem::PrefilterAndUploadCubemap(RhiDevice* rhi_device,
+                                                                const unsigned char* const faces[6], int res) {
+    if (!rhi_device || res <= 0) return {};
     PrefilteredCube data = ComputePrefilteredCube(faces, res);
-    if (data.num_mips <= 0) return 0;
+    if (data.num_mips <= 0) return {};
 
     std::vector<CubeMipLevel> levels(static_cast<size_t>(data.num_mips));
     for (int mip = 0; mip < data.num_mips; ++mip) {
@@ -312,7 +312,7 @@ void ReflectionProbeSystem::GenerateBRDFLUT(RhiDevice* rhi_device) {
 
     brdf_lut_handle_ = rhi_device->CreateTexture2D(lut_size, lut_size, pixels.data(), true);
     DEBUG_LOG_INFO("[ReflectionProbeSystem] BRDF LUT generated: {}x{}, handle={}{}",
-                   lut_size, lut_size, brdf_lut_handle_,
+                   lut_size, lut_size, brdf_lut_handle_.raw(),
                    loaded_from_cache ? " (cached)" : " (computed)");
 }
 
@@ -337,17 +337,17 @@ void ReflectionProbeSystem::Init(RhiDevice* rhi_device) {
 }
 
 void ReflectionProbeSystem::Shutdown(RhiDevice* rhi_device) {
-    if (brdf_lut_handle_ != 0 && rhi_device) {
+    if (brdf_lut_handle_ && rhi_device) {
         rhi_device->DeleteTexture(brdf_lut_handle_);
-        brdf_lut_handle_ = 0;
+        brdf_lut_handle_ = {};
     }
     for (auto& entry : baked_cubemaps_) {
-        if (entry.prefiltered_cubemap != 0 && rhi_device) {
+        if (entry.prefiltered_cubemap && rhi_device) {
             rhi_device->DeleteTexture(entry.prefiltered_cubemap);
         }
     }
     baked_cubemaps_.clear();
-    bake_rt_ = 0;
+    bake_rt_ = {};
     initialized_ = false;
 }
 
@@ -385,7 +385,7 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
 
             // 渲染天空盒（通用绘制原语，自带天空盒 PSO）
             if (ctx.scene_view && ctx.scene_view->skybox.present &&
-                ctx.scene_view->skybox.cubemap_handle != 0) {
+                ctx.scene_view->skybox.cubemap_handle) {
                 skybox_renderer_.Draw(*face_cmd, *rhi_device,
                                       ctx.scene_view->skybox.cubemap_handle, view, proj);
             }
@@ -413,8 +413,8 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
             // A3：CPU 预滤波 base 6 面 → 上传带 mip 链的 prefiltered env cubemap，运行时
             // PBR 以 textureLod(roughness*MAX_LOD) 采样。立方体 mip 采样 ES3.0/WebGL2
             // 原生支持，无 compute/SSBO 需求。
-            unsigned int cubemap = PrefilterAndUploadCubemap(rhi_device, faces, face_w);
-            if (cubemap == 0) {
+            TextureHandle cubemap = PrefilterAndUploadCubemap(rhi_device, faces, face_w);
+            if (!cubemap) {
                 cubemap = rhi_device->CreateTextureCube(face_w, face_h, faces, true);
             }
             probe.cubemap_handle = cubemap;
@@ -424,7 +424,7 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
             bool found = false;
             for (auto& entry : baked_cubemaps_) {
                 if (glm::distance(entry.position, transform.position) < 0.01f) {
-                    if (entry.prefiltered_cubemap != 0) {
+                    if (entry.prefiltered_cubemap) {
                         rhi_device->DeleteTexture(entry.prefiltered_cubemap);
                     }
                     entry.prefiltered_cubemap = cubemap;
@@ -438,7 +438,7 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
             }
 
             DEBUG_LOG_INFO("[ReflectionProbeSystem] Baked probe at ({:.1f},{:.1f},{:.1f}), cubemap={}",
-                           transform.position.x, transform.position.y, transform.position.z, cubemap);
+                           transform.position.x, transform.position.y, transform.position.z, cubemap.raw());
         }
     }
 }
@@ -447,13 +447,13 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
 // 运行时查询
 // ============================================================================
 
-unsigned int ReflectionProbeSystem::QueryNearestProbeCubemap(const RenderSceneView& scene_view,
-                                                              const glm::vec3& position) const {
+TextureHandle ReflectionProbeSystem::QueryNearestProbeCubemap(const RenderSceneView& scene_view,
+                                                               const glm::vec3& position) const {
     float best_dist = std::numeric_limits<float>::max();
-    unsigned int best_cubemap = 0;
+    TextureHandle best_cubemap;
 
     for (const auto& probe : scene_view.reflection_probes) {
-        if (probe.cubemap_handle == 0) continue;
+        if (!probe.cubemap_handle) continue;
 
         float dist = glm::distance(probe.position, position);
         if (dist < probe.influence_radius && dist < best_dist) {

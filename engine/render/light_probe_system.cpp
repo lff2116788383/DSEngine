@@ -51,12 +51,12 @@ void LightProbeSystem::Init(RhiDevice* rhi_device) {
     cubemap_rt_ = rhi_device->CreateRenderTarget(desc);
 
     initialized_ = true;
-    DEBUG_LOG_INFO("[LightProbeSystem] Initialized, face_res={}, RT={}", face_resolution_, cubemap_rt_);
+    DEBUG_LOG_INFO("[LightProbeSystem] Initialized, face_res={}, RT={}", face_resolution_, cubemap_rt_.raw());
 }
 
 void LightProbeSystem::Shutdown() {
     baked_probes_.clear();
-    cubemap_rt_ = 0;
+    cubemap_rt_ = {};
     initialized_ = false;
 }
 
@@ -119,11 +119,11 @@ void LightProbeSystem::IntegrateFaceSH(const unsigned char* rgba8, int width, in
 // 对单个位置渲染 6 面并积分 SH
 // ============================================================================
 SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_resolution,
-                                         RhiDevice* rhi_device, unsigned int cubemap_rt,
+                                         RhiDevice* rhi_device, RenderTargetHandle cubemap_rt,
                                          RenderPassContext& ctx,
                                          SkyboxRenderer* skybox_renderer) {
     SHL2 sh;
-    if (!rhi_device || cubemap_rt == 0) return sh;
+    if (!rhi_device || !cubemap_rt) return sh;
 
     const glm::mat4 proj = rhi_device->GetProjectionCorrection() *
                            glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 500.0f);
@@ -138,7 +138,7 @@ SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_reso
 
         // 渲染天空盒（通用绘制原语，自带天空盒 PSO）
         if (skybox_renderer && ctx.scene_view && ctx.scene_view->skybox.present &&
-            ctx.scene_view->skybox.cubemap_handle != 0) {
+            ctx.scene_view->skybox.cubemap_handle) {
             skybox_renderer->Draw(*face_cmd, *rhi_device,
                                   ctx.scene_view->skybox.cubemap_handle, view, proj);
         }

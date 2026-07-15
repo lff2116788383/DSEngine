@@ -64,11 +64,11 @@ RenderTargetReadback RenderForwardPbr(RhiDevice& device) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;  // MeshRenderer PSO 写/测深度，需深度附件
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
     // 内建 forward PBR 程序不可用（该后端未提供）→ 返回空 readback，由调用方跳过。
-    if (device.GetBuiltinProgram(BuiltinProgram::ForwardPbr) == 0) {
+    if (!device.GetBuiltinProgram(BuiltinProgram::ForwardPbr)) {
         device.DeleteRenderTarget(rt);
         return {};
     }

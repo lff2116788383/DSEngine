@@ -19,15 +19,15 @@ class ForwardingCommandBuffer : public CommandBuffer {
 public:
     // --- 共享实现（三端完全一致） ---
 
-    void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override {
+    void BindGlobalShadowMap(unsigned int index, TextureHandle texture_handle) override {
         if (base_device_) base_device_->SetGlobalShadowMap(index, texture_handle);
     }
 
-    void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override {
+    void BindGlobalSpotShadowMap(unsigned int index, TextureHandle texture_handle) override {
         if (base_device_) base_device_->SetGlobalSpotShadowMap(index, texture_handle);
     }
 
-    void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override {
+    void BindGlobalPointShadowMap(unsigned int index, TextureHandle texture_handle) override {
         if (base_device_) base_device_->SetGlobalPointShadowMap(index, texture_handle);
     }
 

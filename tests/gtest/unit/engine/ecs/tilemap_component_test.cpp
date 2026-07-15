@@ -18,7 +18,7 @@ TEST(TilemapComponentTest, DefaultValues) {
     EXPECT_EQ(tm.width, 0);
     EXPECT_EQ(tm.height, 0);
     EXPECT_FLOAT_EQ(tm.tile_size, 1.0f);
-    EXPECT_EQ(tm.tileset_handle, 0u);
+    EXPECT_FALSE(tm.tileset_handle);
     EXPECT_EQ(tm.tileset_cols, 1);
     EXPECT_EQ(tm.tileset_rows, 1);
     EXPECT_EQ(tm.sorting_layer, 0);

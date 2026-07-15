@@ -51,11 +51,13 @@ extern "C" void dse_mesh_set_texture_handle(uint32_t e, const char* slot, uint32
     auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
     if (!mr) return;
     std::string name(slot);
-    if (name == "albedo") mr->albedo_texture_handle = texture_handle;
-    else if (name == "normal") mr->normal_texture_handle = texture_handle;
-    else if (name == "metallic_roughness") mr->metallic_roughness_texture_handle = texture_handle;
-    else if (name == "emissive") mr->emissive_texture_handle = texture_handle;
-    else if (name == "occlusion") mr->occlusion_texture_handle = texture_handle;
+    const dse::render::TextureHandle handle =
+        dse::render::TextureHandle::from_raw(texture_handle);
+    if (name == "albedo") mr->albedo_texture_handle = handle;
+    else if (name == "normal") mr->normal_texture_handle = handle;
+    else if (name == "metallic_roughness") mr->metallic_roughness_texture_handle = handle;
+    else if (name == "emissive") mr->emissive_texture_handle = handle;
+    else if (name == "occlusion") mr->occlusion_texture_handle = handle;
 }
 
 extern "C" void dse_mesh_set_emissive(uint32_t e, float r, float g, float b) {
@@ -66,4 +68,3 @@ extern "C" void dse_mesh_set_emissive(uint32_t e, float r, float g, float b) {
     mr->emissive = glm::vec3(r, g, b);
     mr->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
 }
-

@@ -135,7 +135,7 @@ void WeatherSystem::Update(World& world, float delta_time) {
                                      : weather->rain_texture_path;
     if (ps.texture_path != tex) {
         ps.texture_path   = tex;
-        ps.texture_handle = 0; // 强制粒子系统重新加载
+        ps.texture_handle = {}; // 强制粒子系统重新加载
     }
 
     // Dirty check — 仅在参数变化时计算新目标

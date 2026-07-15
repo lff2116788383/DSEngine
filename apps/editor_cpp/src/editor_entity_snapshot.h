@@ -161,8 +161,8 @@ struct EntitySnapshot {
         restore(audio_listener, noop);
         restore(particle_system_3d, [](dse::ParticleSystem3DComponent& p) {
             p.particles.clear(); p.emission_accumulator = 0.0f;
-            p.active_particle_count = 0; p.instance_vbo = 0;
-            p.texture_handle = 0; p.initialized = false;
+            p.active_particle_count = 0; p.instance_vbo = {};
+            p.texture_handle = {}; p.initialized = false;
         });
         restore(parent, noop);
         restore(sibling_index, noop);
@@ -226,8 +226,8 @@ struct EntitySnapshot {
         restore(audio_listener, noop);
         restore(particle_system_3d, [](dse::ParticleSystem3DComponent& p) {
             p.particles.clear(); p.emission_accumulator = 0.0f;
-            p.active_particle_count = 0; p.instance_vbo = 0;
-            p.texture_handle = 0; p.initialized = false;
+            p.active_particle_count = 0; p.instance_vbo = {};
+            p.texture_handle = {}; p.initialized = false;
         });
         restore(parent, noop);
         restore(sibling_index, noop);

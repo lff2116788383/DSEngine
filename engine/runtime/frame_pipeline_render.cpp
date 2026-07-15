@@ -104,8 +104,8 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
     // 注意：mesh_render_system 把蒙皮项（item.skinned=true）放进 cpu_meshes.opaque/transparent 队列，
     // 而非独立的 skinned 队列（后者从未被填充）。故此处就地扫描这两个队列里的蒙皮项处理。
     if (!skinning_bake_checked_) {
-        skinning_bake_for_web_ = (runtime_context_.rhi_device->GetBuiltinProgram(
-            BuiltinProgram::ForwardSkinnedShaded) == 0);
+        skinning_bake_for_web_ = !runtime_context_.rhi_device->GetBuiltinProgram(
+            BuiltinProgram::ForwardSkinnedShaded);
         skinning_bake_checked_ = true;
     }
     if (skinning_bake_for_web_) {
@@ -319,14 +319,14 @@ void FramePipeline::BuildRenderGraphInternal() {
     // Pass 层图形管线（B5-3b）：聚合为 (pso, program=0) PSO-only 管线句柄——其后绘制经 GPU-driven 自绑 program
     // 或被渲染器自带 (pso+program) 覆盖，故此处不烘 program，BindPipeline 仅应用 PSO 状态，保留原 SetPipelineState 语义。
     auto* rhi = runtime_context_.rhi_device.get();
-    render_pass_context_.pipeline_states.sprite    = rhi->GetGraphicsPipeline(render_resources_.sprite_pipeline_state, 0);
-    render_pass_context_.pipeline_states.mesh      = rhi->GetGraphicsPipeline(render_resources_.mesh_pipeline_state, 0);
-    render_pass_context_.pipeline_states.prez      = rhi->GetGraphicsPipeline(render_resources_.prez_pipeline_state, 0);
-    render_pass_context_.pipeline_states.shadow    = rhi->GetGraphicsPipeline(render_resources_.shadow_pipeline_state, 0);
-    render_pass_context_.pipeline_states.composite = rhi->GetGraphicsPipeline(render_resources_.composite_pipeline_state, 0);
-    render_pass_context_.pipeline_states.decal_blend = rhi->GetGraphicsPipeline(render_resources_.decal_blend_pipeline_state, 0);
-    render_pass_context_.pipeline_states.wboit_accum = rhi->GetGraphicsPipeline(render_resources_.wboit_accum_pipeline_state, 0);
-    render_pass_context_.pipeline_states.wboit_reveal = rhi->GetGraphicsPipeline(render_resources_.wboit_reveal_pipeline_state, 0);
+    render_pass_context_.pipeline_states.sprite    = rhi->GetGraphicsPipeline(render_resources_.sprite_pipeline_state, {});
+    render_pass_context_.pipeline_states.mesh      = rhi->GetGraphicsPipeline(render_resources_.mesh_pipeline_state, {});
+    render_pass_context_.pipeline_states.prez      = rhi->GetGraphicsPipeline(render_resources_.prez_pipeline_state, {});
+    render_pass_context_.pipeline_states.shadow    = rhi->GetGraphicsPipeline(render_resources_.shadow_pipeline_state, {});
+    render_pass_context_.pipeline_states.composite = rhi->GetGraphicsPipeline(render_resources_.composite_pipeline_state, {});
+    render_pass_context_.pipeline_states.decal_blend = rhi->GetGraphicsPipeline(render_resources_.decal_blend_pipeline_state, {});
+    render_pass_context_.pipeline_states.wboit_accum = rhi->GetGraphicsPipeline(render_resources_.wboit_accum_pipeline_state, {});
+    render_pass_context_.pipeline_states.wboit_reveal = rhi->GetGraphicsPipeline(render_resources_.wboit_reveal_pipeline_state, {});
 
     render_pass_context_.render_targets.main     = render_resources_.main_render_target;
     render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;
@@ -356,7 +356,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
     render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
     render_pass_context_.render_targets.sss_temp = render_resources_.pp_sss_temp_rt;
-    if (render_resources_.rsm_render_target != 0) {
+    if (render_resources_.rsm_render_target) {
         render_pass_context_.rsm_render_target = render_resources_.rsm_render_target;
         render_pass_context_.rsm_targets.position = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 0);
         render_pass_context_.rsm_targets.normal   = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 1);
@@ -463,7 +463,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     const auto& registry = dse::render::BuiltinRenderPipelineRegistry();
     dse::render::RenderPipelineValidationContext prune_ctx{};
     prune_ctx.editor_mode = runtime_context_.editor_mode;
-    prune_ctx.hiz_available = render_resources_.hiz_texture != 0;
+    prune_ctx.hiz_available = static_cast<bool>(render_resources_.hiz_texture);
     prune_ctx.gpu_driven_supported = render_resources_.gpu_driven_supported;
     if (const dse::render::RhiDevice* dev = runtime_context_.rhi_device.get()) {
         prune_ctx.compute_supported = dev->SupportsCompute();
@@ -554,8 +554,8 @@ void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
     static int diag_pass_frame = 0;
     const char* pass_diag = std::getenv("DSE_PASS_DIAG");
     const bool pass_diag_enabled = pass_diag && pass_diag[0] != '\0' && pass_diag[0] != '0';
-    const unsigned int scene_rt = render_resources_.scene_render_target;
-    if (pass_diag_enabled && diag_pass_frame < 4 && scene_rt != 0 && runtime_context_.rhi_device) {
+    const auto scene_rt = render_resources_.scene_render_target;
+    if (pass_diag_enabled && diag_pass_frame < 4 && scene_rt && runtime_context_.rhi_device) {
         dse::render::RhiDevice* rhi = runtime_context_.rhi_device.get();
         render_graph_dag_.ExecuteWithCallback(cmd_buffer, [&](const std::string& pass_name) {
             auto rb = rhi->ReadRenderTargetColorRgba8WithSize(scene_rt);
@@ -580,4 +580,3 @@ void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
         render_graph_dag_.Execute(cmd_buffer);
     }
 }
-

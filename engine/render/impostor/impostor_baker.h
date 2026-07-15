@@ -18,6 +18,8 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
+#include "engine/render/rhi/rhi_handle.h"
+
 namespace dse {
 namespace render {
 
@@ -84,8 +86,8 @@ public:
     /// 从 .dimpostor 文件加载 atlas 到 GPU
     static bool LoadFromFile(const std::string& path,
                              RhiDevice& device,
-                             unsigned int& out_albedo_tex,
-                             unsigned int& out_normal_tex,
+                             TextureHandle& out_albedo_tex,
+                             TextureHandle& out_normal_tex,
                              int& out_frames_x, int& out_frames_y,
                              float& out_bounds_radius);
 

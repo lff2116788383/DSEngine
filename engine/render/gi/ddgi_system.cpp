@@ -46,21 +46,21 @@ bool DDGISystem::Init(RhiDevice* rhi, const DDGIVolumeConfig& config) {
 void DDGISystem::Shutdown(RhiDevice* rhi) {
     if (!rhi) return;
 
-    if (resources_.irradiance_atlas != 0) {
+    if (resources_.irradiance_atlas) {
         rhi->DeleteTexture(resources_.irradiance_atlas);
-        resources_.irradiance_atlas = 0;
+        resources_.irradiance_atlas = {};
     }
-    if (resources_.visibility_atlas != 0) {
+    if (resources_.visibility_atlas) {
         rhi->DeleteTexture(resources_.visibility_atlas);
-        resources_.visibility_atlas = 0;
+        resources_.visibility_atlas = {};
     }
     if (resources_.probe_state_ssbo) {
         rhi->DeleteGpuBuffer(resources_.probe_state_ssbo);
         resources_.probe_state_ssbo = {};
     }
-    if (resources_.update_compute_shader != 0) {
+    if (resources_.update_compute_shader) {
         rhi->DeleteComputeShader(resources_.update_compute_shader);
-        resources_.update_compute_shader = 0;
+        resources_.update_compute_shader = {};
     }
 
     resources_.initialized = false;
@@ -81,14 +81,14 @@ void DDGISystem::EnsureRSMResources(RhiDevice* rhi) {
 }
 
 void DDGISystem::UpdateProbes(RhiDevice* rhi,
-                               unsigned int rsm_position, unsigned int rsm_normal, unsigned int rsm_flux,
+                               TextureHandle rsm_position, TextureHandle rsm_normal, TextureHandle rsm_flux,
                                int rsm_width, int rsm_height,
                                const glm::vec3& light_dir, const glm::vec3& light_color) {
     if (!rhi || !resources_.initialized) return;
-    if (resources_.update_compute_shader == 0) return;
-    if (resources_.irradiance_atlas == 0 || resources_.visibility_atlas == 0) return;
+    if (!resources_.update_compute_shader) return;
+    if (!resources_.irradiance_atlas || !resources_.visibility_atlas) return;
     if (rsm_width <= 0 || rsm_height <= 0) return;
-    if (rsm_position == 0 || rsm_normal == 0 || rsm_flux == 0) return;
+    if (!rsm_position || !rsm_normal || !rsm_flux) return;
 
     int total_probes = config_.TotalProbeCount();
     int probes_this_frame = std::min(probes_per_frame_, total_probes);
@@ -106,7 +106,7 @@ void DDGISystem::UpdateProbes(RhiDevice* rhi,
     rhi->BindGpuBuffer(resources_.probe_state_ssbo, 0);
 
     // Set uniforms
-    unsigned int shader = resources_.update_compute_shader;
+    ShaderHandle shader = resources_.update_compute_shader;
     rhi->SetComputeUniformInt(shader, "u_probe_count", total_probes);
     rhi->SetComputeUniformInt(shader, "u_probe_start", current_update_offset_);
     rhi->SetComputeUniformInt(shader, "u_probes_to_update", probes_this_frame);
@@ -144,10 +144,10 @@ void DDGISystem::UpdateProbes(RhiDevice* rhi,
 void DDGISystem::BindForSampling(RhiDevice* rhi, unsigned int irradiance_unit,
                                   unsigned int visibility_unit) const {
     if (!rhi || !resources_.initialized) return;
-    if (resources_.irradiance_atlas != 0) {
+    if (resources_.irradiance_atlas) {
         rhi->SetComputeTextureSampler(irradiance_unit, resources_.irradiance_atlas);
     }
-    if (resources_.visibility_atlas != 0) {
+    if (resources_.visibility_atlas) {
         rhi->SetComputeTextureSampler(visibility_unit, resources_.visibility_atlas);
     }
 }
@@ -162,13 +162,13 @@ bool DDGISystem::CreateAtlasTextures(RhiDevice* rhi) {
 
     // 创建可供 compute shader 写入的 atlas（含 storage image / UAV 标志）
     resources_.irradiance_atlas = rhi->CreateComputeWriteTexture2D(irr_size.x, irr_size.y);
-    if (resources_.irradiance_atlas == 0) {
+    if (!resources_.irradiance_atlas) {
         DEBUG_LOG_ERROR("[DDGI] Failed to create irradiance atlas ({}x{})", irr_size.x, irr_size.y);
         return false;
     }
 
     resources_.visibility_atlas = rhi->CreateComputeWriteTexture2D(vis_size.x, vis_size.y);
-    if (resources_.visibility_atlas == 0) {
+    if (!resources_.visibility_atlas) {
         DEBUG_LOG_ERROR("[DDGI] Failed to create visibility atlas ({}x{})", vis_size.x, vis_size.y);
         return false;
     }
@@ -187,7 +187,7 @@ bool DDGISystem::CreateComputeShader(RhiDevice* rhi) {
         /*sampler_count=*/3,
         /*push_constant_bytes=*/224,
         wgsl::kWgslDdgiProbeUpdate);  // WebGPU 手译 WGSL 源
-    if (resources_.update_compute_shader == 0) {
+    if (!resources_.update_compute_shader) {
         DEBUG_LOG_ERROR("[DDGI] Failed to compile probe update compute shader");
         return false;
     }

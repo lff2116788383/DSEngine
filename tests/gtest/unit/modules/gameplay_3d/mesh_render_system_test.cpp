@@ -49,11 +49,11 @@ TEST(MeshRendererComponentTest, DefaultValues) {
 // 测试 网格渲染器组件：句柄默认值到零
 TEST(MeshRendererComponentTest, HandleDefaultsToZero) {
     dse::MeshRendererComponent mr;
-    EXPECT_EQ(mr.albedo_texture_handle, 0u);
-    EXPECT_EQ(mr.normal_texture_handle, 0u);
-    EXPECT_EQ(mr.metallic_roughness_texture_handle, 0u);
-    EXPECT_EQ(mr.emissive_texture_handle, 0u);
-    EXPECT_EQ(mr.occlusion_texture_handle, 0u);
+    EXPECT_FALSE(mr.albedo_texture_handle);
+    EXPECT_FALSE(mr.normal_texture_handle);
+    EXPECT_FALSE(mr.metallic_roughness_texture_handle);
+    EXPECT_FALSE(mr.emissive_texture_handle);
+    EXPECT_FALSE(mr.occlusion_texture_handle);
 }
 
 // 测试 网格渲染器组件：PBR Extended参数默认值

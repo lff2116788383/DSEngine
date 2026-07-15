@@ -34,8 +34,8 @@ class RhiDevice;
 /// 由发射系统（particle3d / fluid）经 CreateGpuBuffer(kStorage) 创建并每帧填充，
 /// ParticleRenderer 仅绑定、不拷贝。
 struct ParticleDrawItem {
-    unsigned int texture_handle = 0;   ///< u_texture（0 → 回退内建 1x1 白纹理）
-    unsigned int instance_buffer = 0;  ///< 每实例 pos/size/color SSBO 底层句柄
+    TextureHandle texture_handle;   ///< u_texture（0 → 回退内建 1x1 白纹理）
+    BufferHandle instance_buffer;   ///< 每实例 pos/size/color SSBO 底层句柄
     int particle_count = 0;            ///< 活跃粒子数（= 实例数）
 };
 
@@ -61,7 +61,7 @@ private:
 
     bool init_ = false;
     PipelineHandle pso_;
-    unsigned int white_tex_ = 0;
+    TextureHandle white_tex_;
     BufferHandle quad_vbo_;
     BufferHandle quad_ibo_;
     BufferHandle per_frame_ubo_;

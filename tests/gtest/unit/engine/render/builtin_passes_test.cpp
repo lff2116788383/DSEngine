@@ -59,24 +59,24 @@ TEST(RenderPassContextTest, PipelineStatesDefaultIsZero) {
 // 测试 渲染通道上下文：渲染目标默认为零
 TEST(RenderPassContextTest, RenderTargetsDefaultIsZero) {
     RenderPassContext ctx;
-    EXPECT_EQ(ctx.render_targets.main, 0u);
-    EXPECT_EQ(ctx.render_targets.scene, 0u);
-    EXPECT_EQ(ctx.render_targets.ui, 0u);
-    EXPECT_EQ(ctx.render_targets.prez, 0u);
-    EXPECT_EQ(ctx.render_targets.bloom_extract, 0u);
-    EXPECT_EQ(ctx.render_targets.ssao, 0u);
-    EXPECT_EQ(ctx.render_targets.fxaa, 0u);
-    EXPECT_EQ(ctx.render_targets.taa, 0u);
-    EXPECT_EQ(ctx.render_targets.dof, 0u);
-    EXPECT_EQ(ctx.render_targets.ssr, 0u);
-    EXPECT_EQ(ctx.render_targets.motion_vector, 0u);
-    EXPECT_EQ(ctx.render_targets.outline, 0u);
-    EXPECT_EQ(ctx.render_targets.fog, 0u);
+    EXPECT_FALSE(ctx.render_targets.main);
+    EXPECT_FALSE(ctx.render_targets.scene);
+    EXPECT_FALSE(ctx.render_targets.ui);
+    EXPECT_FALSE(ctx.render_targets.prez);
+    EXPECT_FALSE(ctx.render_targets.bloom_extract);
+    EXPECT_FALSE(ctx.render_targets.ssao);
+    EXPECT_FALSE(ctx.render_targets.fxaa);
+    EXPECT_FALSE(ctx.render_targets.taa);
+    EXPECT_FALSE(ctx.render_targets.dof);
+    EXPECT_FALSE(ctx.render_targets.ssr);
+    EXPECT_FALSE(ctx.render_targets.motion_vector);
+    EXPECT_FALSE(ctx.render_targets.outline);
+    EXPECT_FALSE(ctx.render_targets.fog);
     for (int i = 0; i < 3; ++i)
-        EXPECT_EQ(ctx.render_targets.shadow[i], 0u);
+        EXPECT_FALSE(ctx.render_targets.shadow[i]);
     for (int i = 0; i < 4; ++i) {
-        EXPECT_EQ(ctx.render_targets.spot_shadow[i], 0u);
-        EXPECT_EQ(ctx.render_targets.point_shadow[i], 0u);
+        EXPECT_FALSE(ctx.render_targets.spot_shadow[i]);
+        EXPECT_FALSE(ctx.render_targets.point_shadow[i]);
     }
 }
 
@@ -219,13 +219,14 @@ TEST(BuiltinPassesRenderGraphTest, ResetAfterRecompilingSuccessfully) {
 // 测试 内置通道渲染图：外部资源
 TEST(BuiltinPassesRenderGraphTest, OutsideAsset) {
     RenderGraph graph;
-    auto h = graph.ImportResource("backbuffer", 42);
-    EXPECT_EQ(graph.GetResourceRT(h), 42u);
+    const auto render_target = dse::render::RenderTargetHandle::from_raw(42);
+    auto h = graph.ImportResource("backbuffer", render_target);
+    EXPECT_EQ(graph.GetResourceRT(h), render_target);
 }
 
 // 测试 内置通道渲染图：Notbinding资源渲染目标返回零
 TEST(BuiltinPassesRenderGraphTest, NotbindingAssetRTReturnsZero) {
     RenderGraph graph;
     auto h = graph.DeclareResource("unbound");
-    EXPECT_EQ(graph.GetResourceRT(h), 0u);
+    EXPECT_FALSE(graph.GetResourceRT(h));
 }

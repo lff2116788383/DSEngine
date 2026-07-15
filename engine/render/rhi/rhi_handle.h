@@ -47,6 +47,7 @@ struct TextureTag {};
 struct BufferTag {};
 struct VertexArrayTag {};
 struct RenderTargetTag {};
+struct ShaderTag {};
 struct PipelineTag {};
 struct GraphicsPipelineTag {};
 
@@ -58,6 +59,7 @@ using TextureHandle      = TypedHandle<TextureTag>;
 using BufferHandle       = TypedHandle<BufferTag>;
 using VertexArrayHandle  = TypedHandle<VertexArrayTag>;
 using RenderTargetHandle = TypedHandle<RenderTargetTag>;
+using ShaderHandle       = TypedHandle<ShaderTag>;
 using PipelineHandle     = TypedHandle<PipelineTag>;
 /// GetGraphicsPipeline 返回的聚合图形管线对象句柄（区别于 CreatePipelineState 的 PSO 状态句柄）。
 using GraphicsPipelineHandle = TypedHandle<GraphicsPipelineTag>;

@@ -240,32 +240,33 @@ void DrawMaterialPanel(EditorContext& ctx) {
     AssetManager* asset_mgr = ctx.engine.asset_manager();
 
     // Texture slots with drag-drop support
-    auto DrawTextureSlot = [&](const char* label, unsigned int& texture_handle) {
+    auto DrawTextureSlot = [&](const char* label, dse::render::TextureHandle& texture_handle) {
         ImGui::PushID(label);
         ImGui::Text("%s", label);
         ImGui::SameLine(140);
 
         char buf[128];
-        if (texture_handle != 0) {
-            auto it = s_handle_names.find(texture_handle);
+        if (texture_handle) {
+            auto it = s_handle_names.find(texture_handle.raw());
             if (it == s_handle_names.end() && asset_mgr) {
                 std::string path = asset_mgr->FindTexturePathByHandle(texture_handle);
                 if (!path.empty())
-                    s_handle_names[texture_handle] = std::filesystem::path(path).filename().string();
-                it = s_handle_names.find(texture_handle);
+                    s_handle_names[texture_handle.raw()] =
+                        std::filesystem::path(path).filename().string();
+                it = s_handle_names.find(texture_handle.raw());
             }
             if (it != s_handle_names.end()) {
                 snprintf(buf, sizeof(buf), "%s", it->second.c_str());
             } else {
-                snprintf(buf, sizeof(buf), "Texture #%u", texture_handle);
+                snprintf(buf, sizeof(buf), "Texture #%u", texture_handle.raw());
             }
         } else {
             snprintf(buf, sizeof(buf), "(None)");
         }
 
         ImGui::Button(buf, ImVec2(ImGui::GetContentRegionAvail().x - 30, 0));
-        if (ImGui::IsItemHovered() && texture_handle != 0) {
-            auto it = s_handle_names.find(texture_handle);
+        if (ImGui::IsItemHovered() && texture_handle) {
+            auto it = s_handle_names.find(texture_handle.raw());
             if (it != s_handle_names.end())
                 ImGui::SetTooltip("%s", it->second.c_str());
         }
@@ -281,18 +282,18 @@ void DrawMaterialPanel(EditorContext& ctx) {
                 if (is_image && asset_mgr) {
                     auto tex = asset_mgr->LoadTexture(rel_path);
                     if (tex) {
-                        unsigned int old_handle = texture_handle;
-                        unsigned int new_handle = tex->GetHandle();
+                        const dse::render::TextureHandle old_handle = texture_handle;
+                        const dse::render::TextureHandle new_handle = tex->GetHandle();
                         texture_handle = new_handle;
-                        s_handle_names[new_handle] =
+                        s_handle_names[new_handle.raw()] =
                             std::filesystem::path(rel_path).filename().string();
                         auto* reg = &registry;
                         size_t offset = (size_t)((char*)&texture_handle - (char*)&mesh);
-                        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<unsigned int>>(
+                        undo_mgr.Execute(std::make_unique<PropertyChangeCommand<dse::render::TextureHandle>>(
                             "Material Texture", old_handle, new_handle,
-                            [reg, entity, offset](const unsigned int& v) {
+                            [reg, entity, offset](const dse::render::TextureHandle& v) {
                                 if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
-                                    *reinterpret_cast<unsigned int*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+                                    *reinterpret_cast<dse::render::TextureHandle*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
                             }), false);
                         tab_mgr.MarkDirty();
                     }
@@ -302,18 +303,18 @@ void DrawMaterialPanel(EditorContext& ctx) {
         }
 
         ImGui::SameLine();
-        if (texture_handle != 0) {
+        if (texture_handle) {
             if (ImGui::SmallButton("X")) {
-                unsigned int old_handle = texture_handle;
-                s_handle_names.erase(texture_handle);
-                texture_handle = 0;
+                const dse::render::TextureHandle old_handle = texture_handle;
+                s_handle_names.erase(texture_handle.raw());
+                texture_handle = {};
                 auto* reg = &registry;
                 size_t offset = (size_t)((char*)&texture_handle - (char*)&mesh);
-                undo_mgr.Execute(std::make_unique<PropertyChangeCommand<unsigned int>>(
-                    "Clear Material Texture", old_handle, 0u,
-                    [reg, entity, offset](const unsigned int& v) {
+                undo_mgr.Execute(std::make_unique<PropertyChangeCommand<dse::render::TextureHandle>>(
+                    "Clear Material Texture", old_handle, dse::render::TextureHandle{},
+                    [reg, entity, offset](const dse::render::TextureHandle& v) {
                         if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
-                            *reinterpret_cast<unsigned int*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+                            *reinterpret_cast<dse::render::TextureHandle*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
                     }), false);
                 tab_mgr.MarkDirty();
             }

@@ -72,11 +72,11 @@ TEST(GpuParticleEmitterConfigTest, EmitterShapeEnum) {
 TEST(GpuParticleComponentTest, DefaultState) {
     GpuParticleComponent comp;
 
-    EXPECT_EQ(comp.particle_buffer_a, 0u);
-    EXPECT_EQ(comp.particle_buffer_b, 0u);
-    EXPECT_EQ(comp.counter_buffer, 0u);
-    EXPECT_EQ(comp.indirect_buffer, 0u);
-    EXPECT_EQ(comp.texture_handle, 0u);
+    EXPECT_FALSE(comp.particle_buffer_a);
+    EXPECT_FALSE(comp.particle_buffer_b);
+    EXPECT_FALSE(comp.counter_buffer);
+    EXPECT_FALSE(comp.indirect_buffer);
+    EXPECT_FALSE(comp.texture_handle);
     EXPECT_TRUE(comp.ping);
     EXPECT_FLOAT_EQ(comp.emit_accumulator, 0.0f);
     EXPECT_FALSE(comp.initialized);

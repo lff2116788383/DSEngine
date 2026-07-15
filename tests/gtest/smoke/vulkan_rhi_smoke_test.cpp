@@ -152,8 +152,8 @@ TEST_F(VulkanRhiSmokeTest, CreateAndDestroyWithoutCrashing) {
         255,255,255,255, 255,255,255,255,
         255,255,255,255, 255,255,255,255
     };
-    unsigned int tex = device_.CreateTexture2D(2, 2, pixels, true);
-    EXPECT_NE(tex, 0u);
+    const auto tex = device_.CreateTexture2D(2, 2, pixels, true);
+    EXPECT_TRUE(tex);
     device_.DeleteTexture(tex);
     SUCCEED();
 }
@@ -182,8 +182,8 @@ TEST_F(VulkanRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     desc.width = 64;
     desc.height = 64;
     desc.has_depth = true;
-    unsigned int rt = device_.CreateRenderTarget(desc);
-    EXPECT_NE(rt, 0u);
+    const auto rt = device_.CreateRenderTarget(desc);
+    EXPECT_TRUE(rt);
     device_.DeleteRenderTarget(rt);
     SUCCEED();
 }
@@ -194,8 +194,8 @@ TEST_F(VulkanRhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
         GTEST_SKIP() << "No Vulkan";
     }
     float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
-    unsigned int buf = device_.CreateBuffer(sizeof(data), data, false, false);
-    EXPECT_NE(buf, 0u);
+    const auto buf = device_.CreateBuffer(sizeof(data), data, false, false);
+    EXPECT_TRUE(buf);
     device_.DeleteBuffer(buf);
     SUCCEED();
 }
@@ -211,8 +211,8 @@ TEST_F(VulkanRhiSmokeTest, ClearColorReadbackCorrect) {
     desc.height = kRtSize;
     desc.has_color = true;
     desc.has_depth = false;
-    unsigned int rt = device_.CreateRenderTarget(desc);
-    ASSERT_NE(rt, 0u);
+    const auto rt = device_.CreateRenderTarget(desc);
+    ASSERT_TRUE(rt);
 
     const glm::vec4 kClear(0.25f, 0.50f, 0.75f, 1.0f);
     device_.BeginFrame();
@@ -262,8 +262,8 @@ TEST_F(VulkanRhiSmokeTest, DepthRenderTargetReadback) {
     desc.height = kRtSize;
     desc.has_color = true;
     desc.has_depth = true;
-    unsigned int rt = device_.CreateRenderTarget(desc);
-    ASSERT_NE(rt, 0u);
+    const auto rt = device_.CreateRenderTarget(desc);
+    ASSERT_TRUE(rt);
 
     device_.BeginFrame();
     auto cmd = device_.CreateCommandBuffer();
@@ -313,7 +313,7 @@ TEST_F(VulkanRhiSmokeTest, MultipleRenderTargetsCreateDestroy) {
         GTEST_SKIP() << "No Vulkan";
     }
     constexpr int kCount = 8;
-    unsigned int handles[kCount];
+    dse::render::RenderTargetHandle handles[kCount];
     for (int i = 0; i < kCount; ++i) {
         RenderTargetDesc desc;
         desc.width = 32 + i * 16;
@@ -321,7 +321,7 @@ TEST_F(VulkanRhiSmokeTest, MultipleRenderTargetsCreateDestroy) {
         desc.has_color = true;
         desc.has_depth = (i % 2 == 0);
         handles[i] = device_.CreateRenderTarget(desc);
-        ASSERT_NE(handles[i], 0u) << "RT #" << i;
+        ASSERT_TRUE(handles[i]) << "RT #" << i;
     }
     for (int i = kCount - 1; i >= 0; --i) {
         device_.DeleteRenderTarget(handles[i]);
@@ -339,11 +339,11 @@ TEST_F(VulkanRhiSmokeTest, TextureFormatVariantsCreateDestroy) {
         255,0,0,255, 0,255,0,255,
         0,0,255,255, 255,255,0,255
     };
-    unsigned int tex_mip = device_.CreateTexture2D(2, 2, pixels, true);
-    EXPECT_NE(tex_mip, 0u);
+    const auto tex_mip = device_.CreateTexture2D(2, 2, pixels, true);
+    EXPECT_TRUE(tex_mip);
     // RGBA8 without mips
-    unsigned int tex_no_mip = device_.CreateTexture2D(2, 2, pixels, false);
-    EXPECT_NE(tex_no_mip, 0u);
+    const auto tex_no_mip = device_.CreateTexture2D(2, 2, pixels, false);
+    EXPECT_TRUE(tex_no_mip);
     device_.DeleteTexture(tex_mip);
     device_.DeleteTexture(tex_no_mip);
     SUCCEED();

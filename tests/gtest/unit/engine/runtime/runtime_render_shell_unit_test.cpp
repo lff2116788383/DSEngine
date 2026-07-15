@@ -23,23 +23,23 @@ public:
     void BeginRenderPass(const RenderPassDesc&) override {}
     void EndRenderPass() override {}
     void BindPipeline(GraphicsPipelineHandle) override {}
-    void BindVertexBuffer(uint32_t, unsigned int, uint32_t, const std::vector<VertexAttr>&,
+    void BindVertexBuffer(uint32_t, BufferHandle, uint32_t, const std::vector<VertexAttr>&,
                           VertexInputRate) override {}
     void PushConstants(ShaderStage, uint32_t, const void*, uint32_t) override {}
     void Draw(uint32_t, uint32_t) override {}
-    void BindIndexBuffer(unsigned int, IndexType) override {}
-    void BindTexture(uint32_t, unsigned int, TextureDim) override {}
-    void BindUniformBuffer(uint32_t, unsigned int, uint32_t, uint32_t) override {}
-    void BindStorageBuffer(uint32_t, unsigned int, uint32_t, uint32_t) override {}
+    void BindIndexBuffer(BufferHandle, IndexType) override {}
+    void BindTexture(uint32_t, TextureHandle, TextureDim) override {}
+    void BindUniformBuffer(uint32_t, BufferHandle, uint32_t, uint32_t) override {}
+    void BindStorageBuffer(uint32_t, BufferHandle, uint32_t, uint32_t) override {}
     void DrawIndexed(uint32_t, uint32_t, int32_t) override {}
     void DispatchComputePass(const ComputeDispatch&) override {}
     void DrawIndexedInstanced(uint32_t, uint32_t, uint32_t, int32_t, uint32_t) override {}
-    void DrawIndexedIndirect(unsigned int, uint32_t) override {}
+    void DrawIndexedIndirect(BufferHandle, uint32_t) override {}
     void ClearColor(const glm::vec4&) override {}
     void SetViewport(int, int, int, int) override {}
-    void BindGlobalShadowMap(unsigned int, unsigned int) override {}
-    void BindGlobalSpotShadowMap(unsigned int, unsigned int) override {}
-    void BindGlobalPointShadowMap(unsigned int, unsigned int) override {}
+    void BindGlobalShadowMap(unsigned int, TextureHandle) override {}
+    void BindGlobalSpotShadowMap(unsigned int, TextureHandle) override {}
+    void BindGlobalPointShadowMap(unsigned int, TextureHandle) override {}
 };
 
 class RuntimeRenderShellRhiDevice : public RhiDevice {
@@ -54,21 +54,25 @@ public:
     RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override { ++begin_frame_count; }
-    unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 0; }
-    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override { return render_target_handle + 500u; }
-    unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override { return render_target_handle + 1000u; }
-    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int) const override { return {}; }
-    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int) const override { return {}; }
-    unsigned int CreateTexture2D(int, int, const unsigned char*, bool) override { return 0; }
-    unsigned int CreateTextureCube(int, int, const unsigned char* const[6], bool) override { return 0; }
-    unsigned int CreateTexture3D(int, int, int, const unsigned char*, bool) override { return 0; }
-    void DeleteTexture(unsigned int) override {}
-    unsigned int CreateShaderProgram(const std::string&, const std::string&) override { return 0; }
-    void DeleteShaderProgram(unsigned int) override {}
+    RenderTargetHandle CreateRenderTarget(const RenderTargetDesc&) override { return {}; }
+    TextureHandle GetRenderTargetColorTexture(RenderTargetHandle render_target_handle) const override {
+        return TextureHandle::from_raw(render_target_handle.raw() + 500u);
+    }
+    TextureHandle GetRenderTargetDepthTexture(RenderTargetHandle render_target_handle) const override {
+        return TextureHandle::from_raw(render_target_handle.raw() + 1000u);
+    }
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(RenderTargetHandle) const override { return {}; }
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(RenderTargetHandle) const override { return {}; }
+    TextureHandle CreateTexture2D(int, int, const unsigned char*, bool) override { return {}; }
+    TextureHandle CreateTextureCube(int, int, const unsigned char* const[6], bool) override { return {}; }
+    TextureHandle CreateTexture3D(int, int, int, const unsigned char*, bool) override { return {}; }
+    void DeleteTexture(TextureHandle) override {}
+    ShaderHandle CreateShaderProgram(const std::string&, const std::string&) override { return {}; }
+    void DeleteShaderProgram(ShaderHandle) override {}
     dse::render::PipelineHandle CreatePipelineState(const PipelineStateDesc&) override { return {}; }
-    unsigned int CreateBuffer(size_t, const void*, bool, bool) override { return 0; }
-    void UpdateBuffer(unsigned int, size_t, size_t, const void*, bool) override {}
-    void DeleteBuffer(unsigned int) override {}
+    BufferHandle CreateBuffer(size_t, const void*, bool, bool) override { return {}; }
+    void UpdateBuffer(BufferHandle, size_t, size_t, const void*, bool) override {}
+    void DeleteBuffer(BufferHandle) override {}
     VertexArrayHandle CreateVertexArray() override { return {}; }
     void DeleteVertexArray(VertexArrayHandle) override {}
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return command_buffer; }
@@ -103,22 +107,28 @@ TEST(RuntimeRenderShellUnitTest, BindShadowMapsWritingGlobalStateFromRenderTarge
     auto* device = InstallRhi(pipeline);
 
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        pipeline.render_resources_.shadow_render_target[i] = 10u + static_cast<unsigned int>(i);
+        pipeline.render_resources_.shadow_render_target[i] =
+            RenderTargetHandle::from_raw(10u + static_cast<unsigned int>(i));
     }
     for (int i = 0; i < 4; ++i) {
-        pipeline.render_resources_.spot_shadow_render_target[i] = 20u + static_cast<unsigned int>(i);
-        pipeline.render_resources_.point_shadow_render_target[i] = 30u + static_cast<unsigned int>(i);
+        pipeline.render_resources_.spot_shadow_render_target[i] =
+            RenderTargetHandle::from_raw(20u + static_cast<unsigned int>(i));
+        pipeline.render_resources_.point_shadow_render_target[i] =
+            RenderTargetHandle::from_raw(30u + static_cast<unsigned int>(i));
     }
 
     BindRuntimeShadowMaps(pipeline);
 
     const auto& state = device->GetGlobalRenderState();
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        EXPECT_EQ(state.shadow_map[i], 1010u + static_cast<unsigned int>(i));
+        EXPECT_EQ(state.shadow_map[i],
+                  TextureHandle::from_raw(1010u + static_cast<unsigned int>(i)));
     }
     for (int i = 0; i < 4; ++i) {
-        EXPECT_EQ(state.spot_shadow_map[i], 1020u + static_cast<unsigned int>(i));
-        EXPECT_EQ(state.point_shadow_map[i], 1030u + static_cast<unsigned int>(i));
+        EXPECT_EQ(state.spot_shadow_map[i],
+                  TextureHandle::from_raw(1020u + static_cast<unsigned int>(i)));
+        EXPECT_EQ(state.point_shadow_map[i],
+                  TextureHandle::from_raw(1030u + static_cast<unsigned int>(i)));
     }
 }
 

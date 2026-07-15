@@ -17,8 +17,8 @@ void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
                                  const glm::mat4& proj) {
     if (vertices.empty() || indices.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrDepth);
-    if (program == 0) return;  // 该后端未提供 depth-only 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrDepth);
+    if (!program) return;  // 该后端未提供 depth-only 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_) return;
@@ -63,9 +63,9 @@ void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // 写/测深度（Less）、背面剔除
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);  // PerFrame @ set0.b0
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 
@@ -78,8 +78,8 @@ void MeshRenderer::DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
                                           bool foliage) {
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedDepth);
-    if (program == 0) return;  // 该后端未提供实例化 depth-only 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedDepth);
+    if (!program) return;  // 该后端未提供实例化 depth-only 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_) return;
@@ -127,11 +127,11 @@ void MeshRenderer::DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // 写/测深度（Less）、背面剔除
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);  // PerFrame @ set0.b0
     // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
-    cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindStorageBuffer(0u, instance_ssbo_, 0u, static_cast<uint32_t>(inst_bytes));
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     // 契约：first_instance 恒 0，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
                              static_cast<uint32_t>(instance_models.size()),
@@ -149,8 +149,8 @@ void MeshRenderer::DrawDepthOnlySharedTemplateInstanced(CommandBuffer& cmd, RhiD
     if (index_count == 0 || instance_models.empty() ||
         !tmpl.vertex_buffer || !tmpl.index_buffer) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedDepth);
-    if (program == 0) return;
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedDepth);
+    if (!program) return;
 
     EnsureResources(device);
     if (!per_frame_ubo_) return;
@@ -177,11 +177,11 @@ void MeshRenderer::DrawDepthOnlySharedTemplateInstanced(CommandBuffer& cmd, RhiD
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
-    cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);
+    cmd.BindStorageBuffer(0u, instance_ssbo_, 0u, static_cast<uint32_t>(inst_bytes));
     // 共享局部空间模板 VB/IB（caller 持有、常驻），按子段对每实例绘制。
-    cmd.BindVertexBuffer(0u, tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
-    cmd.BindIndexBuffer(tmpl.index_buffer.raw(), tmpl.index_type);
+    cmd.BindVertexBuffer(0u, tmpl.vertex_buffer, static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(tmpl.index_buffer, tmpl.index_type);
     cmd.DrawIndexedInstanced(index_count, static_cast<uint32_t>(instance_models.size()),
                              first_index, 0, 0u);
 }

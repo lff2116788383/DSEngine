@@ -35,12 +35,12 @@ public:
     /// 一次降采样步：以 source_tex 为输入，写入当前绑定 RT。
     /// src_res_x/y 为源 mip 全分辨率（quad 路径据此算 texel；compute 路径忽略，按纹理尺寸推导）。
     void Downsample(CommandBuffer& cmd, RhiDevice& device,
-                    unsigned int source_tex, float src_res_x, float src_res_y);
+                    TextureHandle source_tex, float src_res_x, float src_res_y);
 
     /// 一次升采样步：以 source_tex（更高 mip）为输入，累加进当前绑定 RT（更低 mip）。
     /// filter_radius 为 quad 路径的采样半径；blend_weight 为混合权重（两路径均用）。
     void Upsample(CommandBuffer& cmd, RhiDevice& device,
-                  unsigned int source_tex, float filter_radius, float blend_weight);
+                  TextureHandle source_tex, float filter_radius, float blend_weight);
 
     /// 释放内部 GPU 资源。
     void Shutdown(RhiDevice& device);

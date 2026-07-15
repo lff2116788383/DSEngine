@@ -19,7 +19,7 @@ struct VulkanRhiDevice::HiZImpl {
         int mip_count = 0;
         unsigned int texture_handle = 0;
     };
-    std::unordered_map<unsigned int, HiZTextureInfo> textures;
+    std::unordered_map<TextureHandle, HiZTextureInfo> textures;
     unsigned int next_handle = 450000;
 };
 

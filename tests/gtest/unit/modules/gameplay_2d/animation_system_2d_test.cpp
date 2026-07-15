@@ -21,6 +21,14 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/time_scale_component.h"
 
+namespace {
+
+dse::render::TextureHandle Texture(unsigned int raw) {
+    return dse::render::TextureHandle::from_raw(raw);
+}
+
+} // namespace
+
 class AnimationSystem2DTest : public ::testing::Test {
 protected:
     World world;
@@ -55,7 +63,7 @@ TEST_F(AnimationSystem2DTest, SingleStateAutoInitializecurrent_state) {
     state.name = "idle";
     state.frame_rate = 10.0f;
     state.loop = true;
-    state.frame_handles = {1u, 2u, 3u};
+    state.frame_handles = {Texture(1), Texture(2), Texture(3)};
     anim->states["idle"] = state;
     anim->current_state = ""; // 空，应自动初始化
 
@@ -70,7 +78,7 @@ TEST_F(AnimationSystem2DTest, FrameAdvancecurrent_FrameIncrements) {
     state.name = "walk";
     state.frame_rate = 10.0f;
     state.loop = true;
-    state.frame_handles = {10u, 20u, 30u, 40u};
+    state.frame_handles = {Texture(10), Texture(20), Texture(30), Texture(40)};
     anim->states["walk"] = state;
     anim->current_state = "walk";
     anim->current_frame = 0;
@@ -88,7 +96,7 @@ TEST_F(AnimationSystem2DTest, LoopPlaybackWrapsToFirstFrameAtEnd) {
     state.name = "loop_anim";
     state.frame_rate = 10.0f;
     state.loop = true;
-    state.frame_handles = {1u, 2u};
+    state.frame_handles = {Texture(1), Texture(2)};
     anim->states["loop_anim"] = state;
     anim->current_state = "loop_anim";
     anim->current_frame = 1; // 末帧
@@ -106,7 +114,7 @@ TEST_F(AnimationSystem2DTest, NonLoopPlaybackStopsAtLastFrame) {
     state.name = "once";
     state.frame_rate = 10.0f;
     state.loop = false;
-    state.frame_handles = {1u, 2u};
+    state.frame_handles = {Texture(1), Texture(2)};
     anim->states["once"] = state;
     anim->current_state = "once";
     anim->current_frame = 1; // 末帧
@@ -126,14 +134,14 @@ TEST_F(AnimationSystem2DTest, SetBooltriggerStateTransition) {
     idle_state.name = "idle";
     idle_state.frame_rate = 10.0f;
     idle_state.loop = true;
-    idle_state.frame_handles = {1u};
+    idle_state.frame_handles = {Texture(1)};
     anim->states["idle"] = idle_state;
 
     AnimationState walk_state;
     walk_state.name = "walk";
     walk_state.frame_rate = 10.0f;
     walk_state.loop = true;
-    walk_state.frame_handles = {2u};
+    walk_state.frame_handles = {Texture(2)};
     anim->states["walk"] = walk_state;
 
     AnimationTransition trans;
@@ -162,7 +170,8 @@ TEST_F(AnimationSystem2DTest, PlaySegmentSegmentPlayback) {
     state.name = "full";
     state.frame_rate = 10.0f;
     state.loop = true;
-    state.frame_handles = {1u, 2u, 3u, 4u, 5u};
+    state.frame_handles = {
+        Texture(1), Texture(2), Texture(3), Texture(4), Texture(5)};
     anim->states["full"] = state;
     anim->current_state = "full";
 
@@ -179,7 +188,7 @@ TEST_F(AnimationSystem2DTest, FrameRateControlsAdvanceSpeed) {
     state.name = "slow";
     state.frame_rate = 1.0f; // 1fps，每帧 1 秒
     state.loop = true;
-    state.frame_handles = {1u, 2u};
+    state.frame_handles = {Texture(1), Texture(2)};
     anim->states["slow"] = state;
     anim->current_state = "slow";
     anim->current_frame = 0;
@@ -201,7 +210,7 @@ TEST_F(AnimationSystem2DTest, TimeDoesNotAdvanceAfterStopPlayback) {
     state.name = "paused";
     state.frame_rate = 10.0f;
     state.loop = true;
-    state.frame_handles = {1u, 2u, 3u};
+    state.frame_handles = {Texture(1), Texture(2), Texture(3)};
     anim->states["paused"] = state;
     anim->current_state = "paused";
     anim->current_frame = 1;
@@ -217,7 +226,7 @@ AnimationState MakeWalkState() {
     s.name = "walk";
     s.frame_rate = 10.0f; // 每帧 0.1s
     s.loop = true;
-    s.frame_handles = {1u, 2u, 3u, 4u};
+    s.frame_handles = {Texture(1), Texture(2), Texture(3), Texture(4)};
     return s;
 }
 } // namespace

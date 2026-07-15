@@ -561,7 +561,7 @@ extern "C" void dse_snow_set_texture(uint32_t e, const char* path, float tiling)
     if (!sc) return;
     if (path) {
         sc->snow_texture_path = path;
-        sc->snow_texture_handle = 0;  // 触发重新加载
+        sc->snow_texture_handle = {};  // 触发重新加载
     }
     if (!Keep(tiling)) sc->snow_tiling = tiling;
 }

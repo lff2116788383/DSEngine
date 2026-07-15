@@ -112,7 +112,8 @@ void FramePipeline::PrepareRenderFrame() {
         for (auto entity : pp_view) {
             auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
             if (pp.enabled && pp.taa_enabled) {
-                render_pass_context_.taa_active = (render_pass_context_.render_targets.taa != 0);
+                render_pass_context_.taa_active =
+                    static_cast<bool>(render_pass_context_.render_targets.taa);
                 break;
             }
         }
@@ -259,7 +260,7 @@ void FramePipeline::ExecuteRenderFrame() {
             render_pass_context_.ddgi_normal_bias);
     } else {
         runtime_context_.rhi_device->SetGlobalDDGI(
-            false, 0, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
+            false, {}, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
     }
 
     // Hi-Z AABB 上传

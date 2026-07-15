@@ -29,7 +29,7 @@ struct DrawExecutorGlobalState {
     // --- 方向光 CSM ---
     glm::mat4 light_space_matrix[3] = {};
     float cascade_splits[3] = {};
-    unsigned int shadow_map[3] = {};
+    TextureHandle shadow_map[3];
     glm::vec4 shadow_atlas_region[3] = {
         glm::vec4(1.0f, 1.0f, 0.0f, 0.0f),
         glm::vec4(1.0f, 1.0f, 0.0f, 0.0f),
@@ -40,10 +40,10 @@ struct DrawExecutorGlobalState {
     glm::mat4 spot_light_space_matrix[4] = {
         glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)
     };
-    unsigned int spot_shadow_map[4] = {};
+    TextureHandle spot_shadow_map[4];
 
     // --- 点光源 ---
-    unsigned int point_shadow_map[4] = {};
+    TextureHandle point_shadow_map[4];
 
     // --- Light Probe ---
     glm::vec4 light_probe_sh[9] = {};
@@ -51,7 +51,7 @@ struct DrawExecutorGlobalState {
 
     // --- DDGI ---
     bool ddgi_enabled = false;
-    unsigned int ddgi_irradiance_atlas = 0;
+    TextureHandle ddgi_irradiance_atlas;
     glm::vec3 ddgi_grid_origin = glm::vec3(0.0f);
     glm::vec3 ddgi_grid_spacing = glm::vec3(1.0f);
     glm::ivec3 ddgi_grid_resolution = glm::ivec3(0);
@@ -61,7 +61,7 @@ struct DrawExecutorGlobalState {
 
     // --- GBuffer (Deferred) ---
     static constexpr int kMaxGBufferTextures = 4;
-    unsigned int gbuffer_texture[kMaxGBufferTextures] = {};
+    TextureHandle gbuffer_texture[kMaxGBufferTextures];
     bool gbuffer_rendering_mode = false;  ///< true: DrawMeshBatch 使用 GBuffer shader
 
     // --- 当前 pass 深度专用标志（阶段4-M4）---
@@ -87,13 +87,13 @@ struct DrawExecutorGlobalState {
 
     // ---- Setter 方法 ----
 
-    void SetShadowMap(unsigned int index, unsigned int handle) {
+    void SetShadowMap(unsigned int index, TextureHandle handle) {
         if (index < 3) shadow_map[index] = handle;
     }
-    void SetSpotShadowMap(unsigned int index, unsigned int handle) {
+    void SetSpotShadowMap(unsigned int index, TextureHandle handle) {
         if (index < 4) spot_shadow_map[index] = handle;
     }
-    void SetPointShadowMap(unsigned int index, unsigned int handle) {
+    void SetPointShadowMap(unsigned int index, TextureHandle handle) {
         if (index < 4) point_shadow_map[index] = handle;
     }
     void SetLightSpaceMatrix(unsigned int index, const glm::mat4& mat) {
@@ -112,10 +112,10 @@ struct DrawExecutorGlobalState {
         for (int i = 0; i < 9; ++i) light_probe_sh[i] = sh_in[i];
         light_probe_enabled = enabled;
     }
-    void SetGBufferTexture(unsigned int index, unsigned int handle) {
+    void SetGBufferTexture(unsigned int index, TextureHandle handle) {
         if (index < kMaxGBufferTextures) gbuffer_texture[index] = handle;
     }
-    void SetDDGI(bool enabled, unsigned int irradiance_atlas,
+    void SetDDGI(bool enabled, TextureHandle irradiance_atlas,
                  const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
                  const glm::ivec3& grid_resolution, int irradiance_texels,
                  float gi_intensity, float normal_bias) {
@@ -189,10 +189,10 @@ inline PerMaterialUBO PreparePerMaterialUBO(const MeshDrawItem& item,
             item.material_emissive,
             item.material_alpha_test ? 1.0f : 0.0f);
         mat.flags = glm::vec4(
-            item.normal_map_handle != 0 ? 1.0f : 0.0f,
-            item.metallic_roughness_map_handle != 0 ? 1.0f : 0.0f,
-            item.emissive_map_handle != 0 ? 1.0f : 0.0f,
-            item.occlusion_map_handle != 0 ? 1.0f : 0.0f);
+            item.normal_map_handle ? 1.0f : 0.0f,
+            item.metallic_roughness_map_handle ? 1.0f : 0.0f,
+            item.emissive_map_handle ? 1.0f : 0.0f,
+            item.occlusion_map_handle ? 1.0f : 0.0f);
     }
     mat.extra_params = glm::vec4(
         item.material_sss_strength,

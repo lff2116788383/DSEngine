@@ -86,12 +86,12 @@ TEST(UBOTypesTest, BindingPointenumerationValue) {
 TEST(DrawExecutorGlobalStateTest, DefaultValues) {
     DrawExecutorGlobalState s;
     for (int i = 0; i < 3; ++i) {
-        EXPECT_EQ(s.shadow_map[i], 0u);
+        EXPECT_FALSE(s.shadow_map[i]);
         EXPECT_FLOAT_EQ(s.cascade_splits[i], 0.0f);
     }
     for (int i = 0; i < 4; ++i) {
-        EXPECT_EQ(s.spot_shadow_map[i], 0u);
-        EXPECT_EQ(s.point_shadow_map[i], 0u);
+        EXPECT_FALSE(s.spot_shadow_map[i]);
+        EXPECT_FALSE(s.point_shadow_map[i]);
     }
     EXPECT_FALSE(s.light_probe_enabled);
     EXPECT_FALSE(s.gbuffer_rendering_mode);
@@ -102,26 +102,26 @@ TEST(DrawExecutorGlobalStateTest, DefaultValues) {
 // 测试 绘制执行器全局状态：设置阴影映射
 TEST(DrawExecutorGlobalStateTest, SetShadowMap) {
     DrawExecutorGlobalState s;
-    s.SetShadowMap(0, 42);
-    s.SetShadowMap(2, 99);
-    s.SetShadowMap(5, 123); // 越界，不应崩溃
-    EXPECT_EQ(s.shadow_map[0], 42u);
-    EXPECT_EQ(s.shadow_map[2], 99u);
+    s.SetShadowMap(0, TextureHandle::from_raw(42));
+    s.SetShadowMap(2, TextureHandle::from_raw(99));
+    s.SetShadowMap(5, TextureHandle::from_raw(123)); // 越界，不应崩溃
+    EXPECT_EQ(s.shadow_map[0], TextureHandle::from_raw(42));
+    EXPECT_EQ(s.shadow_map[2], TextureHandle::from_raw(99));
 }
 
 // 测试 绘制执行器全局状态：设置聚光阴影映射
 TEST(DrawExecutorGlobalStateTest, SetSpotShadowMap) {
     DrawExecutorGlobalState s;
-    s.SetSpotShadowMap(1, 77);
-    EXPECT_EQ(s.spot_shadow_map[1], 77u);
-    s.SetSpotShadowMap(10, 0); // 越界
+    s.SetSpotShadowMap(1, TextureHandle::from_raw(77));
+    EXPECT_EQ(s.spot_shadow_map[1], TextureHandle::from_raw(77));
+    s.SetSpotShadowMap(10, {}); // 越界
 }
 
 // 测试 绘制执行器全局状态：设置点阴影映射
 TEST(DrawExecutorGlobalStateTest, SetPointShadowMap) {
     DrawExecutorGlobalState s;
-    s.SetPointShadowMap(3, 55);
-    EXPECT_EQ(s.point_shadow_map[3], 55u);
+    s.SetPointShadowMap(3, TextureHandle::from_raw(55));
+    EXPECT_EQ(s.point_shadow_map[3], TextureHandle::from_raw(55));
 }
 
 // 测试 绘制执行器全局状态：设置灯光Space矩阵
@@ -166,11 +166,11 @@ TEST(DrawExecutorGlobalStateTest, BeginEndFrame) {
 // 测试 绘制执行器全局状态：设置G缓冲区纹理
 TEST(DrawExecutorGlobalStateTest, SetGBufferTexture) {
     DrawExecutorGlobalState s;
-    s.SetGBufferTexture(0, 111);
-    s.SetGBufferTexture(3, 222);
-    s.SetGBufferTexture(4, 333); // 越界
-    EXPECT_EQ(s.gbuffer_texture[0], 111u);
-    EXPECT_EQ(s.gbuffer_texture[3], 222u);
+    s.SetGBufferTexture(0, TextureHandle::from_raw(111));
+    s.SetGBufferTexture(3, TextureHandle::from_raw(222));
+    s.SetGBufferTexture(4, TextureHandle::from_raw(333)); // 越界
+    EXPECT_EQ(s.gbuffer_texture[0], TextureHandle::from_raw(111));
+    EXPECT_EQ(s.gbuffer_texture[3], TextureHandle::from_raw(222));
 }
 
 // ============================================================
@@ -217,8 +217,8 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO) {
     item.material_metallic = 0.8f;
     item.material_roughness = 0.4f;
     item.material_ao = 0.9f;
-    item.normal_map_handle = 5;
-    item.emissive_map_handle = 0;
+    item.normal_map_handle = TextureHandle::from_raw(5);
+    item.emissive_map_handle = {};
 
     DrawExecutorGlobalState state;
     PerMaterialUBO ubo = PreparePerMaterialUBO(item, state);

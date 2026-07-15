@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <string>
+#include "engine/render/rhi/rhi_handle.h"
 
 namespace dse {
 
@@ -65,7 +66,7 @@ struct FluidEmitterComponent {
     uint32_t active_count = 0;           ///< 存活粒子数量
 
     // GPU 实例缓冲区（用于渲染）
-    unsigned int instance_vbo = 0;
+    dse::render::BufferHandle instance_vbo;
     bool gpu_dirty = false;
 };
 

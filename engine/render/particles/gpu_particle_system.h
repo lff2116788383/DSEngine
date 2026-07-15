@@ -83,11 +83,11 @@ struct GpuParticleComponent {
     GpuParticleEmitterConfig config;
 
     // GPU 资源（运行时由 GpuParticleManager 管理）
-    unsigned int particle_buffer_a = 0;    ///< SSBO: 粒子状态 buffer A (ping)
-    unsigned int particle_buffer_b = 0;    ///< SSBO: 粒子状态 buffer B (pong)
-    unsigned int counter_buffer = 0;       ///< SSBO: atomic counters (alive_count, dead_count, emit_count)
-    unsigned int indirect_buffer = 0;      ///< Indirect draw args buffer
-    unsigned int texture_handle = 0;       ///< 粒子纹理
+    BufferHandle particle_buffer_a;    ///< SSBO: 粒子状态 buffer A (ping)
+    BufferHandle particle_buffer_b;    ///< SSBO: 粒子状态 buffer B (pong)
+    BufferHandle counter_buffer;       ///< SSBO: atomic counters (alive_count, dead_count, emit_count)
+    BufferHandle indirect_buffer;      ///< Indirect draw args buffer
+    TextureHandle texture_handle;      ///< 粒子纹理
 
     bool ping = true;                      ///< 当前读 A 写 B (true) 还是读 B 写 A (false)
     float emit_accumulator = 0.0f;
@@ -130,8 +130,8 @@ public:
     void ShutdownComponent(GpuParticleComponent& comp, RhiDevice* rhi);
 
 private:
-    unsigned int update_shader_ = 0;   ///< particle_update compute shader
-    unsigned int emit_shader_ = 0;     ///< particle_emit compute shader
+    ShaderHandle update_shader_;   ///< particle_update compute shader
+    ShaderHandle emit_shader_;     ///< particle_emit compute shader
     bool inited_ = false;
 };
 

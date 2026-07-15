@@ -55,7 +55,7 @@ void ParallaxSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::
         if (!parallax.enabled) continue;
 
         for (auto& layer : parallax.layers) {
-            if (!layer.visible || layer.texture_handle == 0) continue;
+            if (!layer.visible || !layer.texture_handle) continue;
 
             SpriteDrawItem item{};
             item.texture_handle = layer.texture_handle;

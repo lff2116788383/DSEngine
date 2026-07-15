@@ -29,13 +29,13 @@ void VulkanDrawExecutor::BeginRenderPass(
 
     // 更新帧索引和当前 RT 句柄
     current_frame_index_ = context_->current_frame() % MAX_FRAMES;
-    current_rt_handle_ = render_pass.render_target;
+    current_rt_handle_ = render_pass.render_target.raw();
 
     // 确定 Framebuffer 和 RenderPass
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass vk_render_pass = VK_NULL_HANDLE;
-    if (render_pass.render_target != 0) {
-        const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_pass.render_target);
+    if (render_pass.render_target) {
+        const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (rt) {
             framebuffer = rt->framebuffer;
             // 根据是否需要清除选择 render pass 变体
@@ -81,8 +81,8 @@ void VulkanDrawExecutor::BeginRenderPass(
     // 确定渲染区域大小和 MSAA 采样数
     VkExtent2D render_extent = context_->swapchain_extent();
     current_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
-    if (render_pass.render_target != 0) {
-        const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_pass.render_target);
+    if (render_pass.render_target) {
+        const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (rt && rt->width > 0 && rt->height > 0) {
             render_extent.width = static_cast<uint32_t>(rt->width);
             render_extent.height = static_cast<uint32_t>(rt->height);
@@ -104,8 +104,8 @@ void VulkanDrawExecutor::BeginRenderPass(
     int num_color = 1;
     bool rt_color_present = true;
     bool rt_depth_present = false;
-    if (render_pass.render_target != 0) {
-        const VulkanRenderTarget* rt_for_attachments = resource_mgr.GetRenderTarget(render_pass.render_target);
+    if (render_pass.render_target) {
+        const VulkanRenderTarget* rt_for_attachments = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (rt_for_attachments) {
             rt_color_present = rt_for_attachments->has_color;
             rt_depth_present = rt_for_attachments->has_depth;
@@ -143,7 +143,7 @@ void VulkanDrawExecutor::BeginRenderPass(
     if (max_render_passes_ >= 0 && render_pass_counter_ >= max_render_passes_) {
         skip_current_pass_ = true;
         DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: SKIPPED rt={} (pass {} >= max {})",
-                       render_pass.render_target, render_pass_counter_, max_render_passes_);
+                       render_pass.render_target.raw(), render_pass_counter_, max_render_passes_);
         render_pass_counter_++;
         return;
     }
@@ -162,7 +162,7 @@ void VulkanDrawExecutor::BeginRenderPass(
         global_state_.current_frame_stats.shadow_passes += 1;
     }
     DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: rt={} extent={}x{} msaa={} color_count={} depth={} pass#={}",
-                   render_pass.render_target,
+                   render_pass.render_target.raw(),
                    render_extent.width, render_extent.height,
                    static_cast<int>(current_msaa_samples_),
                    num_color, rt_depth_present,

@@ -181,7 +181,7 @@ public:
 
 private:
     RenderPassContext& ctx_;
-    unsigned int history_rt_[2] = {0, 0}; ///< 双缓冲历史 RT (ping-pong)
+    RenderTargetHandle history_rt_[2]; ///< 双缓冲历史 RT (ping-pong)
     int history_index_ = 0;              ///< 当前写入索引
     int history_width_ = 0;              ///< 历史 RT 宽度
     int history_height_ = 0;             ///< 历史 RT 高度
@@ -349,8 +349,8 @@ public:
     const char* GetName() const override { return "hiz_build_pass"; }
 private:
     RenderPassContext& ctx_;
-    unsigned int hiz_copy_shader_ = 0;
-    unsigned int hiz_downsample_shader_ = 0;
+    ShaderHandle hiz_copy_shader_;
+    ShaderHandle hiz_downsample_shader_;
     bool shaders_compiled_ = false;
     void EnsureShaders();
 };
@@ -364,7 +364,7 @@ public:
     const char* GetName() const override { return "hiz_cull_pass"; }
 private:
     RenderPassContext& ctx_;
-    unsigned int hiz_cull_shader_ = 0;
+    ShaderHandle hiz_cull_shader_;
     bool shader_compiled_ = false;
     void EnsureShader();
 };

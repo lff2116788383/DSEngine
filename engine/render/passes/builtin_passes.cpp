@@ -121,7 +121,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
             rhi->SetupGPUDrivenShadowShader(view, projection);
             rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
             rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
                                           ctx_.gpu_indirect_draw_count,
                                           sizeof(DrawElementsIndirectCommand));
             rhi->UnbindVAO();
@@ -232,7 +232,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 rhi->SetupGPUDrivenShadowShader(cam.view, cam.projection);
                 rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
                 rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
                                               ctx_.gpu_indirect_draw_count,
                                               sizeof(DrawElementsIndirectCommand));
                 rhi->UnbindVAO();
@@ -272,7 +272,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     // 绑定单个 atlas 深度纹理到所有 shadow map slot
-    unsigned int atlas_depth = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow_atlas);
+    TextureHandle atlas_depth = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow_atlas);
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cmd_buffer.BindGlobalShadowMap(i, atlas_depth);
     }
@@ -303,7 +303,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         && ctx_.gpu_indirect_draw_count > 0;
 
     for (int i = 0; i < snap.spot_shadow_count; ++i) {
-        if (ctx_.render_targets.spot_shadow[i] == 0) continue;
+        if (!ctx_.render_targets.spot_shadow[i]) continue;
         const auto& sl = snap.spot_lights[i];
 
         // Camera-Relative: spot light 位置转换到相机相对空间
@@ -319,7 +319,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
             rhi->SetupGPUDrivenShadowShader(light_view_mat, light_proj);
             rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
             rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+            rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
                                           ctx_.gpu_indirect_draw_count,
                                           sizeof(DrawElementsIndirectCommand));
             rhi->UnbindVAO();
@@ -366,7 +366,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
         && ctx_.gpu_indirect_draw_count > 0;
 
     for (int shadow_slot = 0; shadow_slot < snap.point_shadow_count; ++shadow_slot) {
-        if (ctx_.render_targets.point_shadow[shadow_slot] == 0) continue;
+        if (!ctx_.render_targets.point_shadow[shadow_slot]) continue;
         const auto& pl = snap.point_lights[shadow_slot];
         // Camera-Relative: point light 位置转换到相机相对空间
         const glm::vec3 pl_pos_relative = pl.position - ctx_.camera_offset;
@@ -399,7 +399,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 rhi->SetupGPUDrivenShadowShader(light_view_mat, light_proj);
                 rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
                 rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
                                               ctx_.gpu_indirect_draw_count,
                                               sizeof(DrawElementsIndirectCommand));
                 rhi->UnbindVAO();
@@ -580,14 +580,14 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                                                 bucket.textures.emissive,
                                                 bucket.textures.occlusion);
                     rhi->MultiDrawIndexedIndirect(
-                        ctx_.gpu_draw_cmd_ssbo.raw(),
+                        ctx_.gpu_draw_cmd_ssbo,
                         static_cast<int>(bucket.cmd_count),
                         stride,
                         bucket.cmd_offset * stride);
                 }
             } else {
-                rhi->BindGPUDrivenTextures(0, 0, 0, 0, 0);
-                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                rhi->BindGPUDrivenTextures({}, {}, {}, {}, {});
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
                                               ctx_.gpu_indirect_draw_count,
                                               sizeof(DrawElementsIndirectCommand));
             }
@@ -614,7 +614,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 auto* rhi = ctx_.rhi_device;
                 rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
                 rhi->BindMegaVAO(ctx_.gpu_mega_vao);
-                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
+                rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo,
                                               ctx_.gpu_indirect_draw_count,
                                               sizeof(DrawElementsIndirectCommand));
                 rhi->UnbindVAO();
@@ -653,5 +653,4 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
 } // namespace render
 } // namespace dse
-
 

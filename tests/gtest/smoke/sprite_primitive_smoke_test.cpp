@@ -32,15 +32,15 @@ RenderTargetReadback RenderCenteredSpriteQuad(RhiDevice& device) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
     // 2×2 纯红纹理（采样到 quad，验证纹理路径而非仅顶点色）
     const unsigned char red[] = {
         255, 0, 0, 255,  255, 0, 0, 255,
         255, 0, 0, 255,  255, 0, 0, 255,
     };
-    unsigned int tex = device.CreateTexture2D(2, 2, red, false);
+    const auto tex = device.CreateTexture2D(2, 2, red, false);
 
     // SpriteRenderer 必须存活到帧提交完成后才能 Shutdown：其 VBO/IBO/UBO 被命令缓冲引用，
     // 帧内删除会使 Vulkan 命令缓冲失效（GL/DX11 容忍，Vulkan 严格）。

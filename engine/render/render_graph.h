@@ -106,12 +106,12 @@ public:
     /// @param name 资源名称
     /// @param rt_handle 已分配的 RT 句柄
     /// @return 资源句柄
-    RenderResourceHandle ImportResource(const std::string& name, unsigned int rt_handle);
+    RenderResourceHandle ImportResource(const std::string& name, RenderTargetHandle rt_handle);
 
     /// 查询资源对应的物理 RT 句柄（Pass lambda 内使用）
     /// @param resource 资源句柄
     /// @return RT handle，无物理绑定时返回 0
-    unsigned int GetResourceRT(RenderResourceHandle resource) const;
+    RenderTargetHandle GetResourceRT(RenderResourceHandle resource) const;
 
     /// 添加一个渲染 Pass（返回 PassBuilder 风格的引用以支持链式调用）
     /// @param name Pass 名称
@@ -187,7 +187,7 @@ public:
 
     /// 编译阶段生成的屏障描述
     struct BarrierEntry {
-        unsigned int rt_handle;
+        RenderTargetHandle rt_handle;
         ResourceState from;
         ResourceState to;
     };
@@ -205,7 +205,7 @@ public:
         /// Compile 输出：执行前需插入的屏障
         std::vector<BarrierEntry> pre_barriers;
         /// Compile 输出：自动绑定的 RT（0 = 不自动绑定）
-        unsigned int auto_bind_rt = 0;
+        RenderTargetHandle auto_bind_rt;
     };
 
     /// 获取编译后的执行顺序（只读）
@@ -228,7 +228,7 @@ private:
         std::string name;
         ResourceType type = ResourceType::Logical;
         RenderTargetDesc desc{};        ///< Transient 类型的 RT 描述
-        unsigned int rt_handle = 0;      ///< 实际分配的 GPU RT（Transient/Imported）
+        RenderTargetHandle rt_handle;      ///< 实际分配的 GPU RT（Transient/Imported）
         int first_use = -1;             ///< 生命周期：编译顺序中的首次使用位置
         int last_use = -1;              ///< 生命周期：编译顺序中的最后使用位置
         ResourceState compiled_state = ResourceState::Undefined; ///< Compile 时追踪的当前状态

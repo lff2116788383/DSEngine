@@ -23,34 +23,34 @@ namespace {
 
 class AssetManagerFakeRhiDevice final : public RhiDevice {
 public:
-    unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override {
+    dse::render::TextureHandle CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override {
         (void)linear_filter;
         EXPECT_EQ(width, 1);
         EXPECT_EQ(height, 1);
         EXPECT_NE(rgba8_data, nullptr);
-        return next_texture_handle_++;
+        return dse::render::TextureHandle::from_raw(next_texture_handle_++);
     }
 
-    void DeleteTexture(unsigned int texture_handle) override {
+    void DeleteTexture(dse::render::TextureHandle texture_handle) override {
         deleted_textures.push_back(texture_handle);
     }
 
     RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override {}
-    unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override { (void)desc; return 0; }
-    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override { (void)render_target_handle; return 0; }
-    unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override { (void)render_target_handle; return 0; }
-    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override { (void)render_target_handle; return {}; }
-    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override { (void)render_target_handle; return {}; }
-    unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override { (void)width; (void)height; (void)rgba8_faces; (void)linear_filter; return 0; }
-    unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override { (void)width; (void)height; (void)depth; (void)rgba8_data; (void)linear_filter; return 0; }
-    unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override { (void)vert_src; (void)frag_src; return 0; }
-    void DeleteShaderProgram(unsigned int program_handle) override { (void)program_handle; }
+    dse::render::RenderTargetHandle CreateRenderTarget(const RenderTargetDesc& desc) override { (void)desc; return {}; }
+    dse::render::TextureHandle GetRenderTargetColorTexture(dse::render::RenderTargetHandle render_target_handle) const override { (void)render_target_handle; return {}; }
+    dse::render::TextureHandle GetRenderTargetDepthTexture(dse::render::RenderTargetHandle render_target_handle) const override { (void)render_target_handle; return {}; }
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(dse::render::RenderTargetHandle render_target_handle) const override { (void)render_target_handle; return {}; }
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(dse::render::RenderTargetHandle render_target_handle) const override { (void)render_target_handle; return {}; }
+    dse::render::TextureHandle CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override { (void)width; (void)height; (void)rgba8_faces; (void)linear_filter; return {}; }
+    dse::render::TextureHandle CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override { (void)width; (void)height; (void)depth; (void)rgba8_data; (void)linear_filter; return {}; }
+    dse::render::ShaderHandle CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override { (void)vert_src; (void)frag_src; return {}; }
+    void DeleteShaderProgram(dse::render::ShaderHandle program_handle) override { (void)program_handle; }
     dse::render::PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return {}; }
-    unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override { (void)size; (void)data; (void)is_dynamic; (void)is_index; return 0; }
-    void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override { (void)handle; (void)offset; (void)size; (void)data; (void)is_index; }
-    void DeleteBuffer(unsigned int handle) override { (void)handle; }
+    dse::render::BufferHandle CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override { (void)size; (void)data; (void)is_dynamic; (void)is_index; return {}; }
+    void UpdateBuffer(dse::render::BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) override { (void)handle; (void)offset; (void)size; (void)data; (void)is_index; }
+    void DeleteBuffer(dse::render::BufferHandle handle) override { (void)handle; }
     dse::render::VertexArrayHandle CreateVertexArray() override { return {}; }
     void DeleteVertexArray(dse::render::VertexArrayHandle handle) override { (void)handle; }
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
@@ -58,7 +58,7 @@ public:
     void EndFrame() override {}
     const RenderStats& LastFrameStats() const override { return stats_; }
 
-    std::vector<unsigned int> deleted_textures;
+    std::vector<dse::render::TextureHandle> deleted_textures;
 
 private:
     unsigned int next_texture_handle_ = 900001;
@@ -195,7 +195,7 @@ TEST(AssetManagerTest, WeakReferenceAfterReleaseGpuResourcesStillrelease) {
     const std::filesystem::path temp_dir = std::filesystem::temp_directory_path() / "dse_asset_manager_gpu_release_test";
     const std::filesystem::path image_path = WriteOnePixelPpm(temp_dir);
 
-    unsigned int handle = 0;
+    dse::render::TextureHandle handle;
     {
         AssetManager mgr;
         mgr.SetRhiDevice(&fake_rhi);
@@ -204,7 +204,7 @@ TEST(AssetManagerTest, WeakReferenceAfterReleaseGpuResourcesStillrelease) {
             auto texture = mgr.LoadTexture("weak_ref_release.ppm");
             ASSERT_NE(texture, nullptr);
             handle = texture->GetHandle();
-            ASSERT_NE(handle, 0u);
+            ASSERT_TRUE(handle);
         }
 
         ASSERT_TRUE(fake_rhi.deleted_textures.empty());
@@ -273,7 +273,7 @@ TEST(MaterialAssetTest, Default) {
     EXPECT_EQ(mat.GetId(), 1u);
     EXPECT_EQ(mat.GetName(), "default_test");
     EXPECT_EQ(mat.GetShaderVariant(), "SPRITE_UNLIT");
-    EXPECT_EQ(mat.GetTextureHandle(), 0u);
+    EXPECT_FALSE(mat.GetTextureHandle());
     EXPECT_EQ(mat.GetTint(), glm::vec4(1.0f));
     EXPECT_EQ(mat.GetUvRect(), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
     EXPECT_EQ(mat.GetBlendMode(), MaterialBlendMode::Alpha);
@@ -296,8 +296,8 @@ TEST(MaterialAssetTest, SetShaderVariantModifyShaderVariants) {
 // 测试 材质资源：设置纹理句柄修改句柄
 TEST(MaterialAssetTest, SetTextureHandleModifyHandle) {
     MaterialAsset mat(1, "test");
-    mat.SetTextureHandle(42u);
-    EXPECT_EQ(mat.GetTextureHandle(), 42u);
+    mat.SetTextureHandle(dse::render::TextureHandle::from_raw(42u));
+    EXPECT_EQ(mat.GetTextureHandle(), dse::render::TextureHandle::from_raw(42u));
 }
 
 // 测试 材质资源：设置Tint修改Coloring
@@ -333,11 +333,11 @@ TEST(MaterialAssetTest, SetUpAnd) {
 TEST(MaterialAssetTest, TextureSlotsDefaultAllZeros) {
     MaterialAsset mat(1, "test");
     auto slots = mat.GetTextureSlots();
-    EXPECT_EQ(slots.albedo, 0u);
-    EXPECT_EQ(slots.normal, 0u);
-    EXPECT_EQ(slots.metallic_roughness, 0u);
-    EXPECT_EQ(slots.emissive, 0u);
-    EXPECT_EQ(slots.occlusion, 0u);
+    EXPECT_FALSE(slots.albedo);
+    EXPECT_FALSE(slots.normal);
+    EXPECT_FALSE(slots.metallic_roughness);
+    EXPECT_FALSE(slots.emissive);
+    EXPECT_FALSE(slots.occlusion);
 }
 
 // 测试 材质资源：Scalar Overrides默认值

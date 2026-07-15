@@ -758,7 +758,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     // --- Set 2: PerMaterial UBO + 采样器 ---
     if (gbuffer_mode) {
         // GBuffer 模式只绑定 albedo 纹理到 binding 1
-        unsigned int tex_handle = item.texture_handle;
+        unsigned int tex_handle = item.texture_handle.raw();
         if (tex_handle == 0) tex_handle = white_texture_handle_;
         const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
         if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
@@ -801,11 +801,11 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             uint32_t binding;
         };
         TexBinding tex_bindings[] = {
-            {item.texture_handle, 1},                     // albedo
-            {item.normal_map_handle, 2},                   // normal
-            {item.metallic_roughness_map_handle, 3},       // metallic-roughness
-            {item.emissive_map_handle, 4},                  // emissive
-            {item.occlusion_map_handle, 5},                 // occlusion
+            {item.texture_handle.raw(), 1},                     // albedo
+            {item.normal_map_handle.raw(), 2},                   // normal
+            {item.metallic_roughness_map_handle.raw(), 3},       // metallic-roughness
+            {item.emissive_map_handle.raw(), 4},                  // emissive
+            {item.occlusion_map_handle.raw(), 5},                 // occlusion
         };
 
         VkDescriptorImageInfo image_infos[5] = {};
@@ -842,7 +842,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             VkSampler cmp_sampler = resource_mgr.shadow_comparison_sampler();
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 3; ++i) {
-                unsigned int sm_handle = global_state_.shadow_map[i];
+                unsigned int sm_handle = global_state_.shadow_map[i].raw();
                 // shadow map handle 是 RT handle，需从 RT 获取 depth image view
                 VkImageView depth_view = (sm_handle != 0)
                     ? resource_mgr.GetRenderTargetDepthImageView(sm_handle) : VK_NULL_HANDLE;
@@ -871,7 +871,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         if (has_binding(2, 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 4; ++i) {
-                unsigned int ss_handle = global_state_.spot_shadow_map[i];
+                unsigned int ss_handle = global_state_.spot_shadow_map[i].raw();
                 // spot shadow map handle 是 RT handle，需从 RT 获取 depth image view
                 VkImageView depth_view = (ss_handle != 0)
                     ? resource_mgr.GetRenderTargetDepthImageView(ss_handle) : VK_NULL_HANDLE;
@@ -981,11 +981,11 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         VkDescriptorImageInfo splat_infos[5] = {};
         VkWriteDescriptorSet splat_writes[5] = {};
         unsigned int splat_handles[5] = {
-            item.splat_weight_map_handle,
-            item.splat_layer_handles[0],
-            item.splat_layer_handles[1],
-            item.splat_layer_handles[2],
-            item.splat_layer_handles[3],
+            item.splat_weight_map_handle.raw(),
+            item.splat_layer_handles[0].raw(),
+            item.splat_layer_handles[1].raw(),
+            item.splat_layer_handles[2].raw(),
+            item.splat_layer_handles[3].raw(),
         };
         for (int i = 0; i < 5; ++i) {
             const uint32_t binding = static_cast<uint32_t>(11 + i);
@@ -1082,7 +1082,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             VkSampler lin_sampler = resource_mgr.default_sampler();
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_cubemap_handle_);
             for (int i = 0; i < 4; ++i) {
-                unsigned int ps_handle = global_state_.point_shadow_map[i];
+                unsigned int ps_handle = global_state_.point_shadow_map[i].raw();
                 const VulkanTexture* ps_tex = (ps_handle != 0)
                     ? resource_mgr.GetTexture(ps_handle) : nullptr;
                 if (ps_tex) {
@@ -1526,4 +1526,3 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
 
 } // namespace render
 } // namespace dse
-

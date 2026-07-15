@@ -25,8 +25,8 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     if (index_count == 0 || instance_models.empty() ||
         !tmpl.vertex_buffer || !tmpl.index_buffer) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded);
-    if (program == 0) return;  // 该后端未提供实例化高级 shading 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded);
+    if (!program) return;  // 该后端未提供实例化高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
@@ -125,7 +125,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     probe.probe_params = glm::vec4(gi.sh_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_light_probe_ubo_, 0, sizeof(probe), &probe);
 
-    const bool ddgi_on = gi.ddgi_enabled && gi.ddgi_irradiance_atlas != 0;
+    const bool ddgi_on = gi.ddgi_enabled && gi.ddgi_irradiance_atlas;
     FwdDDGIParamsUBO ddgi{};
     ddgi.origin = glm::vec4(gi.ddgi_grid_origin, ddgi_on ? 1.0f : 0.0f);
     ddgi.spacing = glm::vec4(gi.ddgi_grid_spacing, gi.ddgi_gi_intensity);
@@ -137,7 +137,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     FillSpotLightsUBO(spot_lights, slights);
     device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
 
-    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+    auto tex_or_white = [&](TextureHandle h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
         VertexAttr{0u, 3u, 0u},    // pos
@@ -149,13 +149,13 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
 
     PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
-    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());
-    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());
-    cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());
-    cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());
-    cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());
-    cmd.BindUniformBuffer(6u, per_ddgi_ubo_.raw());
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);
+    cmd.BindUniformBuffer(1u, per_scene_ubo_);
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_);
+    cmd.BindUniformBuffer(3u, per_point_lights_ubo_);
+    cmd.BindUniformBuffer(4u, per_terrain_ubo_);
+    cmd.BindUniformBuffer(5u, per_light_probe_ubo_);
+    cmd.BindUniformBuffer(6u, per_ddgi_ubo_);
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
@@ -178,12 +178,12 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
-    cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1
+    cmd.BindUniformBuffer(7u, per_spot_lights_ubo_);      // FwdSpotLight @ set7.b1
     // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
-    cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
+    cmd.BindStorageBuffer(0u, instance_ssbo_, 0u, static_cast<uint32_t>(inst_bytes));
     // 共享局部空间模板 VB/IB（caller 持有、常驻），按 index_count_override 子段对每实例绘制。
-    cmd.BindVertexBuffer(0u, tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
-    cmd.BindIndexBuffer(tmpl.index_buffer.raw(), tmpl.index_type);
+    cmd.BindVertexBuffer(0u, tmpl.vertex_buffer, static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(tmpl.index_buffer, tmpl.index_type);
     // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(index_count, static_cast<uint32_t>(instance_models.size()),
                              first_index, 0, 0u);
@@ -201,8 +201,8 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
                                  const DirectionalLight& light) {
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrInstanced);
-    if (program == 0) return;  // 该后端未提供实例化 forward PBR 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrInstanced);
+    if (!program) return;  // 该后端未提供实例化 forward PBR 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_ubo_) return;
@@ -259,7 +259,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
                           material.occlusion_tex ? 1.0f : 0.0f);
     device.UpdateGpuBuffer(per_material_ubo_, 0, sizeof(mat), &mat);
 
-    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+    auto tex_or_white = [&](TextureHandle h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
         VertexAttr{0u, 3u, 0u},    // pos
@@ -270,18 +270,18 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
-    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);     // PerFrame    @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_);     // PerScene    @ set1.b0
+    cmd.BindUniformBuffer(2u, per_material_ubo_);  // PerMaterial @ set2.b0
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
     // 每实例 model SSBO\@slot 0（三后端通用语义：GL binding0 / Vulkan 位置0 / DX11 t0 经 @SSBO_LOW_REGISTERS）。
-    cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindStorageBuffer(0u, instance_ssbo_, 0u, static_cast<uint32_t>(inst_bytes));
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
                              static_cast<uint32_t>(instance_models.size()),
@@ -299,8 +299,8 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
                                 const DirectionalLight& light) {
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrInstanced);
-    if (program == 0) return;  // 该后端未提供实例化 forward PBR 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrInstanced);
+    if (!program) return;  // 该后端未提供实例化 forward PBR 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_ubo_) return;
@@ -369,7 +369,7 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
                           material.occlusion_tex ? 1.0f : 0.0f);
     device.UpdateGpuBuffer(per_material_ubo_, 0, sizeof(mat), &mat);
 
-    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+    auto tex_or_white = [&](TextureHandle h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
         VertexAttr{0u, 3u, 0u},    // pos
@@ -380,20 +380,20 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
-    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);     // PerFrame    @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_);     // PerScene    @ set1.b0
+    cmd.BindUniformBuffer(2u, per_material_ubo_);  // PerMaterial @ set2.b0
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
     // 每实例 model SSBO\@slot 0（与 DrawInstanced 同语义）。
-    cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindStorageBuffer(0u, instance_ssbo_, 0u, static_cast<uint32_t>(inst_bytes));
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     // 间接绘制：绘制参数取自 indirect buffer 偏移 0 处的 DrawElementsIndirectCommand。
-    cmd.DrawIndexedIndirect(indirect_buffer_.raw(), 0u);
+    cmd.DrawIndexedIndirect(indirect_buffer_, 0u);
 }
 
 } // namespace render

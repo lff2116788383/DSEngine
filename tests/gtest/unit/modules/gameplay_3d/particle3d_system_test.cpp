@@ -78,8 +78,8 @@ TEST(Particle3DSystemComponentTest, ParameterDefaultValue_2) {
 TEST(Particle3DSystemComponentTest, GPUResourceDefaults) {
     ParticleSystem3DComponent ps;
     EXPECT_TRUE(ps.texture_path.empty());
-    EXPECT_EQ(ps.texture_handle, 0u);
-    EXPECT_EQ(ps.instance_vbo, 0u);
+    EXPECT_FALSE(ps.texture_handle);
+    EXPECT_FALSE(ps.instance_vbo);
     EXPECT_TRUE(ps.particles.empty());
     EXPECT_EQ(ps.active_particle_count, 0);
     EXPECT_FALSE(ps.initialized);

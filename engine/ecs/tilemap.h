@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
+#include "engine/render/rhi/rhi_handle.h"
 #include <entt/entt.hpp>
 
 class TextureAsset;
@@ -24,7 +25,7 @@ struct TilemapComponent {
     int height = 0;                                      ///< 地图的行数
     float tile_size = 1.0f;                              ///< 单个瓦片的物理/渲染尺寸
     std::shared_ptr<TextureAsset> tileset_texture;       ///< 引用的瓦片图集纹理
-    unsigned int tileset_handle = 0;                     ///< 图集的 RHI 渲染句柄
+    dse::render::TextureHandle tileset_handle;           ///< 图集的 RHI 渲染句柄
     int tileset_cols = 1;
     int tileset_rows = 1;
     int sorting_layer = 0;

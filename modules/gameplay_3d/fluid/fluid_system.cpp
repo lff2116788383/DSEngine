@@ -111,9 +111,9 @@ void FluidSystem::Shutdown(World& world) {
     auto view = world.registry().view<FluidEmitterComponent>();
     for (auto entity : view) {
         auto& fluid = view.get<FluidEmitterComponent>(entity);
-        if (fluid.instance_vbo != 0) {
-            rhi_->DeleteGpuBuffer(dse::render::BufferHandle{fluid.instance_vbo});
-            fluid.instance_vbo = 0;
+        if (fluid.instance_vbo) {
+            rhi_->DeleteGpuBuffer(fluid.instance_vbo);
+            fluid.instance_vbo = {};
         }
     }
 }
@@ -154,12 +154,12 @@ void FluidSystem::UploadGpuData(FluidEmitterComponent& fluid) {
     // 首次使用创建每实例 SSBO（std430：{ vec4 pos_size; vec4 color } = 8 floats/粒子），
     // 供 ParticleRenderer 经通用原语 BindStorageBuffer 绑定。
     const size_t max_particles = 16384;
-    if (fluid.instance_vbo == 0) {
+    if (!fluid.instance_vbo) {
         dse::render::GpuBufferDesc inst_desc;
         inst_desc.size = max_particles * 8 * sizeof(float);
         inst_desc.usage = dse::render::GpuBufferUsage::kStorage;
         inst_desc.is_dynamic = true;
-        fluid.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr).raw();
+        fluid.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr);
     }
 
     // std430 布局：pos_size = (pos.xyz, size)，color = (r,g,b,a)。

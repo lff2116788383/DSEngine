@@ -687,7 +687,7 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath) {
     source.GetWorld().registry().emplace<TransformComponent>(entity, transform);
 
     SpriteRendererComponent sprite;
-    sprite.texture_handle = 123456;
+    sprite.texture_handle = dse::render::TextureHandle::from_raw(123456);
     sprite.color = glm::vec4(0.2f, 0.4f, 0.6f, 0.8f);
     sprite.uv = glm::vec4(0.1f, 0.2f, 0.7f, 0.8f);
     sprite.material_instance_id = 445566;
@@ -704,7 +704,7 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath) {
     material.name = "regression_material";
     material.shader_variant = "SPRITE_TINT";
     material.blend_mode = SpriteBlendMode::Additive;
-    material.texture_handle = 345678;
+    material.texture_handle = dse::render::TextureHandle::from_raw(345678);
     material.tint = glm::vec4(0.6f, 0.7f, 0.8f, 0.9f);
     material.uv_rect = glm::vec4(0.05f, 0.1f, 0.9f, 0.95f);
     source.GetWorld().registry().emplace<MaterialInstanceComponent>(material_entity, material);
@@ -738,7 +738,7 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath) {
                         near_equal(loaded_transform.scale.y, transform.scale.y) &&
                         near_equal(loaded_transform.scale.z, transform.scale.z);
 
-    bool sprite_ok = loaded_sprite.texture_handle == 0u &&
+    bool sprite_ok = !loaded_sprite.texture_handle &&
                      near_equal(loaded_sprite.color.r, sprite.color.r) &&
                      near_equal(loaded_sprite.color.g, sprite.color.g) &&
                      near_equal(loaded_sprite.color.b, sprite.color.b) &&
@@ -768,7 +768,7 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath) {
                        loaded_material.name == material.name &&
                        loaded_material.shader_variant == material.shader_variant &&
                        loaded_material.blend_mode == material.blend_mode &&
-                       loaded_material.texture_handle == 0u &&
+                       !loaded_material.texture_handle &&
                        near_equal(loaded_material.tint.r, material.tint.r) &&
                        near_equal(loaded_material.tint.g, material.tint.g) &&
                        near_equal(loaded_material.tint.b, material.tint.b) &&
@@ -864,7 +864,7 @@ bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath) 
                         near_equal(transform.position.y, 2.0f) &&
                         near_equal(transform.scale.x, 1.2f) &&
                         near_equal(transform.scale.y, 1.3f);
-    bool sprite_ok = sprite.texture_handle == 0u &&
+    bool sprite_ok = !sprite.texture_handle &&
                      near_equal(sprite.color.r, 0.4f) &&
                      near_equal(sprite.color.g, 0.5f) &&
                      near_equal(sprite.color.b, 0.6f) &&
@@ -886,7 +886,7 @@ bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath) 
         materials_ok = material.material_id == 12345 &&
                        material.shader_variant == "SPRITE_TINT" &&
                        material.blend_mode == SpriteBlendMode::Multiply &&
-                       material.texture_handle == 0u &&
+                       !material.texture_handle &&
                        near_equal(material.tint.r, 0.4f) &&
                        near_equal(material.tint.g, 0.5f) &&
                        near_equal(material.tint.b, 0.6f) &&

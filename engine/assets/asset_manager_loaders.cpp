@@ -74,14 +74,14 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
             return nullptr;
         }
 
-        unsigned int handle = 0;
+        dse::render::TextureHandle handle;
         {
             std::lock_guard<std::mutex> lock(config_mutex_);
             if (rhi_device_) {
                 handle = rhi_device_->CreateCompressedTexture2D(fmt, mips, sampler.filter == TextureFilter::Linear);
             }
         }
-        if (handle == 0) {
+        if (!handle) {
             DEBUG_LOG_ERROR("Failed to create compressed texture via RHI: {}", path);
             return nullptr;
         }
@@ -110,14 +110,14 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
         return nullptr;
     }
 
-    unsigned int handle = 0;
+    dse::render::TextureHandle handle;
     {
         std::lock_guard<std::mutex> lock(config_mutex_);
         if (rhi_device_) {
             handle = rhi_device_->CreateTexture2D(width, height, data, sampler);
         }
     }
-    if (handle == 0) {
+    if (!handle) {
         stbi_image_free(data);
         DEBUG_LOG_ERROR("Failed to create texture via RHI: {}", path);
         return nullptr;
@@ -135,7 +135,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
     return tex;
 }
 
-std::string AssetManager::FindTexturePathByHandle(unsigned int handle) const {
+std::string AssetManager::FindTexturePathByHandle(dse::render::TextureHandle handle) const {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     for (const auto& [key, tex] : textures_) {
         if (tex && tex->GetHandle() == handle) {
@@ -229,7 +229,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapDirectory(const std::stri
         face_pixels[0], face_pixels[1], face_pixels[2], face_pixels[3], face_pixels[4], face_pixels[5]
     };
 
-    unsigned int handle = 0;
+    dse::render::TextureHandle handle;
     {
         std::lock_guard<std::mutex> lock(config_mutex_);
         if (rhi_device_) {
@@ -239,7 +239,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapDirectory(const std::stri
 
     cleanup_faces();
 
-    if (handle == 0) {
+    if (!handle) {
         DEBUG_LOG_ERROR("Failed to create cubemap via RHI: {}", directory_path);
         return nullptr;
     }
@@ -358,7 +358,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapPanorama(const std::strin
         faces[3].data(), faces[4].data(), faces[5].data()
     };
 
-    unsigned int handle = 0;
+    dse::render::TextureHandle handle;
     {
         std::lock_guard<std::mutex> lock(config_mutex_);
         if (rhi_device_) {
@@ -366,7 +366,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapPanorama(const std::strin
         }
     }
 
-    if (handle == 0) {
+    if (!handle) {
         DEBUG_LOG_ERROR("Failed to create cubemap from panorama via RHI: {}", image_path);
         return nullptr;
     }
@@ -465,7 +465,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapCross(const std::string& 
         faces[3].data(), faces[4].data(), faces[5].data()
     };
 
-    unsigned int handle = 0;
+    dse::render::TextureHandle handle;
     {
         std::lock_guard<std::mutex> lock(config_mutex_);
         if (rhi_device_) {
@@ -473,7 +473,7 @@ std::shared_ptr<CubemapAsset> AssetManager::LoadCubemapCross(const std::string& 
         }
     }
 
-    if (handle == 0) {
+    if (!handle) {
         DEBUG_LOG_ERROR("Failed to create cubemap from cross layout via RHI: {}", image_path);
         return nullptr;
     }
@@ -530,14 +530,14 @@ std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, c
         }
     }
 
-    unsigned int handle = 0;
+    dse::render::ShaderHandle handle;
     {
         std::lock_guard<std::mutex> lock(config_mutex_);
         if (rhi_device_) {
             handle = rhi_device_->CreateShaderProgram(vert_src, frag_src);
         }
     }
-    if (handle == 0) {
+    if (!handle) {
         DEBUG_LOG_ERROR("Failed to create shader via RHI: {}", name);
         return nullptr;
     }
@@ -551,12 +551,12 @@ std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, c
     return shader;
 }
 
-unsigned int AssetManager::GetShaderHandle(const std::string& name) const {
+dse::render::ShaderHandle AssetManager::GetShaderHandle(const std::string& name) const {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     auto it = shaders_.find(name);
-    if (it == shaders_.end()) return 0u;
+    if (it == shaders_.end()) return {};
     if (auto shared = it->second.lock()) return shared->GetHandle();
-    return 0u;
+    return {};
 }
 
 std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& path) {
@@ -753,7 +753,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
 
         std::lock_guard<std::mutex> callback_lock(callback_mutex_);
         pending_main_thread_callbacks_.push_back([this, callback, cache_key, resolved_path, width, height, channels, data, event_bus]() {
-            unsigned int handle = 0;
+            dse::render::TextureHandle handle;
             {
                 std::lock_guard<std::mutex> config_lock(config_mutex_);
                 if (rhi_device_) {
@@ -761,7 +761,7 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
                 }
             }
             stbi_image_free(data);
-            if (handle == 0) {
+            if (!handle) {
                 if (callback) {
                     callback(nullptr);
                 }
@@ -791,4 +791,3 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
         worker();
     }
 }
-

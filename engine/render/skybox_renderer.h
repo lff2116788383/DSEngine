@@ -28,7 +28,7 @@ class SkyboxRenderer {
 public:
     /// 记录一次天空盒绘制。view/projection 为该相机的视图/投影矩阵；
     /// 内部移除 view 的平移分量（仅保留旋转），与原 DrawSkybox 行为一致。
-    void Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int cubemap_handle,
+    void Draw(CommandBuffer& cmd, RhiDevice& device, TextureHandle cubemap_handle,
               const glm::mat4& view, const glm::mat4& projection);
 
 private:

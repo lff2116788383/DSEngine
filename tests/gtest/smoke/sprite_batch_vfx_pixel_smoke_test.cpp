@@ -37,7 +37,7 @@ std::vector<SpriteDrawItem> BuildItems() {
     // ① 渐变 quad（无圆角/无模糊）。
     {
         SpriteDrawItem it;
-        it.texture_handle = 0;  // 白纹理回退
+        it.texture_handle = {};  // 白纹理回退
         it.blend_mode = 0u;
         it.model = glm::translate(glm::mat4(1.0f), glm::vec3(64.0f, kCenterY, 0.0f)) *
                    glm::scale(glm::mat4(1.0f), glm::vec3(96.0f, 64.0f, 1.0f));
@@ -54,7 +54,7 @@ std::vector<SpriteDrawItem> BuildItems() {
     // ② 圆角 quad（渐变设为纯白以隔离圆角分支）。
     {
         SpriteDrawItem it;
-        it.texture_handle = 0;
+        it.texture_handle = {};
         it.blend_mode = 0u;
         it.model = glm::translate(glm::mat4(1.0f), glm::vec3(192.0f, kCenterY, 0.0f)) *
                    glm::scale(glm::mat4(1.0f), glm::vec3(96.0f, 64.0f, 1.0f));
@@ -77,8 +77,8 @@ RenderTargetReadback RenderVfx(RhiDevice& device) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
     const std::vector<SpriteDrawItem> items = BuildItems();
     const glm::mat4 view(1.0f);

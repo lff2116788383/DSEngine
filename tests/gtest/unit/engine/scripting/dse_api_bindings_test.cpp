@@ -747,7 +747,7 @@ TEST_F(DseApiBindingsTest, SnowCover_FullLifecycleEcs) {
 
     dse_snow_set_texture(id, "tex/snow.png", /*tiling=*/16.0f);
     EXPECT_EQ(sc.snow_texture_path, "tex/snow.png");
-    EXPECT_EQ(sc.snow_texture_handle, 0u);
+    EXPECT_FALSE(sc.snow_texture_handle);
     EXPECT_FLOAT_EQ(sc.snow_tiling, 16.0f);
     dse_snow_set_texture(id, nullptr, NAN);          // path=null + NaN → 全保持
     EXPECT_EQ(sc.snow_texture_path, "tex/snow.png");
@@ -873,7 +873,8 @@ TEST_F(DseApiBindingsTest, Anim2D_StatePlayEventEcs) {
     EXPECT_FLOAT_EQ(st.frame_rate, 12.0f);
     EXPECT_TRUE(st.loop);
     ASSERT_EQ(st.frame_handles.size(), 3u);
-    EXPECT_EQ(st.frame_handles[2], 12u);
+    EXPECT_EQ(st.frame_handles[2],
+              dse::render::TextureHandle::from_raw(12));
     ASSERT_EQ(st.events.size(), 1u);
     EXPECT_EQ(st.events[0].second, "footstep");
     EXPECT_EQ(anim.current_state, "walk");

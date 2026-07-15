@@ -384,7 +384,7 @@ void MeshRenderer::DrawBatch(CommandBuffer& cmd, RhiDevice& device,
 
         // ===== GBuffer 模式（RSM；非 depth-only）：蒙皮/实例在 CPU 展开为静态世界几何 =====
         if (gbuffer_mode) {
-            const unsigned int albedo_tex = item.texture_handle;
+            const TextureHandle albedo_tex = item.texture_handle;
             if (skinned_instanced) {
                 for (size_t j = 0; j < vis_models.size(); ++j) {
                     const int pidx = vis_palette_idx[j];
@@ -423,7 +423,7 @@ void MeshRenderer::DrawBatch(CommandBuffer& cmd, RhiDevice& device,
             // 后端未提供实例化 shaded 内建着色器时（如当前上下文缺少 SSBO 支持，
             // DrawInstancedShaded 会因 program==0 直接 return），逐实例回退到非实例
             // DrawShaded，避免整批合批 mesh 静默不渲染。
-            if (device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded) == 0) {
+            if (!device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded)) {
                 for (const auto& mdl : vis_models)
                     DrawShaded(cmd, device, mverts, indices16, mdl, view, proj, camera_pos,
                                material, light, point_lights, gi, spot_lights);
@@ -479,8 +479,8 @@ void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
                                const DirectionalLight& light) {
     if (vertices.empty() || indices.empty() || bone_matrices.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrSkinned);
-    if (program == 0) return;  // 该后端未提供蒙皮 forward PBR 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrSkinned);
+    if (!program) return;  // 该后端未提供蒙皮 forward PBR 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_ubo_) return;
@@ -545,7 +545,7 @@ void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
                           material.occlusion_tex ? 1.0f : 0.0f);
     device.UpdateGpuBuffer(per_material_ubo_, 0, sizeof(mat), &mat);
 
-    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+    auto tex_or_white = [&](TextureHandle h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
         VertexAttr{0u, 3u, 0u},    // pos
@@ -558,18 +558,18 @@ void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
-    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);     // PerFrame    @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_);     // PerScene    @ set1.b0
+    cmd.BindUniformBuffer(2u, per_material_ubo_);  // PerMaterial @ set2.b0
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
     // 骨骼矩阵 SSBO\@slot 0（三后端通用语义：GL binding0 / Vulkan 位置0 / DX11 t0 经 @SSBO_LOW_REGISTERS）。
-    cmd.BindStorageBuffer(0u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindStorageBuffer(0u, bone_ssbo_, 0u, static_cast<uint32_t>(bone_bytes));
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 
@@ -584,8 +584,8 @@ void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                         const DirectionalLight& light) {
     if (vertices.empty() || indices.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbr);
-    if (program == 0) return;  // 该后端未提供 forward PBR 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbr);
+    if (!program) return;  // 该后端未提供 forward PBR 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_ubo_) return;
@@ -642,7 +642,7 @@ void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(per_material_ubo_, 0, sizeof(mat), &mat);
 
     // --- 纹理（缺省回退到白纹理；flat unit 0..4） ---
-    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+    auto tex_or_white = [&](TextureHandle h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
         VertexAttr{0u, 3u, 0u},    // pos
@@ -653,16 +653,16 @@ void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
-    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);     // PerFrame    @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_);     // PerScene    @ set1.b0
+    cmd.BindUniformBuffer(2u, per_material_ubo_);  // PerMaterial @ set2.b0
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 
@@ -672,12 +672,12 @@ void MeshRenderer::DrawUnlit2D(CommandBuffer& cmd, RhiDevice& device,
                               const std::vector<uint16_t>& indices,
                               const glm::mat4& view,
                               const glm::mat4& proj,
-                              unsigned int texture,
+                              TextureHandle texture,
                               unsigned int blend_mode) {
     if (vertices.empty() || indices.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
-    if (program == 0) return;  // 该后端未提供 sprite2d 内建着色器
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
+    if (!program) return;  // 该后端未提供 sprite2d 内建着色器
 
     EnsureResources(device);          // 复用 per_frame_ubo_（176B，vp 在首）/ vbo_ / ibo_ / white_tex_
     EnsureUnlit2DResources(device);   // 懒建无光照 2D 混合 PSO
@@ -718,10 +718,10 @@ void MeshRenderer::DrawUnlit2D(CommandBuffer& cmd, RhiDevice& device,
     else if (blend_mode == 2) pso = pso_unlit2d_multiply_;
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
-    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());                       // PerFrame @ set0.b0（仅 vp）
+    cmd.BindUniformBuffer(0u, per_frame_ubo_);                             // PerFrame @ set0.b0（仅 vp）
     cmd.BindTexture(0u, texture ? texture : white_tex_, TextureDim::Tex2D); // u_texture @ slot 0
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuUnlit2DVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(GpuUnlit2DVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 

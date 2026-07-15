@@ -120,62 +120,62 @@ public:
     void InitSprite2DShader();
 
     /// sprite2d 着色器句柄（base ShaderManagerBase 未含）
-    unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
+    ShaderHandle sprite2d_shader_handle() const { return ShaderHandle{sprite2d_shader_handle_}; }
 
     /// 初始化 SpriteBatchRenderer SDF/VFX 着色器（sprite_fx.vert + sprite_fx_{sdf,vfx}.frag）
     void InitSpriteFxSdfShader();
     void InitSpriteFxVfxShader();
-    unsigned int sprite_fx_sdf_shader_handle() const { return sprite_fx_sdf_shader_handle_; }
-    unsigned int sprite_fx_vfx_shader_handle() const { return sprite_fx_vfx_shader_handle_; }
+    ShaderHandle sprite_fx_sdf_shader_handle() const { return ShaderHandle{sprite_fx_sdf_shader_handle_}; }
+    ShaderHandle sprite_fx_vfx_shader_handle() const { return ShaderHandle{sprite_fx_vfx_shader_handle_}; }
 
     /// 初始化静态 forward PBR 着色器（B2b-1；PerFrame\@0/PerScene\@1/PerMaterial\@2 + 5 纹理槽）
     void InitForwardPbrShader();
-    unsigned int forward_pbr_shader_handle() const { return forward_pbr_shader_handle_; }
+    ShaderHandle forward_pbr_shader_handle() const { return ShaderHandle{forward_pbr_shader_handle_}; }
 
     /// 初始化蒙皮 forward PBR 着色器（B2b-2；forward_pbr_skinned.vert + forward_pbr.frag + 骨骼 SSBO\@set3.b0）
     void InitForwardPbrSkinnedShader();
-    unsigned int forward_pbr_skinned_shader_handle() const { return forward_pbr_skinned_shader_handle_; }
+    ShaderHandle forward_pbr_skinned_shader_handle() const { return ShaderHandle{forward_pbr_skinned_shader_handle_}; }
 
     /// 初始化实例化 forward PBR 着色器（B2b-3；forward_pbr_instanced.vert + forward_pbr.frag + 每实例 model SSBO\@set3.b0）
     void InitForwardPbrInstancedShader();
-    unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
+    ShaderHandle forward_pbr_instanced_shader_handle() const { return ShaderHandle{forward_pbr_instanced_shader_handle_}; }
 
     /// 初始化仅深度 forward PBR 着色器（B2b-4；forward_pbr.vert + 空 shadow.frag；只写深度、不输出颜色）
     void InitForwardPbrDepthShader();
-    unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
+    ShaderHandle forward_pbr_depth_shader_handle() const { return ShaderHandle{forward_pbr_depth_shader_handle_}; }
     void InitForwardInstancedDepthShader();
-    unsigned int forward_instanced_depth_shader_handle() const { return forward_instanced_depth_shader_handle_; }
+    ShaderHandle forward_instanced_depth_shader_handle() const { return ShaderHandle{forward_instanced_depth_shader_handle_}; }
     /// 初始化 3D 粒子广告牌着色器（B3：particle_instanced.vert + particle.frag）
     void InitParticle3DShader();
-    unsigned int particle3d_shader_handle() const { return particle3d_shader_handle_; }
+    ShaderHandle particle3d_shader_handle() const { return ShaderHandle{particle3d_shader_handle_}; }
 
     /// 初始化毛发线带着色器（B4；hair.vert vertexless + hair.frag；position/tangent SSBO\@set7.b0/b1 + HairUniforms\@set0.b0）
     void InitHairStrandShader();
-    unsigned int hair_strand_shader_handle() const { return hair_strand_shader_handle_; }
+    ShaderHandle hair_strand_shader_handle() const { return ShaderHandle{hair_strand_shader_handle_}; }
 
     /// 初始化高级 shading forward 着色器（B2c-1；forward_pbr.vert + forward_shaded.frag + 扩展 PerMaterial\@2 + 5 纹理槽）
     void InitForwardShadedShader();
-    unsigned int forward_shaded_shader_handle() const { return forward_shaded_shader_handle_; }
+    ShaderHandle forward_shaded_shader_handle() const { return ShaderHandle{forward_shaded_shader_handle_}; }
 
     /// 初始化蒙皮 + 高级 shading 组合着色器（Final-Feat-2；forward_shaded_skinned.vert + forward_shaded.frag + 骨骼 SSBO\@set7.b0）
     void InitForwardSkinnedShadedShader();
-    unsigned int forward_skinned_shaded_shader_handle() const { return forward_skinned_shaded_shader_handle_; }
+    ShaderHandle forward_skinned_shaded_shader_handle() const { return ShaderHandle{forward_skinned_shaded_shader_handle_}; }
 
     /// 初始化实例化 + 高级 shading 组合着色器（Final-Feat-3；forward_shaded_instanced.vert + forward_shaded.frag + 每实例 model SSBO\@set7.b0）
     void InitForwardInstancedShadedShader();
-    unsigned int forward_instanced_shaded_shader_handle() const { return forward_instanced_shaded_shader_handle_; }
+    ShaderHandle forward_instanced_shaded_shader_handle() const { return ShaderHandle{forward_instanced_shaded_shader_handle_}; }
 
     /// 初始化蒙皮 + 硬件实例化 + 高级 shading 组合着色器（阶段4-M1；forward_shaded_skinned_instanced.vert + forward_shaded.frag + 实例 SSBO\@set8.b0 + 骨骼 SSBO\@set8.b1）
     void InitForwardSkinnedInstancedShadedShader();
-    unsigned int forward_skinned_instanced_shaded_shader_handle() const { return forward_skinned_instanced_shaded_shader_handle_; }
+    ShaderHandle forward_skinned_instanced_shaded_shader_handle() const { return ShaderHandle{forward_skinned_instanced_shaded_shader_handle_}; }
 
     /// 初始化 Morph target + 高级 shading 组合着色器（Final-Feat-5；forward_shaded_morph.vert + forward_shaded.frag + morph 增量 SSBO\@set7.b0 + 权重 UBO\@set7.b3）
     void InitForwardMorphShadedShader();
-    unsigned int forward_morph_shaded_shader_handle() const { return forward_morph_shaded_shader_handle_; }
+    ShaderHandle forward_morph_shaded_shader_handle() const { return ShaderHandle{forward_morph_shaded_shader_handle_}; }
 
     /// 初始化 Impostor LOD billboard 着色器（impostor.vert + impostor.frag；per-instance SSBO）
     void InitImpostorShader();
-    unsigned int impostor_shader_handle() const { return impostor_shader_handle_; }
+    ShaderHandle impostor_shader_handle() const { return ShaderHandle{impostor_shader_handle_}; }
 
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();

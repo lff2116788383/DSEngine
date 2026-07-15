@@ -124,8 +124,8 @@ void DuplicateSelectedEntity(EditorContext& context) {
         ps.particles.clear();
         ps.emission_accumulator = 0.0f;
         ps.active_particle_count = 0;
-        ps.instance_vbo = 0;
-        ps.texture_handle = 0;
+        ps.instance_vbo = {};
+        ps.texture_handle = {};
         ps.initialized = false;
     });
     copy_component(dse::PostProcessComponent{});

@@ -106,12 +106,12 @@ void FramePipeline::CaptureThinSnapshot() {
         for (auto e : view) {
             auto& sb = view.get<dse::SkyboxComponent>(e);
             if (!sb.enabled) continue;
-            if (sb.cubemap_handle == 0 && !sb.cubemap_path.empty()) {
+            if (!sb.cubemap_handle && !sb.cubemap_path.empty()) {
                 if (auto cubemap = runtime_context_.asset_manager->LoadCubemap(sb.cubemap_path)) {
                     sb.cubemap_handle = cubemap->GetHandle();
                 }
             }
-            if (sb.cubemap_handle != 0) {
+            if (sb.cubemap_handle) {
                 snap.skybox.valid = true;
                 snap.skybox.cubemap_handle = sb.cubemap_handle;
                 if (reg.all_of<TransformComponent>(e)) {
@@ -367,10 +367,10 @@ void FramePipeline::CaptureThinSnapshot() {
         for (auto e : view) {
             if (snap.decal_count >= dse::render::RenderThinSnapshot::kMaxDecals) break;
             auto& dc = view.get<dse::DecalComponent>(e);
-            if (!dc.enabled || dc.albedo_texture == 0) continue;
+            if (!dc.enabled || !dc.albedo_texture) continue;
             auto& tf = view.get<TransformComponent>(e);
             auto& d = snap.decals[snap.decal_count];
-            d.albedo_texture = dc.albedo_texture;
+            d.albedo_texture = dc.albedo_texture.raw();
             d.color = dc.color;
             d.angle_fade = dc.angle_fade;
             d.position = tf.position;

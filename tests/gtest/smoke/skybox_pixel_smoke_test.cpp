@@ -35,7 +35,7 @@ constexpr int kRtSize = 256;
 // 用 64² 实心面（非 1×1）：使各后端面内部恒为纯色，仅边缝 ~1 texel 受过滤约定影响；
 // 1×1 面在 Vulkan 软件渲染下整面被线性/seamless 采样成跨面渐变，无法跨后端一致。
 // 面序与 CreateTextureCube 约定一致（GL_TEXTURE_CUBE_MAP_POSITIVE_X + face）。
-unsigned int CreateDistinctCubemap(RhiDevice& device) {
+TextureHandle CreateDistinctCubemap(RhiDevice& device) {
     constexpr int kFace = 64;
     static const unsigned char colors[6][4] = {
         {255, 0, 0, 255},      // +X red
@@ -64,11 +64,11 @@ RenderTargetReadback RenderSkybox(RhiDevice& device) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;  // 天空盒走 LEQUAL 深度，需 depth buffer 清到 1.0
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    unsigned int cube = CreateDistinctCubemap(device);
-    if (cube == 0) { device.DeleteRenderTarget(rt); return {}; }
+    const auto cube = CreateDistinctCubemap(device);
+    if (!cube) { device.DeleteRenderTarget(rt); return {}; }
 
     // 相机看向 -Z（中心采 -Z 面），90° FOV 使相邻面在边缘进入。
     const glm::mat4 view = glm::mat4(1.0f);

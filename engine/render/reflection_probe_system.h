@@ -48,14 +48,14 @@ public:
                            RenderPassContext& ctx);
 
     /// 运行时查询：选择最近 probe 的预滤波 cubemap，返回 handle（0 = 无可用 probe，ECS-free）
-    unsigned int QueryNearestProbeCubemap(const RenderSceneView& scene_view,
-                                          const glm::vec3& position) const;
+    TextureHandle QueryNearestProbeCubemap(const RenderSceneView& scene_view,
+                                           const glm::vec3& position) const;
 
     /// 获取 BRDF LUT 纹理句柄
-    unsigned int brdf_lut_handle() const { return brdf_lut_handle_; }
+    TextureHandle brdf_lut_handle() const { return brdf_lut_handle_; }
 
     /// 获取 IBL 是否可用（至少有 1 个 baked probe + BRDF LUT）
-    bool IsIBLAvailable() const { return brdf_lut_handle_ != 0 && !baked_cubemaps_.empty(); }
+    bool IsIBLAvailable() const { return brdf_lut_handle_ && !baked_cubemaps_.empty(); }
 
     /// 运行时着色器以 textureLod(roughness * kMaxReflectionLod) 采样预滤波 cubemap，
     /// 须与 lighting_utils.glsl 中的 MAX_REFLECTION_LOD 保持一致。
@@ -80,18 +80,18 @@ private:
     void GenerateBRDFLUT(RhiDevice* rhi_device);
 
     /// 对 base 6 面执行 CPU 预滤波并上传为带 mip 链的 cubemap，返回纹理 handle（0=失败）
-    unsigned int PrefilterAndUploadCubemap(RhiDevice* rhi_device,
-                                           const unsigned char* const faces[6], int res);
+    TextureHandle PrefilterAndUploadCubemap(RhiDevice* rhi_device,
+                                            const unsigned char* const faces[6], int res);
 
-    unsigned int brdf_lut_handle_ = 0;
-    unsigned int bake_rt_ = 0;             ///< 单面渲染 RT
+    TextureHandle brdf_lut_handle_;
+    RenderTargetHandle bake_rt_;             ///< 单面渲染 RT
     int bake_resolution_ = 128;
     SkyboxRenderer skybox_renderer_;       ///< A1：天空盒用通用原语绘制（取代 DrawSkybox）
 
     struct ProbeEntry {
         glm::vec3 position;
         float influence_radius;
-        unsigned int prefiltered_cubemap;  ///< GPU 预滤波 cubemap 纹理
+        TextureHandle prefiltered_cubemap;  ///< GPU 预滤波 cubemap 纹理
     };
     std::vector<ProbeEntry> baked_cubemaps_;
     bool initialized_ = false;

@@ -73,11 +73,11 @@ void MakeCenteredQuad(std::vector<MeshVertex>& verts, std::vector<uint16_t>& ind
     rt_desc.height = kRtSize;
     rt_desc.has_color = false;  // 仅深度 pass：无颜色附件
     rt_desc.has_depth = true;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
     // depth-only 内建程序不可用（该后端未提供）→ 返回空，由调用方跳过。
-    if (device.GetBuiltinProgram(BuiltinProgram::ForwardPbrDepth) == 0) {
+    if (!device.GetBuiltinProgram(BuiltinProgram::ForwardPbrDepth)) {
         device.DeleteRenderTarget(rt);
         return {};
     }

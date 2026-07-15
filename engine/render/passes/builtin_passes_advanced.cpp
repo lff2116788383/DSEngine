@@ -48,10 +48,10 @@ void VolumetricFogPass::Setup(RenderGraph& graph) {
 void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& pp_snap = snap.post_process;
-    if (!pp_snap.valid || !pp_snap.fog_enabled || ctx_.render_targets.fog == 0) return;
+    if (!pp_snap.valid || !pp_snap.fog_enabled || !ctx_.render_targets.fog) return;
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
         static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
@@ -72,7 +72,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     }
     const auto* pp = &pp_snap;
 
-    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     // params 布局（30 个 float，三后端通用）：
     // [0]      depth_tex handle
@@ -113,8 +113,8 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // 将雾效结果（已包含 scene 颜色）覆写回 scene RT
-    const unsigned int fog_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fog);
-    if (fog_tex != 0) {
+    const TextureHandle fog_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fog);
+    if (fog_tex) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
         post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", fog_tex});
@@ -141,10 +141,10 @@ void VolumetricCloudPass::Setup(RenderGraph& graph) {
 void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& vc = snap.volumetric_cloud;
-    if (!vc.valid || ctx_.render_targets.cloud == 0) return;
+    if (!vc.valid || !ctx_.render_targets.cloud) return;
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
         static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
@@ -171,12 +171,12 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
     float cloud_bottom_rel = vc.cloud_bottom - ctx_.camera_offset.y;
     float cloud_top_rel    = vc.cloud_top    - ctx_.camera_offset.y;
 
-    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     // half_resolution: render to dedicated cloud RT then upscale-copy back
     // full resolution: render directly into scene RT (in-place, no copy needed)
-    const bool use_half_res = vc.half_resolution && (ctx_.render_targets.cloud != 0);
-    const unsigned int target_rt = use_half_res ? ctx_.render_targets.cloud : ctx_.render_targets.scene;
+    const bool use_half_res = vc.half_resolution && (ctx_.render_targets.cloud);
+    const RenderTargetHandle target_rt = use_half_res ? ctx_.render_targets.cloud : ctx_.render_targets.scene;
 
     // params 布局（30 个 float，三后端通用）：
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
@@ -199,8 +199,8 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
 
     // Half-res: upscale-copy cloud result back to scene RT
     if (use_half_res) {
-        const unsigned int cloud_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.cloud);
-        if (cloud_tex != 0) {
+        const TextureHandle cloud_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.cloud);
+        if (cloud_tex) {
             cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
             post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", cloud_tex});
@@ -228,7 +228,7 @@ void WBOITPass::Setup(RenderGraph& graph) {
 }
 
 void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
-    if (ctx_.render_targets.wboit_accum == 0 || ctx_.render_targets.wboit_reveal == 0) return;
+    if (!ctx_.render_targets.wboit_accum || !ctx_.render_targets.wboit_reveal) return;
 
     const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
 
@@ -257,9 +257,9 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // --- Pass 3: Composite WBOIT onto scene RT ---
-    const unsigned int accum_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.wboit_accum);
-    const unsigned int reveal_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.wboit_reveal);
-    if (accum_tex == 0 || reveal_tex == 0) return;
+    const TextureHandle accum_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.wboit_accum);
+    const TextureHandle reveal_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.wboit_reveal);
+    if (!accum_tex || !reveal_tex) return;
 
     cmd_buffer.BindPipeline(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
@@ -287,9 +287,9 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     if (snap.water_count == 0) return;
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
-    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
+    const TextureHandle scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     // Camera-Relative: cam_pos 在着色器中应为 vec3(0)（相机在原点）
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
@@ -379,10 +379,10 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
     }
     const glm::mat4 inv_vp = glm::inverse(proj_mat * view_mat);
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
-    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     cmd_buffer.BindPipeline(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
@@ -411,7 +411,7 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
 
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
             PostProcessRequest{"decal", scene_tex, params, true}
-            .Tex(2, depth_tex).Tex(3, dc.albedo_texture));
+            .Tex(2, depth_tex).Tex(3, TextureHandle::from_raw(dc.albedo_texture)));
     }
     cmd_buffer.EndRenderPass();
 }
@@ -442,14 +442,14 @@ void HiZBuildPass::Setup(RenderGraph& graph) {
 
 void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     EnsureShaders();
-    if (hiz_copy_shader_ == 0 || hiz_downsample_shader_ == 0) return;
-    if (ctx_.render_targets.hiz_texture == 0 || ctx_.render_targets.prez == 0) return;
+    if (!hiz_copy_shader_ || !hiz_downsample_shader_) return;
+    if (!ctx_.render_targets.hiz_texture || !ctx_.render_targets.prez) return;
 
     auto* rhi = ctx_.rhi_device;
     if (!rhi) return;
 
-    const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
-    if (hiz_gpu_tex == 0) return;
+    const TextureHandle hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+    if (!hiz_gpu_tex) return;
 
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
     if (mip_count <= 0) return;
@@ -459,8 +459,8 @@ void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
     // Step 1: Copy PreZ depth â†’ Hi-Z mip 0
     {
-        unsigned int depth_tex = rhi->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-        if (depth_tex == 0) return;
+        TextureHandle depth_tex = rhi->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+        if (!depth_tex) return;
 
         rhi->SetComputeTextureSampler(0, depth_tex);
         rhi->SetComputeTextureImageMip(0, hiz_gpu_tex, 0, false, true);
@@ -519,16 +519,16 @@ void HiZCullPass::Setup(RenderGraph& graph) {
 
 void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     EnsureShader();
-    if (hiz_cull_shader_ == 0) return;
-    if (ctx_.render_targets.hiz_texture == 0) return;
+    if (!hiz_cull_shader_) return;
+    if (!ctx_.render_targets.hiz_texture) return;
     if (!ctx_.hiz_aabb_ssbo || !ctx_.hiz_visibility_ssbo) return;
     if (ctx_.hiz_object_count <= 0) return;
 
     auto* rhi = ctx_.rhi_device;
     if (!rhi) return;
 
-    const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
-    if (hiz_gpu_tex == 0) return;
+    const TextureHandle hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+    if (!hiz_gpu_tex) return;
 
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
@@ -766,8 +766,8 @@ void GPUCullPass::Setup(RenderGraph& graph) {
 
 void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     if (!ctx_.gpu_driven_active_this_frame) return;
-    if (ctx_.gpu_cull_shader == 0) return;
-    if (ctx_.render_targets.hiz_texture == 0) return;
+    if (!ctx_.gpu_cull_shader) return;
+    if (!ctx_.render_targets.hiz_texture) return;
     if (!ctx_.gpu_draw_cmd_ssbo) return;
     if (!ctx_.gpu_aabb_ssbo) return;
     if (ctx_.gpu_indirect_draw_count <= 0) return;
@@ -775,8 +775,8 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     auto* rhi = ctx_.rhi_device;
     if (!rhi) return;
 
-    const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
-    if (hiz_gpu_tex == 0) return;
+    const TextureHandle hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+    if (!hiz_gpu_tex) return;
 
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
@@ -823,7 +823,7 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     }
 
     // Set uniforms
-    unsigned int shader = ctx_.gpu_cull_shader;
+    ShaderHandle shader = ctx_.gpu_cull_shader;
     rhi->SetComputeUniformMat4(shader, "u_view_projection", &view_projection[0][0]);
     rhi->SetComputeUniformVec2f(shader, "u_screen_size",
                                 static_cast<float>(Screen::width()),
@@ -859,8 +859,8 @@ void RSMRenderPass::Setup(RenderGraph& graph) {
 }
 
 void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
-    if (!ctx_.ddgi_active || ctx_.rsm_targets.position == 0) return;
-    if (ctx_.rsm_render_target == 0) return;
+    if (!ctx_.ddgi_active || !ctx_.rsm_targets.position) return;
+    if (!ctx_.rsm_render_target) return;
 
     const auto& snap = *ctx_.snapshot;
     if (!snap.directional_light.valid) return;
@@ -959,11 +959,11 @@ void SSSBlurPass::Setup(RenderGraph& graph) {
 
 void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
     // SSS blur: two-pass separable Gaussian on scene color, masked by alpha (SSS strength)
-    if (ctx_.render_targets.sss_temp == 0 || ctx_.render_targets.scene == 0) return;
+    if (!ctx_.render_targets.sss_temp || !ctx_.render_targets.scene) return;
 
-    const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.scene);
-    if (scene_color_tex == 0 || depth_tex == 0) return;
+    const TextureHandle scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.scene);
+    if (!scene_color_tex || !depth_tex) return;
 
     const float sss_width = 11.0f;
     const float depth_falloff = 500.0f;
@@ -986,7 +986,7 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // Pass 2: Vertical blur â†’ back to scene RT
-    const unsigned int sss_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.sss_temp);
+    const TextureHandle sss_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.sss_temp);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
     {
         auto req = PostProcessRequest("sss_blur", sss_temp_tex, {
@@ -1019,9 +1019,9 @@ void WeatherPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     if (!snap.weather.valid || snap.weather.type == 0 || snap.weather.intensity < 0.001f) return;
 
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
-    const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
+    const TextureHandle scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
         static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
@@ -1073,4 +1073,3 @@ void WeatherPass::Execute(CommandBuffer& cmd_buffer) {
 
 } // namespace render
 } // namespace dse
-

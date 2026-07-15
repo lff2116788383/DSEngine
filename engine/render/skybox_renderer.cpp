@@ -13,13 +13,13 @@
 namespace dse {
 namespace render {
 
-void SkyboxRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int cubemap_handle,
+void SkyboxRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, TextureHandle cubemap_handle,
                           const glm::mat4& view, const glm::mat4& projection) {
-    if (cubemap_handle == 0) return;
+    if (!cubemap_handle) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Skybox);
-    unsigned int vbo = device.GetSkyboxCubeVertexBuffer();
-    if (program == 0 || vbo == 0) return;
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::Skybox);
+    BufferHandle vbo = device.GetSkyboxCubeVertexBuffer();
+    if (!program || !vbo) return;
 
     // 天空盒专用管线状态：深度 LEQUAL、不写深度、不剔除、不混合。
     if (!pso_init_) {

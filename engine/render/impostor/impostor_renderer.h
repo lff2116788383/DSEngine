@@ -43,8 +43,8 @@ struct ImpostorDrawInstance {
 
 /// 一批同 atlas 的 impostor 绘制项
 struct ImpostorBatchItem {
-    unsigned int atlas_texture = 0;         ///< albedo atlas GPU 句柄
-    unsigned int normal_atlas_texture = 0;  ///< normal atlas GPU 句柄（0=不使用法线）
+    TextureHandle atlas_texture;         ///< albedo atlas GPU 句柄
+    TextureHandle normal_atlas_texture;  ///< normal atlas GPU 句柄（0=不使用法线）
     float normal_strength = 1.0f;
     float alpha_cutoff = 0.5f;
     std::vector<ImpostorDrawInstance> instances;
@@ -75,7 +75,7 @@ private:
 
     bool init_ = false;
     PipelineHandle pso_;
-    unsigned int white_tex_ = 0;
+    TextureHandle white_tex_;
     BufferHandle quad_vbo_;
     BufferHandle quad_ibo_;
     BufferHandle per_frame_ubo_;

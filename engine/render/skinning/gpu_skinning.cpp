@@ -121,7 +121,7 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
         kSkinningComputeWGSL        // WebGPU: 手译 WGSL 源（命名 uniform group1/b8）
     );
 
-    if (skinning_shader_ == 0) {
+    if (!skinning_shader_) {
         DEBUG_LOG_WARN("[GPUSkinning] Failed to create compute shader, CPU fallback active");
         available_ = false;
         return false;
@@ -178,7 +178,7 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
 
     available_ = true;
     DEBUG_LOG_INFO("[GPUSkinning] Initialized (shader={}, initial_capacity={}v/{}b)",
-                   skinning_shader_, kInitialVertexCapacity, kInitialBoneCapacity);
+                   skinning_shader_.raw(), kInitialVertexCapacity, kInitialBoneCapacity);
     return true;
 }
 
@@ -187,7 +187,7 @@ void GPUSkinningSystem::Shutdown() {
 
     if (skinning_shader_) {
         rhi_->DeleteComputeShader(skinning_shader_);
-        skinning_shader_ = 0;
+        skinning_shader_ = {};
     }
     if (src_buffer_) { rhi_->DeleteGpuBuffer(src_buffer_); src_buffer_ = {}; }
     if (dst_buffer_[0]) { rhi_->DeleteGpuBuffer(dst_buffer_[0]); dst_buffer_[0] = {}; }

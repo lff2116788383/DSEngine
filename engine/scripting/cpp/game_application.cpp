@@ -113,7 +113,7 @@ Entity GameApplication::CreateMesh(const glm::vec3& position,
 
 unsigned int GameApplication::LoadTexture(const std::string& path) {
     auto tex = asset_manager_->LoadTexture(path);
-    return tex ? tex->GetHandle() : 0;
+    return tex ? tex->GetHandle().raw() : 0;
 }
 
 } // namespace dse::runtime

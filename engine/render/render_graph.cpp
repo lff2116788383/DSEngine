@@ -53,7 +53,7 @@ RenderResourceHandle RenderGraph::DeclareTransient(const std::string& name, cons
     return handle;
 }
 
-RenderResourceHandle RenderGraph::ImportResource(const std::string& name, unsigned int rt_handle) {
+RenderResourceHandle RenderGraph::ImportResource(const std::string& name, RenderTargetHandle rt_handle) {
     auto it = resource_by_name_.find(name);
     if (it != resource_by_name_.end()) {
         // Update the handle if re-importing
@@ -79,14 +79,14 @@ RenderResourceHandle RenderGraph::ImportResource(const std::string& name, unsign
     return handle;
 }
 
-unsigned int RenderGraph::GetResourceRT(RenderResourceHandle resource) const {
-    if (!resource.is_valid()) return 0;
+RenderTargetHandle RenderGraph::GetResourceRT(RenderResourceHandle resource) const {
+    if (!resource.is_valid()) return {};
     for (const auto& res : resources_) {
         if (res.id == resource.id) {
             return res.rt_handle;
         }
     }
-    return 0;
+    return {};
 }
 
 void RenderGraph::SetRhiDevice(RhiDevice* device) {
@@ -397,7 +397,7 @@ bool RenderGraph::Compile() {
 
         // 空闲池：{rt_handle, desc, available_after_order_idx}
         struct FreeSlot {
-            unsigned int rt_handle;
+            RenderTargetHandle rt_handle;
             RenderTargetDesc desc;
             int free_after;
         };
@@ -431,7 +431,7 @@ bool RenderGraph::Compile() {
     // 清空所有 Pass 的编译输出
     for (auto& p : passes_) {
         p.pre_barriers.clear();
-        p.auto_bind_rt = 0;
+        p.auto_bind_rt = {};
     }
     // 沿编译顺序遍历，计算转换
     for (uint32_t pass_id : compiled_order_) {
@@ -458,7 +458,7 @@ bool RenderGraph::Compile() {
             }
 
             // 自动 RT 绑定：写入状态为 RenderTarget 且有物理 RT
-            if (required == ResourceState::RenderTarget && res->rt_handle != 0) {
+            if (required == ResourceState::RenderTarget && res->rt_handle) {
                 p.auto_bind_rt = res->rt_handle;
             }
 
@@ -527,7 +527,7 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
         }
 
         // 自动 RT 绑定
-        if (p.auto_bind_rt != 0) {
+        if (p.auto_bind_rt) {
             RenderPassDesc rpd{};
             rpd.render_target = p.auto_bind_rt;
             cmd_buffer.BeginRenderPass(rpd);
@@ -536,7 +536,7 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
         p.execute(cmd_buffer);
 
         // 自动 RT 解绑
-        if (p.auto_bind_rt != 0) {
+        if (p.auto_bind_rt) {
             cmd_buffer.EndRenderPass();
         }
 
@@ -581,7 +581,7 @@ void RenderGraph::ExecuteWithCallback(CommandBuffer& cmd_buffer,
         }
 
         // 自动 RT 绑定
-        if (p.auto_bind_rt != 0) {
+        if (p.auto_bind_rt) {
             RenderPassDesc rpd{};
             rpd.render_target = p.auto_bind_rt;
             cmd_buffer.BeginRenderPass(rpd);
@@ -590,7 +590,7 @@ void RenderGraph::ExecuteWithCallback(CommandBuffer& cmd_buffer,
         p.execute(cmd_buffer);
 
         // 自动 RT 解绑
-        if (p.auto_bind_rt != 0) {
+        if (p.auto_bind_rt) {
             cmd_buffer.EndRenderPass();
         }
 
@@ -619,9 +619,9 @@ void RenderGraph::Reset() {
     // 释放 Transient 类型资源的物理 RT
     if (rhi_device_) {
         // 收集去重的 transient RT handle（alias 复用时多个资源共享同一 handle）
-        std::unordered_set<unsigned int> freed;
+        std::unordered_set<RenderTargetHandle> freed;
         for (const auto& res : resources_) {
-            if (res.type == ResourceType::Transient && res.rt_handle != 0) {
+            if (res.type == ResourceType::Transient && res.rt_handle) {
                 if (freed.insert(res.rt_handle).second) {
                     rhi_device_->DeleteRenderTarget(res.rt_handle);
                 }

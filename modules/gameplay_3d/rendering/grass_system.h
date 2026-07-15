@@ -121,7 +121,7 @@ private:
     void ShutdownComputeResources();
     void EnsureSSBOCapacity(size_t required_count);
 
-    unsigned int wind_compute_shader_ = 0;
+    dse::render::ShaderHandle wind_compute_shader_;
     dse::render::BufferHandle input_ssbo_;
     dse::render::BufferHandle output_ssbo_;
     size_t ssbo_capacity_ = 0;

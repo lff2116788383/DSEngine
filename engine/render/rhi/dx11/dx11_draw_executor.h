@@ -254,7 +254,7 @@ private:
     bool is_depth_only_pass_ = false;
 
     // 当前渲染目标句柄（MSAA resolve 使用）
-    unsigned int current_rt_handle_ = 0;
+    RenderTargetHandle current_rt_handle_;
 
     // 阴影采样器（用于 PBR pass 采样 shadow map）
     ComPtr<ID3D11SamplerState> shadow_sampler_;

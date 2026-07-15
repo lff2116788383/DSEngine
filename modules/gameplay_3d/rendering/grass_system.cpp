@@ -199,9 +199,10 @@ void GrassSystem::InitComputeShader() {
         kgrass_wind_comp_glsl450,
         kgrass_wind_comp_hlsl,
         2, 0, 0, 96, kGrassWindComputeSourceWGSL);
-    gpu_compute_enabled_ = (wind_compute_shader_ != 0);
+    gpu_compute_enabled_ = static_cast<bool>(wind_compute_shader_);
     if (gpu_compute_enabled_) {
-        DEBUG_LOG_INFO("[GrassSystem] GPU wind compute shader created: {}", wind_compute_shader_);
+        DEBUG_LOG_INFO("[GrassSystem] GPU wind compute shader created: {}",
+                       wind_compute_shader_.raw());
     } else {
         DEBUG_LOG_INFO("[GrassSystem] GPU compute not available, using CPU fallback");
     }
@@ -209,9 +210,9 @@ void GrassSystem::InitComputeShader() {
 
 void GrassSystem::ShutdownComputeResources() {
     if (!rhi_) return;
-    if (wind_compute_shader_ != 0) {
+    if (wind_compute_shader_) {
         rhi_->DeleteComputeShader(wind_compute_shader_);
-        wind_compute_shader_ = 0;
+        wind_compute_shader_ = {};
     }
     if (input_ssbo_) {
         rhi_->DeleteGpuBuffer(input_ssbo_);

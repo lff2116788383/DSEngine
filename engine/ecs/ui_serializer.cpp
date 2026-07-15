@@ -43,7 +43,10 @@ std::string ReadString(const rapidjson::Value& obj, const char* key, const std::
 
 void ParseUIRenderer(entt::registry& reg, entt::entity e, const rapidjson::Value& c) {
     auto& ui = reg.emplace_or_replace<UIRendererComponent>(e);
-    if (c.HasMember("texture_handle")) ui.texture_handle = static_cast<unsigned int>(c["texture_handle"].GetUint());
+    if (c.HasMember("texture_handle")) {
+        ui.texture_handle =
+            dse::render::TextureHandle::from_raw(c["texture_handle"].GetUint());
+    }
     if (c.HasMember("color")) ui.color = ReadVec4(c["color"]);
     if (c.HasMember("uv")) ui.uv = ReadVec4(c["uv"], glm::vec4(0, 0, 1, 1));
     ui.order = ReadInt(c, "order", 0);
@@ -82,7 +85,10 @@ void ParseLabel(entt::registry& reg, entt::entity e, const rapidjson::Value& c) 
     label.text_align = ReadInt(c, "text_align", 0);
     label.overflow_mode = ReadInt(c, "overflow_mode", 0);
     label.max_lines = ReadInt(c, "max_lines", 0);
-    if (c.HasMember("font_texture_handle")) label.font_texture_handle = static_cast<unsigned int>(c["font_texture_handle"].GetUint());
+    if (c.HasMember("font_texture_handle")) {
+        label.font_texture_handle =
+            dse::render::TextureHandle::from_raw(c["font_texture_handle"].GetUint());
+    }
     label.dirty = true;
 }
 

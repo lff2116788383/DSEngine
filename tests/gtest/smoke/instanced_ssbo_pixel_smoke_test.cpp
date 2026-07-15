@@ -121,11 +121,11 @@ RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    unsigned int program = device.CreateShaderProgram(vert_src, frag_src);
-    if (program == 0) {
+    const auto program = device.CreateShaderProgram(vert_src, frag_src);
+    if (!program) {
         device.DeleteRenderTarget(rt);
         return {};
     }
@@ -173,9 +173,9 @@ RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
         cmd->BindPipeline(device.GetGraphicsPipeline(pso, program));
-        cmd->BindVertexBuffer(0u, vbo.raw(), sizeof(float) * 2, {});  // 无属性，仅占位
-        cmd->BindIndexBuffer(ibo.raw(), IndexType::UInt16);
-        cmd->BindStorageBuffer(0, ssbo.raw(), 0, 0);              // P0b：图形阶段 SSBO → slot 0
+        cmd->BindVertexBuffer(0u, vbo, sizeof(float) * 2, {});  // 无属性，仅占位
+        cmd->BindIndexBuffer(ibo, IndexType::UInt16);
+        cmd->BindStorageBuffer(0, ssbo, 0, 0);              // P0b：图形阶段 SSBO → slot 0
         cmd->DrawIndexedInstanced(6, kInstanceCount, 0, 0, 0);   // P0a：实例化绘制
         cmd->EndRenderPass();
         device.Submit(cmd);

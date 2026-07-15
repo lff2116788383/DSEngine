@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include "engine/render/rhi/rhi_handle.h"
 
 namespace dse {
 
@@ -41,10 +42,10 @@ struct ParticleSystem3DComponent {
     
     // Rendering
     std::string texture_path;
-    unsigned int texture_handle = 0; // Cached from AssetManager
+    dse::render::TextureHandle texture_handle; // Cached from AssetManager
     
     // GPU Resources
-    unsigned int instance_vbo = 0;
+    dse::render::BufferHandle instance_vbo;
     std::vector<GPUParticleData> particles; // Kept on CPU if we use CPU simulation, or just as initial buffer for GPU
     int active_particle_count = 0;
     

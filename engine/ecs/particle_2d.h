@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
+#include "engine/render/rhi/rhi_handle.h"
 
 class TextureAsset;
 
@@ -121,7 +122,7 @@ enum class ParticleCollisionMode {
 struct ParticleEmitterComponent {
     std::vector<Particle2D> particles;                   ///< 活跃的粒子池
     std::shared_ptr<TextureAsset> texture;               ///< 粒子的贴图资产
-    unsigned int texture_handle = 0;                     ///< 粒子的渲染纹理句柄
+    dse::render::TextureHandle texture_handle;           ///< 粒子的渲染纹理句柄
     int max_particles = 100;                             ///< 允许的最大粒子数量
     float emit_rate = 10.0f;                             ///< 每秒发射的粒子数
     float emit_rate_scale = 1.0f;                        ///< 发射率缩放倍数

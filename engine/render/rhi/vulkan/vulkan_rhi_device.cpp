@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file vulkan_rhi_device.cpp
  * @brief VulkanRhiDevice 实现 — Vulkan 后端的 RhiDevice 接口实现
  *
@@ -66,14 +66,14 @@ void VulkanCommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_
     if (!desc) return;
     // 设为活动 PSO（绘制时与 program 一起惰性烘进 VkPipeline）；program!=0 时绑 program（PSO-only 管线 program==0）。
     device_->state_mgr().set_active_pipeline_state(desc->pso_state.raw());
-    if (desc->program != 0) device_->draw_executor().PrimBindShaderProgram(desc->program);
+    if (desc->program) device_->draw_executor().PrimBindShaderProgram(desc->program.raw());
 }
 
 
-void VulkanCommandBuffer::BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+void VulkanCommandBuffer::BindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride,
                                            const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
     if (!device_) return;
-    const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle);
+    const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle.raw());
     VkBuffer vk_buf = buf ? buf->buffer : VK_NULL_HANDLE;
     device_->draw_executor().PrimBindVertexBuffer(slot, vk_buf, stride, attrs, rate);
 }
@@ -92,28 +92,28 @@ void VulkanCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
 
 // --- 通用绘制原语 (B0) ---
 
-void VulkanCommandBuffer::BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+void VulkanCommandBuffer::BindIndexBuffer(BufferHandle buffer_handle, IndexType type) {
     if (!device_) return;
-    const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle);
+    const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle.raw());
     VkBuffer vk_buf = buf ? buf->buffer : VK_NULL_HANDLE;
     device_->draw_executor().PrimBindIndexBuffer(vk_buf, type);
 }
 
-void VulkanCommandBuffer::BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+void VulkanCommandBuffer::BindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) {
     if (!device_) return;
-    device_->draw_executor().PrimBindTexture(slot, texture_handle, dim);
+    device_->draw_executor().PrimBindTexture(slot, texture_handle.raw(), dim);
 }
 
-void VulkanCommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+void VulkanCommandBuffer::BindUniformBuffer(uint32_t slot, BufferHandle buffer_handle,
                                             uint32_t offset, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle, offset, size);
+    device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle.raw(), offset, size);
 }
 
-void VulkanCommandBuffer::BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+void VulkanCommandBuffer::BindStorageBuffer(uint32_t slot, BufferHandle buffer_handle,
                                             uint32_t offset, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle, offset, size);
+    device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle.raw(), offset, size);
 }
 
 void VulkanCommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
@@ -132,17 +132,17 @@ void VulkanCommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t in
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
-void VulkanCommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+void VulkanCommandBuffer::DrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().PrimDrawIndexedIndirect(
-        vk_command_buffer_, indirect_buffer, byte_offset,
+        vk_command_buffer_, indirect_buffer.raw(), byte_offset,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
-void VulkanCommandBuffer::BlitToScreen(unsigned int source_rt) {
+void VulkanCommandBuffer::BlitToScreen(RenderTargetHandle source_rt) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().BlitRenderTargetToSwapchain(
-        vk_command_buffer_, source_rt, device_->resource_mgr());
+        vk_command_buffer_, source_rt.raw(), device_->resource_mgr());
 }
 
 void VulkanCommandBuffer::SetViewport(int x, int y, int width, int height) {
@@ -194,7 +194,7 @@ struct VulkanRhiDevice::HiZImpl {
         int mip_count = 0;
         unsigned int texture_handle = 0;
     };
-    std::unordered_map<unsigned int, HiZTextureInfo> textures;
+    std::unordered_map<TextureHandle, HiZTextureInfo> textures;
     unsigned int next_handle = 450000;
 };
 
@@ -390,51 +390,51 @@ uint32_t VulkanRhiDevice::CurrentFrameSlot() const {
     return context_.current_frame();
 }
 
-unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
-    return resource_mgr_.CreateRenderTarget(desc.width, desc.height, desc.has_color, desc.has_depth,
+RenderTargetHandle VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
+    return RenderTargetHandle{resource_mgr_.CreateRenderTarget(desc.width, desc.height, desc.has_color, desc.has_depth,
                                              desc.generate_mipmaps, desc.cube_map,
                                              desc.msaa_samples, desc.allow_uav,
-                                             desc.color_attachment_count);
+                                             desc.color_attachment_count)};
 }
 
-void VulkanRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
+void VulkanRhiDevice::DeleteRenderTarget(RenderTargetHandle render_target_handle) {
     // RT 的 VkRenderPass 即将随之销毁；先淘汰以其为键的缓存 VkPipeline，
     // 否则反复建/销 RT 会令 pipeline 缓存线性堆积（显存泄漏）并残留悬垂引用。
-    if (const VulkanRenderTarget* rt = resource_mgr_.GetRenderTarget(render_target_handle)) {
+    if (const VulkanRenderTarget* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw())) {
         state_mgr_.EvictPipelinesForRenderPass(rt->render_pass);
         state_mgr_.EvictPipelinesForRenderPass(rt->render_pass_load);
     }
-    resource_mgr_.DeleteRenderTarget(render_target_handle);
+    resource_mgr_.DeleteRenderTarget(render_target_handle.raw());
 }
 
-unsigned int VulkanRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const {
+TextureHandle VulkanRhiDevice::GetRenderTargetColorTexture(RenderTargetHandle render_target_handle) const {
     // Vulkan 中纹理句柄概念不同，返回 RenderTarget handle 作为代理
-    return render_target_handle;
+    return TextureHandle::from_raw(render_target_handle.raw());
 }
 
-unsigned int VulkanRhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
-    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+TextureHandle VulkanRhiDevice::GetRenderTargetColorTexture(RenderTargetHandle render_target_handle, int index) const {
+    const auto* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw());
     if (rt && !rt->mrt_texture_handles.empty()) {
         if (index >= 0 && index < static_cast<int>(rt->mrt_texture_handles.size()))
-            return rt->mrt_texture_handles[index];
-        return 0;
+            return TextureHandle{rt->mrt_texture_handles[index]};
+        return {};
     }
-    return (index == 0) ? render_target_handle : 0;
+    return (index == 0) ? TextureHandle::from_raw(render_target_handle.raw()) : TextureHandle{};
 }
 
-unsigned int VulkanRhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const {
-    return render_target_handle; // 代理
+TextureHandle VulkanRhiDevice::GetRenderTargetDepthTexture(RenderTargetHandle render_target_handle) const {
+    return TextureHandle::from_raw(render_target_handle.raw()); // 代理
 }
 
-std::vector<unsigned char> VulkanRhiDevice::ReadRenderTargetColorRgba8(unsigned int render_target_handle) const {
+std::vector<unsigned char> VulkanRhiDevice::ReadRenderTargetColorRgba8(RenderTargetHandle render_target_handle) const {
     auto result = ReadRenderTargetColorRgba8WithSize(render_target_handle);
     return std::move(result.pixels);
 }
 
-RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const {
+RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(RenderTargetHandle render_target_handle) const {
     // const_cast: 底层读回操作在语义上是只读的，但 Vulkan 命令提交需要非 const 访问
     auto& resource_mgr = const_cast<VulkanResourceManager&>(resource_mgr_);
-    const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_target_handle);
+    const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_target_handle.raw());
     if (!rt || !rt->has_color) {
         return {};
     }
@@ -589,10 +589,10 @@ RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
     return result;
 }
 
-RenderTargetDepthReadback VulkanRhiDevice::ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
+RenderTargetDepthReadback VulkanRhiDevice::ReadRenderTargetDepthFloatWithSize(RenderTargetHandle render_target_handle) const {
     // const_cast: 底层读回操作语义只读，但 Vulkan 命令提交需非 const 访问。
     auto& resource_mgr = const_cast<VulkanResourceManager&>(resource_mgr_);
-    const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_target_handle);
+    const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_target_handle.raw());
     if (!rt || !rt->has_depth || rt->depth_texture.image == VK_NULL_HANDLE) {
         return {};
     }
@@ -709,38 +709,39 @@ RenderTargetDepthReadback VulkanRhiDevice::ReadRenderTargetDepthFloatWithSize(un
     return result;
 }
 
-unsigned int VulkanRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
-    return resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter);
+TextureHandle VulkanRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
+    return TextureHandle{resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter)};
 }
 
-unsigned int VulkanRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
+TextureHandle VulkanRhiDevice::CreateCompressedTexture2D(CompressedTextureFormat format,
                                                          const std::vector<CompressedMipLevel>& mips,
                                                          bool linear_filter) {
-    return resource_mgr_.CreateCompressedTexture2D(format, mips, linear_filter);
+    return TextureHandle{resource_mgr_.CreateCompressedTexture2D(format, mips, linear_filter)};
 }
 
-unsigned int VulkanRhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
-    return resource_mgr_.CreateTextureCube(width, height, rgba8_faces, linear_filter);
+TextureHandle VulkanRhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
+    return TextureHandle{resource_mgr_.CreateTextureCube(width, height, rgba8_faces, linear_filter)};
 }
 
-unsigned int VulkanRhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
-    return resource_mgr_.CreateTexture3D(width, height, depth, rgba8_data, linear_filter);
+TextureHandle VulkanRhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
+    return TextureHandle{resource_mgr_.CreateTexture3D(width, height, depth, rgba8_data, linear_filter)};
 }
 
-void VulkanRhiDevice::DeleteTexture(unsigned int texture_handle) {
-    resource_mgr_.DeleteTexture(texture_handle);
+void VulkanRhiDevice::DeleteTexture(TextureHandle texture_handle) {
+    resource_mgr_.DeleteTexture(texture_handle.raw());
 }
 
-unsigned int VulkanRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
+ShaderHandle VulkanRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
     unsigned int handle = shader_mgr_.CreateProgram(vert_src, frag_src);
-    if (handle != 0) {
-        external_shader_programs_.insert(handle);
+    ShaderHandle shader_handle{handle};
+    if (shader_handle) {
+        external_shader_programs_.insert(shader_handle);
     }
-    return handle;
+    return shader_handle;
 }
 
-void VulkanRhiDevice::DeleteShaderProgram(unsigned int program_handle) {
-    shader_mgr_.DeleteProgram(program_handle);
+void VulkanRhiDevice::DeleteShaderProgram(ShaderHandle program_handle) {
+    shader_mgr_.DeleteProgram(program_handle.raw());
     external_shader_programs_.erase(program_handle);
 }
 
@@ -748,78 +749,78 @@ PipelineHandle VulkanRhiDevice::CreatePipelineState(const PipelineStateDesc& des
     return PipelineHandle{state_mgr_.CreatePipelineState(desc)};
 }
 
-unsigned int VulkanRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
-    return resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index);
+BufferHandle VulkanRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    return BufferHandle{resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index)};
 }
 
 // --- 内建资源访问器 ---
 
-unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
+ShaderHandle VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     EnsureInitialized();
     switch (program) {
         case BuiltinProgram::Skybox:
-            if (shader_mgr_.skybox_shader_handle() == 0) shader_mgr_.InitSkyboxShader();
+            if (!shader_mgr_.skybox_shader_handle()) shader_mgr_.InitSkyboxShader();
             return shader_mgr_.skybox_shader_handle();
         case BuiltinProgram::Sprite2D:
-            if (shader_mgr_.sprite2d_shader_handle() == 0) shader_mgr_.InitSprite2DShader();
+            if (!shader_mgr_.sprite2d_shader_handle()) shader_mgr_.InitSprite2DShader();
             return shader_mgr_.sprite2d_shader_handle();
         case BuiltinProgram::SpriteFxSdf:
-            if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) shader_mgr_.InitSpriteFxSdfShader();
+            if (!shader_mgr_.sprite_fx_sdf_shader_handle()) shader_mgr_.InitSpriteFxSdfShader();
             return shader_mgr_.sprite_fx_sdf_shader_handle();
         case BuiltinProgram::SpriteFxVfx:
-            if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) shader_mgr_.InitSpriteFxVfxShader();
+            if (!shader_mgr_.sprite_fx_vfx_shader_handle()) shader_mgr_.InitSpriteFxVfxShader();
             return shader_mgr_.sprite_fx_vfx_shader_handle();
         case BuiltinProgram::ForwardPbr:
-            if (shader_mgr_.forward_pbr_shader_handle() == 0) shader_mgr_.InitForwardPbrShader();
+            if (!shader_mgr_.forward_pbr_shader_handle()) shader_mgr_.InitForwardPbrShader();
             return shader_mgr_.forward_pbr_shader_handle();
         case BuiltinProgram::ForwardPbrSkinned:
-            if (shader_mgr_.forward_pbr_skinned_shader_handle() == 0) shader_mgr_.InitForwardPbrSkinnedShader();
+            if (!shader_mgr_.forward_pbr_skinned_shader_handle()) shader_mgr_.InitForwardPbrSkinnedShader();
             return shader_mgr_.forward_pbr_skinned_shader_handle();
         case BuiltinProgram::ForwardPbrInstanced:
-            if (shader_mgr_.forward_pbr_instanced_shader_handle() == 0) shader_mgr_.InitForwardPbrInstancedShader();
+            if (!shader_mgr_.forward_pbr_instanced_shader_handle()) shader_mgr_.InitForwardPbrInstancedShader();
             return shader_mgr_.forward_pbr_instanced_shader_handle();
         case BuiltinProgram::ForwardPbrDepth:
-            if (shader_mgr_.forward_pbr_depth_shader_handle() == 0) shader_mgr_.InitForwardPbrDepthShader();
+            if (!shader_mgr_.forward_pbr_depth_shader_handle()) shader_mgr_.InitForwardPbrDepthShader();
             return shader_mgr_.forward_pbr_depth_shader_handle();
         case BuiltinProgram::ForwardInstancedDepth:
-            if (shader_mgr_.forward_instanced_depth_shader_handle() == 0) shader_mgr_.InitForwardInstancedDepthShader();
+            if (!shader_mgr_.forward_instanced_depth_shader_handle()) shader_mgr_.InitForwardInstancedDepthShader();
             return shader_mgr_.forward_instanced_depth_shader_handle();
         case BuiltinProgram::Particle3D:
-            if (shader_mgr_.particle3d_shader_handle() == 0) shader_mgr_.InitParticle3DShader();
+            if (!shader_mgr_.particle3d_shader_handle()) shader_mgr_.InitParticle3DShader();
             return shader_mgr_.particle3d_shader_handle();
         case BuiltinProgram::HairStrand:
-            if (shader_mgr_.hair_strand_shader_handle() == 0) shader_mgr_.InitHairStrandShader();
+            if (!shader_mgr_.hair_strand_shader_handle()) shader_mgr_.InitHairStrandShader();
             return shader_mgr_.hair_strand_shader_handle();
         case BuiltinProgram::ForwardShaded:
-            if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
+            if (!shader_mgr_.forward_shaded_shader_handle()) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedShaded:
-            if (shader_mgr_.forward_skinned_shaded_shader_handle() == 0) shader_mgr_.InitForwardSkinnedShadedShader();
+            if (!shader_mgr_.forward_skinned_shaded_shader_handle()) shader_mgr_.InitForwardSkinnedShadedShader();
             return shader_mgr_.forward_skinned_shaded_shader_handle();
         case BuiltinProgram::ForwardInstancedShaded:
-            if (shader_mgr_.forward_instanced_shaded_shader_handle() == 0) shader_mgr_.InitForwardInstancedShadedShader();
+            if (!shader_mgr_.forward_instanced_shaded_shader_handle()) shader_mgr_.InitForwardInstancedShadedShader();
             return shader_mgr_.forward_instanced_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedInstancedShaded:
-            if (shader_mgr_.forward_skinned_instanced_shaded_shader_handle() == 0) shader_mgr_.InitForwardSkinnedInstancedShadedShader();
+            if (!shader_mgr_.forward_skinned_instanced_shaded_shader_handle()) shader_mgr_.InitForwardSkinnedInstancedShadedShader();
             return shader_mgr_.forward_skinned_instanced_shaded_shader_handle();
         case BuiltinProgram::ForwardMorphShaded:
-            if (shader_mgr_.forward_morph_shaded_shader_handle() == 0) shader_mgr_.InitForwardMorphShadedShader();
+            if (!shader_mgr_.forward_morph_shaded_shader_handle()) shader_mgr_.InitForwardMorphShadedShader();
             return shader_mgr_.forward_morph_shaded_shader_handle();
         case BuiltinProgram::GBufferMesh:
             return shader_mgr_.gbuffer_mesh_shader_handle();  // InitBuiltinShaders 阶段已预编译
         case BuiltinProgram::Impostor:
-            if (shader_mgr_.impostor_shader_handle() == 0) shader_mgr_.InitImpostorShader();
+            if (!shader_mgr_.impostor_shader_handle()) shader_mgr_.InitImpostorShader();
             return shader_mgr_.impostor_shader_handle();
     }
-    return 0;
+    return {};
 }
 
-unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
+ShaderHandle VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
     EnsureInitialized();
     // 无参 sampler-only 效果共用内建 passthrough（fullscreen quad 采样源纹理）。
     // PostProcessRenderer 按 effect 名取 gen-PP 程序句柄；未映射效果返回 0（调用方跳过）。
     // InitPostProcessShader 一次创建 passthrough/fxaa 等全部 PP 效果着色器。
-    if (shader_mgr_.postprocess_shader_handle() == 0) shader_mgr_.InitPostProcessShader();
+    if (!shader_mgr_.postprocess_shader_handle()) shader_mgr_.InitPostProcessShader();
     if (effect_name == "postprocess_passthrough" || effect_name == "copy" ||
         effect_name == "ui_overlay") {
         return shader_mgr_.postprocess_shader_handle();
@@ -850,17 +851,17 @@ unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_na
     if (effect_name == "atmosphere_transmittance_lut") return shader_mgr_.atmosphere_transmittance_lut_shader_handle();
     if (effect_name == "atmosphere_sky") return shader_mgr_.atmosphere_sky_shader_handle();
     if (effect_name == "bloom_composite") return shader_mgr_.bloom_composite_ssao_ae_shader_handle();
-    return 0;
+    return {};
 }
 
-unsigned int VulkanRhiDevice::GetBloomComputeShader(bool upsample) const {
+ShaderHandle VulkanRhiDevice::GetBloomComputeShader(bool upsample) const {
     return upsample ? shader_mgr_.bloom_upsample_cs_handle()
                     : shader_mgr_.bloom_downsample_cs_handle();
 }
 
-unsigned int VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
+BufferHandle VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
     EnsureInitialized();
-    if (skybox_cube_vbo_handle_ == 0) {
+    if (!skybox_cube_vbo_handle_) {
         static const float kSkyboxVertices[] = {
             -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
              1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
@@ -875,7 +876,7 @@ unsigned int VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
             -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
              1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
         };
-        skybox_cube_vbo_handle_ = resource_mgr_.CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
+        skybox_cube_vbo_handle_ = BufferHandle{resource_mgr_.CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false)};
     }
     return skybox_cube_vbo_handle_;
 }
@@ -893,51 +894,51 @@ BufferHandle VulkanRhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const v
     return RhiDevice::CreateGpuBuffer(desc, initial_data);
 }
 
-void VulkanRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
-    resource_mgr_.UpdateBuffer(handle, offset, size, data);
+void VulkanRhiDevice::UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) {
+    resource_mgr_.UpdateBuffer(handle.raw(), offset, size, data);
     (void)is_index;
 }
 
-void VulkanRhiDevice::DeleteBuffer(unsigned int handle) {
-    resource_mgr_.DeleteBuffer(handle);
+void VulkanRhiDevice::DeleteBuffer(BufferHandle handle) {
+    resource_mgr_.DeleteBuffer(handle.raw());
 }
 
 // --- SSBO ---
 
-unsigned int VulkanRhiDevice::CreateSSBO(size_t size, const void* data) {
-    return resource_mgr_.CreateSSBO(size, data);
+BufferHandle VulkanRhiDevice::CreateSSBO(size_t size, const void* data) {
+    return BufferHandle{resource_mgr_.CreateSSBO(size, data)};
 }
 
-void VulkanRhiDevice::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
-    resource_mgr_.UpdateSSBO(handle, offset, size, data);
+void VulkanRhiDevice::UpdateSSBO(BufferHandle handle, size_t offset, size_t size, const void* data) {
+    resource_mgr_.UpdateSSBO(handle.raw(), offset, size, data);
 }
 
-void VulkanRhiDevice::DeleteSSBO(unsigned int handle) {
-    resource_mgr_.DeleteSSBO(handle);
+void VulkanRhiDevice::DeleteSSBO(BufferHandle handle) {
+    resource_mgr_.DeleteSSBO(handle.raw());
 }
 
 // --- Indirect Draw Buffer ---
 
-unsigned int VulkanRhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
-    return resource_mgr_.CreateIndirectBuffer(size, data);
+BufferHandle VulkanRhiDevice::CreateIndirectBuffer(size_t size, const void* data) {
+    return BufferHandle{resource_mgr_.CreateIndirectBuffer(size, data)};
 }
 
-void VulkanRhiDevice::UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
-    resource_mgr_.UpdateIndirectBuffer(handle, offset, size, data);
+void VulkanRhiDevice::UpdateIndirectBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) {
+    resource_mgr_.UpdateIndirectBuffer(handle.raw(), offset, size, data);
 }
 
-void VulkanRhiDevice::DeleteIndirectBuffer(unsigned int handle) {
-    resource_mgr_.DeleteIndirectBuffer(handle);
+void VulkanRhiDevice::DeleteIndirectBuffer(BufferHandle handle) {
+    resource_mgr_.DeleteIndirectBuffer(handle.raw());
 }
 
-void VulkanRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset) {
-    if (draw_count <= 0 || indirect_buffer == 0) return;
+void VulkanRhiDevice::MultiDrawIndexedIndirect(BufferHandle indirect_buffer, int draw_count, size_t stride, size_t byte_offset) {
+    if (draw_count <= 0 || !indirect_buffer) return;
     if (active_render_cmd_ == VK_NULL_HANDLE) return;
 
     // 查找 VkBuffer：先查 indirect buffer map，再查 SSBO map（draw cmd SSBO 有 INDIRECT_BUFFER_BIT）
-    const VulkanBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer);
+    const VulkanBuffer* buf = resource_mgr_.GetIndirectBuffer(indirect_buffer.raw());
     if (!buf || buf->buffer == VK_NULL_HANDLE) {
-        buf = resource_mgr_.GetSSBO(indirect_buffer);
+        buf = resource_mgr_.GetSSBO(indirect_buffer.raw());
     }
     if (!buf || buf->buffer == VK_NULL_HANDLE) return;
     draw_executor_.SetBoundSSBOs(bound_ssbos_);
@@ -953,4 +954,3 @@ void VulkanRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int
 
 } // namespace render
 } // namespace dse
-

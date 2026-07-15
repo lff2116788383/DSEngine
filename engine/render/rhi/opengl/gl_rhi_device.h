@@ -45,35 +45,35 @@ public:
 
     void Shutdown() override;
     void BeginFrame() override;
-    unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
-    void DeleteRenderTarget(unsigned int render_target_handle) override;
+    RenderTargetHandle CreateRenderTarget(const RenderTargetDesc& desc) override;
+    void DeleteRenderTarget(RenderTargetHandle render_target_handle) override;
     RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
-    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
-    unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const override;
-    unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
-    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
-    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
-    RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const override;
+    TextureHandle GetRenderTargetColorTexture(RenderTargetHandle render_target_handle) const override;
+    TextureHandle GetRenderTargetColorTexture(RenderTargetHandle render_target_handle, int index) const override;
+    TextureHandle GetRenderTargetDepthTexture(RenderTargetHandle render_target_handle) const override;
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(RenderTargetHandle render_target_handle) const override;
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(RenderTargetHandle render_target_handle) const override;
+    RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(RenderTargetHandle render_target_handle) const override;
     void ImmediateDraw(const ImmediateDrawDesc& desc) override;
-    void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) override;
-    unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
-    void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override;
-    void DeleteBuffer(unsigned int handle) override;
+    void BlitRenderTarget(RenderTargetHandle src_rt, RenderTargetHandle dst_rt) override;
+    BufferHandle CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
+    void UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) override;
+    void DeleteBuffer(BufferHandle handle) override;
     VertexArrayHandle CreateVertexArray() override;
     void DeleteVertexArray(VertexArrayHandle handle) override;
-    unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
-    unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
+    TextureHandle CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
+    TextureHandle CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
                                  const TextureSamplerDesc& sampler) override;
-    unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
+    TextureHandle CreateCompressedTexture2D(CompressedTextureFormat format,
                                            const std::vector<CompressedMipLevel>& mips,
                                            bool linear_filter) override;
-    unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
-    unsigned int CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
+    TextureHandle CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
+    TextureHandle CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
                                            bool linear_filter) override;
-    unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override;
-    void DeleteTexture(unsigned int texture_handle) override;
-    unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
-    void DeleteShaderProgram(unsigned int program_handle) override;
+    TextureHandle CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override;
+    void DeleteTexture(TextureHandle texture_handle) override;
+    ShaderHandle CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
+    void DeleteShaderProgram(ShaderHandle program_handle) override;
     PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override;
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override;
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
@@ -81,7 +81,7 @@ public:
     const RenderStats& LastFrameStats() const override;
 
     // --- RenderGraph 自动屏障（GL: glTextureBarrier / glMemoryBarrier）---
-    void TransitionRenderTarget(unsigned int rt_handle,
+    void TransitionRenderTarget(RenderTargetHandle rt_handle,
                                  ResourceState from, ResourceState to) override;
 
     void PatchLastFrameGPUCulledCount(int culled) override {
@@ -92,51 +92,51 @@ public:
     // 旧 API 已 deprecated，但后端实现仍需覆写供基类路由调用
 #pragma warning(push)
 #pragma warning(disable: 4996)
-    unsigned int CreateSSBO(size_t size, const void* data) override;
-    void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) override;
-    void BindSSBO(unsigned int handle, unsigned int binding_point) override;
-    void DeleteSSBO(unsigned int handle) override;
+    BufferHandle CreateSSBO(size_t size, const void* data) override;
+    void UpdateSSBO(BufferHandle handle, size_t offset, size_t size, const void* data) override;
+    void BindSSBO(BufferHandle handle, unsigned int binding_point) override;
+    void DeleteSSBO(BufferHandle handle) override;
     bool SupportsSSBO() const override { return supports_ssbo_; }
     int GetMaxColorAttachments() const override { return max_color_attachments_; }
 
     // --- Compute Shader（GL 4.3+）---
-    unsigned int CreateComputeShader(const std::string& source) override;
-    void DeleteComputeShader(unsigned int handle) override;
-    void DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
+    ShaderHandle CreateComputeShader(const std::string& source) override;
+    void DeleteComputeShader(ShaderHandle handle) override;
+    void DispatchCompute(ShaderHandle shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
     void ComputeMemoryBarrier() override;
-    void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
-    void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+    void SetComputeTextureImage(unsigned int binding, TextureHandle texture_handle, bool read_only) override;
+    void SetComputeTextureImageMip(unsigned int binding, TextureHandle texture_handle,
                                    int mip_level, bool read_only, bool r32f = false) override;
-    void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
+    void SetComputeTextureSampler(unsigned int unit, TextureHandle texture_handle) override;
     bool SupportsCompute() const override { return supports_ssbo_; }
     bool SupportsSSBOCompute() const override { return supports_ssbo_; }
-    unsigned int CreateComputeWriteTexture2D(int width, int height) override;
+    TextureHandle CreateComputeWriteTexture2D(int width, int height) override;
 
     // --- Hi-Z Occlusion Culling ---
-    unsigned int CreateHiZTexture(int width, int height) override;
-    void DeleteHiZTexture(unsigned int handle) override;
-    int GetHiZMipCount(unsigned int handle) const override;
-    unsigned int GetHiZGpuTexture(unsigned int handle) const override;
+    TextureHandle CreateHiZTexture(int width, int height) override;
+    void DeleteHiZTexture(TextureHandle handle) override;
+    int GetHiZMipCount(TextureHandle handle) const override;
+    TextureHandle GetHiZGpuTexture(TextureHandle handle) const override;
 
     // --- Compute Uniform ---
-    void SetComputeUniformInt(unsigned int shader, const char* name, int value) override;
-    void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
-    void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
-    void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
-    void SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) override;
-    void SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) override;
-    void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) override;
-    void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
+    void SetComputeUniformInt(ShaderHandle shader, const char* name, int value) override;
+    void SetComputeUniformFloat(ShaderHandle shader, const char* name, float value) override;
+    void SetComputeUniformVec2i(ShaderHandle shader, const char* name, int x, int y) override;
+    void SetComputeUniformVec2f(ShaderHandle shader, const char* name, float x, float y) override;
+    void SetComputeUniformVec3(ShaderHandle shader, const char* name, float x, float y, float z) override;
+    void SetComputeUniformIVec3(ShaderHandle shader, const char* name, int x, int y, int z) override;
+    void SetComputeUniformVec4(ShaderHandle shader, const char* name, float x, float y, float z, float w) override;
+    void SetComputeUniformMat4(ShaderHandle shader, const char* name, const float* data) override;
 
     // --- SSBO 读回 ---
-    void ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) override;
+    void ReadSSBO(BufferHandle handle, size_t offset, size_t size, void* dst) override;
 
     // --- Indirect Draw Buffer ---
-    unsigned int CreateIndirectBuffer(size_t size, const void* data) override;
-    void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) override;
-    void DeleteIndirectBuffer(unsigned int handle) override;
+    BufferHandle CreateIndirectBuffer(size_t size, const void* data) override;
+    void UpdateIndirectBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) override;
+    void DeleteIndirectBuffer(BufferHandle handle) override;
 #pragma warning(pop)
-    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset = 0) override;
+    void MultiDrawIndexedIndirect(BufferHandle indirect_buffer, int draw_count, size_t stride, size_t byte_offset = 0) override;
     bool SupportsIndirectDraw() const override { return supports_ssbo_; }
 
     // --- Mega Buffer (GPU Driven) ---
@@ -165,9 +165,9 @@ public:
                                   float light_intensity, float ambient_intensity,
                                   float shadow_strength = 0.0f) override;
     void SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) override;
-    void BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
-                                unsigned int metallic_roughness,
-                                unsigned int emissive, unsigned int occlusion) override;
+    void BindGPUDrivenTextures(TextureHandle albedo, TextureHandle normal,
+                                TextureHandle metallic_roughness,
+                                TextureHandle emissive, TextureHandle occlusion) override;
 
     // --- 编辑器场景视图模式 ---
     void SetWireframeMode(bool enable) override;
@@ -181,17 +181,17 @@ public:
 
     // --- 通用绘制原语 (A1) ---
     void RealBindPipeline(GraphicsPipelineHandle graphics_pipeline_handle);
-    void RealBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+    void RealBindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs,
                               VertexInputRate rate = VertexInputRate::PerVertex);
     void RealPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void RealDraw(uint32_t vertex_count, uint32_t first_vertex);
 
     // --- 通用绘制原语 (B0) ---
-    void RealBindIndexBuffer(unsigned int buffer_handle, IndexType type);
-    void RealBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
-    void RealBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
-    void RealBindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
+    void RealBindIndexBuffer(BufferHandle buffer_handle, IndexType type);
+    void RealBindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim);
+    void RealBindUniformBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size);
+    void RealBindStorageBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size);
     void RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex);
 
     // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
@@ -200,12 +200,12 @@ public:
                                   uint32_t first_instance);
 
     // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
-    void RealDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset);
+    void RealDrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset);
 
     // --- 内建资源访问器 ---
-    unsigned int GetBuiltinProgram(BuiltinProgram program) override;
-    unsigned int GetGenPPShaderProgram(const std::string& effect_name) override;
-    unsigned int GetSkyboxCubeVertexBuffer() override;
+    ShaderHandle GetBuiltinProgram(BuiltinProgram program) override;
+    ShaderHandle GetGenPPShaderProgram(const std::string& effect_name) override;
+    BufferHandle GetSkyboxCubeVertexBuffer() override;
 
     // --- 子系统访问器 ---
     GLResourceManager& resource_mgr() { return resource_mgr_; }
@@ -226,13 +226,13 @@ private:
     UBOManager ubo_mgr_;
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄，需在 Shutdown 中统一清理
-    std::unordered_set<unsigned int> external_shader_programs_;
+    std::unordered_set<ShaderHandle> external_shader_programs_;
 
     /// 内建天空盒立方体顶点缓冲（懒初始化，A1 通用原语用）
-    unsigned int skybox_cube_vbo_ = 0;
+    BufferHandle skybox_cube_vbo_;
 
     /// 通过 CreateComputeShader 创建的 compute 程序句柄
-    std::unordered_set<unsigned int> compute_programs_;
+    std::unordered_set<ShaderHandle> compute_programs_;
 
     /// Hi-Z 纹理信息（pimpl 隐藏实现，避免 WINDOWS_EXPORT_ALL_SYMBOLS 模板泄漏）
     struct HiZImpl;
@@ -242,7 +242,7 @@ private:
     GLGpuTimer gpu_timer_;
 
     /// Indirect draw buffer 管理
-    std::unordered_map<unsigned int, unsigned int> indirect_buffers_; ///< handle → GL buffer ID
+    std::unordered_map<BufferHandle, unsigned int> indirect_buffers_; ///< handle → GL buffer ID
     unsigned int next_indirect_handle_ = 600000;
 
     bool initialized_ = false;
@@ -260,12 +260,12 @@ private:
         int size = 0;               ///< 块字节大小（GL_UNIFORM_BLOCK_DATA_SIZE）
         bool initialized = false;
     };
-    std::unordered_map<unsigned int, ComputePushUbo> compute_push_ubos_;
+    std::unordered_map<ShaderHandle, ComputePushUbo> compute_push_ubos_;
     std::vector<uint8_t> compute_uniform_staging_;             ///< CPU 暂存（定位累积，整块上传）
     std::unordered_map<std::string, size_t> compute_uniform_name_to_offset_;
     size_t compute_uniform_next_offset_ = 0;
     size_t GetOrCreateComputeUniformOffset(const char* name, size_t data_size);
-    ComputePushUbo& EnsureComputePushUbo(unsigned int program);
+    ComputePushUbo& EnsureComputePushUbo(ShaderHandle program);
 
 public:
     // --- IRhiGpuTimer 接口 ---

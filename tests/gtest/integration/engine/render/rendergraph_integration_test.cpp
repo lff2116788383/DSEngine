@@ -41,22 +41,22 @@ public:
     MOCK_METHOD(void, BeginRenderPass, (const RenderPassDesc&), (override));
     MOCK_METHOD(void, EndRenderPass, (), (override));
     MOCK_METHOD(void, BindPipeline, (GraphicsPipelineHandle), (override));
-    MOCK_METHOD(void, BindVertexBuffer, (uint32_t, unsigned int, uint32_t, (const std::vector<VertexAttr>&), VertexInputRate), (override));
+    MOCK_METHOD(void, BindVertexBuffer, (uint32_t, BufferHandle, uint32_t, (const std::vector<VertexAttr>&), VertexInputRate), (override));
     MOCK_METHOD(void, PushConstants, (ShaderStage, uint32_t, const void*, uint32_t), (override));
     MOCK_METHOD(void, Draw, (uint32_t, uint32_t), (override));
-    MOCK_METHOD(void, BindIndexBuffer, (unsigned int, IndexType), (override));
-    MOCK_METHOD(void, BindTexture, (uint32_t, unsigned int, TextureDim), (override));
-    MOCK_METHOD(void, BindUniformBuffer, (uint32_t, unsigned int, uint32_t, uint32_t), (override));
-    MOCK_METHOD(void, BindStorageBuffer, (uint32_t, unsigned int, uint32_t, uint32_t), (override));
+    MOCK_METHOD(void, BindIndexBuffer, (BufferHandle, IndexType), (override));
+    MOCK_METHOD(void, BindTexture, (uint32_t, TextureHandle, TextureDim), (override));
+    MOCK_METHOD(void, BindUniformBuffer, (uint32_t, BufferHandle, uint32_t, uint32_t), (override));
+    MOCK_METHOD(void, BindStorageBuffer, (uint32_t, BufferHandle, uint32_t, uint32_t), (override));
     MOCK_METHOD(void, DrawIndexed, (uint32_t, uint32_t, int32_t), (override));
     MOCK_METHOD(void, DrawIndexedInstanced, (uint32_t, uint32_t, uint32_t, int32_t, uint32_t), (override));
-    MOCK_METHOD(void, DrawIndexedIndirect, (unsigned int, uint32_t), (override));
+    MOCK_METHOD(void, DrawIndexedIndirect, (BufferHandle, uint32_t), (override));
     MOCK_METHOD(void, ClearColor, (const glm::vec4&), (override));
     MOCK_METHOD(void, DispatchComputePass, (const ComputeDispatch&), (override));
     MOCK_METHOD(void, SetViewport, (int, int, int, int), (override));
-    MOCK_METHOD(void, BindGlobalShadowMap, (unsigned int, unsigned int), (override));
-    MOCK_METHOD(void, BindGlobalSpotShadowMap, (unsigned int, unsigned int), (override));
-    MOCK_METHOD(void, BindGlobalPointShadowMap, (unsigned int, unsigned int), (override));
+    MOCK_METHOD(void, BindGlobalShadowMap, (unsigned int, TextureHandle), (override));
+    MOCK_METHOD(void, BindGlobalSpotShadowMap, (unsigned int, TextureHandle), (override));
+    MOCK_METHOD(void, BindGlobalPointShadowMap, (unsigned int, TextureHandle), (override));
 };
 
 // ============================================================
@@ -316,31 +316,33 @@ public:
     // 记录高层 Pass 迁移后经 PostProcessRenderer 向后端索取的 gen-PP 效果名，
     // 用于断言 CompositePass 的路由（bloom 启用→bloom_composite / ui_overlay 等）。
     mutable std::vector<std::string> requested_pp_effects;
-    unsigned int GetGenPPShaderProgram(const std::string& effect_name) override {
+    ShaderHandle GetGenPPShaderProgram(const std::string& effect_name) override {
         requested_pp_effects.push_back(effect_name);
-        return 1;  // 非 0：表示该效果已迁到 PostProcessRenderer（受支持）
+        return ShaderHandle::from_raw(1);  // 非 0：表示该效果已迁到 PostProcessRenderer（受支持）
     }
     // bloom mip 链走 CommandBuffer 级 compute 原语（Option A）：返回非 0 句柄启用 compute
     // 路径（downsample=99 / upsample=88），供 BloomPass 测试区分两种调度。
-    unsigned int GetBloomComputeShader(bool upsample) const override { return upsample ? 88u : 99u; }
+    ShaderHandle GetBloomComputeShader(bool upsample) const override {
+        return ShaderHandle::from_raw(upsample ? 88u : 99u);
+    }
     RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override {}
-    unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 0; }
-    unsigned int GetRenderTargetColorTexture(unsigned int) const override { return 42; }
-    unsigned int GetRenderTargetDepthTexture(unsigned int) const override { return 0; }
-    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int) const override { return {}; }
-    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int) const override { return {}; }
-    unsigned int CreateTexture2D(int, int, const unsigned char*, bool) override { return 0; }
-    unsigned int CreateTextureCube(int, int, const unsigned char* const[6], bool) override { return 0; }
-    unsigned int CreateTexture3D(int, int, int, const unsigned char*, bool) override { return 0; }
-    void DeleteTexture(unsigned int) override {}
-    unsigned int CreateShaderProgram(const std::string&, const std::string&) override { return 0; }
-    void DeleteShaderProgram(unsigned int) override {}
+    RenderTargetHandle CreateRenderTarget(const RenderTargetDesc&) override { return {}; }
+    TextureHandle GetRenderTargetColorTexture(RenderTargetHandle) const override { return TextureHandle::from_raw(42); }
+    TextureHandle GetRenderTargetDepthTexture(RenderTargetHandle) const override { return {}; }
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(RenderTargetHandle) const override { return {}; }
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(RenderTargetHandle) const override { return {}; }
+    TextureHandle CreateTexture2D(int, int, const unsigned char*, bool) override { return {}; }
+    TextureHandle CreateTextureCube(int, int, const unsigned char* const[6], bool) override { return {}; }
+    TextureHandle CreateTexture3D(int, int, int, const unsigned char*, bool) override { return {}; }
+    void DeleteTexture(TextureHandle) override {}
+    ShaderHandle CreateShaderProgram(const std::string&, const std::string&) override { return {}; }
+    void DeleteShaderProgram(ShaderHandle) override {}
     dse::render::PipelineHandle CreatePipelineState(const PipelineStateDesc&) override { return {}; }
-    unsigned int CreateBuffer(size_t, const void*, bool, bool) override { return 0; }
-    void UpdateBuffer(unsigned int, size_t, size_t, const void*, bool) override {}
-    void DeleteBuffer(unsigned int) override {}
+    BufferHandle CreateBuffer(size_t, const void*, bool, bool) override { return {}; }
+    void UpdateBuffer(BufferHandle, size_t, size_t, const void*, bool) override {}
+    void DeleteBuffer(BufferHandle) override {}
     VertexArrayHandle CreateVertexArray() override { return {}; }
     void DeleteVertexArray(VertexArrayHandle) override {}
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
@@ -365,9 +367,16 @@ protected:
         ctx.world       = &world;
         ctx.rhi_device  = &rhi_dev;
         ctx.snapshot    = &snap;
-        ctx.render_targets.scene         = 1;
-        ctx.render_targets.bloom_extract = 2;
-        ctx.render_targets.bloom_mips    = {3, 4, 5, 6, 7};
+        ctx.render_targets.scene =
+            RenderTargetHandle::from_raw(1);
+        ctx.render_targets.bloom_extract =
+            RenderTargetHandle::from_raw(2);
+        ctx.render_targets.bloom_mips = {
+            RenderTargetHandle::from_raw(3),
+            RenderTargetHandle::from_raw(4),
+            RenderTargetHandle::from_raw(5),
+            RenderTargetHandle::from_raw(6),
+            RenderTargetHandle::from_raw(7)};
     }
 
     void SetBloomConfig(bool enabled, float threshold = 1.0f, float intensity = 0.5f) {
@@ -401,10 +410,14 @@ TEST_F(BloomPassTest, BloomPass_Enabled_DispatchesDownsampleAndUpsample) {
     EXPECT_CALL(mock, DispatchComputePass(::testing::_))
         .Times(::testing::AnyNumber());
     // 降采样 mip 链（shader=99）
-    EXPECT_CALL(mock, DispatchComputePass(::testing::Field(&ComputeDispatch::shader, 99u)))
+    EXPECT_CALL(mock, DispatchComputePass(::testing::Field(
+                          &ComputeDispatch::shader,
+                          ShaderHandle::from_raw(99))))
         .Times(::testing::AtLeast(1));
     // 升采样 mip 链（shader=88）
-    EXPECT_CALL(mock, DispatchComputePass(::testing::Field(&ComputeDispatch::shader, 88u)))
+    EXPECT_CALL(mock, DispatchComputePass(::testing::Field(
+                          &ComputeDispatch::shader,
+                          ShaderHandle::from_raw(88))))
         .Times(::testing::AtLeast(1));
     EXPECT_CALL(mock, BeginRenderPass(::testing::_))
         .Times(::testing::AtLeast(6));
@@ -429,10 +442,10 @@ protected:
         ctx.world       = &world;
         ctx.rhi_device  = &rhi_dev;
         ctx.snapshot    = &snap;
-        ctx.render_targets.scene = 1;
-        ctx.render_targets.ui    = 2;
-        ctx.render_targets.main  = 3;
-        ctx.render_targets.bloom_mips = {4};
+        ctx.render_targets.scene = RenderTargetHandle::from_raw(1);
+        ctx.render_targets.ui = RenderTargetHandle::from_raw(2);
+        ctx.render_targets.main = RenderTargetHandle::from_raw(3);
+        ctx.render_targets.bloom_mips = {RenderTargetHandle::from_raw(4)};
     }
 
     void SetBloomConfig(bool enabled, float intensity = 0.5f, float exposure = 1.0f) {
@@ -614,16 +627,16 @@ TEST_F(RenderGraphIntegrationTest, WithoutStateNotgenerateBarrier) {
 class TransientRTStub : public StubRhiDevice {
     unsigned int next_handle_ = 100;
 public:
-    std::vector<unsigned int> created_handles;
-    std::vector<unsigned int> deleted_handles;
+    std::vector<RenderTargetHandle> created_handles;
+    std::vector<RenderTargetHandle> deleted_handles;
 
-    unsigned int CreateRenderTarget(const RenderTargetDesc&) override {
-        unsigned int h = next_handle_++;
+    RenderTargetHandle CreateRenderTarget(const RenderTargetDesc&) override {
+        const auto h = RenderTargetHandle::from_raw(next_handle_++);
         created_handles.push_back(h);
         return h;
     }
 
-    void DeleteRenderTarget(unsigned int handle) override {
+    void DeleteRenderTarget(RenderTargetHandle handle) override {
         deleted_handles.push_back(handle);
     }
 };
@@ -656,7 +669,7 @@ TEST_F(RenderGraphIntegrationTest, TransientRT_CompileDistributionAndResetreleas
 
     // Transient 应被分配了物理 RT
     EXPECT_EQ(stub.created_handles.size(), 1u);
-    EXPECT_NE(graph.GetResourceRT(t1), 0u);
+    EXPECT_TRUE(graph.GetResourceRT(t1));
 
     // Reset 应释放
     graph.Reset();

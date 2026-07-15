@@ -90,7 +90,7 @@ TEST(FluidEmitterComponentTest, DefaultWhenState) {
     EXPECT_TRUE(fluid.particles.empty());
     EXPECT_FLOAT_EQ(fluid.emit_accumulator, 0.0f);
     EXPECT_EQ(fluid.active_count, 0u);
-    EXPECT_EQ(fluid.instance_vbo, 0u);
+    EXPECT_FALSE(fluid.instance_vbo);
     EXPECT_FALSE(fluid.gpu_dirty);
 }
 

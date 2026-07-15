@@ -85,8 +85,8 @@ void PostProcessRenderer::BeginFrame() {
 
 bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                                const PostProcessRequest& req) {
-    const unsigned int prog = device.GetGenPPShaderProgram(req.effect_name);
-    if (prog == 0) return false;  // 该效果尚未迁移到 PostProcessRenderer
+    const ShaderHandle prog = device.GetGenPPShaderProgram(req.effect_name);
+    if (!prog) return false;  // 该效果尚未迁移到 PostProcessRenderer
     // 注：source_texture==0 是合法的（如 atmosphere_transmittance_lut 仅由参数程序化生成，
     // 不采样输入纹理）；此时跳过主输入绑定即可，不再据此提前返回。
 
@@ -104,7 +104,7 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
 
     // 主输入纹理：GLSL binding=N → t<N-1>（push cbuffer 占 b0，纹理从 t0 起）。
     // 无源纹理效果（source_texture==0）跳过该绑定。
-    if (req.source_texture != 0) {
+    if (req.source_texture) {
         const uint32_t src_slot =
             req.source_binding > 0 ? static_cast<uint32_t>(req.source_binding - 1) : 0u;
         cmd.BindTexture(src_slot, req.source_texture, TextureDim::Tex2D);
@@ -113,7 +113,7 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     // 额外纹理：slot 存 GLSL binding，同样映射到 t<binding-1>。
     // 3D 纹理（color_grading / tonemapping 的 LUT 等）经 is_3d 标志走 TextureDim::Tex3D。
     for (const PPTextureBinding& t : req.textures) {
-        if (t.handle == 0) break;
+        if (!t.handle) break;
         const uint32_t slot = t.slot > 0 ? t.slot - 1 : 0u;
         cmd.BindTexture(slot, t.handle, t.is_3d ? TextureDim::Tex3D : TextureDim::Tex2D);
     }
@@ -122,8 +122,8 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{0u, 2u, 0u},   // pos
         VertexAttr{1u, 2u, 8u},   // uv
     };
-    cmd.BindVertexBuffer(0u, quad_vbo_.raw(), static_cast<uint32_t>(sizeof(PPVertex)), kAttrs);
-    cmd.BindIndexBuffer(quad_ibo_.raw(), IndexType::UInt16);
+    cmd.BindVertexBuffer(0u, quad_vbo_, static_cast<uint32_t>(sizeof(PPVertex)), kAttrs);
+    cmd.BindIndexBuffer(quad_ibo_, IndexType::UInt16);
     cmd.DrawIndexed(6, 0, 0);
     return true;
 }

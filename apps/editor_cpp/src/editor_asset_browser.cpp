@@ -60,8 +60,8 @@ unsigned int GetThumbnailForAsset(const AssetInfo& asset) {
     auto* am = dse::core::ServiceLocator::Instance().Get<AssetManager>();
     if (am) {
         auto tex = am->LoadTexture(asset.relative_path);
-        if (tex && tex->GetHandle() != 0) {
-            entry.texture_id = tex->GetHandle();
+        if (tex && tex->GetHandle()) {
+            entry.texture_id = tex->GetHandle().raw();
             entry.loaded = true;
         } else {
             entry.failed = true;

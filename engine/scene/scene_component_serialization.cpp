@@ -249,8 +249,8 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
         const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::ImpostorComponent>();
         if (ti) dse::reflect::DeserializeReflected(*ti, &impostor, components["ImpostorComponent"]);
         // 运行时状态重置
-        impostor.atlas_texture_handle_ = 0;
-        impostor.normal_texture_handle_ = 0;
+        impostor.atlas_texture_handle_ = {};
+        impostor.normal_texture_handle_ = {};
         impostor.atlas_loaded_ = false;
         impostor.cached_bounds_radius_ = 0.0f;
         registry.emplace<dse::ImpostorComponent>(entity, std::move(impostor));

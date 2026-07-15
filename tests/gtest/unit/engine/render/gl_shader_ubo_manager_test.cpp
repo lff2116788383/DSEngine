@@ -47,8 +47,8 @@ TEST(SkyboxShaderLocationsTest, DefaultValues) {
 // 测试 GL着色器管理器：默认安全
 TEST(GLShaderManagerTest, DefaultSafety) {
     GLShaderManager mgr;
-    EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
-    EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
+    EXPECT_FALSE(mgr.pbr_shader_handle());
+    EXPECT_FALSE(mgr.skybox_shader_handle());
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
@@ -74,7 +74,8 @@ TEST(GLShaderManagerTest, GenPPShader_UnknownEffectReturnsZero) {
 TEST(GLShaderManagerTest, SetSkyboxHandle) {
     GLShaderManager mgr;
     mgr.set_skybox_shader_handle(42);
-    EXPECT_EQ(mgr.skybox_shader_handle(), 42u);
+    EXPECT_EQ(mgr.skybox_shader_handle(),
+              dse::render::ShaderHandle::from_raw(42));
 }
 
 // ============================================================

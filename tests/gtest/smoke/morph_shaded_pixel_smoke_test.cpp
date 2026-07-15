@@ -71,10 +71,10 @@ RenderTargetReadback RenderMorphShaded(RhiDevice& device, int shading_mode) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    if (device.GetBuiltinProgram(BuiltinProgram::ForwardMorphShaded) == 0) {
+    if (!device.GetBuiltinProgram(BuiltinProgram::ForwardMorphShaded)) {
         device.DeleteRenderTarget(rt);
         return {};
     }

@@ -48,12 +48,12 @@ public:
     virtual void ClearDepth(float depth = 1.0f) { (void)depth; }
 
     /// 诊断用：直接 blit RT 到 swapchain，绕过 shader pipeline
-    virtual void BlitToScreen(unsigned int source_rt) { (void)source_rt; }
+    virtual void BlitToScreen(RenderTargetHandle source_rt) { (void)source_rt; }
 
     /// 阴影贴图绑定命令（Pass 中调用，直接委托到 RhiDevice）
-    virtual void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
-    virtual void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) = 0;
-    virtual void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) = 0;
+    virtual void BindGlobalShadowMap(unsigned int index, TextureHandle texture_handle) = 0;
+    virtual void BindGlobalSpotShadowMap(unsigned int index, TextureHandle texture_handle) = 0;
+    virtual void BindGlobalPointShadowMap(unsigned int index, TextureHandle texture_handle) = 0;
 
     // --- 通用绘制原语 (A1) ---
     // 高层渲染器（如 SkyboxRenderer）用这组后端无关的原语组合出绘制，
@@ -68,7 +68,7 @@ public:
     /// 布局随 VB 一起提供，后端据此建立输入布局。slot 化兑现契约 §3 终态签名：多顶点流
     /// （如 per-instance 实例顶点流走独立 slot + VertexInputRate::PerInstance）。slot=0/PerVertex
     /// 为默认（与旧单 slot 行为一致）。每次绘制前累积各 slot 绑定，在 Draw* 时一并组装输入布局。
-    virtual void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+    virtual void BindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride,
                                   const std::vector<VertexAttr>& attrs,
                                   VertexInputRate rate = VertexInputRate::PerVertex) = 0;
     /// 通用 push constant 字节块写入（Vulkan→真 push constant / DX11→push cbuffer(b0) /
@@ -81,17 +81,17 @@ public:
     // 这组原语由 mesh/sprite 类消费者倒推（见 RHI_PRIMITIVE_CONTRACT.md §4）。纯虚：见上。
 
     /// 绑定索引缓冲（供 DrawIndexed 使用）
-    virtual void BindIndexBuffer(unsigned int buffer_handle, IndexType type) = 0;
+    virtual void BindIndexBuffer(BufferHandle buffer_handle, IndexType type) = 0;
     /// 绑定纹理到指定 slot（按维度区分 2D / cube / 2D 数组）
-    virtual void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) = 0;
+    virtual void BindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) = 0;
     /// 绑定 uniform/constant buffer 到指定 slot（offset/size=0 表示整个 buffer）
-    virtual void BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+    virtual void BindUniformBuffer(uint32_t slot, BufferHandle buffer_handle,
                                    uint32_t offset = 0, uint32_t size = 0) = 0;
     /// 绑定图形阶段 storage buffer (SSBO) 到指定 slot（offset/size=0 表示整个 buffer，
     /// 非 0 表示绑定子区间，蒙皮/实例数据按 item 偏移取用）。
     /// GL→glBindBufferBase/Range(GL_SHADER_STORAGE_BUFFER)；DX11→StructuredBuffer SRV→t-register(VS/PS)；
     /// Vulkan→VK_DESCRIPTOR_TYPE_STORAGE_BUFFER descriptor。
-    virtual void BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+    virtual void BindStorageBuffer(uint32_t slot, BufferHandle buffer_handle,
                                    uint32_t offset = 0, uint32_t size = 0) = 0;
 
     /// 绑定组（契约 §2.3）：一次性绑定一组 UBO/纹理/SSBO，落实「更少、更批量的状态变更」。
@@ -146,7 +146,7 @@ public:
     /// 契约同 DrawIndexedInstanced：DX11 的 SV_InstanceID 仍从 0 起，base_instance 偏移须经
     /// SSBO 偏移表达，不能靠 base_instance 取数（见 RHI_PRIMITIVE_CONTRACT.md §6）。
     /// indirect_buffer 须经 CreateGpuBuffer(GpuBufferUsage::kIndirect) 创建。
-    virtual void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset = 0) = 0;
+    virtual void DrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset = 0) = 0;
 };
 
 /**
@@ -187,21 +187,21 @@ public:
     virtual void Shutdown() = 0;
     virtual void WaitIdle() {}
     virtual void BeginFrame() = 0;
-    virtual unsigned int CreateRenderTarget(const RenderTargetDesc& desc) = 0;
-    virtual void DeleteRenderTarget(unsigned int render_target_handle) { (void)render_target_handle; }
+    virtual RenderTargetHandle CreateRenderTarget(const RenderTargetDesc& desc) = 0;
+    virtual void DeleteRenderTarget(RenderTargetHandle render_target_handle) { (void)render_target_handle; }
     /// 查询当前 RHI 后端类型
     virtual RhiBackend GetBackend() const = 0;
 
-    virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const = 0;
-    virtual unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const {
+    virtual TextureHandle GetRenderTargetColorTexture(RenderTargetHandle render_target_handle) const = 0;
+    virtual TextureHandle GetRenderTargetColorTexture(RenderTargetHandle render_target_handle, int index) const {
         (void)index; return GetRenderTargetColorTexture(render_target_handle);
     }
-    virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
-    virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const = 0;
-    virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const = 0;
+    virtual TextureHandle GetRenderTargetDepthTexture(RenderTargetHandle render_target_handle) const = 0;
+    virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(RenderTargetHandle render_target_handle) const = 0;
+    virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(RenderTargetHandle render_target_handle) const = 0;
     /// 回读渲染目标深度附件为归一化 float [0,1]（行优先）。默认返回空（后端未实现 / 无深度附件）。
     /// 用于 depth-only pass 校验（B2b-4）：各后端把原生深度格式（D24S8 等）解包为 [0,1]。
-    virtual RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
+    virtual RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(RenderTargetHandle render_target_handle) const {
         (void)render_target_handle; return {};
     }
 
@@ -213,39 +213,39 @@ public:
 
     /// 渲染目标 blit（编辑器架构 §5.B）：等尺寸把 src_rt 的颜色 0 号附件拷到 dst_rt，
     /// 替代多视口的 glBlitFramebuffer。dst 需已按相同尺寸创建。默认空实现。
-    virtual void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+    virtual void BlitRenderTarget(RenderTargetHandle src_rt, RenderTargetHandle dst_rt) {
         (void)src_rt; (void)dst_rt;
     }
-    virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
+    virtual TextureHandle CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     /// 带采样描述(过滤 + 环绕)的 2D 纹理创建。默认实现退化为旧的 filter-only 行为
     /// (环绕 = Repeat)，后端可覆盖以支持 ClampToEdge / 点采样等。
-    virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
+    virtual TextureHandle CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
                                          const TextureSamplerDesc& sampler) {
         return CreateTexture2D(width, height, rgba8_data, sampler.filter == TextureFilter::Linear);
     }
-    virtual unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
+    virtual TextureHandle CreateCompressedTexture2D(CompressedTextureFormat format,
                                                    const std::vector<CompressedMipLevel>& mips,
-                                                   bool linear_filter) { (void)format; (void)mips; (void)linear_filter; return 0; }
-    virtual unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
+                                                   bool linear_filter) { (void)format; (void)mips; (void)linear_filter; return {}; }
+    virtual TextureHandle CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
     /// 创建带预滤波 mip 链的立方体纹理（IBL prefiltered env）。mips[0] 为 base、
     /// 其后为按粗糙度卷积的逐 mip 数据，运行时着色器以 textureLod(roughness*MAX_LOD)
     /// 采样。默认实现仅上传 mip0（回退为无 mip 链立方体）；GL 后端覆盖为逐 mip 上传 +
     /// LINEAR_MIPMAP_LINEAR（WebGL2/GLES3.0 原生支持立方体 mip 采样，无需 compute/SSBO）。
-    virtual unsigned int CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
+    virtual TextureHandle CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
                                                    bool linear_filter) {
-        if (mips.empty()) return 0;
+        if (mips.empty()) return {};
         return CreateTextureCube(mips[0].width, mips[0].height, mips[0].faces, linear_filter);
     }
-    virtual unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) = 0;
-    virtual void DeleteTexture(unsigned int texture_handle) = 0;
-    virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
-    virtual void DeleteShaderProgram(unsigned int program_handle) = 0;
+    virtual TextureHandle CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) = 0;
+    virtual void DeleteTexture(TextureHandle texture_handle) = 0;
+    virtual ShaderHandle CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
+    virtual void DeleteShaderProgram(ShaderHandle program_handle) = 0;
     virtual PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) = 0;
 
     /// 图形管线对象（B5-3b）：把 PSO 子状态句柄 + 着色器程序句柄聚合为单一管线句柄并惰性缓存（按 (pso,program) 去重）。
     /// program==0 表示「仅 PSO 状态」管线。供 CommandBuffer::BindPipeline 取用，取代分离的 SetPipelineState+BindShaderProgram。
     /// 后端无关：仅登记句柄对，绑定时由各后端 command buffer 经 GetGraphicsPipelineDesc 解出 (pso,program) 分别应用。
-    GraphicsPipelineHandle GetGraphicsPipeline(PipelineHandle pso_state, unsigned int program) {
+    GraphicsPipelineHandle GetGraphicsPipeline(PipelineHandle pso_state, ShaderHandle program) {
         const GraphicsPipelineDesc desc{pso_state, program};
         for (size_t i = 0; i < graphics_pipelines_.size(); ++i) {
             if (graphics_pipelines_[i] == desc) return GraphicsPipelineHandle{static_cast<uint32_t>(i + 1)};
@@ -265,33 +265,33 @@ public:
 
     /// 内建着色器程序句柄（懒初始化）。按 BuiltinProgram 标识取用，取代每效果一个访问器。
     /// 默认返回 0（未实现该程序的后端/Mock）。
-    virtual unsigned int GetBuiltinProgram(BuiltinProgram program) { (void)program; return 0; }
+    virtual ShaderHandle GetBuiltinProgram(BuiltinProgram program) { (void)program; return {}; }
     /// 后处理效果的 gen 着色器程序句柄（懒编译/取用），供 PostProcessRenderer 经通用原语绑定。
     /// effect_name 为 gen-PP 效果名（"passthrough"/"tonemapping"/"bloom_composite"/...，
     /// 见各后端 GetGenPPShaderProgram 映射）。未实现该效果的后端/Mock 或未知名返回 0。
-    virtual unsigned int GetGenPPShaderProgram(const std::string& effect_name) {
+    virtual ShaderHandle GetGenPPShaderProgram(const std::string& effect_name) {
         (void)effect_name;
-        return 0;
+        return {};
     }
     /// bloom 降采样/升采样 compute shader 句柄，供 BloomRenderer 选择 compute vs quad 路径。
     /// compute 后端（DX11 FL11+/Vulkan）返回有效句柄；不支持/未启用 compute 的后端（GL）
     /// 返回 0，BloomRenderer 据此回退全屏 quad（避免新写不可验证的 GL compute 着色器）。
     /// upsample=false → 降采样 CS；true → 升采样 CS。
-    virtual unsigned int GetBloomComputeShader(bool upsample) const { (void)upsample; return 0; }
+    virtual ShaderHandle GetBloomComputeShader(bool upsample) const { (void)upsample; return {}; }
 
     /// 内建天空盒立方体顶点缓冲句柄（36 顶点，vec3 pos，懒初始化）
-    virtual unsigned int GetSkyboxCubeVertexBuffer() { return 0; }
+    virtual BufferHandle GetSkyboxCubeVertexBuffer() { return {}; }
 
-    virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
-    virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
-    virtual void DeleteBuffer(unsigned int handle) = 0;
+    virtual BufferHandle CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
+    virtual void UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
+    virtual void DeleteBuffer(BufferHandle handle) = 0;
 
     // --- 资源状态转换（RenderGraph 自动屏障） ---
 
     /// 渲染目标状态转换，由 RenderGraph::Execute 在 Pass 之间自动调用。
     /// 默认实现：从 UnorderedAccess 离开时插入 ComputeMemoryBarrier。
     /// 后端可覆写以执行更精确的屏障（如 Vulkan VkImageMemoryBarrier）。
-    virtual void TransitionRenderTarget(unsigned int rt_handle,
+    virtual void TransitionRenderTarget(RenderTargetHandle rt_handle,
                                          ResourceState from, ResourceState to) {
         (void)rt_handle;
         if (from == ResourceState::UnorderedAccess && to != ResourceState::UnorderedAccess) {
@@ -312,12 +312,12 @@ public:
     virtual BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
         BufferHandle h;
         if (has(desc.usage, GpuBufferUsage::kStorage)) {
-            h = BufferHandle{CreateSSBO(desc.size, initial_data)};
+            h = CreateSSBO(desc.size, initial_data);
         } else if (has(desc.usage, GpuBufferUsage::kIndirect)) {
-            h = BufferHandle{CreateIndirectBuffer(desc.size, initial_data)};
+            h = CreateIndirectBuffer(desc.size, initial_data);
         } else {
             bool is_index = has(desc.usage, GpuBufferUsage::kIndex);
-            h = BufferHandle{CreateBuffer(desc.size, initial_data, desc.is_dynamic, is_index)};
+            h = CreateBuffer(desc.size, initial_data, desc.is_dynamic, is_index);
         }
         if (h) gpu_buffer_usage_map_[h.raw()] = desc.usage;
         return h;
@@ -326,29 +326,29 @@ public:
     virtual void UpdateGpuBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) {
         auto usage = GetBufferUsage_(handle);
         if (has(usage, GpuBufferUsage::kStorage)) {
-            UpdateSSBO(handle.raw(), offset, size, data);
+            UpdateSSBO(handle, offset, size, data);
         } else if (has(usage, GpuBufferUsage::kIndirect)) {
-            UpdateIndirectBuffer(handle.raw(), offset, size, data);
+            UpdateIndirectBuffer(handle, offset, size, data);
         } else {
             bool is_index = has(usage, GpuBufferUsage::kIndex);
-            UpdateBuffer(handle.raw(), offset, size, data, is_index);
+            UpdateBuffer(handle, offset, size, data, is_index);
         }
     }
 
     virtual void DeleteGpuBuffer(BufferHandle handle) {
         auto usage = GetBufferUsage_(handle);
         if (has(usage, GpuBufferUsage::kStorage)) {
-            DeleteSSBO(handle.raw());
+            DeleteSSBO(handle);
         } else if (has(usage, GpuBufferUsage::kIndirect)) {
-            DeleteIndirectBuffer(handle.raw());
+            DeleteIndirectBuffer(handle);
         } else {
-            DeleteBuffer(handle.raw());
+            DeleteBuffer(handle);
         }
         gpu_buffer_usage_map_.erase(handle.raw());
     }
 
     virtual void BindGpuBuffer(BufferHandle handle, uint32_t binding_point) {
-        BindSSBO(handle.raw(), binding_point);
+        BindSSBO(handle, binding_point);
     }
 
     /// 绑定 GPU Buffer 到指定绑定点（writable=true 时 DX11 绑定为 UAV，GL/VK 忽略此参数）
@@ -358,7 +358,7 @@ public:
     }
 
     virtual void ReadGpuBuffer(BufferHandle handle, size_t offset, size_t size, void* dst) {
-        ReadSSBO(handle.raw(), offset, size, dst);
+        ReadSSBO(handle, offset, size, dst);
     }
 
     /// 异步 readback: 发起 GPU→staging 拷贝（本帧不读取），返回上一帧数据是否可用
@@ -439,9 +439,9 @@ public:
     // B5-2 收敛：阴影贴图、光照空间矩阵均统一为 (index, value) 签名并按类别分组，删除冗余的单参 index=0 重载（无调用方）。
     //
     // 阴影贴图绑定（方向 / 聚光 / 点光）
-    void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetShadowMap(index, handle); }
-    void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetSpotShadowMap(index, handle); }
-    void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetPointShadowMap(index, handle); }
+    void SetGlobalShadowMap(unsigned int index, TextureHandle handle) { global_render_state_.SetShadowMap(index, handle); }
+    void SetGlobalSpotShadowMap(unsigned int index, TextureHandle handle) { global_render_state_.SetSpotShadowMap(index, handle); }
+    void SetGlobalPointShadowMap(unsigned int index, TextureHandle handle) { global_render_state_.SetPointShadowMap(index, handle); }
     // 光照空间矩阵（方向 CSM / 聚光）
     void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetLightSpaceMatrix(index, mat); }
     void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(index, mat); }
@@ -452,7 +452,7 @@ public:
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_render_state_.SetLightProbeSH(sh, enabled); }
 
     // --- DDGI 全局状态 ---
-    void SetGlobalDDGI(bool enabled, unsigned int irradiance_atlas,
+    void SetGlobalDDGI(bool enabled, TextureHandle irradiance_atlas,
                        const glm::vec3& grid_origin, const glm::vec3& grid_spacing,
                        const glm::ivec3& grid_resolution, int irradiance_texels,
                        float gi_intensity, float normal_bias) {
@@ -468,7 +468,7 @@ public:
     void SetGlobalFoliagePush(const glm::vec4& push) { global_render_state_.foliage_push = push; }
 
     // --- GBuffer / Deferred 管线状态 ---
-    void SetGlobalGBufferTexture(unsigned int index, unsigned int texture_handle) { global_render_state_.SetGBufferTexture(index, texture_handle); }
+    void SetGlobalGBufferTexture(unsigned int index, TextureHandle texture_handle) { global_render_state_.SetGBufferTexture(index, texture_handle); }
     void SetGBufferRenderingMode(bool enabled) { global_render_state_.gbuffer_rendering_mode = enabled; }
 
     /// 全局渲染状态访问器（供 DrawExecutor 等内部组件使用）

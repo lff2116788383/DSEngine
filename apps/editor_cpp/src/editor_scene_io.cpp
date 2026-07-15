@@ -938,7 +938,7 @@ static void SaveUIRendererJsonComponent(
 
     auto& ui = registry.get<UIRendererComponent>(entity);
     rapidjson::Value ui_obj(rapidjson::kObjectType);
-    ui_obj.AddMember("texture_handle", ui.texture_handle, allocator);
+    ui_obj.AddMember("texture_handle", ui.texture_handle.raw(), allocator);
     WriteVec4(ui_obj, "color", ui.color, allocator);
     WriteVec4(ui_obj, "uv", ui.uv, allocator);
     ui_obj.AddMember("order", ui.order, allocator);
@@ -964,7 +964,7 @@ static void LoadUIRendererJsonComponent(
 
     auto& ui_obj = v["ui_renderer"];
     auto& ui = registry.emplace<UIRendererComponent>(entity);
-    if (ui_obj.HasMember("texture_handle") && ui_obj["texture_handle"].IsUint()) ui.texture_handle = ui_obj["texture_handle"].GetUint();
+    if (ui_obj.HasMember("texture_handle") && ui_obj["texture_handle"].IsUint()) ui.texture_handle = dse::render::TextureHandle::from_raw(ui_obj["texture_handle"].GetUint());
     ReadVec4(ui_obj, "color", ui.color);
     ReadVec4(ui_obj, "uv", ui.uv);
     if (ui_obj.HasMember("order") && ui_obj["order"].IsInt()) ui.order = ui_obj["order"].GetInt();
@@ -1000,7 +1000,7 @@ static void SaveUILabelJsonComponent(
     label_obj.AddMember("localization_params", params_obj, allocator);
     label_obj.AddMember("number_value", label.number_value, allocator);
     label_obj.AddMember("numeric_mode", label.numeric_mode, allocator);
-    label_obj.AddMember("font_texture_handle", label.font_texture_handle, allocator);
+    label_obj.AddMember("font_texture_handle", label.font_texture_handle.raw(), allocator);
     WriteVec2(label_obj, "glyph_size", label.glyph_size, allocator);
     WriteVec2(label_obj, "offset", label.offset, allocator);
     label_obj.AddMember("spacing", label.spacing, allocator);
@@ -1032,7 +1032,7 @@ static void LoadUILabelJsonComponent(
     }
     if (label_obj.HasMember("number_value") && label_obj["number_value"].IsInt64()) label.number_value = label_obj["number_value"].GetInt64();
     if (label_obj.HasMember("numeric_mode") && label_obj["numeric_mode"].IsBool()) label.numeric_mode = label_obj["numeric_mode"].GetBool();
-    if (label_obj.HasMember("font_texture_handle") && label_obj["font_texture_handle"].IsUint()) label.font_texture_handle = label_obj["font_texture_handle"].GetUint();
+    if (label_obj.HasMember("font_texture_handle") && label_obj["font_texture_handle"].IsUint()) label.font_texture_handle = dse::render::TextureHandle::from_raw(label_obj["font_texture_handle"].GetUint());
     ReadVec2(label_obj, "glyph_size", label.glyph_size);
     ReadVec2(label_obj, "offset", label.offset);
     if (label_obj.HasMember("spacing") && label_obj["spacing"].IsNumber()) label.spacing = label_obj["spacing"].GetFloat();
@@ -1082,7 +1082,7 @@ static void SaveParticleEmitterJsonComponent(
 
     auto& emitter = registry.get<ParticleEmitterComponent>(entity);
     rapidjson::Value emitter_obj(rapidjson::kObjectType);
-    emitter_obj.AddMember("texture_handle", emitter.texture_handle, allocator);
+    emitter_obj.AddMember("texture_handle", emitter.texture_handle.raw(), allocator);
     emitter_obj.AddMember("max_particles", emitter.max_particles, allocator);
     emitter_obj.AddMember("emit_rate", emitter.emit_rate, allocator);
     emitter_obj.AddMember("emit_rate_scale", emitter.emit_rate_scale, allocator);
@@ -1139,7 +1139,7 @@ static void LoadParticleEmitterJsonComponent(
 
     auto& emitter_obj = v["particle_emitter"];
     auto& emitter = registry.emplace<ParticleEmitterComponent>(entity);
-    if (emitter_obj.HasMember("texture_handle") && emitter_obj["texture_handle"].IsUint()) emitter.texture_handle = emitter_obj["texture_handle"].GetUint();
+    if (emitter_obj.HasMember("texture_handle") && emitter_obj["texture_handle"].IsUint()) emitter.texture_handle = dse::render::TextureHandle::from_raw(emitter_obj["texture_handle"].GetUint());
     if (emitter_obj.HasMember("max_particles") && emitter_obj["max_particles"].IsInt()) emitter.max_particles = emitter_obj["max_particles"].GetInt();
     if (emitter_obj.HasMember("emit_rate") && emitter_obj["emit_rate"].IsNumber()) emitter.emit_rate = emitter_obj["emit_rate"].GetFloat();
     if (emitter_obj.HasMember("emit_rate_scale") && emitter_obj["emit_rate_scale"].IsNumber()) emitter.emit_rate_scale = emitter_obj["emit_rate_scale"].GetFloat();
@@ -1560,7 +1560,7 @@ static void SaveSkyboxJsonComponent(
     auto& skybox = registry.get<dse::SkyboxComponent>(entity);
     rapidjson::Value skybox_obj(rapidjson::kObjectType);
     skybox_obj.AddMember("enabled", skybox.enabled, allocator);
-    skybox_obj.AddMember("cubemap_handle", skybox.cubemap_handle, allocator);
+    skybox_obj.AddMember("cubemap_handle", skybox.cubemap_handle.raw(), allocator);
     skybox_obj.AddMember("cubemap_path", rapidjson::Value(skybox.cubemap_path.c_str(), allocator).Move(), allocator);
     ent_obj.AddMember("skybox", skybox_obj, allocator);
 }
@@ -1574,7 +1574,7 @@ static void LoadSkyboxJsonComponent(
     auto& skybox_obj = v["skybox"];
     auto& skybox = registry.emplace<dse::SkyboxComponent>(entity);
     if (skybox_obj.HasMember("enabled") && skybox_obj["enabled"].IsBool()) skybox.enabled = skybox_obj["enabled"].GetBool();
-    if (skybox_obj.HasMember("cubemap_handle") && skybox_obj["cubemap_handle"].IsUint()) skybox.cubemap_handle = skybox_obj["cubemap_handle"].GetUint();
+    if (skybox_obj.HasMember("cubemap_handle") && skybox_obj["cubemap_handle"].IsUint()) skybox.cubemap_handle = dse::render::TextureHandle::from_raw(skybox_obj["cubemap_handle"].GetUint());
     if (skybox_obj.HasMember("cubemap_path") && skybox_obj["cubemap_path"].IsString()) skybox.cubemap_path = skybox_obj["cubemap_path"].GetString();
 }
 
@@ -1681,7 +1681,7 @@ static void SaveTerrainJsonComponent(
     rapidjson::Value terrain_obj(rapidjson::kObjectType);
     terrain_obj.AddMember("enabled", terrain.enabled, allocator);
     terrain_obj.AddMember("heightmap_path", rapidjson::Value(terrain.heightmap_path.c_str(), allocator).Move(), allocator);
-    terrain_obj.AddMember("texture_handle", terrain.texture_handle, allocator);
+    terrain_obj.AddMember("texture_handle", terrain.texture_handle.raw(), allocator);
     terrain_obj.AddMember("width", terrain.width, allocator);
     terrain_obj.AddMember("depth", terrain.depth, allocator);
     terrain_obj.AddMember("max_height", terrain.max_height, allocator);
@@ -1704,7 +1704,7 @@ static void LoadTerrainJsonComponent(
     auto& terrain = registry.emplace<dse::TerrainComponent>(entity);
     if (terrain_obj.HasMember("enabled") && terrain_obj["enabled"].IsBool()) terrain.enabled = terrain_obj["enabled"].GetBool();
     if (terrain_obj.HasMember("heightmap_path") && terrain_obj["heightmap_path"].IsString()) terrain.heightmap_path = terrain_obj["heightmap_path"].GetString();
-    if (terrain_obj.HasMember("texture_handle") && terrain_obj["texture_handle"].IsUint()) terrain.texture_handle = terrain_obj["texture_handle"].GetUint();
+    if (terrain_obj.HasMember("texture_handle") && terrain_obj["texture_handle"].IsUint()) terrain.texture_handle = dse::render::TextureHandle::from_raw(terrain_obj["texture_handle"].GetUint());
     if (terrain_obj.HasMember("width") && terrain_obj["width"].IsNumber()) terrain.width = terrain_obj["width"].GetFloat();
     if (terrain_obj.HasMember("depth") && terrain_obj["depth"].IsNumber()) terrain.depth = terrain_obj["depth"].GetFloat();
     if (terrain_obj.HasMember("max_height") && terrain_obj["max_height"].IsNumber()) terrain.max_height = terrain_obj["max_height"].GetFloat();

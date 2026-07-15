@@ -167,67 +167,67 @@ glm::mat4 WebGPURhiDevice::GetShadowSampleCorrection() const {
 bool WebGPURhiDevice::InitDevice(void* window_handle, int width, int height) { return ctx_->InitDevice(window_handle, width, height); }
 void WebGPURhiDevice::OnWindowResized(int width, int height) { ctx_->OnWindowResized(width, height); }
 void WebGPURhiDevice::WaitIdle() { ctx_->WaitIdle(); }
-unsigned int WebGPURhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) { return res_.CreateRenderTarget(desc); }
-void WebGPURhiDevice::DeleteRenderTarget(unsigned int render_target_handle) { res_.DeleteRenderTarget(render_target_handle); }
-unsigned int WebGPURhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const { return res_.GetRenderTargetColorTexture(render_target_handle); }
-unsigned int WebGPURhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const { return res_.GetRenderTargetDepthTexture(render_target_handle); }
-std::vector<unsigned char> WebGPURhiDevice::ReadRenderTargetColorRgba8(unsigned int render_target_handle) const { return res_.ReadRenderTargetColorRgba8(render_target_handle); }
-RenderTargetReadback WebGPURhiDevice::ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const { return res_.ReadRenderTargetColorRgba8WithSize(render_target_handle); }
-unsigned int WebGPURhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const { return res_.GetRenderTargetColorTexture(render_target_handle, index); }
-unsigned int WebGPURhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) { return res_.CreateTexture2D(width, height, rgba8_data, linear_filter); }
-unsigned int WebGPURhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, const TextureSamplerDesc& sampler) { return res_.CreateTexture2D(width, height, rgba8_data, sampler); }
-unsigned int WebGPURhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) { return res_.CreateTextureCube(width, height, rgba8_faces, linear_filter); }
-unsigned int WebGPURhiDevice::CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips, bool linear_filter) { return res_.CreateTextureCubeWithMips(mips, linear_filter); }
-unsigned int WebGPURhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) { return res_.CreateTexture3D(width, height, depth, rgba8_data, linear_filter); }
-void WebGPURhiDevice::DeleteTexture(unsigned int texture_handle) { res_.DeleteTexture(texture_handle); }
-unsigned int WebGPURhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) { return shader_.CreateShaderProgram(vert_src, frag_src); }
-void WebGPURhiDevice::DeleteShaderProgram(unsigned int program_handle) { shader_.DeleteShaderProgram(program_handle); }
+RenderTargetHandle WebGPURhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) { return res_.CreateRenderTarget(desc); }
+void WebGPURhiDevice::DeleteRenderTarget(RenderTargetHandle render_target_handle) { res_.DeleteRenderTarget(render_target_handle); }
+TextureHandle WebGPURhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle) const { return res_.GetRenderTargetColorTexture(render_target_handle); }
+TextureHandle WebGPURhiDevice::GetRenderTargetDepthTexture(unsigned int render_target_handle) const { return res_.GetRenderTargetDepthTexture(render_target_handle); }
+std::vector<unsigned char> WebGPURhiDevice::ReadRenderTargetColorRgba8(RenderTargetHandle render_target_handle) const { return res_.ReadRenderTargetColorRgba8(render_target_handle); }
+RenderTargetReadback WebGPURhiDevice::ReadRenderTargetColorRgba8WithSize(RenderTargetHandle render_target_handle) const { return res_.ReadRenderTargetColorRgba8WithSize(render_target_handle); }
+TextureHandle WebGPURhiDevice::GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const { return res_.GetRenderTargetColorTexture(render_target_handle, index); }
+TextureHandle WebGPURhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) { return res_.CreateTexture2D(width, height, rgba8_data, linear_filter); }
+TextureHandle WebGPURhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, const TextureSamplerDesc& sampler) { return res_.CreateTexture2D(width, height, rgba8_data, sampler); }
+TextureHandle WebGPURhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) { return res_.CreateTextureCube(width, height, rgba8_faces, linear_filter); }
+TextureHandle WebGPURhiDevice::CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips, bool linear_filter) { return res_.CreateTextureCubeWithMips(mips, linear_filter); }
+TextureHandle WebGPURhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) { return res_.CreateTexture3D(width, height, depth, rgba8_data, linear_filter); }
+void WebGPURhiDevice::DeleteTexture(TextureHandle texture_handle) { res_.DeleteTexture(texture_handle); }
+ShaderHandle WebGPURhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) { return shader_.CreateShaderProgram(vert_src, frag_src); }
+void WebGPURhiDevice::DeleteShaderProgram(ShaderHandle program_handle) { shader_.DeleteShaderProgram(program_handle); }
 PipelineHandle WebGPURhiDevice::CreatePipelineState(const PipelineStateDesc& desc) { return PipelineHandle{pso_.CreatePipelineState(desc)}; }
-unsigned int WebGPURhiDevice::GetBuiltinProgram(BuiltinProgram program) { return shader_.GetBuiltinProgram(program); }
-unsigned int WebGPURhiDevice::GetGenPPShaderProgram(const std::string& effect_name) { return shader_.GetGenPPShaderProgram(effect_name); }
-unsigned int WebGPURhiDevice::GetSkyboxCubeVertexBuffer() { return shader_.GetSkyboxCubeVertexBuffer(); }
-unsigned int WebGPURhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) { return res_.CreateBuffer(size, data, is_dynamic, is_index); }
-void WebGPURhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) { res_.UpdateBuffer(handle, offset, size, data, is_index); }
-void WebGPURhiDevice::DeleteBuffer(unsigned int handle) { res_.DeleteBuffer(handle); }
+ShaderHandle WebGPURhiDevice::GetBuiltinProgram(BuiltinProgram program) { return shader_.GetBuiltinProgram(program); }
+ShaderHandle WebGPURhiDevice::GetGenPPShaderProgram(const std::string& effect_name) { return shader_.GetGenPPShaderProgram(effect_name); }
+BufferHandle WebGPURhiDevice::GetSkyboxCubeVertexBuffer() { return shader_.GetSkyboxCubeVertexBuffer(); }
+BufferHandle WebGPURhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) { return res_.CreateBuffer(size, data, is_dynamic, is_index); }
+void WebGPURhiDevice::UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) { res_.UpdateBuffer(handle, offset, size, data, is_index); }
+void WebGPURhiDevice::DeleteBuffer(BufferHandle handle) { res_.DeleteBuffer(handle); }
 VertexArrayHandle WebGPURhiDevice::CreateVertexArray() { return exec_.CreateVertexArray(); }
 void WebGPURhiDevice::DeleteVertexArray(VertexArrayHandle handle) { exec_.DeleteVertexArray(handle); }
 void WebGPURhiDevice::CmdBeginRenderPass(const RenderPassDesc& desc) { exec_.CmdBeginRenderPass(desc); }
 void WebGPURhiDevice::CmdEndRenderPass() { exec_.CmdEndRenderPass(); }
 void WebGPURhiDevice::CmdClearColor(const glm::vec4& color) { exec_.CmdClearColor(color); }
 void WebGPURhiDevice::CmdSetViewport(int x, int y, int width, int height) { exec_.CmdSetViewport(x, y, width, height); }
-void WebGPURhiDevice::CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle) { exec_.CmdBindGlobalShadowMap(index, texture_handle); }
-void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) { exec_.CmdBindGlobalSpotShadowMap(index, texture_handle); }
-void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) { exec_.CmdBindGlobalPointShadowMap(index, texture_handle); }
+void WebGPURhiDevice::CmdBindGlobalShadowMap(unsigned int index, TextureHandle texture_handle) { exec_.CmdBindGlobalShadowMap(index, texture_handle); }
+void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, TextureHandle texture_handle) { exec_.CmdBindGlobalSpotShadowMap(index, texture_handle); }
+void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, TextureHandle texture_handle) { exec_.CmdBindGlobalPointShadowMap(index, texture_handle); }
 void WebGPURhiDevice::CmdBindPipeline(unsigned int graphics_pipeline_handle) { exec_.CmdBindPipeline(graphics_pipeline_handle); }
-void WebGPURhiDevice::CmdBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs, VertexInputRate rate) { exec_.CmdBindVertexBuffer(slot, buffer_handle, stride, attrs, rate); }
-void WebGPURhiDevice::CmdBindIndexBuffer(unsigned int buffer_handle, IndexType type) { exec_.CmdBindIndexBuffer(buffer_handle, type); }
-void WebGPURhiDevice::CmdBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) { exec_.CmdBindTexture(slot, texture_handle, dim); }
-void WebGPURhiDevice::CmdBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) { exec_.CmdBindUniformBuffer(slot, buffer_handle, offset, size); }
-void WebGPURhiDevice::CmdBindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) { exec_.CmdBindStorageBuffer(slot, buffer_handle, offset, size); }
+void WebGPURhiDevice::CmdBindVertexBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs, VertexInputRate rate) { exec_.CmdBindVertexBuffer(slot, buffer_handle, stride, attrs, rate); }
+void WebGPURhiDevice::CmdBindIndexBuffer(BufferHandle buffer_handle, IndexType type) { exec_.CmdBindIndexBuffer(buffer_handle, type); }
+void WebGPURhiDevice::CmdBindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) { exec_.CmdBindTexture(slot, texture_handle, dim); }
+void WebGPURhiDevice::CmdBindUniformBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size) { exec_.CmdBindUniformBuffer(slot, buffer_handle, offset, size); }
+void WebGPURhiDevice::CmdBindStorageBuffer(uint32_t slot, BufferHandle buffer_handle, uint32_t offset, uint32_t size) { exec_.CmdBindStorageBuffer(slot, buffer_handle, offset, size); }
 void WebGPURhiDevice::CmdPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) { exec_.CmdPushConstants(stage, offset, data, size); }
 void WebGPURhiDevice::CmdDraw(uint32_t vertex_count, uint32_t first_vertex) { exec_.CmdDraw(vertex_count, first_vertex); }
 void WebGPURhiDevice::CmdDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) { exec_.CmdDrawIndexed(index_count, first_index, base_vertex); }
 void WebGPURhiDevice::CmdDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t base_vertex, uint32_t first_instance) { exec_.CmdDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance); }
-void WebGPURhiDevice::CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) { exec_.CmdDrawIndexedIndirect(indirect_buffer, byte_offset); }
+void WebGPURhiDevice::CmdDrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset) { exec_.CmdDrawIndexedIndirect(indirect_buffer, byte_offset); }
 void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { exec_.CmdDispatchComputePass(dispatch); }
-unsigned int WebGPURhiDevice::CreateComputeShader(const std::string& source) { return shader_.CreateComputeShader(source); }
-unsigned int WebGPURhiDevice::CreateComputeShaderEx(const std::string& gl_src, const std::string& vk_src, const std::string& hlsl_src, uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count, uint32_t push_constant_bytes, const std::string& wgsl_src) { return shader_.CreateComputeShaderEx(gl_src, vk_src, hlsl_src, ssbo_count, storage_image_count, sampler_count, push_constant_bytes, wgsl_src); }
-void WebGPURhiDevice::DeleteComputeShader(unsigned int handle) { shader_.DeleteComputeShader(handle); }
-void WebGPURhiDevice::DispatchCompute(unsigned int shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) { exec_.DispatchCompute(shader_handle, groups_x, groups_y, groups_z); }
+ShaderHandle WebGPURhiDevice::CreateComputeShader(const std::string& source) { return shader_.CreateComputeShader(source); }
+ShaderHandle WebGPURhiDevice::CreateComputeShaderEx(const std::string& gl_src, const std::string& vk_src, const std::string& hlsl_src, uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count, uint32_t push_constant_bytes, const std::string& wgsl_src) { return shader_.CreateComputeShaderEx(gl_src, vk_src, hlsl_src, ssbo_count, storage_image_count, sampler_count, push_constant_bytes, wgsl_src); }
+void WebGPURhiDevice::DeleteComputeShader(ShaderHandle handle) { shader_.DeleteComputeShader(handle); }
+void WebGPURhiDevice::DispatchCompute(ShaderHandle shader_handle, unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) { exec_.DispatchCompute(shader_handle, groups_x, groups_y, groups_z); }
 void WebGPURhiDevice::BeginComputePass() { exec_.BeginComputePass(); }
 void WebGPURhiDevice::EndComputePass() { exec_.EndComputePass(); }
-unsigned int WebGPURhiDevice::CreateComputeWriteTexture2D(int width, int height) { return res_.CreateComputeWriteTexture2D(width, height); }
-void WebGPURhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) { exec_.SetComputeTextureImage(binding, texture_handle, read_only); }
-void WebGPURhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle, int mip_level, bool read_only, bool r32f) { exec_.SetComputeTextureImageMip(binding, texture_handle, mip_level, read_only, r32f); }
-void WebGPURhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) { exec_.SetComputeTextureSampler(unit, texture_handle); }
-void WebGPURhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) { exec_.SetComputeUniformInt(shader, name, value); }
-void WebGPURhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) { exec_.SetComputeUniformFloat(shader, name, value); }
-void WebGPURhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) { exec_.SetComputeUniformVec2i(shader, name, x, y); }
-void WebGPURhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) { exec_.SetComputeUniformVec2f(shader, name, x, y); }
-void WebGPURhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) { exec_.SetComputeUniformVec3(shader, name, x, y, z); }
-void WebGPURhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) { exec_.SetComputeUniformIVec3(shader, name, x, y, z); }
-void WebGPURhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) { exec_.SetComputeUniformVec4(shader, name, x, y, z, w); }
-void WebGPURhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) { exec_.SetComputeUniformMat4(shader, name, data); }
+TextureHandle WebGPURhiDevice::CreateComputeWriteTexture2D(int width, int height) { return res_.CreateComputeWriteTexture2D(width, height); }
+void WebGPURhiDevice::SetComputeTextureImage(unsigned int binding, TextureHandle texture_handle, bool read_only) { exec_.SetComputeTextureImage(binding, texture_handle, read_only); }
+void WebGPURhiDevice::SetComputeTextureImageMip(unsigned int binding, TextureHandle texture_handle, int mip_level, bool read_only, bool r32f) { exec_.SetComputeTextureImageMip(binding, texture_handle, mip_level, read_only, r32f); }
+void WebGPURhiDevice::SetComputeTextureSampler(unsigned int unit, TextureHandle texture_handle) { exec_.SetComputeTextureSampler(unit, texture_handle); }
+void WebGPURhiDevice::SetComputeUniformInt(ShaderHandle shader, const char* name, int value) { exec_.SetComputeUniformInt(shader, name, value); }
+void WebGPURhiDevice::SetComputeUniformFloat(ShaderHandle shader, const char* name, float value) { exec_.SetComputeUniformFloat(shader, name, value); }
+void WebGPURhiDevice::SetComputeUniformVec2i(ShaderHandle shader, const char* name, int x, int y) { exec_.SetComputeUniformVec2i(shader, name, x, y); }
+void WebGPURhiDevice::SetComputeUniformVec2f(ShaderHandle shader, const char* name, float x, float y) { exec_.SetComputeUniformVec2f(shader, name, x, y); }
+void WebGPURhiDevice::SetComputeUniformVec3(ShaderHandle shader, const char* name, float x, float y, float z) { exec_.SetComputeUniformVec3(shader, name, x, y, z); }
+void WebGPURhiDevice::SetComputeUniformIVec3(ShaderHandle shader, const char* name, int x, int y, int z) { exec_.SetComputeUniformIVec3(shader, name, x, y, z); }
+void WebGPURhiDevice::SetComputeUniformVec4(ShaderHandle shader, const char* name, float x, float y, float z, float w) { exec_.SetComputeUniformVec4(shader, name, x, y, z, w); }
+void WebGPURhiDevice::SetComputeUniformMat4(ShaderHandle shader, const char* name, const float* data) { exec_.SetComputeUniformMat4(shader, name, data); }
 BufferHandle WebGPURhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) { return res_.CreateGpuBuffer(desc, initial_data); }
 void WebGPURhiDevice::UpdateGpuBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) { res_.UpdateGpuBuffer(handle, offset, size, data); }
 void WebGPURhiDevice::BindGpuBuffer(BufferHandle handle, uint32_t binding_point) { exec_.BindGpuBuffer(handle, binding_point); }
@@ -235,7 +235,7 @@ void WebGPURhiDevice::BindGpuBuffer(BufferHandle handle, uint32_t binding_point,
 void WebGPURhiDevice::DeleteGpuBuffer(BufferHandle handle) { res_.DeleteGpuBuffer(handle); }
 bool WebGPURhiDevice::BeginGpuReadback(BufferHandle handle, size_t offset, size_t size) { return res_.BeginGpuReadback(handle, offset, size); }
 const void* WebGPURhiDevice::GetLastReadbackResult(size_t* out_size) const { return res_.GetLastReadbackResult(out_size); }
-void WebGPURhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset) { exec_.MultiDrawIndexedIndirect(indirect_buffer, draw_count, stride, byte_offset); }
+void WebGPURhiDevice::MultiDrawIndexedIndirect(BufferHandle indirect_buffer, int draw_count, size_t stride, size_t byte_offset) { exec_.MultiDrawIndexedIndirect(indirect_buffer, draw_count, stride, byte_offset); }
 VertexArrayHandle WebGPURhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes, BufferHandle& out_vbo, BufferHandle& out_ibo) { return exec_.CreateMegaVAO(vbo_size_bytes, ibo_size_bytes, out_vbo, out_ibo); }
 void WebGPURhiDevice::UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) { exec_.UpdateMegaVBO(vbo, offset, size, data); }
 void WebGPURhiDevice::UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) { exec_.UpdateMegaIBO(ibo, offset, size, data); }
@@ -244,11 +244,11 @@ void WebGPURhiDevice::BindMegaVAO(VertexArrayHandle vao) { exec_.BindMegaVAO(vao
 void WebGPURhiDevice::UnbindVAO() { exec_.UnbindVAO(); }
 bool WebGPURhiDevice::HasGPUDrivenPBRShader() const { return shader_.HasGPUDrivenPBRShader(); }
 void WebGPURhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& camera_pos, const glm::vec3& light_dir, const glm::vec3& light_color, float light_intensity, float ambient_intensity, float shadow_strength) { exec_.SetupGPUDrivenPBRShader(view, proj, camera_pos, light_dir, light_color, light_intensity, ambient_intensity, shadow_strength); }
-void WebGPURhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal, unsigned int metallic_roughness, unsigned int emissive, unsigned int occlusion) { exec_.BindGPUDrivenTextures(albedo, normal, metallic_roughness, emissive, occlusion); }
-unsigned int WebGPURhiDevice::CreateHiZTexture(int width, int height) { return res_.CreateHiZTexture(width, height); }
-void WebGPURhiDevice::DeleteHiZTexture(unsigned int handle) { res_.DeleteHiZTexture(handle); }
-int WebGPURhiDevice::GetHiZMipCount(unsigned int handle) const { return res_.GetHiZMipCount(handle); }
-unsigned int WebGPURhiDevice::GetHiZGpuTexture(unsigned int handle) const { return res_.GetHiZGpuTexture(handle); }
+void WebGPURhiDevice::BindGPUDrivenTextures(TextureHandle albedo, TextureHandle normal, unsigned int metallic_roughness, unsigned int emissive, unsigned int occlusion) { exec_.BindGPUDrivenTextures(albedo, normal, metallic_roughness, emissive, occlusion); }
+TextureHandle WebGPURhiDevice::CreateHiZTexture(int width, int height) { return res_.CreateHiZTexture(width, height); }
+void WebGPURhiDevice::DeleteHiZTexture(TextureHandle handle) { res_.DeleteHiZTexture(handle); }
+int WebGPURhiDevice::GetHiZMipCount(TextureHandle handle) const { return res_.GetHiZMipCount(handle); }
+TextureHandle WebGPURhiDevice::GetHiZGpuTexture(unsigned int handle) const { return res_.GetHiZGpuTexture(handle); }
 
 }  // namespace render
 }  // namespace dse

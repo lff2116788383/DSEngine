@@ -27,7 +27,7 @@ TEST(RenderSnapshotTest, DefaultCamera2DInvalid) {
 TEST(RenderSnapshotTest, DefaultSkyboxInvalid) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.skybox.valid);
-    EXPECT_EQ(snap.skybox.cubemap_handle, 0u);
+    EXPECT_FALSE(snap.skybox.cubemap_handle);
 }
 
 // 测试 渲染快照：默认方向光灯光

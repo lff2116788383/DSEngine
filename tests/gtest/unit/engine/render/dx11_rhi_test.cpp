@@ -89,44 +89,44 @@ TEST(DX11RhiDeviceTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     desc.width = 256;
     desc.height = 256;
     desc.has_color = true;
-    unsigned int handle = device.CreateRenderTarget(desc);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateRenderTarget(desc);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 DX 11 RHI设备：当不已初始化创建纹理2D返回零
 TEST(DX11RhiDeviceTest, WhenNotInitializedCreateTexture2DReturnsZero) {
     DX11RhiDevice device;
-    unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateTexture2D(4, 4, nullptr, false);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 DX 11 RHI设备：当不已初始化创建缓冲区安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedCreateBufferSafety) {
     DX11RhiDevice device;
-    unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateBuffer(16, nullptr, false, false);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 DX 11 RHI设备：当不已初始化创建着色器程序返回零
 TEST(DX11RhiDeviceTest, WhenNotInitializedCreateShaderProgramReturnsZero) {
     DX11RhiDevice device;
-    unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateShaderProgram("void main(){}", "void main(){}");
+    EXPECT_FALSE(handle);
 }
 
 // 测试 DX 11 RHI设备：当不已初始化删除安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedDeleteSafety) {
     DX11RhiDevice device;
-    device.DeleteRenderTarget(999);
-    device.DeleteTexture(999);
-    device.DeleteShaderProgram(999);
+    device.DeleteRenderTarget(RenderTargetHandle::from_raw(999));
+    device.DeleteTexture(TextureHandle::from_raw(999));
+    device.DeleteShaderProgram(ShaderHandle::from_raw(999));
 }
 
 // 测试 DX 11 RHI设备：当不已初始化更新缓冲区安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedUpdateBufferSafety) {
     DX11RhiDevice device;
     float data[] = {0.5f};
-    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+    device.UpdateBuffer(BufferHandle::from_raw(999), 0, sizeof(data), data, false);
 }
 
 // 测试 DX 11 RHI设备：创建顶点数组返回Increment句柄
@@ -173,19 +173,19 @@ TEST(DX11RhiDeviceTest, SystemCanCalls) {
 TEST(DX11RhiDeviceTest, SetGlobalShadowMapCrossBorderSilentlyIgnore) {
     DX11RhiDevice device;
     // 有效索引
-    device.SetGlobalShadowMap(0, 100);
-    device.SetGlobalShadowMap(2, 200);
+    device.SetGlobalShadowMap(0, TextureHandle::from_raw(100));
+    device.SetGlobalShadowMap(2, TextureHandle::from_raw(200));
     // 越界索引 >= 3 应静默忽略，不崩溃
-    device.SetGlobalShadowMap(3, 999);
-    device.SetGlobalShadowMap(100, 999);
+    device.SetGlobalShadowMap(3, TextureHandle::from_raw(999));
+    device.SetGlobalShadowMap(100, TextureHandle::from_raw(999));
 }
 
 // 测试 DX 11 RHI设备：全部接口不崩溃
 TEST(DX11RhiDeviceTest, AllTheInterfaceDoesNotCrash) {
     DX11RhiDevice device;
-    device.SetGlobalShadowMap(0, 1);
-    device.SetGlobalSpotShadowMap(0, 2);
-    device.SetGlobalPointShadowMap(0, 3);
+    device.SetGlobalShadowMap(0, TextureHandle::from_raw(1));
+    device.SetGlobalSpotShadowMap(0, TextureHandle::from_raw(2));
+    device.SetGlobalPointShadowMap(0, TextureHandle::from_raw(3));
     device.SetGlobalLightSpaceMatrix(0, glm::mat4(1.0f));
     device.SetGlobalCascadeSplit(0, 0.1f);
     device.SetGlobalCascadeSplit(1, 0.3f);
@@ -213,7 +213,8 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
 // 测试 DX 11命令缓冲区：无设备当 compute 调度安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDispatchComputePassSafety) {
     DX11CommandBuffer cmd;
-    cmd.DispatchComputePass(ComputeDispatch{1, 100, 0.5f});
+    cmd.DispatchComputePass(ComputeDispatch{
+        ShaderHandle::from_raw(1), TextureHandle::from_raw(100), 0.5f});
 }
 
 // 测试 DX 11命令缓冲区：无设备当清空颜色安全
@@ -231,9 +232,9 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
 // 测试 DX 11命令缓冲区：无设备当延迟阴影映射安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     DX11CommandBuffer cmd;
-    cmd.BindGlobalShadowMap(0, 100);
-    cmd.BindGlobalSpotShadowMap(0, 200);
-    cmd.BindGlobalPointShadowMap(0, 300);
+    cmd.BindGlobalShadowMap(0, TextureHandle::from_raw(100));
+    cmd.BindGlobalSpotShadowMap(0, TextureHandle::from_raw(200));
+    cmd.BindGlobalPointShadowMap(0, TextureHandle::from_raw(300));
 }
 
 // ============================================================
@@ -244,17 +245,17 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
 TEST(DX11DrawExecutorTest, AllState) {
     DrawExecutorGlobalState state;
     // 有效索引
-    state.SetShadowMap(0, 100);
-    state.SetShadowMap(2, 200);
-    state.SetSpotShadowMap(3, 300);
-    state.SetPointShadowMap(3, 400);
+    state.SetShadowMap(0, TextureHandle::from_raw(100));
+    state.SetShadowMap(2, TextureHandle::from_raw(200));
+    state.SetSpotShadowMap(3, TextureHandle::from_raw(300));
+    state.SetPointShadowMap(3, TextureHandle::from_raw(400));
     state.SetLightSpaceMatrix(2, glm::mat4(1.0f));
     state.SetCascadeSplit(2, 0.5f);
     state.SetSpotLightSpaceMatrix(3, glm::mat4(1.0f));
     // 越界静默忽略
-    state.SetShadowMap(3, 999);
-    state.SetSpotShadowMap(4, 999);
-    state.SetPointShadowMap(4, 999);
+    state.SetShadowMap(3, TextureHandle::from_raw(999));
+    state.SetSpotShadowMap(4, TextureHandle::from_raw(999));
+    state.SetPointShadowMap(4, TextureHandle::from_raw(999));
     state.SetLightSpaceMatrix(3, glm::mat4(1.0f));
     state.SetCascadeSplit(3, 1.0f);
     state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f));
@@ -277,11 +278,11 @@ TEST(DX11DrawExecutorTest, DefaultstatsisZero) {
 // 测试 DX 11着色器管理器：当不初始化为零
 TEST(DX11ShaderManagerTest, WhenNotInitializedisZero) {
     DX11ShaderManager mgr;
-    EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
-    EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.sprite_shader_handle(), 0u);
-    EXPECT_EQ(mgr.postprocess_shader_handle(), 0u);
-    EXPECT_EQ(mgr.shadow_shader_handle(), 0u);
+    EXPECT_FALSE(mgr.pbr_shader_handle());
+    EXPECT_FALSE(mgr.skybox_shader_handle());
+    EXPECT_FALSE(mgr.sprite_shader_handle());
+    EXPECT_FALSE(mgr.postprocess_shader_handle());
+    EXPECT_FALSE(mgr.shadow_shader_handle());
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
@@ -330,8 +331,8 @@ TEST(DX11RenderTargetTest, DefaultValues) {
     EXPECT_EQ(rt.height, 0);
     EXPECT_TRUE(rt.has_color);
     EXPECT_FALSE(rt.has_depth);
-    EXPECT_EQ(rt.color_texture_handle, 0u);
-    EXPECT_EQ(rt.depth_texture_handle, 0u);
+    EXPECT_FALSE(rt.color_texture_handle);
+    EXPECT_FALSE(rt.depth_texture_handle);
 }
 
 // 测试 DX 11上下文：当不Initializeddevice为空
@@ -572,21 +573,21 @@ TEST(DX11RhiDeviceTest, CreateVertexArrayReturnsAnIncrementingNonZeroHandle) {
 // 测试 DX 11 RHI设备：计算Uniform未初始化不崩溃
 TEST(DX11RhiDeviceTest, ComputeUniformUninitializedDoesNotCrash) {
     DX11RhiDevice device;
-    device.SetComputeUniformInt  (1, "u_count", 42);
-    device.SetComputeUniformFloat(1, "u_value", 3.14f);
-    device.SetComputeUniformVec2i(1, "u_off",  10, 20);
-    device.SetComputeUniformVec3 (1, "u_pos",  1.f, 2.f, 3.f);
-    device.SetComputeUniformVec4 (1, "u_color", 0.f, 0.f, 1.f, 1.f);
+    device.SetComputeUniformInt  (ShaderHandle::from_raw(1), "u_count", 42);
+    device.SetComputeUniformFloat(ShaderHandle::from_raw(1), "u_value", 3.14f);
+    device.SetComputeUniformVec2i(ShaderHandle::from_raw(1), "u_off",  10, 20);
+    device.SetComputeUniformVec3 (ShaderHandle::from_raw(1), "u_pos",  1.f, 2.f, 3.f);
+    device.SetComputeUniformVec4 (ShaderHandle::from_raw(1), "u_color", 0.f, 0.f, 1.f, 1.f);
     float identity[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
-    device.SetComputeUniformMat4 (1, "u_mvp",  identity);
+    device.SetComputeUniformMat4 (ShaderHandle::from_raw(1), "u_mvp",  identity);
     device.ClearComputeParams();
 }
 
 // 测试 DX 11 RHI设备：计算Uniform参数带相同名称执行不崩溃
 TEST(DX11RhiDeviceTest, ComputeUniformParametersWithTheSameNameDoNotCrash) {
     DX11RhiDevice device;
-    device.SetComputeUniformInt(1, "u_count", 42);
-    device.SetComputeUniformInt(1, "u_count", 99);  // 同名重写
+    device.SetComputeUniformInt(ShaderHandle::from_raw(1), "u_count", 42);
+    device.SetComputeUniformInt(ShaderHandle::from_raw(1), "u_count", 99);  // 同名重写
     device.ClearComputeParams();
 }
 

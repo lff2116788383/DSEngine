@@ -51,7 +51,7 @@ TEST(GLIndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
     // 未初始化设备，supports_ssbo_ 默认 true 但 GL context 无效
     // CreateIndirectBuffer 应返回 0 (glGenBuffers 返回 0 或无 GL context)
     DrawElementsIndirectCommand cmd{36, 1, 0, 0, 0};
-    unsigned int handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);
+    const auto handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);
     // 在无 GL context 环境下返回 0 是合法的
     // 不崩溃即通过
     device.UpdateIndirectBuffer(handle, 0, sizeof(cmd), &cmd);
@@ -84,8 +84,8 @@ TEST(DX11IndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
     DX11RhiDevice device;
     // D3D11 未初始化，device_ == nullptr，应返回 0
     DrawElementsIndirectCommand cmd{36, 1, 0, 0, 0};
-    unsigned int handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);
-    EXPECT_EQ(handle, 0u);  // 无设备时安全返回 0
+    const auto handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);
+    EXPECT_FALSE(handle);  // 无设备时安全返回 0
     device.UpdateIndirectBuffer(handle, 0, sizeof(cmd), &cmd);
     device.DeleteIndirectBuffer(handle);
     device.MultiDrawIndexedIndirect(handle, 1, sizeof(cmd));
@@ -108,8 +108,8 @@ TEST(VulkanIndirectDrawTest, SupportsIndirectDraw_Returnstrue) {
 TEST(VulkanIndirectDrawTest, CreateDelete_UninitializedReturnsZeroWithoutCrashing) {
     VulkanRhiDevice device;
     DrawElementsIndirectCommand cmd{36, 1, 0, 0, 0};
-    unsigned int handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);
+    EXPECT_FALSE(handle);
     device.DeleteIndirectBuffer(handle);
     SUCCEED();
 }
@@ -122,8 +122,12 @@ TEST(VulkanIndirectDrawTest, CreateDelete_UninitializedReturnsZeroWithoutCrashin
 // 测试 构造排序键：生成
 TEST(MakeSortKeyTest, Generate) {
     MeshDrawItem a, b;
-    a.blend_mode = 0; a.shading_mode = 0; a.texture_handle = 42; a.normal_map_handle = 7;
-    b.blend_mode = 0; b.shading_mode = 0; b.texture_handle = 42; b.normal_map_handle = 7;
+    a.blend_mode = 0; a.shading_mode = 0;
+    a.texture_handle = TextureHandle::from_raw(42);
+    a.normal_map_handle = TextureHandle::from_raw(7);
+    b.blend_mode = 0; b.shading_mode = 0;
+    b.texture_handle = TextureHandle::from_raw(42);
+    b.normal_map_handle = TextureHandle::from_raw(7);
     EXPECT_EQ(MakeSortKey(a), MakeSortKey(b));
 }
 
@@ -132,14 +136,15 @@ TEST(MakeSortKeyTest, blend_ModehighestPriority) {
     MeshDrawItem opaque, transparent;
     opaque.blend_mode      = 0;
     transparent.blend_mode = 1;
-    opaque.texture_handle = transparent.texture_handle = 9999;
+    opaque.texture_handle =
+        transparent.texture_handle = TextureHandle::from_raw(9999);
     EXPECT_LT(MakeSortKey(opaque), MakeSortKey(transparent));
 }
 
 // 测试 构造排序键：Differenttexturegenerate不同键
 TEST(MakeSortKeyTest, DifferenttexturegenerateDifferentKeys) {
     MeshDrawItem a, b;
-    a.texture_handle = 100;
-    b.texture_handle = 200;
+    a.texture_handle = TextureHandle::from_raw(100);
+    b.texture_handle = TextureHandle::from_raw(200);
     EXPECT_NE(MakeSortKey(a), MakeSortKey(b));
 }

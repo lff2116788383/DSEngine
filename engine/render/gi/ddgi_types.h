@@ -159,10 +159,10 @@ struct alignas(16) RSMSample {
 // ============================================================================
 
 struct DDGIResources {
-    unsigned int irradiance_atlas = 0;       ///< RGBA16F 纹理（辐照度 octahedral atlas）
-    unsigned int visibility_atlas = 0;       ///< RG16F 纹理（深度 + 深度² atlas）
+    TextureHandle irradiance_atlas;          ///< RGBA16F 纹理（辐照度 octahedral atlas）
+    TextureHandle visibility_atlas;          ///< RG16F 纹理（深度 + 深度² atlas）
     BufferHandle probe_state_ssbo;            ///< ProbeState[] SSBO
-    unsigned int update_compute_shader = 0;  ///< 探针更新 compute shader
+    ShaderHandle update_compute_shader;      ///< 探针更新 compute shader
     bool initialized = false;
 };
 

@@ -67,7 +67,7 @@ void ImGuiBackendVulkan::RenderDrawData(ImDrawData* draw_data) {
     if (!vulkan_command_buffer) return;
 
     RenderPassDesc render_pass{};
-    render_pass.render_target = 0;
+    render_pass.render_target = {};
     render_pass.clear_color =
         glm::vec4(clear_color_[0], clear_color_[1], clear_color_[2], clear_color_[3]);
     render_pass.clear_color_enabled = true;

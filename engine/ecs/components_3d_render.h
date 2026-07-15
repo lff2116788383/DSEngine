@@ -35,11 +35,11 @@ struct MeshRendererComponent {
     float material_alpha_cutoff = 0.5f;
     bool material_alpha_test = false;
     bool material_double_sided = false;
-    unsigned int albedo_texture_handle = 0;
-    unsigned int normal_texture_handle = 0;
-    unsigned int metallic_roughness_texture_handle = 0;
-    unsigned int emissive_texture_handle = 0;
-    unsigned int occlusion_texture_handle = 0;
+    dse::render::TextureHandle albedo_texture_handle;
+    dse::render::TextureHandle normal_texture_handle;
+    dse::render::TextureHandle metallic_roughness_texture_handle;
+    dse::render::TextureHandle emissive_texture_handle;
+    dse::render::TextureHandle occlusion_texture_handle;
     float sss_strength = 0.0f;
     glm::vec3 sss_tint = glm::vec3(0.0f);
     float clear_coat = 0.0f;
@@ -246,7 +246,7 @@ struct PostProcessComponent {
 // Screen-Space Decal（基于深度重建投影贴花）
 struct DecalComponent {
     bool enabled = true;
-    unsigned int albedo_texture = 0;     // 贴花颜色纹理
+    dse::render::TextureHandle albedo_texture; // 贴花颜色纹理
     glm::vec4 color = glm::vec4(1.0f);  // 颜色乘算 + alpha 不透明度
     float angle_fade = 0.5f;             // 法线角度衰减阈值（0=无衰减,1=严格正面）
 };
@@ -297,7 +297,7 @@ struct SkyLightComponent {
 
 struct SkyboxComponent {
     bool enabled = true;
-    unsigned int cubemap_handle = 0; // The RHI handle for the loaded cubemap texture
+    dse::render::TextureHandle cubemap_handle; // The RHI handle for the loaded cubemap texture
     std::string cubemap_path; // Path to load the cubemap from
 };
 
@@ -320,7 +320,7 @@ struct TerrainComponent {
     bool enabled = true;
     std::string heightmap_path;
     std::string texture_path;
-    unsigned int texture_handle = 0;
+    dse::render::TextureHandle texture_handle;
     int heightmap_width = 0;
     int heightmap_height = 0;
     int heightmap_channels = 0;
@@ -344,13 +344,13 @@ struct TerrainComponent {
     // Splat map: 4-layer texture weights per vertex (R=layer0, G=layer1, B=layer2, A=layer3)
     std::vector<float> splat_data;           // size = resolution_x * resolution_z * 4
     std::string splat_texture_paths[4];      // texture path per layer
-    unsigned int splat_texture_handles[4] = {0, 0, 0, 0};
+    dse::render::TextureHandle splat_texture_handles[4]{};
     glm::vec4 splat_tiling = glm::vec4(10.0f); // per-layer UV tiling factor
     bool splat_dirty = true; // 置位时 TerrainSystem 会把 splat_data 上传为权重图纹理
 
     // Internal state
     bool is_dirty = true;
-    unsigned int splat_weight_texture = 0; // splat_data 上传得到的 RGBA8 权重图 GPU 句柄（0=未上传）
+    dse::render::TextureHandle splat_weight_texture; // splat_data 上传得到的 RGBA8 权重图 GPU 句柄（0=未上传）
     std::vector<float> height_data;
     dse::render::VertexArrayHandle vao;
     dse::render::BufferHandle vbo;
@@ -433,7 +433,7 @@ struct ReflectionProbeComponent {
     float box_size_z = 10.0f;
     bool use_box_projection = false;
     int resolution = 128;                 ///< Cubemap face resolution
-    unsigned int cubemap_handle = 0;      ///< GPU cubemap texture
+    dse::render::TextureHandle cubemap_handle;      ///< GPU cubemap texture
     bool needs_rebake = true;
     bool show_debug = true;               ///< Show debug wireframe in editor
 };
@@ -454,7 +454,7 @@ struct GrassComponent {
     float blade_height_variation = 0.3f;  ///< ±高度随机比例
     glm::vec3 base_color = glm::vec3(0.15f, 0.45f, 0.1f);
     glm::vec3 tip_color  = glm::vec3(0.3f, 0.65f, 0.15f);  ///< 叶尖颜色（GrassSystem 按高度 base_color→tip_color 顶点色渐变）
-    unsigned int albedo_texture = 0;
+    dse::render::TextureHandle albedo_texture;
 
     // 风场
     glm::vec2 wind_direction = glm::vec2(1.0f, 0.0f);

@@ -199,7 +199,7 @@ struct PipelineStateDesc {
 /// program==0 表示「仅 PSO 状态」管线（Pass 层用：GPU-driven 间接绘制自绑 program / 被渲染器覆盖，cmd 不绑 program）。
 struct GraphicsPipelineDesc {
     dse::render::PipelineHandle pso_state;  ///< CreatePipelineState 返回的 PSO 子状态句柄（光栅/混合/深度/拓扑/线框）
-    unsigned int program = 0;    ///< 着色器程序句柄（0 = 不绑 program，仅应用 PSO 状态）
+    dse::render::ShaderHandle program;    ///< 着色器程序句柄（0 = 不绑 program，仅应用 PSO 状态）
 
     bool operator==(const GraphicsPipelineDesc& o) const {
         return pso_state == o.pso_state && program == o.program;
@@ -249,18 +249,18 @@ enum class TextureDim : uint8_t {
 struct BindGroupDesc {
     struct UniformBufferEntry {
         uint32_t slot = 0;
-        unsigned int buffer_handle = 0;
+        dse::render::BufferHandle buffer_handle;
         uint32_t offset = 0;   ///< 0 表示整个 buffer
         uint32_t size = 0;
     };
     struct TextureEntry {
         uint32_t slot = 0;
-        unsigned int texture_handle = 0;
+        dse::render::TextureHandle texture_handle;
         TextureDim dim = TextureDim::Tex2D;
     };
     struct StorageBufferEntry {
         uint32_t slot = 0;
-        unsigned int buffer_handle = 0;
+        dse::render::BufferHandle buffer_handle;
         uint32_t offset = 0;   ///< 0 表示整个 buffer
         uint32_t size = 0;
     };
@@ -279,8 +279,8 @@ struct ImmediateVertexAttrib { int location = 0; int components = 0; int offset_
 /// 直接绘制到指定 RT，不经高层 Mesh/Sprite 批。供编辑器视口拾取（颜色 ID quad）等使用。
 /// 自包含、同步执行（落地后可紧跟 ReadRenderTargetColorRgba8WithSize 回读），属设备级原语。
 struct ImmediateDrawDesc {
-    unsigned int render_target = 0;        ///< 目标 RT 句柄（0 = 默认帧缓冲/交换链）
-    unsigned int shader_program = 0;       ///< CreateShaderProgram 返回值
+    dse::render::RenderTargetHandle render_target;        ///< 目标 RT 句柄（0 = 默认帧缓冲/交换链）
+    dse::render::ShaderHandle shader_program;       ///< CreateShaderProgram 返回值
     const void*  vertices = nullptr;       ///< 交错顶点数据
     size_t       vertex_bytes = 0;
     int          vertex_count = 0;
@@ -320,7 +320,7 @@ enum class BuiltinProgram : uint8_t {
 
 /// 渲染通道描述符
 struct RenderPassDesc {
-    unsigned int render_target = 0;
+    dse::render::RenderTargetHandle render_target;
     glm::vec4 clear_color = glm::vec4(0.0f);
     bool clear_color_enabled = false;
     /// 立方体阴影逐面渲染：>=0 时指定要附着的 cubemap 面（0..5 = +X,-X,+Y,-Y,+Z,-Z）。
@@ -359,7 +359,7 @@ struct SpriteVisualEffect {
 };
 
 struct SpriteDrawItem {
-    unsigned int texture_handle = 0;
+    dse::render::TextureHandle texture_handle;
     unsigned int material_instance_id = 0;
     unsigned int shader_variant_key = 0;
     unsigned int blend_mode = 0;
@@ -393,14 +393,14 @@ struct MeshDrawItem {
     dse::render::BufferHandle ebo_override;       ///< 有效时绑定此 EBO 覆盖 VAO 默认的 element buffer
     unsigned int index_count_override = 0;
 
-    unsigned int texture_handle = 0;
-    unsigned int normal_map_handle = 0;
-    unsigned int metallic_roughness_map_handle = 0;
-    unsigned int emissive_map_handle = 0;
-    unsigned int occlusion_map_handle = 0;
+    dse::render::TextureHandle texture_handle;
+    dse::render::TextureHandle normal_map_handle;
+    dse::render::TextureHandle metallic_roughness_map_handle;
+    dse::render::TextureHandle emissive_map_handle;
+    dse::render::TextureHandle occlusion_map_handle;
     // Shader Graph 自定义命名程序（RHI 着色器句柄）。非 0 时逐 draw 用它替换内建 ForwardShaded
     // （仅 OpenGL：AssetManager::LoadShader 只有 GL 后端能从 GLSL 源码编出有效句柄，其余后端返回 0 → 回退内建）。
-    unsigned int custom_shader_program = 0;
+    dse::render::ShaderHandle custom_shader_program;
     unsigned int blend_mode = 0;
     glm::mat4 model = glm::mat4(1.0f);
     glm::vec4 color = glm::vec4(1.0f);
@@ -443,8 +443,8 @@ struct MeshDrawItem {
 
     // Terrain splatmap
     bool splat_enabled = false;
-    unsigned int splat_weight_map_handle = 0;
-    unsigned int splat_layer_handles[4] = {0, 0, 0, 0};
+    dse::render::TextureHandle splat_weight_map_handle;
+    dse::render::TextureHandle splat_layer_handles[4];
     glm::vec4 splat_tiling = glm::vec4(10.0f); ///< per-layer UV tiling
 
     // Snow cover
@@ -561,8 +561,8 @@ struct HairDrawItem {
 /// 仅 compute 后端（DX11 FL11+/Vulkan）消费；不支持 compute 的后端（GL）由高层渲染器
 /// 经 GetBloomComputeShader()==0 回退全屏 quad，不会调到该原语，故默认空实现即可。
 struct ComputeDispatch {
-    unsigned int shader = 0;          ///< 设备级 compute shader handle
-    unsigned int source_texture = 0;  ///< 输入 SRV（0 表示无输入）
+    dse::render::ShaderHandle shader;          ///< 设备级 compute shader handle
+    dse::render::TextureHandle source_texture;  ///< 输入 SRV（0 表示无输入）
     float blend_weight = 1.0f;        ///< 混合权重（upsample 累加用，downsample 取 1.0）
 };
 
@@ -638,7 +638,7 @@ inline uint64_t MakeSortKey(const MeshDrawItem& item) noexcept {
     uint64_t key = 0;
     key |= (static_cast<uint64_t>(item.blend_mode   & 0xFu)        << 60u);
     key |= (static_cast<uint64_t>(item.shading_mode & 0xFFu)       << 52u);
-    key |= (static_cast<uint64_t>(item.texture_handle)              << 20u);
-    key |= (static_cast<uint64_t>(item.normal_map_handle & 0xFFFFFu));
+    key |= (static_cast<uint64_t>(item.texture_handle.raw())              << 20u);
+    key |= (static_cast<uint64_t>(item.normal_map_handle.raw() & 0xFFFFFu));
     return key;
 }

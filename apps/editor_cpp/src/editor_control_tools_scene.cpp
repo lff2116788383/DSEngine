@@ -180,7 +180,7 @@ static JsonRpcResponse HandleAssetImport(
         auto tex = am->LoadTexture(path);
         if (!tex) return MakeToolError(-32603, "Failed to load texture: " + path);
         result.AddMember("type", "texture", alloc);
-        result.AddMember("handle", tex->GetHandle(), alloc);
+        result.AddMember("handle", tex->GetHandle().raw(), alloc);
         result.AddMember("width", tex->GetWidth(), alloc);
         result.AddMember("height", tex->GetHeight(), alloc);
         result.AddMember("channels", tex->GetChannels(), alloc);

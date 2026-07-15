@@ -64,8 +64,8 @@ void HairRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                         const std::vector<HairDrawItem>& items,
                         const glm::mat4& view, const glm::mat4& proj) {
     if (items.empty()) return;
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::HairStrand);
-    if (program == 0) return;  // SSBO 不支持的上下文（如 WebGL2）→ 静默跳过
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::HairStrand);
+    if (!program) return;  // SSBO 不支持的上下文（如 WebGL2）→ 静默跳过
     EnsureResources(device);
     if (!hair_ubo_) return;
 
@@ -95,9 +95,9 @@ void HairRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         device.UpdateGpuBuffer(hair_ubo_, 0, sizeof(u), &u);
 
         // 组合 HairUniforms UBO\@set0.b0（VS/FS 共享）+ position/tangent SSBO\@set7.b0/b1。
-        cmd.BindUniformBuffer(0u, hair_ubo_.raw());
-        cmd.BindStorageBuffer(0u, item.position_ssbo.raw(), 0u, 0u);
-        cmd.BindStorageBuffer(1u, item.tangent_ssbo.raw(), 0u, 0u);
+        cmd.BindUniformBuffer(0u, hair_ubo_);
+        cmd.BindStorageBuffer(0u, item.position_ssbo, 0u, 0u);
+        cmd.BindStorageBuffer(1u, item.tangent_ssbo, 0u, 0u);
 
         // 每个 strand 是一条 LINE_STRIP：first_vertex=strand_firsts[s]，count=strand_counts[s]。
         // gl_VertexIndex（DX SV_VertexID / GL gl_VertexID / VK gl_VertexIndex）= first + i，

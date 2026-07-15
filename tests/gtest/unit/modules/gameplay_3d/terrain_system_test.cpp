@@ -30,7 +30,7 @@ TEST(TerrainComponentTest, DefaultValues) {
     EXPECT_TRUE(tc.enabled);
     EXPECT_TRUE(tc.heightmap_path.empty());
     EXPECT_TRUE(tc.texture_path.empty());
-    EXPECT_EQ(tc.texture_handle, 0u);
+    EXPECT_FALSE(tc.texture_handle);
     EXPECT_FLOAT_EQ(tc.width, 100.0f);
     EXPECT_FLOAT_EQ(tc.depth, 100.0f);
     EXPECT_FLOAT_EQ(tc.max_height, 20.0f);
@@ -53,10 +53,10 @@ TEST(TerrainComponentTest, SplatMapDefaultValues) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.splat_data.empty());
     EXPECT_TRUE(tc.splat_dirty);
-    EXPECT_EQ(tc.splat_weight_texture, 0u);  // 未上传前权重图句柄为 0
+    EXPECT_FALSE(tc.splat_weight_texture);  // 未上传前权重图句柄为 0
     for (int i = 0; i < 4; ++i) {
         EXPECT_TRUE(tc.splat_texture_paths[i].empty());
-        EXPECT_EQ(tc.splat_texture_handles[i], 0u);
+        EXPECT_FALSE(tc.splat_texture_handles[i]);
     }
 }
 
@@ -135,8 +135,8 @@ public:
         TextureWrap wrap = TextureWrap::Repeat;
     };
 
-    unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
-                                 const TextureSamplerDesc& sampler) override {
+    TextureHandle CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
+                                  const TextureSamplerDesc& sampler) override {
         CreatedTexture t;
         t.width = width;
         t.height = height;
@@ -147,16 +147,16 @@ public:
                            rgba8_data + static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
         }
         created.push_back(std::move(t));
-        return next_texture_handle_++;
+        return TextureHandle::from_raw(next_texture_handle_++);
     }
 
-    unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override {
+    TextureHandle CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override {
         TextureSamplerDesc s;
         s.filter = linear_filter ? TextureFilter::Linear : TextureFilter::Nearest;
         return CreateTexture2D(width, height, rgba8_data, s);
     }
 
-    void DeleteTexture(unsigned int texture_handle) override {
+    void DeleteTexture(TextureHandle texture_handle) override {
         deleted_textures.push_back(texture_handle);
     }
 
@@ -164,19 +164,19 @@ public:
     RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override {}
-    unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override { (void)desc; return 0; }
-    unsigned int GetRenderTargetColorTexture(unsigned int h) const override { (void)h; return 0; }
-    unsigned int GetRenderTargetDepthTexture(unsigned int h) const override { (void)h; return 0; }
-    std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int h) const override { (void)h; return {}; }
-    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int h) const override { (void)h; return {}; }
-    unsigned int CreateTextureCube(int w, int h, const unsigned char* const f[6], bool l) override { (void)w; (void)h; (void)f; (void)l; return 0; }
-    unsigned int CreateTexture3D(int w, int h, int d, const unsigned char* data, bool l) override { (void)w; (void)h; (void)d; (void)data; (void)l; return 0; }
-    unsigned int CreateShaderProgram(const std::string& v, const std::string& f) override { (void)v; (void)f; return 0; }
-    void DeleteShaderProgram(unsigned int h) override { (void)h; }
+    RenderTargetHandle CreateRenderTarget(const RenderTargetDesc& desc) override { (void)desc; return {}; }
+    TextureHandle GetRenderTargetColorTexture(RenderTargetHandle h) const override { (void)h; return {}; }
+    TextureHandle GetRenderTargetDepthTexture(RenderTargetHandle h) const override { (void)h; return {}; }
+    std::vector<unsigned char> ReadRenderTargetColorRgba8(RenderTargetHandle h) const override { (void)h; return {}; }
+    RenderTargetReadback ReadRenderTargetColorRgba8WithSize(RenderTargetHandle h) const override { (void)h; return {}; }
+    TextureHandle CreateTextureCube(int w, int h, const unsigned char* const f[6], bool l) override { (void)w; (void)h; (void)f; (void)l; return {}; }
+    TextureHandle CreateTexture3D(int w, int h, int d, const unsigned char* data, bool l) override { (void)w; (void)h; (void)d; (void)data; (void)l; return {}; }
+    ShaderHandle CreateShaderProgram(const std::string& v, const std::string& f) override { (void)v; (void)f; return {}; }
+    void DeleteShaderProgram(ShaderHandle h) override { (void)h; }
     dse::render::PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return {}; }
-    unsigned int CreateBuffer(size_t s, const void* d, bool dyn, bool idx) override { (void)s; (void)d; (void)dyn; (void)idx; return 0; }
-    void UpdateBuffer(unsigned int h, size_t o, size_t s, const void* d, bool idx) override { (void)h; (void)o; (void)s; (void)d; (void)idx; }
-    void DeleteBuffer(unsigned int h) override { (void)h; }
+    BufferHandle CreateBuffer(size_t s, const void* d, bool dyn, bool idx) override { (void)s; (void)d; (void)dyn; (void)idx; return {}; }
+    void UpdateBuffer(BufferHandle h, size_t o, size_t s, const void* d, bool idx) override { (void)h; (void)o; (void)s; (void)d; (void)idx; }
+    void DeleteBuffer(BufferHandle h) override { (void)h; }
     dse::render::VertexArrayHandle CreateVertexArray() override { return {}; }
     void DeleteVertexArray(dse::render::VertexArrayHandle h) override { (void)h; }
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override { return nullptr; }
@@ -185,7 +185,7 @@ public:
     const RenderStats& LastFrameStats() const override { return stats_; }
 
     std::vector<CreatedTexture> created;
-    std::vector<unsigned int> deleted_textures;
+    std::vector<TextureHandle> deleted_textures;
 
 private:
     unsigned int next_texture_handle_ = 700001;
@@ -210,7 +210,7 @@ TEST(TerrainSplatUploadTest, WithoutWhen) {
     TerrainComponent tc = MakeSplatTerrain(2, 2, 1.0f);
     sys.UploadSplatWeightMap(tc);
     EXPECT_TRUE(tc.splat_dirty);                 // 无设备不消费脏标志
-    EXPECT_EQ(tc.splat_weight_texture, 0u);
+    EXPECT_FALSE(tc.splat_weight_texture);
 }
 
 // 测试 地形泼溅上传：非当不
@@ -222,7 +222,7 @@ TEST(TerrainSplatUploadTest, NonWhenNot) {
     tc.splat_dirty = false;  // 已是干净
     sys.UploadSplatWeightMap(tc);
     EXPECT_TRUE(fake.created.empty());
-    EXPECT_EQ(tc.splat_weight_texture, 0u);
+    EXPECT_FALSE(tc.splat_weight_texture);
 }
 
 // 测试 地形泼溅上传：Validdata
@@ -243,7 +243,7 @@ TEST(TerrainSplatUploadTest, Validdata) {
     // float 1.0 → RGBA8 255。
     ASSERT_EQ(fake.created[0].rgba8.size(), 16u);
     for (unsigned char b : fake.created[0].rgba8) EXPECT_EQ(b, 255);
-    EXPECT_NE(tc.splat_weight_texture, 0u);
+    EXPECT_TRUE(tc.splat_weight_texture);
     EXPECT_FALSE(tc.splat_dirty);  // 脏标志已消费
 }
 
@@ -277,15 +277,15 @@ TEST(TerrainSplatUploadTest, DataNotWhenrollbackrelease) {
     // 先正常上传一次，拿到旧纹理句柄。
     TerrainComponent tc = MakeSplatTerrain(2, 2, 1.0f);
     sys.UploadSplatWeightMap(tc);
-    const unsigned int old_handle = tc.splat_weight_texture;
-    ASSERT_NE(old_handle, 0u);
+    const auto old_handle = tc.splat_weight_texture;
+    ASSERT_TRUE(old_handle);
 
     // 数据被清空但标脏 → 应释放旧纹理、句柄归 0、不再创建新纹理、脏标志清除。
     tc.splat_data.clear();
     tc.splat_dirty = true;
     sys.UploadSplatWeightMap(tc);
 
-    EXPECT_EQ(tc.splat_weight_texture, 0u);
+    EXPECT_FALSE(tc.splat_weight_texture);
     EXPECT_FALSE(tc.splat_dirty);
     ASSERT_FALSE(fake.deleted_textures.empty());
     EXPECT_EQ(fake.deleted_textures.back(), old_handle);

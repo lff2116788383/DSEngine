@@ -71,7 +71,8 @@ extern "C" void dse_anim2d_add_state(uint32_t e, const char* name, float fps, in
     if (frame_handles && handle_count > 0) {
         state.frame_handles.reserve(static_cast<size_t>(handle_count));
         for (int i = 0; i < handle_count; ++i) {
-            state.frame_handles.push_back(static_cast<unsigned int>(frame_handles[i]));
+            state.frame_handles.push_back(
+                dse::render::TextureHandle::from_raw(frame_handles[i]));
         }
     }
     animator->states[name] = std::move(state);

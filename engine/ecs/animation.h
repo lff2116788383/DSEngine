@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "engine/render/rhi/rhi_handle.h"
 #include <unordered_map>
 
 class TextureAsset;
@@ -21,7 +22,7 @@ class TextureAsset;
 struct AnimationState {
     std::string name;                                    ///< 状态名称
     std::vector<std::shared_ptr<TextureAsset>> frames;   ///< 帧纹理列表
-    std::vector<unsigned int> frame_handles;             ///< 帧句柄列表 (用于 Lua 绑定优化)
+    std::vector<dse::render::TextureHandle> frame_handles; ///< 帧句柄列表 (用于 Lua 绑定优化)
     std::vector<std::pair<float, std::string>> events;   ///< 时间点触发的事件列表
     std::vector<std::pair<int, int>> segments;           ///< 动画片段区间
     float frame_rate = 10.0f;                            ///< 播放帧率

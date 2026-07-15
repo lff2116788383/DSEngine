@@ -599,7 +599,7 @@ extern "C" void dse_ui_add_renderer(uint32_t e, uint32_t texture_handle,
     World* world = GW();
     if (!world || !world->registry().valid(TE(e))) return;
     auto& ui = world->registry().emplace_or_replace<UIRendererComponent>(TE(e));
-    ui.texture_handle = texture_handle;
+    ui.texture_handle = dse::render::TextureHandle::from_raw(texture_handle);
     ui.color = glm::vec4(r, g, b, a);
     ui.order = order;
     ui.size = glm::vec2(w, h);
@@ -958,7 +958,7 @@ extern "C" uint32_t dse_font_get_texture(const char* font_id) {
     std::string fid = font_id ? font_id : "";
     if (fid.empty()) fid = svc->GetDefaultFontId();
     auto* fi = svc->GetFont(fid);
-    return fi ? fi->gpu_texture_handle : 0;
+    return fi ? fi->gpu_texture_handle.raw() : 0;
 }
 
 // ============================================================

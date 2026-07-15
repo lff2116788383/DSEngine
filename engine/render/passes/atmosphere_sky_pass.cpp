@@ -41,8 +41,8 @@ void AtmosphereSkyPass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     // 获取 scene depth 用于天空 mask (仅渲染 far 像素)
-    const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-    if (depth_tex == 0) return;
+    const TextureHandle depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
     // 太阳方向
     glm::vec3 sun_dir = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -88,7 +88,7 @@ void AtmosphereSkyPass::Execute(CommandBuffer& cmd_buffer) {
     // [34]     sky_view_steps
     // [35]     reserved
 
-    unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
+    TextureHandle scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
@@ -117,11 +117,11 @@ void AtmosphereSkyPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 void AtmosphereSkyPass::EnsureTransmittanceLUT(int width, int height) {
-    if (transmittance_lut_ != 0 && lut_width_ == width && lut_height_ == height)
+    if (transmittance_lut_ && lut_width_ == width && lut_height_ == height)
         return;
 
     // 如果尺寸变化或未初始化，重建 RT
-    if (transmittance_rt_ != 0) {
+    if (transmittance_rt_) {
         ctx_.rhi_device->DeleteRenderTarget(transmittance_rt_);
     }
     // 创建 RT 用于 LUT
@@ -138,7 +138,7 @@ void AtmosphereSkyPass::EnsureTransmittanceLUT(int width, int height) {
 }
 
 void AtmosphereSkyPass::RenderTransmittanceLUT(CommandBuffer& cmd_buffer) {
-    if (transmittance_rt_ == 0) return;
+    if (!transmittance_rt_) return;
 
     const auto& atm = ctx_.snapshot->atmosphere_sky;
 
@@ -154,7 +154,7 @@ void AtmosphereSkyPass::RenderTransmittanceLUT(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({transmittance_rt_, glm::vec4(0.0f), true});
     // 已迁到 PostProcessRenderer：无源纹理效果（仅由 8 标量 UBO 程序化生成 LUT）。
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
-        PostProcessRequest{"atmosphere_transmittance_lut", 0, {
+        PostProcessRequest{"atmosphere_transmittance_lut", TextureHandle{}, {
             atm.planet_radius,
             atm.atmosphere_height,
             atm.rayleigh_coeff.x, atm.rayleigh_coeff.y, atm.rayleigh_coeff.z,

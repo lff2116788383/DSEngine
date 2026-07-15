@@ -156,11 +156,11 @@ RenderTargetReadback RenderGraphPreview(RhiDevice& device, const char* backend, 
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    unsigned int program = device.CreateShaderProgram(code.vertex, code.fragment);
-    if (program == 0) {
+    const auto program = device.CreateShaderProgram(code.vertex, code.fragment);
+    if (!program) {
         std::printf("[P1-4b] backend=%s: shader-graph program failed to compile/link\n", backend);
         std::fflush(stdout);
         device.DeleteRenderTarget(rt);
@@ -213,9 +213,9 @@ RenderTargetReadback RenderGraphPreview(RhiDevice& device, const char* backend, 
             rp.clear_color_enabled = true;
             cmd->BeginRenderPass(rp);
             cmd->BindPipeline(device.GetGraphicsPipeline(pso, program));
-            cmd->BindVertexBuffer(0u, vbo.raw(), sizeof(MeshVertex), attrs);
-            cmd->BindIndexBuffer(ibo.raw(), IndexType::UInt16);
-            cmd->BindUniformBuffer(0u, ubo.raw(), 0u, 0u);
+            cmd->BindVertexBuffer(0u, vbo, sizeof(MeshVertex), attrs);
+            cmd->BindIndexBuffer(ibo, IndexType::UInt16);
+            cmd->BindUniformBuffer(0u, ubo, 0u, 0u);
             cmd->DrawIndexed(static_cast<uint32_t>(indices.size()), 0, 0);
             cmd->EndRenderPass();
             device.Submit(cmd);

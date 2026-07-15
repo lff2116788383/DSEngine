@@ -34,39 +34,39 @@ public:
 
     /// 创建 Indirect Draw Buffer
     [[deprecated("使用 CreateGpuBuffer(kIndirect) 替代")]]
-    virtual unsigned int CreateIndirectBuffer(size_t size, const void* data) {
-        (void)size; (void)data; return 0;
+    virtual BufferHandle CreateIndirectBuffer(size_t size, const void* data) {
+        (void)size; (void)data; return {};
     }
 
     /// 更新 Indirect Draw Buffer 子区域
     [[deprecated("使用 UpdateGpuBuffer 替代")]]
-    virtual void UpdateIndirectBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
+    virtual void UpdateIndirectBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) {
         (void)handle; (void)offset; (void)size; (void)data;
     }
 
     /// 删除 Indirect Draw Buffer
     [[deprecated("使用 DeleteGpuBuffer 替代")]]
-    virtual void DeleteIndirectBuffer(unsigned int handle) { (void)handle; }
+    virtual void DeleteIndirectBuffer(BufferHandle handle) { (void)handle; }
 
     /// 绑定 indirect buffer 并发起 Multi-Draw Indexed Indirect
     /// @param byte_offset  indirect buffer 内的字节偏移（用于纹理桶分段绘制）
-    virtual void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride, size_t byte_offset = 0) {
+    virtual void MultiDrawIndexedIndirect(BufferHandle indirect_buffer, int draw_count, size_t stride, size_t byte_offset = 0) {
         (void)indirect_buffer; (void)draw_count; (void)stride; (void)byte_offset;
     }
 
     // --- Hi-Z Occlusion Culling ---
 
     /// 创建 Hi-Z 纹理（R32F 格式，完整 mip chain，nearest 过滤）
-    virtual unsigned int CreateHiZTexture(int width, int height) { (void)width; (void)height; return 0; }
+    virtual TextureHandle CreateHiZTexture(int width, int height) { (void)width; (void)height; return {}; }
 
     /// 删除 Hi-Z 纹理
-    virtual void DeleteHiZTexture(unsigned int handle) { (void)handle; }
+    virtual void DeleteHiZTexture(TextureHandle handle) { (void)handle; }
 
     /// 获取 Hi-Z 纹理的 mip 级数
-    virtual int GetHiZMipCount(unsigned int handle) const { (void)handle; return 0; }
+    virtual int GetHiZMipCount(TextureHandle handle) const { (void)handle; return 0; }
 
     /// 获取 Hi-Z 纹理的 GPU 原生句柄
-    virtual unsigned int GetHiZGpuTexture(unsigned int handle) const { (void)handle; return 0; }
+    virtual TextureHandle GetHiZGpuTexture(TextureHandle handle) const { (void)handle; return {}; }
 
     // --- Mega Buffer (GPU Driven) ---
 
@@ -128,9 +128,9 @@ public:
 
     /// 绑定 GPU-Driven 路径的 PBR 纹理（albedo/normal/MR/emissive/occlusion）
     /// handle=0 时绑定默认白色/平坦纹理。ForwardScenePass 每桶调用一次。
-    virtual void BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
-                                        unsigned int metallic_roughness,
-                                        unsigned int emissive, unsigned int occlusion) {
+    virtual void BindGPUDrivenTextures(TextureHandle albedo, TextureHandle normal,
+                                        TextureHandle metallic_roughness,
+                                        TextureHandle emissive, TextureHandle occlusion) {
         (void)albedo; (void)normal; (void)metallic_roughness; (void)emissive; (void)occlusion;
     }
 

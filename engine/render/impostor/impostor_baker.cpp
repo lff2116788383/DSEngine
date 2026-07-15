@@ -45,8 +45,8 @@ ImpostorBakeResult ImpostorBaker::Bake(RhiDevice& device,
     rt_desc.height = res;
     rt_desc.has_color = true;
     rt_desc.has_depth = true;
-    unsigned int bake_rt = device.CreateRenderTarget(rt_desc);
-    if (bake_rt == 0) return result;
+    RenderTargetHandle bake_rt = device.CreateRenderTarget(rt_desc);
+    if (!bake_rt) return result;
 
     // Dedicated bake program: the builtin ForwardPbr shader does not expose the
     // u_mvp_row* uniforms this baker feeds, so with it the mesh is never
@@ -76,8 +76,8 @@ ImpostorBakeResult ImpostorBaker::Bake(RhiDevice& device,
         "    float d = (len < 0.0001) ? 0.6 : (abs(dot(n / len, L)) * 0.7 + 0.3);\n"
         "    frag = vec4(vec3(0.82, 0.79, 0.72) * d, 1.0);\n"
         "}\n";
-    unsigned int bake_program = device.CreateShaderProgram(kBakeVert, kBakeFrag);
-    if (bake_program == 0) { device.DeleteRenderTarget(bake_rt); return result; }
+    ShaderHandle bake_program = device.CreateShaderProgram(kBakeVert, kBakeFrag);
+    if (!bake_program) { device.DeleteRenderTarget(bake_rt); return result; }
 
     for (int fy = 0; fy < config.frames_y; ++fy) {
         for (int fx = 0; fx < config.frames_x; ++fx) {
@@ -192,11 +192,11 @@ bool ImpostorBaker::SaveToFile(const std::string& path,
 
 bool ImpostorBaker::LoadFromFile(const std::string& path,
                                  RhiDevice& device,
-                                 unsigned int& out_albedo_tex,
-                                 unsigned int& out_normal_tex,
+                                 TextureHandle& out_albedo_tex,
+                                 TextureHandle& out_normal_tex,
                                  int& out_frames_x, int& out_frames_y,
                                  float& out_bounds_radius) {
-    out_albedo_tex = out_normal_tex = 0;
+    out_albedo_tex = out_normal_tex = TextureHandle{};
 
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open()) return false;
@@ -245,7 +245,7 @@ bool ImpostorBaker::LoadFromFile(const std::string& path,
         }
     }
 
-    return out_albedo_tex != 0;
+    return static_cast<bool>(out_albedo_tex);
 }
 
 glm::mat4 ImpostorBaker::ComputeViewForFrame(int fx, int fy, int frames_x, int frames_y,

@@ -83,7 +83,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, TerrainComponentDefaultValues) {
 TEST_F(Gameplay3dEcsIntegrationTest, SkyboxComponentDefaultValues) {
     SkyboxComponent skybox;
     EXPECT_TRUE(skybox.enabled);
-    EXPECT_EQ(skybox.cubemap_handle, 0u);
+    EXPECT_FALSE(skybox.cubemap_handle);
     EXPECT_TRUE(skybox.cubemap_path.empty());
 }
 

@@ -407,8 +407,8 @@ void DX11DrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     UINT num_rtvs = 0;
     ID3D11DepthStencilView* dsv = nullptr;
 
-    if (render_pass.render_target != 0) {
-        const auto* rt = resource_mgr.GetRenderTarget(render_pass.render_target);
+    if (render_pass.render_target) {
+        const auto* rt = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (rt) {
             if (!rt->color_rtvs_mrt.empty()) {
                 num_rtvs = static_cast<UINT>(rt->color_rtvs_mrt.size());
@@ -433,8 +433,8 @@ void DX11DrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
 
     // Viewport
     int vp_width = 0, vp_height = 0;
-    if (render_pass.render_target != 0) {
-        const auto* rt = resource_mgr.GetRenderTarget(render_pass.render_target);
+    if (render_pass.render_target) {
+        const auto* rt = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (rt) { vp_width = rt->width; vp_height = rt->height; }
     }
     if (vp_width == 0 || vp_height == 0) {
@@ -469,8 +469,8 @@ void DX11DrawExecutor::EndRenderPass() {
     is_depth_only_pass_ = false;
     global_state_.current_pass_depth_only = false;
     // MSAA resolve：将多重采样颜色纹理 resolve 到 1x resolve 纹理
-    if (current_rt_handle_ != 0 && resource_mgr_) {
-        const auto* rt = resource_mgr_->GetRenderTarget(current_rt_handle_);
+    if (current_rt_handle_ && resource_mgr_) {
+        const auto* rt = resource_mgr_->GetRenderTarget(current_rt_handle_.raw());
         if (rt && rt->is_msaa && rt->color_texture && rt->color_resolve_texture) {
             const bool use_hdr = context_ ? context_->hdr_enabled() : false;
             DXGI_FORMAT fmt = use_hdr ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -479,7 +479,7 @@ void DX11DrawExecutor::EndRenderPass() {
                 rt->color_texture.Get(), 0, fmt);
         }
     }
-    current_rt_handle_ = 0;
+    current_rt_handle_ = {};
 }
 
 // ============================================================
@@ -843,13 +843,13 @@ void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uin
 void DX11DrawExecutor::DispatchComputePass(const ComputeDispatch& dispatch,
                                             DX11ShaderManager& shader_mgr,
                                             DX11ResourceManager& resource_mgr) {
-    if (!context_ || dispatch.shader == 0 || current_rt_handle_ == 0) return;
+    if (!context_ || !dispatch.shader || !current_rt_handle_) return;
     ID3D11DeviceContext* dc = context_->device_context();
 
-    const auto* rt = resource_mgr.GetRenderTarget(current_rt_handle_);
+    const auto* rt = resource_mgr.GetRenderTarget(current_rt_handle_.raw());
     if (!rt || !rt->color_uav) return;
 
-    const unsigned int uav_rt = current_rt_handle_;
+    const unsigned int uav_rt = current_rt_handle_.raw();
     // 解绑当前 RTV，清空 PS SRV（防止 D3D11 Validation Layer UAV 冲突），切换到 CS 路径。
     ID3D11RenderTargetView* null_rtv = nullptr;
     dc->OMSetRenderTargets(0, &null_rtv, nullptr);
@@ -860,7 +860,7 @@ void DX11DrawExecutor::DispatchComputePass(const ComputeDispatch& dispatch,
     const UINT dst_h = static_cast<UINT>(rt->height);
     const UINT tx = (dst_w + 7) / 8;
     const UINT ty = (dst_h + 7) / 8;
-    DispatchCompute(dispatch.shader, dispatch.source_texture, uav_rt, tx, ty,
+    DispatchCompute(dispatch.shader.raw(), dispatch.source_texture.raw(), uav_rt, tx, ty,
                     dispatch.blend_weight, shader_mgr, resource_mgr);
 
     // 重新绑定 RTV（EndRenderPass 会解绑并 resolve）。
@@ -938,10 +938,10 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
     if (!dc) return;
 
     // 优先使用 GPU-driven shader（VS 从 ByteAddressBuffer t16 读 model via draw_id）
-    unsigned int prog = shader_mgr.gpu_driven_pbr_shader_handle();
+    unsigned int prog = shader_mgr.gpu_driven_pbr_shader_handle().raw();
     const auto* program = shader_mgr.GetProgram(prog);
     if (!program) {
-        prog = shader_mgr.pbr_shader_handle();
+        prog = shader_mgr.pbr_shader_handle().raw();
         program = shader_mgr.GetProgram(prog);
         if (!program) return;
     }
@@ -1011,10 +1011,10 @@ void DX11DrawExecutor::SetupGPUDrivenShadow(const glm::mat4& light_view, const g
     if (!dc) return;
 
     // 优先使用 GPU-driven shadow shader（VS 从 ByteAddressBuffer t16 读 model via draw_id）
-    unsigned int prog = shader_mgr.gpu_driven_shadow_shader_handle();
+    unsigned int prog = shader_mgr.gpu_driven_shadow_shader_handle().raw();
     const auto* program = shader_mgr.GetProgram(prog);
     if (!program) {
-        prog = shader_mgr.shadow_shader_handle();
+        prog = shader_mgr.shadow_shader_handle().raw();
         program = shader_mgr.GetProgram(prog);
         if (!program) return;
     }

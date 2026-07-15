@@ -544,7 +544,8 @@ void FractureSystem::SpawnFragments(World& world, entt::entity source_entity) {
     std::string shader_variant = fc.fragment_shader_variant;
     glm::vec4 color(1.0f);
     float metallic = 0.0f, roughness = 0.5f, ao = 1.0f;
-    unsigned int albedo_tex = 0, normal_tex = 0;
+    dse::render::TextureHandle albedo_tex;
+    dse::render::TextureHandle normal_tex;
     if (fc.inherit_material && world.registry().all_of<MeshRendererComponent>(source_entity)) {
         const auto& mr = world.registry().get<MeshRendererComponent>(source_entity);
         shader_variant = mr.shader_variant;

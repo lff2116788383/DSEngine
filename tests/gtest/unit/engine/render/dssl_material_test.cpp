@@ -120,9 +120,10 @@ TEST(DSSLMaterialInstanceTest, IntsetGet) {
 // 测试 DSSL材质实例：Textureset获取
 TEST(DSSLMaterialInstanceTest, TexturesetGet) {
     DSSLMaterialInstance inst(1, "x.dssl");
-    inst.SetTexture("albedo_tex", 100);
-    EXPECT_EQ(inst.GetTexture("albedo_tex"), 100u);
-    EXPECT_EQ(inst.GetTexture("nonexist"), 0u);
+    inst.SetTexture("albedo_tex", dse::render::TextureHandle::from_raw(100));
+    EXPECT_EQ(inst.GetTexture("albedo_tex"),
+              dse::render::TextureHandle::from_raw(100));
+    EXPECT_FALSE(inst.GetTexture("nonexist"));
 }
 
 // ============================================================
@@ -222,25 +223,29 @@ TEST(DSSLMaterialInstanceTest, GetEmissiveColor_Vec4rollback) {
 // 测试 DSSL材质实例：获取Albedo纹理多个名称回退
 TEST(DSSLMaterialInstanceTest, GetAlbedoTexture_MultipleNameFallback) {
     DSSLMaterialInstance inst(1, "x.dssl");
-    EXPECT_EQ(inst.GetAlbedoTexture(), 0u);
+    EXPECT_FALSE(inst.GetAlbedoTexture());
 
-    inst.SetTexture("base_texture", 200);
-    EXPECT_EQ(inst.GetAlbedoTexture(), 200u);
+    inst.SetTexture("base_texture", dse::render::TextureHandle::from_raw(200));
+    EXPECT_EQ(inst.GetAlbedoTexture(),
+              dse::render::TextureHandle::from_raw(200));
 
-    inst.SetTexture("albedo_tex", 300);
-    EXPECT_EQ(inst.GetAlbedoTexture(), 300u);
+    inst.SetTexture("albedo_tex", dse::render::TextureHandle::from_raw(300));
+    EXPECT_EQ(inst.GetAlbedoTexture(),
+              dse::render::TextureHandle::from_raw(300));
 }
 
 // 测试 DSSL材质实例：获取法线纹理多个名称回退
 TEST(DSSLMaterialInstanceTest, GetNormalTexture_MultipleNameFallback) {
     DSSLMaterialInstance inst(1, "x.dssl");
-    EXPECT_EQ(inst.GetNormalTexture(), 0u);
+    EXPECT_FALSE(inst.GetNormalTexture());
 
-    inst.SetTexture("normal_map", 500);
-    EXPECT_EQ(inst.GetNormalTexture(), 500u);
+    inst.SetTexture("normal_map", dse::render::TextureHandle::from_raw(500));
+    EXPECT_EQ(inst.GetNormalTexture(),
+              dse::render::TextureHandle::from_raw(500));
 
-    inst.SetTexture("normal_tex", 600);
-    EXPECT_EQ(inst.GetNormalTexture(), 600u);
+    inst.SetTexture("normal_tex", dse::render::TextureHandle::from_raw(600));
+    EXPECT_EQ(inst.GetNormalTexture(),
+              dse::render::TextureHandle::from_raw(600));
 }
 
 // ============================================================

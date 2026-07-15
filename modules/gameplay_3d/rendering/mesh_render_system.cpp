@@ -1008,9 +1008,11 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
             }
         }
         
-        item.texture_handle = resolved_texture_slots.albedo != 0
+        item.texture_handle = resolved_texture_slots.albedo
             ? resolved_texture_slots.albedo
-            : (prefer_material_instance ? material_instance->GetTextureHandle() : 0);
+            : (prefer_material_instance
+                   ? material_instance->GetTextureHandle()
+                   : dse::render::TextureHandle{});
         item.normal_map_handle = resolved_texture_slots.normal;
         item.metallic_roughness_map_handle = resolved_texture_slots.metallic_roughness;
         item.emissive_map_handle = resolved_texture_slots.emissive;
@@ -1100,7 +1102,7 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         // GPU Instancing: 有 mesh_path + opaque → 检查合批（静态物体走 StaticBatch）
         // Skinned mesh 也可合批（bone SSBO + per-instance bone_offset）
         const bool can_instance = !item.morph_enabled
-            && item.custom_shader_program == 0  // 自定义 Shader Graph 程序不合批（实例化走内建程序）
+            && !item.custom_shader_program  // 自定义 Shader Graph 程序不合批（实例化走内建程序）
             && !world.registry().all_of<ClothComponent>(entity)
             && !world.registry().all_of<MorphTargetComponent>(entity)
             && !world.registry().all_of<FragmentTagComponent>(entity)
@@ -1114,11 +1116,11 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         if (can_instance) {
             inst_key.mesh_path = &mesh_renderer.mesh_path;
             auto& kd = inst_key.data;
-            kd.tex[0] = item.texture_handle;
-            kd.tex[1] = item.normal_map_handle;
-            kd.tex[2] = item.metallic_roughness_map_handle;
-            kd.tex[3] = item.emissive_map_handle;
-            kd.tex[4] = item.occlusion_map_handle;
+            kd.tex[0] = item.texture_handle.raw();
+            kd.tex[1] = item.normal_map_handle.raw();
+            kd.tex[2] = item.metallic_roughness_map_handle.raw();
+            kd.tex[3] = item.emissive_map_handle.raw();
+            kd.tex[4] = item.occlusion_map_handle.raw();
             kd.color[0] = item.color.r; kd.color[1] = item.color.g;
             kd.color[2] = item.color.b; kd.color[3] = item.color.a;
             kd.scalars[0] = item.material_metallic;
@@ -1577,7 +1579,8 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
                         item.shading_mode, item.lighting_enabled ? 1 : 0, item.receive_shadow ? 1 : 0,
                         item.shadow_strength, item.light_direction.x, item.light_direction.y, item.light_direction.z,
                         item.ambient_intensity, item.light_intensity,
-                        item.texture_handle, item.normal_map_handle, item.metallic_roughness_map_handle,
+                        item.texture_handle.raw(), item.normal_map_handle.raw(),
+                        item.metallic_roughness_map_handle.raw(),
                         item.color.r, item.color.g, item.color.b, item.color.a,
                         item.material_albedo.r, item.material_albedo.g, item.material_albedo.b,
                         item.material_metallic, item.material_roughness, item.material_ao, item.material_double_sided ? 1 : 0,
@@ -1867,10 +1870,10 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
                                      mesh_renderer.normal_strength, mesh_renderer.material_alpha_cutoff);
         mat.emissive = glm::vec4(mesh_renderer.emissive, mesh_renderer.material_alpha_test ? 1.0f : 0.0f);
         mat.flags = glm::vec4(
-            mesh_renderer.normal_texture_handle != 0 ? 1.0f : 0.0f,
-            mesh_renderer.metallic_roughness_texture_handle != 0 ? 1.0f : 0.0f,
-            mesh_renderer.emissive_texture_handle != 0 ? 1.0f : 0.0f,
-            mesh_renderer.occlusion_texture_handle != 0 ? 1.0f : 0.0f);
+            mesh_renderer.normal_texture_handle ? 1.0f : 0.0f,
+            mesh_renderer.metallic_roughness_texture_handle ? 1.0f : 0.0f,
+            mesh_renderer.emissive_texture_handle ? 1.0f : 0.0f,
+            mesh_renderer.occlusion_texture_handle ? 1.0f : 0.0f);
         mat.extra_params = glm::vec4(mesh_renderer.sss_strength, mesh_renderer.clear_coat,
                                      mesh_renderer.clear_coat_roughness, mesh_renderer.anisotropy);
         mat.extra_params2 = glm::vec4(mesh_renderer.pom_height_scale,
@@ -2145,4 +2148,3 @@ void MeshRenderSystem::CleanupGPUResources(RhiDevice* rhi) {
 
 } // namespace gameplay3d
 } // namespace dse
-

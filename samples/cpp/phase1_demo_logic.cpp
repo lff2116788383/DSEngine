@@ -305,7 +305,7 @@ void Bootstrap(World& world, AssetManager& asset_manager) {
     free_cam.move_speed = 10.0f;
 
     auto texture = asset_manager.LoadTexture("models/CesiumLogoFlat.png");
-    state.texture_handle = texture ? texture->GetHandle() : 0;
+    state.texture_handle = texture ? texture->GetHandle().raw() : 0;
 
     state.dlight = world.CreateEntity();
     auto& light = world.registry().emplace<DirectionalLight3DComponent>(state.dlight);

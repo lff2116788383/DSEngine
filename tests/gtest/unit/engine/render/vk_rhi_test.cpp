@@ -68,15 +68,15 @@ TEST(VkRhiDeviceBasicTest, WhenNotInitializedSubmitSafety) {
 // 测试 Vulkan RHI设备基础：当不已初始化创建缓冲区返回零
 TEST(VkRhiDeviceBasicTest, WhenNotInitializedCreateBufferReturnsZero) {
     VulkanRhiDevice device;
-    unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateBuffer(16, nullptr, false, false);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 Vulkan RHI设备基础：当不已初始化创建纹理2D返回零
 TEST(VkRhiDeviceBasicTest, WhenNotInitializedCreateTexture2DReturnsZero) {
     VulkanRhiDevice device;
-    unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateTexture2D(4, 4, nullptr, false);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 Vulkan RHI设备基础：当不已初始化创建渲染目标返回零
@@ -86,24 +86,24 @@ TEST(VkRhiDeviceBasicTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     desc.width = 256;
     desc.height = 256;
     desc.has_color = true;
-    unsigned int handle = device.CreateRenderTarget(desc);
-    EXPECT_EQ(handle, 0u);
+    const auto handle = device.CreateRenderTarget(desc);
+    EXPECT_FALSE(handle);
 }
 
 // 测试 Vulkan RHI设备基础：当不已初始化更新缓冲区安全
 TEST(VkRhiDeviceBasicTest, WhenNotInitializedUpdateBufferSafety) {
     VulkanRhiDevice device;
     float data[] = {0.5f};
-    device.UpdateBuffer(999, 0, sizeof(data), data, false);
+    device.UpdateBuffer(BufferHandle::from_raw(999), 0, sizeof(data), data, false);
 }
 
 // 测试 Vulkan RHI设备基础：当不已初始化删除安全
 TEST(VkRhiDeviceBasicTest, WhenNotInitializedDeleteSafety) {
     VulkanRhiDevice device;
-    device.DeleteRenderTarget(999);
-    device.DeleteTexture(999);
-    device.DeleteShaderProgram(999);
-    device.DeleteBuffer(999);
+    device.DeleteRenderTarget(RenderTargetHandle::from_raw(999));
+    device.DeleteTexture(TextureHandle::from_raw(999));
+    device.DeleteShaderProgram(ShaderHandle::from_raw(999));
+    device.DeleteBuffer(BufferHandle::from_raw(999));
 }
 
 // 测试 Vulkan RHI设备基础：最后帧统计默认值为零

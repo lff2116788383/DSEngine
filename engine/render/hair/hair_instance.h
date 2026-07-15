@@ -95,10 +95,10 @@ struct HairInstance {
     bool compute_unavailable_ = false;
 
     /// Compute shader 句柄（懒加载，首次 Simulate 时编译）
-    unsigned int cs_integrate_   = 0;
-    unsigned int cs_length_      = 0;
-    unsigned int cs_local_shape_ = 0;
-    unsigned int cs_tangent_     = 0;
+    ShaderHandle cs_integrate_;
+    ShaderHandle cs_length_;
+    ShaderHandle cs_local_shape_;
+    ShaderHandle cs_tangent_;
 
     /// CPU 侧 per-strand 绘制参数（用于 glMultiDrawArrays）
     std::vector<int> draw_firsts_;   ///< 每 strand 的顶点起始索引

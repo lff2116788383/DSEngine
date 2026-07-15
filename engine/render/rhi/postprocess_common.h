@@ -17,6 +17,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "engine/render/rhi/rhi_handle.h"
+
 namespace dse {
 namespace render {
 
@@ -135,13 +137,13 @@ static constexpr int kMaxPPTextures = 8;
 
 struct PPTextureBinding {
     uint32_t slot    = 0;   ///< 绑定点（对应 GLSL layout(binding=N) / HLSL tN / VK set2 binding）
-    unsigned int handle = 0; ///< 纹理句柄，0 表示空
+    TextureHandle handle; ///< 纹理句柄，0 表示空
     bool is_3d = false;      ///< GL 专用：用 GL_TEXTURE_3D 绑定（如 LUT 3D 纹理）
 };
 
 struct PostProcessRequest {
     std::string effect_name;
-    unsigned int source_texture = 0;
+    TextureHandle source_texture;
     int source_binding          = 1;    ///< 主纹理绑定点（light_shaft = 0，其余 = 1）
 
     PPTextureBinding textures[kMaxPPTextures] = {};  ///< 额外纹理，遇到 handle==0 终止
@@ -153,34 +155,34 @@ struct PostProcessRequest {
     PostProcessRequest() = default;
 
     /// 便利构造：PostProcessRequest("effect", src_tex, {p0, p1, ...})
-    PostProcessRequest(std::string name, unsigned int src,
+    PostProcessRequest(std::string name, TextureHandle src,
                        std::vector<float> p = {}, bool blend = false, int src_bind = 1)
         : effect_name(std::move(name)), source_texture(src),
           source_binding(src_bind), params(std::move(p)), blend_enabled(blend) {}
 
     /// 便利方法：添加一个额外纹理绑定
-    PostProcessRequest& Tex(uint32_t slot, unsigned int handle) {
+    PostProcessRequest& Tex(uint32_t slot, TextureHandle handle) {
         for (auto& t : textures) {
-            if (t.handle == 0) { t = {slot, handle, false}; return *this; }
+            if (!t.handle) { t = {slot, handle, false}; return *this; }
         }
         return *this;
     }
 
     /// 便利方法：添加一个 3D 纹理绑定（如 Color Grading LUT）
-    PostProcessRequest& Tex3D(uint32_t slot, unsigned int handle) {
+    PostProcessRequest& Tex3D(uint32_t slot, TextureHandle handle) {
         for (auto& t : textures) {
-            if (t.handle == 0) { t = {slot, handle, true}; return *this; }
+            if (!t.handle) { t = {slot, handle, true}; return *this; }
         }
         return *this;
     }
 
     /// 按 slot 查找纹理句柄（0 表示未设置）
-    unsigned int FindTex(uint32_t slot) const {
+    TextureHandle FindTex(uint32_t slot) const {
         for (const auto& t : textures) {
-            if (t.handle == 0) break;
+            if (!t.handle) break;
             if (t.slot == slot) return t.handle;
         }
-        return 0;
+        return {};
     }
 };
 

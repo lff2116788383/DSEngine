@@ -56,8 +56,8 @@ void VulkanDrawExecutor::DispatchComputePass(
     VkCommandBuffer cmd_buf,
     const ComputeDispatch& dispatch,
     VulkanShaderManager& shader_mgr) {
-    if (dispatch.shader == 0 || current_rt_handle_ == 0) return;
-    DispatchBloomCompute(cmd_buf, dispatch.shader, dispatch.source_texture,
+    if (!dispatch.shader || current_rt_handle_ == 0) return;
+    DispatchBloomCompute(cmd_buf, dispatch.shader.raw(), dispatch.source_texture.raw(),
                          current_rt_handle_, dispatch.blend_weight, shader_mgr);
 }
 
@@ -173,11 +173,11 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     if (cmd_buf == VK_NULL_HANDLE || !context_) return;
 
     // 优先使用 GPU-driven shader（VS 从 SSBO 读 model, FS 从 Material SSBO 读材质）
-    unsigned int shader_handle = shader_mgr.gpu_driven_pbr_shader_handle();
+    unsigned int shader_handle = shader_mgr.gpu_driven_pbr_shader_handle().raw();
     const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(shader_handle);
     if (!pbr_program) {
         // 回退到标准 PBR（不支持 glslang 时）
-        shader_handle = shader_mgr.pbr_shader_handle();
+        shader_handle = shader_mgr.pbr_shader_handle().raw();
         pbr_program = shader_mgr.GetProgram(shader_handle);
         if (!pbr_program) return;
     }
@@ -348,7 +348,7 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
         VkDescriptorImageInfo point_shadow_infos[4] = {};
         const VulkanTexture* white_tex = resource_mgr_->GetTexture(white_cubemap_handle_);
         for (int i = 0; i < 4; ++i) {
-            unsigned int ps_handle = global_state_.point_shadow_map[i];
+            unsigned int ps_handle = global_state_.point_shadow_map[i].raw();
             const VulkanTexture* ps_tex = (ps_handle != 0) ? resource_mgr_->GetTexture(ps_handle) : nullptr;
             const VulkanTexture* tex = ps_tex ? ps_tex : white_tex;
             if (tex) {
@@ -386,10 +386,10 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
     if (cmd_buf == VK_NULL_HANDLE || !context_) return;
 
     // 优先使用 GPU-driven shadow shader（VS 从 SSBO 读 model）
-    unsigned int shader_handle = shader_mgr.gpu_driven_shadow_shader_handle();
+    unsigned int shader_handle = shader_mgr.gpu_driven_shadow_shader_handle().raw();
     const VulkanShaderProgram* shadow_program = shader_mgr.GetProgram(shader_handle);
     if (!shadow_program) {
-        shader_handle = shader_mgr.shadow_shader_handle();
+        shader_handle = shader_mgr.shadow_shader_handle().raw();
         shadow_program = shader_mgr.GetProgram(shader_handle);
         if (!shadow_program) return;
     }
@@ -594,8 +594,9 @@ void VulkanDrawExecutor::BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
     VkDescriptorImageInfo csm_infos[3] = {};
     if (has_binding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
         for (int i = 0; i < 3; ++i) {
-            unsigned int sm_handle = global_state_.shadow_map[i];
-            VkImageView depth_view = sm_handle != 0 ? resource_mgr.GetRenderTargetDepthImageView(sm_handle) : VK_NULL_HANDLE;
+            unsigned int sm_handle = global_state_.shadow_map[i].raw();
+            const VulkanTexture* shadow_tex = sm_handle != 0 ? resource_mgr.GetTexture(sm_handle) : nullptr;
+            VkImageView depth_view = shadow_tex ? shadow_tex->image_view : VK_NULL_HANDLE;
             csm_infos[i].sampler = depth_view != VK_NULL_HANDLE ? resource_mgr.shadow_comparison_sampler() : resource_mgr.default_sampler();
             csm_infos[i].imageView = depth_view != VK_NULL_HANDLE ? depth_view : (white_tex ? white_tex->image_view : VK_NULL_HANDLE);
             csm_infos[i].imageLayout = depth_view != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -612,8 +613,9 @@ void VulkanDrawExecutor::BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
     VkDescriptorImageInfo spot_infos[4] = {};
     if (has_binding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
         for (int i = 0; i < 4; ++i) {
-            unsigned int ss_handle = global_state_.spot_shadow_map[i];
-            VkImageView depth_view = ss_handle != 0 ? resource_mgr.GetRenderTargetDepthImageView(ss_handle) : VK_NULL_HANDLE;
+            unsigned int ss_handle = global_state_.spot_shadow_map[i].raw();
+            const VulkanTexture* shadow_tex = ss_handle != 0 ? resource_mgr.GetTexture(ss_handle) : nullptr;
+            VkImageView depth_view = shadow_tex ? shadow_tex->image_view : VK_NULL_HANDLE;
             spot_infos[i].sampler = depth_view != VK_NULL_HANDLE ? resource_mgr.shadow_comparison_sampler() : resource_mgr.default_sampler();
             spot_infos[i].imageView = depth_view != VK_NULL_HANDLE ? depth_view : (white_tex ? white_tex->image_view : VK_NULL_HANDLE);
             spot_infos[i].imageLayout = depth_view != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

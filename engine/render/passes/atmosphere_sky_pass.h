@@ -21,7 +21,7 @@ public:
     const char* GetName() const override { return "atmosphere_sky_pass"; }
 
     /// 获取 transmittance LUT 纹理句柄（供其他 Pass 使用，如 aerial perspective）
-    unsigned int GetTransmittanceLUT() const { return transmittance_lut_; }
+    TextureHandle GetTransmittanceLUT() const { return transmittance_lut_; }
 
     /// 是否有有效的大气天空实体
     bool IsActive() const { return active_; }
@@ -30,8 +30,8 @@ private:
     RenderPassContext& ctx_;
 
     // Transmittance LUT 资源
-    unsigned int transmittance_lut_ = 0;         ///< 2D R16F texture
-    unsigned int transmittance_rt_ = 0;          ///< RT 用于渲染 LUT
+    TextureHandle transmittance_lut_;         ///< 2D R16F texture
+    RenderTargetHandle transmittance_rt_;     ///< RT 用于渲染 LUT
     int lut_width_ = 0;
     int lut_height_ = 0;
     bool lut_valid_ = false;

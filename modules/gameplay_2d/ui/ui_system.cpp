@@ -187,7 +187,7 @@ void UISystem::SyncLabels(entt::registry& registry) {
             dse::render::FontInstance* fi = font_service ? font_service->GetFont(label.font_id) : nullptr;
             if (!fi) fi = font_service ? font_service->GetDefaultFont() : nullptr;
 
-            if (fi && fi->font.IsValid() && fi->gpu_texture_handle != 0) {
+            if (fi && fi->font.IsValid() && fi->gpu_texture_handle) {
                 const float scale = (label.font_size > 0.0f && fi->font.GetFontSize() > 0.0f)
                     ? label.font_size / fi->font.GetFontSize() : 1.0f;
 
@@ -258,7 +258,8 @@ void UISystem::SyncLabels(entt::registry& registry) {
         const int atlas_rows = label.atlas_rows > 0 ? label.atlas_rows : 1;
         const float inv_cols = 1.0f / static_cast<float>(atlas_cols);
         const float inv_rows = 1.0f / static_cast<float>(atlas_rows);
-        const unsigned int font_texture = label.font_texture_handle != 0 ? label.font_texture_handle : ui.texture_handle;
+        const dse::render::TextureHandle font_texture =
+            label.font_texture_handle ? label.font_texture_handle : ui.texture_handle;
 
         auto spawn_glyph = [&](const glm::vec2& local_position, const glm::vec4& color, const glm::vec4& uv, int order) {
             const Entity glyph_entity = registry.create();

@@ -16,9 +16,9 @@
 namespace dse {
 namespace render {
 
-void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
+void VulkanRhiDevice::ReadSSBO(BufferHandle handle, size_t offset, size_t size, void* dst) {
     if (!initialized_ || !dst || size == 0) return;
-    const auto* ssbo = resource_mgr_.GetSSBO(handle);
+    const auto* ssbo = resource_mgr_.GetSSBO(handle.raw());
     if (!ssbo || !ssbo->buffer) return;
 
     // Staging buffer 读回
@@ -139,7 +139,10 @@ void VulkanRhiDevice::PresentFrame() {
     } else {
         auto clear_cmd = CreateCommandBuffer();
         if (clear_cmd) {
-            clear_cmd->BeginRenderPass(RenderPassDesc{0, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), true});
+            RenderPassDesc pass_desc{};
+            pass_desc.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+            pass_desc.clear_color_enabled = true;
+            clear_cmd->BeginRenderPass(pass_desc);
             clear_cmd->EndRenderPass();
             Submit(clear_cmd);
         }
@@ -307,7 +310,7 @@ void VulkanRhiDevice::BindVAOWithEBO(VertexArrayHandle vao, BufferHandle ebo) {
 // ============================================================
 
 bool VulkanRhiDevice::HasGPUDrivenPBRShader() const {
-    return shader_mgr_.gpu_driven_pbr_shader_handle() != 0;
+    return static_cast<bool>(shader_mgr_.gpu_driven_pbr_shader_handle());
 }
 
 void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
@@ -330,14 +333,14 @@ void VulkanRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, co
                                          state_mgr_, shader_mgr_);
 }
 
-void VulkanRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
-                                              unsigned int metallic_roughness,
-                                              unsigned int emissive, unsigned int occlusion) {
+void VulkanRhiDevice::BindGPUDrivenTextures(TextureHandle albedo, TextureHandle normal,
+                                              TextureHandle metallic_roughness,
+                                              TextureHandle emissive, TextureHandle occlusion) {
     if (active_render_cmd_ == VK_NULL_HANDLE) return;
     // 同步 bound_ssbos_ 到 draw executor（GPU-driven 路径不走 DrawMeshBatch，需手动同步）
     draw_executor_.SetBoundSSBOs(bound_ssbos_);
-    draw_executor_.BindGPUDrivenTextures(active_render_cmd_, albedo, normal,
-                                          metallic_roughness, emissive, occlusion,
+    draw_executor_.BindGPUDrivenTextures(active_render_cmd_, albedo.raw(), normal.raw(),
+                                          metallic_roughness.raw(), emissive.raw(), occlusion.raw(),
                                           resource_mgr_);
 }
 

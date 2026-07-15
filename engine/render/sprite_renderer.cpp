@@ -74,11 +74,11 @@ void SpriteRenderer::EnsureResources(RhiDevice& device) {
     init_ = true;
 }
 
-void SpriteRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int texture_handle,
+void SpriteRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, TextureHandle texture_handle,
                           const glm::mat4& vp, float half_extent, const glm::vec4& tint) {
-    if (texture_handle == 0) return;
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
-    if (program == 0) return;  // 该后端未提供 sprite2d 内建着色器
+    if (!texture_handle) return;
+    ShaderHandle program = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
+    if (!program) return;  // 该后端未提供 sprite2d 内建着色器
 
     EnsureResources(device);
     if (!vbo_ || !ibo_ || !ubo_) return;
@@ -107,11 +107,11 @@ void SpriteRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int te
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     // 绑定组（契约 §2.3）：PerFrame UBO + u_texture 打包为一次原子绑定。
     BindGroupDesc group;
-    group.uniform_buffers.push_back({0u, ubo_.raw(), 0u, 0u});                     // PerFrame @ set0.b0
+    group.uniform_buffers.push_back({0u, ubo_, 0u, 0u});                     // PerFrame @ set0.b0
     group.textures.push_back({0u, texture_handle, TextureDim::Tex2D});            // u_texture @ set2.b1
     cmd.BindGroup(group);
-    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), attrs);
-    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.BindVertexBuffer(0u, vbo_, static_cast<uint32_t>(sizeof(SpriteVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
     cmd.DrawIndexed(6u, 0u, 0);
 }
 

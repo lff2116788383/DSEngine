@@ -119,17 +119,18 @@ extern "C" void dse_post_process_set_color_lut(uint32_t e, const char* path, flo
     if (!rhi) return;
     if (path) {
         if (pp->color_lut_handle != 0) {
-            rhi->DeleteTexture(pp->color_lut_handle);
+            rhi->DeleteTexture(dse::render::TextureHandle::from_raw(pp->color_lut_handle));
             pp->color_lut_handle = 0;
         }
         std::string full_path = am->ResolveAssetPath(path);
         dse::assets::LutData lut;
         if (dse::assets::LoadCubeLut(full_path, lut) && lut.size > 0 && !lut.rgba8.empty()) {
-            pp->color_lut_handle = rhi->CreateTexture3D(lut.size, lut.size, lut.size, lut.rgba8.data(), true);
+            pp->color_lut_handle =
+                rhi->CreateTexture3D(lut.size, lut.size, lut.size, lut.rgba8.data(), true).raw();
         }
     } else {
         if (pp->color_lut_handle != 0) {
-            rhi->DeleteTexture(pp->color_lut_handle);
+            rhi->DeleteTexture(dse::render::TextureHandle::from_raw(pp->color_lut_handle));
         }
         pp->color_lut_handle = 0;
     }
@@ -151,7 +152,9 @@ extern "C" void dse_decal_set_full(uint32_t e, int enabled, int has_texture, uin
     auto* dc = GetComp<DecalComponent>(e);
     if (!dc) return;
     dc->enabled = (enabled != 0);
-    if (has_texture) dc->albedo_texture = texture;
+    if (has_texture) {
+        dc->albedo_texture = dse::render::TextureHandle::from_raw(texture);
+    }
     dc->color.r = r;
     dc->color.g = g;
     dc->color.b = b;
@@ -235,7 +238,7 @@ extern "C" int dse_terrain_set_texture(uint32_t e, const char* path,
     terrain->texture_path = path;
     terrain->texture_handle = texture->GetHandle();
     terrain->is_dirty = true;
-    if (out_handle) *out_handle = terrain->texture_handle;
+    if (out_handle) *out_handle = terrain->texture_handle.raw();
     if (out_w) *out_w = texture->GetWidth();
     if (out_h) *out_h = texture->GetHeight();
     return 1;
@@ -461,7 +464,7 @@ extern "C" void dse_ui_add_label(uint32_t e, const char* text, uint32_t font_tex
     World* w = GW();
     if (!w || !w->registry().valid(TE(e))) return;
     auto& ui = w->registry().emplace_or_replace<UIRendererComponent>(TE(e));
-    ui.texture_handle = font_tex_handle;
+    ui.texture_handle = dse::render::TextureHandle::from_raw(font_tex_handle);
     ui.color = glm::vec4(r, g, b, 0.0f);
     ui.visible = true;
     ui.interactable = false;
@@ -469,7 +472,8 @@ extern "C" void dse_ui_add_label(uint32_t e, const char* text, uint32_t font_tex
     ui.size = glm::vec2(0.0f, 0.0f);
     auto& label = w->registry().emplace_or_replace<UILabelComponent>(TE(e));
     label.text = text ? text : "";
-    label.font_texture_handle = font_tex_handle;
+    label.font_texture_handle =
+        dse::render::TextureHandle::from_raw(font_tex_handle);
     label.color = glm::vec4(r, g, b, a);
     if (glyph_w > 0.0f && glyph_h > 0.0f) label.glyph_size = glm::vec2(glyph_w, glyph_h);
     if (spacing != 0.0f) label.spacing = spacing;

@@ -42,7 +42,7 @@ TEST(PipelineStateDescTest, DefaultValues) {
 // 测试 渲染通道描述符：默认值
 TEST(RenderPassDescTest, DefaultValues) {
     RenderPassDesc desc;
-    EXPECT_EQ(desc.render_target, 0u);
+    EXPECT_FALSE(desc.render_target);
     EXPECT_EQ(desc.clear_color, glm::vec4(0.0f));
     EXPECT_FALSE(desc.clear_color_enabled);
 }
@@ -62,7 +62,7 @@ TEST(RenderTargetReadbackTest, DefaultValues) {
 // 测试 精灵绘制项：默认值
 TEST(SpriteDrawItemTest, DefaultValues) {
     SpriteDrawItem item;
-    EXPECT_EQ(item.texture_handle, 0u);
+    EXPECT_FALSE(item.texture_handle);
     EXPECT_EQ(item.material_instance_id, 0u);
     EXPECT_EQ(item.sorting_layer, 0);
     EXPECT_EQ(item.order_in_layer, 0);

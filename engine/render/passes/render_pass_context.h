@@ -75,33 +75,33 @@ struct RenderPassContext {
     } pipeline_states;
 
     struct RenderTargets {
-        unsigned int main = 0;
-        unsigned int scene = 0;
-        unsigned int ui = 0;
-        unsigned int prez = 0;
-        unsigned int shadow[3] = {0, 0, 0};     // CSM_CASCADES (legacy, kept for spot/point)
-        unsigned int shadow_atlas = 0;           // CSM shadow atlas RT
-        unsigned int spot_shadow[4] = {0, 0, 0, 0};
-        unsigned int point_shadow[4] = {0, 0, 0, 0};
-        unsigned int bloom_extract = 0;
-        std::vector<unsigned int> bloom_mips;
-        unsigned int ssao = 0;
-        unsigned int ssao_blur = 0;
-        unsigned int contact_shadow = 0;
-        unsigned int fxaa = 0;
-        unsigned int taa = 0;               // TAA resolve 输出 RT
-        unsigned int dof = 0;               // DOF 输出 RT
-        unsigned int ssr = 0;               // SSR 输出 RT
-        unsigned int motion_vector = 0;     // Motion Vector RT (RG16F)
-        unsigned int outline = 0;            // Outline / Edge Detection RT
-        unsigned int fog = 0;               // Volumetric Fog RT
-        unsigned int cloud = 0;             // Volumetric Cloud RT
-        unsigned int wboit_accum = 0;        // WBOIT accumulation RT (RGBA16F)
-        unsigned int wboit_reveal = 0;       // WBOIT revealage RT (RGBA16F)
-        unsigned int lum_temp = 0;          // 64x64 log luminance
-        unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong
-        unsigned int hiz_texture = 0;       // Hi-Z depth mipmap (R32F, RHI handle)
-        unsigned int sss_temp = 0;          // Separable SSS blur intermediate RT (RGBA16F)
+        RenderTargetHandle main;
+        RenderTargetHandle scene;
+        RenderTargetHandle ui;
+        RenderTargetHandle prez;
+        RenderTargetHandle shadow[3];     // CSM_CASCADES (legacy, kept for spot/point)
+        RenderTargetHandle shadow_atlas;           // CSM shadow atlas RT
+        RenderTargetHandle spot_shadow[4];
+        RenderTargetHandle point_shadow[4];
+        RenderTargetHandle bloom_extract;
+        std::vector<RenderTargetHandle> bloom_mips;
+        RenderTargetHandle ssao;
+        RenderTargetHandle ssao_blur;
+        RenderTargetHandle contact_shadow;
+        RenderTargetHandle fxaa;
+        RenderTargetHandle taa;               // TAA resolve 输出 RT
+        RenderTargetHandle dof;               // DOF 输出 RT
+        RenderTargetHandle ssr;               // SSR 输出 RT
+        RenderTargetHandle motion_vector;     // Motion Vector RT (RG16F)
+        RenderTargetHandle outline;            // Outline / Edge Detection RT
+        RenderTargetHandle fog;               // Volumetric Fog RT
+        RenderTargetHandle cloud;             // Volumetric Cloud RT
+        RenderTargetHandle wboit_accum;        // WBOIT accumulation RT (RGBA16F)
+        RenderTargetHandle wboit_reveal;       // WBOIT revealage RT (RGBA16F)
+        RenderTargetHandle lum_temp;          // 64x64 log luminance
+        RenderTargetHandle lum_adapted[2]; // 1x1 ping-pong
+        TextureHandle hiz_texture;       // Hi-Z depth mipmap (R32F, RHI handle)
+        RenderTargetHandle sss_temp;          // Separable SSS blur intermediate RT (RGBA16F)
     } render_targets;
 
     /// Hi-Z Occlusion Culling 状态
@@ -110,9 +110,9 @@ struct RenderPassContext {
     size_t hiz_aabb_capacity = 0;          ///< hiz_aabb_ssbo 分配容量（对象数），0 表示未知
     int hiz_object_count = 0;               ///< 当前帧 mesh 数量
     bool hiz_culling_enabled = false;       ///< Hi-Z 剔除是否激活
-    unsigned int hiz_copy_shader = 0;       ///< Compute: depth → Hi-Z mip 0（由 FramePipeline 管理生命周期）
-    unsigned int hiz_downsample_shader = 0; ///< Compute: mip N-1 → mip N
-    unsigned int hiz_cull_shader = 0;       ///< Compute: AABB 遮挡剔除
+    ShaderHandle hiz_copy_shader;       ///< Compute: depth → Hi-Z mip 0（由 FramePipeline 管理生命周期）
+    ShaderHandle hiz_downsample_shader; ///< Compute: mip N-1 → mip N
+    ShaderHandle hiz_cull_shader;       ///< Compute: AABB 遮挡剔除
 
     /// GPU Driven 渲染状态
     bool gpu_driven_enabled = false;              ///< 兼容字段：后端能力支持，勿作为本帧激活判定
@@ -128,7 +128,7 @@ struct RenderPassContext {
     BufferHandle gpu_visible_indices_ssbo;       ///< visible instance index buffer SSBO
     BufferHandle gpu_atomic_counter_ssbo;        ///< atomic draw count SSBO
     VertexArrayHandle gpu_mega_vao;                ///< mega buffer VAO
-    unsigned int gpu_cull_shader = 0;             ///< GPU Driven culling compute shader
+    ShaderHandle gpu_cull_shader;             ///< GPU Driven culling compute shader
     int gpu_indirect_draw_count = 0;              ///< indirect draw command 条数
     int gpu_total_instances = 0;                  ///< 本帧总 instance 数
     size_t gpu_aabb_capacity = 0;
@@ -194,18 +194,18 @@ struct RenderPassContext {
 
     /// RSM (Reflective Shadow Map) 渲染目标
     struct RSMRenderTargets {
-        unsigned int position = 0;    ///< 世界坐标 RT (RGBA32F)
-        unsigned int normal = 0;      ///< 法线 RT (RGBA16F)
-        unsigned int flux = 0;        ///< 辐射通量 RT (RGBA16F)
+        TextureHandle position;    ///< 世界坐标纹理 (RGBA32F)
+        TextureHandle normal;      ///< 法线纹理 (RGBA16F)
+        TextureHandle flux;        ///< 辐射通量纹理 (RGBA16F)
         int width = 0;
         int height = 0;
     } rsm_targets;
 
-    unsigned int rsm_render_target = 0;  ///< RSM MRT FBO handle（供 RSMRenderPass 使用）
+    RenderTargetHandle rsm_render_target;  ///< RSM MRT FBO handle（供 RSMRenderPass 使用）
 
     /// DDGI 探针 atlas 纹理（供 PBR shader 采样）
-    unsigned int ddgi_irradiance_atlas = 0;
-    unsigned int ddgi_visibility_atlas = 0;
+    TextureHandle ddgi_irradiance_atlas;
+    TextureHandle ddgi_visibility_atlas;
     bool ddgi_active = false;
     float ddgi_gi_intensity = 1.0f;
     float ddgi_normal_bias = 0.2f;
@@ -218,7 +218,7 @@ struct RenderPassContext {
     VertexArrayHandle meshlet_mega_vao;              ///< Meshlet 专用 Mega VAO
     BufferHandle meshlet_mega_vbo;                   ///< Meshlet Mega VBO
     BufferHandle meshlet_mega_ibo;                   ///< Meshlet Mega IBO
-    unsigned int meshlet_cull_shader = 0;            ///< Meshlet culling compute shader
+    ShaderHandle meshlet_cull_shader;            ///< Meshlet culling compute shader
     int meshlet_draw_count = 0;                      ///< 本帧 meshlet indirect draw 数
     int meshlet_total_clusters = 0;                  ///< 本帧总 cluster 数
     int meshlet_visible_clusters = 0;                ///< 本帧可见 cluster 数
@@ -241,11 +241,11 @@ struct RenderPassContext {
     BufferHandle vg_vertex_data_ssbo;                 ///< VGVertexData[] for resolve
     BufferHandle vg_index_data_ssbo;                  ///< Index buffer for resolve
     BufferHandle vg_material_ssbo;                    ///< VGMaterialEntry[] for resolve
-    unsigned int vg_lod_select_shader = 0;            ///< vg_lod_select.comp
-    unsigned int vg_cluster_cull_shader = 0;          ///< vg_cluster_cull.comp
-    unsigned int vg_sw_raster_shader = 0;             ///< vg_sw_raster.comp
-    unsigned int vg_resolve_program = 0;              ///< vg_resolve.vert + vg_resolve.frag
-    unsigned int vg_resolve_pso = 0;                  ///< PSO for resolve pass
+    ShaderHandle vg_lod_select_shader;            ///< vg_lod_select.comp
+    ShaderHandle vg_cluster_cull_shader;          ///< vg_cluster_cull.comp
+    ShaderHandle vg_sw_raster_shader;             ///< vg_sw_raster.comp
+    ShaderHandle vg_resolve_program;              ///< vg_resolve.vert + vg_resolve.frag
+    PipelineHandle vg_resolve_pso;                  ///< PSO for resolve pass
     int vg_dag_node_count = 0;
     int vg_cluster_count = 0;
     int vg_selected_count = 0;

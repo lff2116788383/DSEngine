@@ -73,7 +73,7 @@ const glm::vec2 kQuadUv[4] = {
 struct Batch {
     size_t start_quad = 0;
     size_t quad_count = 0;
-    unsigned int texture = 0;
+    TextureHandle texture;
     unsigned int blend_mode = 0;
     unsigned int shader_variant = 0;
 };
@@ -193,11 +193,11 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                                const glm::mat4& view, const glm::mat4& projection) {
     if (items.empty()) return;
 
-    unsigned int sprite_prog = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
-    if (sprite_prog == 0) return;  // 该后端未提供 sprite2d 内建着色器
+    ShaderHandle sprite_prog = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
+    if (!sprite_prog) return;  // 该后端未提供 sprite2d 内建着色器
 
     EnsureResources(device, items.size());
-    if (!ibo_ || white_tex_ == 0) return;
+    if (!ibo_ || !white_tex_) return;
 
     // 取本在飞帧的动态顶点 / PerFrame 缓冲槽位（2 帧在飞下与上一帧不别名，D9）。
     BufferHandle vbo = vbo_.Acquire(device, sizeof(SpriteVertex) * 4 * items.size(),
@@ -212,7 +212,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
 
     for (size_t i = 0; i < items.size(); ++i) {
         const SpriteDrawItem& item = items[i];
-        const unsigned int tex = item.texture_handle == 0 ? white_tex_ : item.texture_handle;
+        const TextureHandle tex = item.texture_handle ? item.texture_handle : white_tex_;
 
         if (batches.empty() || !SameState(items[batches.back().start_quad], item)) {
             Batch b;
@@ -271,7 +271,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         return 0;                                               // 默认
     };
 
-    unsigned int sdf_prog = 0, vfx_prog = 0;
+    ShaderHandle sdf_prog, vfx_prog;
     size_t fx_batch_count = 0;
     for (const Batch& b : batches) if (path_of(b) != 0) ++fx_batch_count;
     if (fx_batch_count > 0) {
@@ -286,13 +286,13 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         const PipelineHandle pso = PsoForBlend(device, blend);
 
         const int path = path_of(b);
-        unsigned int prog = sprite_prog;
-        unsigned int ubo_handle = ubo.raw();
+        ShaderHandle prog = sprite_prog;
+        BufferHandle ubo_handle = ubo;
 
         if (path != 0) {
             const SpriteDrawItem& rep = items[b.start_quad];
-            unsigned int fx_prog = (path == 1) ? sdf_prog : vfx_prog;
-            if (fx_prog != 0) {
+            ShaderHandle fx_prog = (path == 1) ? sdf_prog : vfx_prog;
+            if (fx_prog) {
                 SpriteFxUBO fx{};
                 fx.vp = uniforms.vp;
                 if (path == 1) {  // SDF
@@ -310,7 +310,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                     device, sizeof(SpriteFxUBO), GpuBufferUsage::kUniform);
                 device.UpdateGpuBuffer(fx_ubo, 0, sizeof(fx), &fx);
                 prog = fx_prog;
-                ubo_handle = fx_ubo.raw();
+                ubo_handle = fx_ubo;
             }
             // fx_prog==0：保持默认程序 + PerFrame UBO（回退）。
         }
@@ -318,8 +318,8 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         cmd.BindPipeline(device.GetGraphicsPipeline(pso, prog));
         cmd.BindUniformBuffer(0u, ubo_handle);
         cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);
-        cmd.BindVertexBuffer(0u, vbo.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);
-        cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+        cmd.BindVertexBuffer(0u, vbo, static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);
+        cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
         cmd.DrawIndexed(static_cast<uint32_t>(b.quad_count * 6),
                         static_cast<uint32_t>(b.start_quad * 6), 0);
     }
@@ -333,7 +333,7 @@ void SpriteBatchRenderer::Shutdown(RhiDevice& device) {
     if (ibo_) device.DeleteGpuBuffer(ibo_);
     if (white_tex_) device.DeleteTexture(white_tex_);
     ibo_ = BufferHandle{};
-    white_tex_ = 0;
+    white_tex_ = {};
     ibo_cap_quads_ = 0;
     init_ = false;
 }

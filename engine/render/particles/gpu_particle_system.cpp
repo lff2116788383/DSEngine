@@ -40,11 +40,11 @@ bool GpuParticleManager::Init(RhiDevice* rhi) {
         kparticle_emit_comp_glsl430, kparticle_emit_comp_glsl450, kparticle_emit_comp_hlsl,
         3, 0, 0, 96);
 
-    inited_ = (update_shader_ != 0 && emit_shader_ != 0);
+    inited_ = (update_shader_ && emit_shader_);
     if (!inited_) {
         DEBUG_LOG_ERROR("[GpuParticleManager] Compute shader creation failed "
                         "(update={}, emit={}) — GPU particles disabled on this backend",
-                        update_shader_, emit_shader_);
+                        update_shader_.raw(), emit_shader_.raw());
     }
     return inited_;
 }
@@ -68,8 +68,8 @@ void GpuParticleManager::InitComponent(GpuParticleComponent& comp, RhiDevice* rh
         init_data[i * 8 + 3] = -1.0f;  // pos_life.w = -1 (dead)
     }
 
-    comp.particle_buffer_a = rhi->CreateGpuBuffer(desc, init_data.data()).raw();
-    comp.particle_buffer_b = rhi->CreateGpuBuffer(desc, init_data.data()).raw();
+    comp.particle_buffer_a = rhi->CreateGpuBuffer(desc, init_data.data());
+    comp.particle_buffer_b = rhi->CreateGpuBuffer(desc, init_data.data());
 
     // Counter buffer: alive_count(4) + dead_count(4) + dead_indices(max_p * 4)
     GpuBufferDesc counter_desc;
@@ -84,7 +84,7 @@ void GpuParticleManager::InitComponent(GpuParticleComponent& comp, RhiDevice* rh
     for (uint32_t i = 0; i < max_p; ++i) {
         counter_init[2 + i] = i;
     }
-    comp.counter_buffer = rhi->CreateGpuBuffer(counter_desc, counter_init.data()).raw();
+    comp.counter_buffer = rhi->CreateGpuBuffer(counter_desc, counter_init.data());
 
     // Indirect draw buffer (DrawArraysIndirectCommand: count, instance_count, first, base_instance)
     GpuBufferDesc indirect_desc;
@@ -92,7 +92,7 @@ void GpuParticleManager::InitComponent(GpuParticleComponent& comp, RhiDevice* rh
     indirect_desc.usage = GpuBufferUsage::kIndirect;
     indirect_desc.is_dynamic = true;
     uint32_t indirect_init[4] = {4, 0, 0, 0}; // 4 verts per quad, 0 instances initially
-    comp.indirect_buffer = rhi->CreateGpuBuffer(indirect_desc, indirect_init).raw();
+    comp.indirect_buffer = rhi->CreateGpuBuffer(indirect_desc, indirect_init);
 
     comp.initialized = true;
     comp.ping = true;
@@ -108,15 +108,15 @@ void GpuParticleManager::Update(GpuParticleComponent& comp, RhiDevice* rhi,
 
     // 重置 counters
     uint32_t zero[2] = {0, 0}; // alive=0, dead=0
-    rhi->UpdateGpuBuffer(BufferHandle{comp.counter_buffer}, 0, 8, zero);
+    rhi->UpdateGpuBuffer(comp.counter_buffer, 0, 8, zero);
 
     // 绑定 SSBO
-    unsigned int read_buf = comp.ping ? comp.particle_buffer_a : comp.particle_buffer_b;
-    unsigned int write_buf = comp.ping ? comp.particle_buffer_b : comp.particle_buffer_a;
+    BufferHandle read_buf = comp.ping ? comp.particle_buffer_a : comp.particle_buffer_b;
+    BufferHandle write_buf = comp.ping ? comp.particle_buffer_b : comp.particle_buffer_a;
 
-    rhi->BindGpuBuffer(BufferHandle{read_buf}, 0);
-    rhi->BindGpuBuffer(BufferHandle{write_buf}, 1, true);
-    rhi->BindGpuBuffer(BufferHandle{comp.counter_buffer}, 2, true);
+    rhi->BindGpuBuffer(read_buf, 0);
+    rhi->BindGpuBuffer(write_buf, 1, true);
+    rhi->BindGpuBuffer(comp.counter_buffer, 2, true);
 
     // Update pass: simulate existing particles
     rhi->SetComputeUniformVec4(update_shader_, "u_gravity_dt",
@@ -141,8 +141,8 @@ void GpuParticleManager::Update(GpuParticleComponent& comp, RhiDevice* rhi,
     comp.emit_accumulator -= static_cast<float>(emit_count);
 
     if (emit_count > 0) {
-        rhi->BindGpuBuffer(BufferHandle{write_buf}, 1, true);
-        rhi->BindGpuBuffer(BufferHandle{comp.counter_buffer}, 2, true);
+        rhi->BindGpuBuffer(write_buf, 1, true);
+        rhi->BindGpuBuffer(comp.counter_buffer, 2, true);
 
         rhi->SetComputeUniformVec4(emit_shader_, "u_emitter_pos",
             emitter_pos.x, emitter_pos.y, emitter_pos.z, cfg.shape_radius);
@@ -170,17 +170,17 @@ void GpuParticleManager::Update(GpuParticleComponent& comp, RhiDevice* rhi,
 
 void GpuParticleManager::Shutdown(RhiDevice* rhi) {
     if (!rhi) return;
-    if (update_shader_) { rhi->DeleteComputeShader(update_shader_); update_shader_ = 0; }
-    if (emit_shader_) { rhi->DeleteComputeShader(emit_shader_); emit_shader_ = 0; }
+    if (update_shader_) { rhi->DeleteComputeShader(update_shader_); update_shader_ = {}; }
+    if (emit_shader_) { rhi->DeleteComputeShader(emit_shader_); emit_shader_ = {}; }
     inited_ = false;
 }
 
 void GpuParticleManager::ShutdownComponent(GpuParticleComponent& comp, RhiDevice* rhi) {
     if (!rhi) return;
-    if (comp.particle_buffer_a) { rhi->DeleteGpuBuffer(BufferHandle{comp.particle_buffer_a}); comp.particle_buffer_a = 0; }
-    if (comp.particle_buffer_b) { rhi->DeleteGpuBuffer(BufferHandle{comp.particle_buffer_b}); comp.particle_buffer_b = 0; }
-    if (comp.counter_buffer) { rhi->DeleteGpuBuffer(BufferHandle{comp.counter_buffer}); comp.counter_buffer = 0; }
-    if (comp.indirect_buffer) { rhi->DeleteGpuBuffer(BufferHandle{comp.indirect_buffer}); comp.indirect_buffer = 0; }
+    if (comp.particle_buffer_a) { rhi->DeleteGpuBuffer(comp.particle_buffer_a); comp.particle_buffer_a = {}; }
+    if (comp.particle_buffer_b) { rhi->DeleteGpuBuffer(comp.particle_buffer_b); comp.particle_buffer_b = {}; }
+    if (comp.counter_buffer) { rhi->DeleteGpuBuffer(comp.counter_buffer); comp.counter_buffer = {}; }
+    if (comp.indirect_buffer) { rhi->DeleteGpuBuffer(comp.indirect_buffer); comp.indirect_buffer = {}; }
     comp.initialized = false;
 }
 

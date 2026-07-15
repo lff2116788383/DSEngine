@@ -35,7 +35,7 @@ public:
     /// @param vp             视图投影矩阵；quad 顶点位于裁剪空间 [-half,+half]，vp=单位即直接落在屏幕中央
     /// @param half_extent    quad 半边长（裁剪空间），如 0.5 表示占屏幕中央一半
     /// @param tint           顶点色（与纹理相乘），默认白
-    void Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int texture_handle,
+    void Draw(CommandBuffer& cmd, RhiDevice& device, TextureHandle texture_handle,
               const glm::mat4& vp, float half_extent = 0.5f,
               const glm::vec4& tint = glm::vec4(1.0f));
 

@@ -21,8 +21,8 @@ TEST(ParticleSystem3DComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(ps.start_size_max, 0.5f);
     EXPECT_FLOAT_EQ(ps.start_speed_min, 1.0f);
     EXPECT_FLOAT_EQ(ps.start_speed_max, 5.0f);
-    EXPECT_EQ(ps.texture_handle, 0u);
-    EXPECT_EQ(ps.instance_vbo, 0u);
+    EXPECT_FALSE(ps.texture_handle);
+    EXPECT_FALSE(ps.instance_vbo);
     EXPECT_EQ(ps.active_particle_count, 0);
     EXPECT_FALSE(ps.initialized);
 }

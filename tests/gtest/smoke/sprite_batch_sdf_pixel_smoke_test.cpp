@@ -36,7 +36,7 @@ const unsigned int kSdfVariantKey =
     static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
 
 // 4x4 RGBA8：RGB 全白，左两列 alpha=255、右两列 alpha=0（竖直 SDF 边）。
-unsigned int CreateSdfTexture(RhiDevice& device) {
+TextureHandle CreateSdfTexture(RhiDevice& device) {
     unsigned char px[4 * 4 * 4];
     for (int y = 0; y < 4; ++y) {
         for (int x = 0; x < 4; ++x) {
@@ -50,7 +50,7 @@ unsigned int CreateSdfTexture(RhiDevice& device) {
 
 // 单个居中 SDF glyph：x 64..192（u=(x-64)/128），y 96..160（关于 128 对称）。
 // 顶点色橙 (1,0.5,0)；左半采到 alpha=1 → 填充橙，右半 alpha=0 → discard 露黑底。
-std::vector<SpriteDrawItem> BuildItems(unsigned int sdf_tex) {
+std::vector<SpriteDrawItem> BuildItems(TextureHandle sdf_tex) {
     std::vector<SpriteDrawItem> items;
     SpriteDrawItem it;
     it.texture_handle = sdf_tex;
@@ -73,10 +73,10 @@ RenderTargetReadback RenderSdf(RhiDevice& device) {
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) return {};
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
 
-    unsigned int sdf_tex = CreateSdfTexture(device);
+    const auto sdf_tex = CreateSdfTexture(device);
     const std::vector<SpriteDrawItem> items = BuildItems(sdf_tex);
     const glm::mat4 view(1.0f);
     const glm::mat4 proj =

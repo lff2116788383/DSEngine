@@ -242,7 +242,7 @@ extern "C" void dse_physics2d_add_tilemap(uint32_t e, int width, int height,
     tm.width = width;
     tm.height = height;
     tm.tile_size = tile_size;
-    tm.tileset_handle = tex_handle;
+    tm.tileset_handle = dse::render::TextureHandle::from_raw(tex_handle);
     tm.tiles.resize(static_cast<size_t>(width) * height, -1);
     tm.dirty = true;
 }

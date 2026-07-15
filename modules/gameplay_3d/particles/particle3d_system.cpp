@@ -53,9 +53,9 @@ void Particle3DSystem::Shutdown(World& world) {
     auto view = world.registry().view<ParticleSystem3DComponent>();
     for (auto entity : view) {
         auto& ps = view.get<ParticleSystem3DComponent>(entity);
-        if (ps.instance_vbo != 0) {
-            rhi_->DeleteGpuBuffer(dse::render::BufferHandle{ps.instance_vbo});
-            ps.instance_vbo = 0;
+        if (ps.instance_vbo) {
+            rhi_->DeleteGpuBuffer(ps.instance_vbo);
+            ps.instance_vbo = {};
         }
     }
 }
@@ -126,7 +126,7 @@ void Particle3DSystem::Update(World& world, float delta_time) {
             inst_desc.size = static_cast<size_t>(ps.max_particles) * 8 * sizeof(float);
             inst_desc.usage = dse::render::GpuBufferUsage::kStorage;
             inst_desc.is_dynamic = true;
-            ps.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr).raw();
+            ps.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr);
             ps.initialized = true;
         }
 
@@ -185,12 +185,12 @@ void Particle3DSystem::Update(World& world, float delta_time) {
 
         // 3. Upload to GPU
         if (ps.active_particle_count > 0 && !gpu_data.empty()) {
-            rhi_->UpdateGpuBuffer(dse::render::BufferHandle{ps.instance_vbo}, 0,
+            rhi_->UpdateGpuBuffer(ps.instance_vbo, 0,
                                   gpu_data.size() * sizeof(float), gpu_data.data());
         }
 
         // 4. Resolve Texture
-        if (ps.texture_handle == 0 && !ps.texture_path.empty()) {
+        if (!ps.texture_handle && !ps.texture_path.empty()) {
             auto tex = asset_manager.LoadTexture(ps.texture_path);
             if (tex) ps.texture_handle = tex->GetHandle();
         }

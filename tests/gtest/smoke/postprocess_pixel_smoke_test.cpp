@@ -60,17 +60,17 @@ std::vector<unsigned char> BuildUniformTexels(unsigned char v) {
 RenderTargetReadback RenderPPViaRenderer(RhiDevice& device,
                                          const PostProcessRequest& req_template,
                                          const std::vector<unsigned char>& src_texels) {
-    const unsigned int src_tex =
+    const auto src_tex =
         device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
-    if (src_tex == 0) return {};
+    if (!src_tex) return {};
 
     RenderTargetDesc rt_desc;
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    const unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) { device.DeleteTexture(src_tex); return {}; }
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) { device.DeleteTexture(src_tex); return {}; }
 
     PostProcessRequest req = req_template;
     req.source_texture = src_tex;
@@ -107,20 +107,20 @@ RenderTargetReadback RenderPPViaRenderer2Tex(RhiDevice& device,
                                              const std::vector<unsigned char>& src_texels,
                                              uint32_t extra_slot,
                                              const std::vector<unsigned char>& extra_texels) {
-    const unsigned int src_tex =
+    const auto src_tex =
         device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
-    if (src_tex == 0) return {};
-    const unsigned int extra_tex =
+    if (!src_tex) return {};
+    const auto extra_tex =
         device.CreateTexture2D(kRtSize, kRtSize, extra_texels.data(), /*linear_filter=*/false);
-    if (extra_tex == 0) { device.DeleteTexture(src_tex); return {}; }
+    if (!extra_tex) { device.DeleteTexture(src_tex); return {}; }
 
     RenderTargetDesc rt_desc;
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    const unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) { device.DeleteTexture(src_tex); device.DeleteTexture(extra_tex); return {}; }
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) { device.DeleteTexture(src_tex); device.DeleteTexture(extra_tex); return {}; }
 
     PostProcessRequest req = req_template;
     req.source_texture = src_tex;
@@ -159,15 +159,15 @@ RenderTargetReadback RenderPPViaRendererNTex(RhiDevice& device,
                                              const PostProcessRequest& req_template,
                                              const std::vector<unsigned char>& src_texels,
                                              const std::vector<ExtraTex>& extras) {
-    const unsigned int src_tex =
+    const auto src_tex =
         device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
-    if (src_tex == 0) return {};
-    std::vector<unsigned int> extra_handles;
+    if (!src_tex) return {};
+    std::vector<TextureHandle> extra_handles;
     for (const auto& e : extras) {
-        const unsigned int h =
+        const auto h =
             device.CreateTexture2D(kRtSize, kRtSize, e.texels.data(), /*linear_filter=*/false);
-        if (h == 0) {
-            for (unsigned int x : extra_handles) device.DeleteTexture(x);
+        if (!h) {
+            for (TextureHandle x : extra_handles) device.DeleteTexture(x);
             device.DeleteTexture(src_tex);
             return {};
         }
@@ -179,9 +179,9 @@ RenderTargetReadback RenderPPViaRendererNTex(RhiDevice& device,
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
     rt_desc.has_depth = false;
-    const unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) {
-        for (unsigned int x : extra_handles) device.DeleteTexture(x);
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) {
+        for (TextureHandle x : extra_handles) device.DeleteTexture(x);
         device.DeleteTexture(src_tex);
         return {};
     }
@@ -212,12 +212,12 @@ RenderTargetReadback RenderPPViaRendererNTex(RhiDevice& device,
     renderer.Shutdown(device);
     device.DeleteRenderTarget(rt);
     device.DeleteTexture(src_tex);
-    for (unsigned int x : extra_handles) device.DeleteTexture(x);
+    for (TextureHandle x : extra_handles) device.DeleteTexture(x);
     return rb;
 }
 
 RenderTargetReadback RenderPassthroughViaRenderer(RhiDevice& device) {
-    return RenderPPViaRenderer(device, PostProcessRequest("postprocess_passthrough", 0),
+    return RenderPPViaRenderer(device, PostProcessRequest("postprocess_passthrough", {}),
                                BuildSplitTexels());
 }
 
@@ -226,14 +226,14 @@ RenderTargetReadback RenderPassthroughViaRenderer(RhiDevice& device) {
 RenderTargetReadback RenderFxaaViaRenderer(RhiDevice& device) {
     return RenderPPViaRenderer(
         device,
-        PostProcessRequest("fxaa", 0,
+        PostProcessRequest("fxaa", {},
                            {static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
         BuildSplitTexels());
 }
 
 RenderTargetReadback RenderTonemapping(RhiDevice& device) {
     // exposure = 1.0；无 auto-exposure / LUT 额外纹理。
-    return RenderPPViaRenderer(device, PostProcessRequest("tonemapping", 0, {1.0f}), BuildUniformTexels(128));
+    return RenderPPViaRenderer(device, PostProcessRequest("tonemapping", {}, {1.0f}), BuildUniformTexels(128));
 }
 
 // bloom_extract（带参 UBO 契约，强校验 threshold 真实生效）：
@@ -241,11 +241,11 @@ RenderTargetReadback RenderTonemapping(RhiDevice& device) {
 // 低阈值 0.05 → contribution=1 → 原样灰 128。两条对比证明 threshold UBO 确实绑定
 // （若 UBO 未绑定/读到大垃圾值，高阈值用例不会变黑 → 被捕获）。
 RenderTargetReadback RenderBloomExtractHigh(RhiDevice& device) {
-    return RenderPPViaRenderer(device, PostProcessRequest("bloom_extract", 0, {0.9f, 0.05f}),
+    return RenderPPViaRenderer(device, PostProcessRequest("bloom_extract", {}, {0.9f, 0.05f}),
                                BuildUniformTexels(128));
 }
 RenderTargetReadback RenderBloomExtractLow(RhiDevice& device) {
-    return RenderPPViaRenderer(device, PostProcessRequest("bloom_extract", 0, {0.05f, 0.05f}),
+    return RenderPPViaRenderer(device, PostProcessRequest("bloom_extract", {}, {0.05f, 0.05f}),
                                BuildUniformTexels(128));
 }
 
@@ -255,7 +255,7 @@ RenderTargetReadback RenderBloomExtractLow(RhiDevice& device) {
 RenderTargetReadback RenderDofColorPass(RhiDevice& device) {
     return RenderPPViaRenderer2Tex(
         device,
-        PostProcessRequest("dof", 0, {10.0f, 5.0f, 0.0f, 0.1f, 1000.0f,
+        PostProcessRequest("dof", {}, {10.0f, 5.0f, 0.0f, 0.1f, 1000.0f,
                                       static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
         BuildUniformTexels(128), 2, BuildUniformTexels(200));
 }
@@ -265,7 +265,7 @@ RenderTargetReadback RenderDofColorPass(RhiDevice& device) {
 RenderTargetReadback RenderMotionBlurColorPass(RhiDevice& device) {
     return RenderPPViaRenderer2Tex(
         device,
-        PostProcessRequest("motion_blur", 0, {1.0f, 8.0f,
+        PostProcessRequest("motion_blur", {}, {1.0f, 8.0f,
                            static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
         BuildUniformTexels(0), 2, BuildUniformTexels(180));
 }
@@ -275,7 +275,7 @@ RenderTargetReadback RenderMotionBlurColorPass(RhiDevice& device) {
 RenderTargetReadback RenderSsrEarlyOut(RhiDevice& device) {
     return RenderPPViaRenderer2Tex(
         device,
-        PostProcessRequest("ssr", 0, {100.0f, 0.5f, 1.0f, 32.0f, 0.1f, 1000.0f,
+        PostProcessRequest("ssr", {}, {100.0f, 0.5f, 1.0f, 32.0f, 0.1f, 1000.0f,
                            static_cast<float>(kRtSize), static_cast<float>(kRtSize), 0.1f, 0.8f}),
         BuildUniformTexels(255), 2, BuildUniformTexels(200));
 }
@@ -286,7 +286,7 @@ RenderTargetReadback RenderSsrEarlyOut(RhiDevice& device) {
 RenderTargetReadback RenderTaaFirstFrame(RhiDevice& device) {
     return RenderPPViaRendererNTex(
         device,
-        PostProcessRequest("taa_resolve", 0, {0.9f, 0.0f, 0.0f, 0.0f,
+        PostProcessRequest("taa_resolve", {}, {0.9f, 0.0f, 0.0f, 0.0f,
                            static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
         BuildSplitTexels(),
         {{2, BuildUniformTexels(0)}, {5, BuildUniformTexels(64)}});
@@ -298,7 +298,7 @@ RenderTargetReadback RenderTaaFirstFrame(RhiDevice& device) {
 RenderTargetReadback RenderMotionVectorIdentity(RhiDevice& device) {
     return RenderPPViaRenderer(
         device,
-        PostProcessRequest("motion_vector", 0,
+        PostProcessRequest("motion_vector", {},
             {static_cast<float>(kRtSize), static_cast<float>(kRtSize),
              1.0f, 0.0f, 0.0f, 0.0f,
              0.0f, 1.0f, 0.0f, 0.0f,
@@ -313,7 +313,7 @@ RenderTargetReadback RenderMotionVectorIdentity(RhiDevice& device) {
 RenderTargetReadback RenderVolumetricFogDepthPass(RhiDevice& device) {
     return RenderPPViaRenderer2Tex(
         device,
-        PostProcessRequest("volumetric_fog", 0, std::vector<float>(28, 0.0f)),
+        PostProcessRequest("volumetric_fog", {}, std::vector<float>(28, 0.0f)),
         BuildSplitTexels(), 2, BuildUniformTexels(255));
 }
 
@@ -322,7 +322,7 @@ RenderTargetReadback RenderVolumetricFogDepthPass(RhiDevice& device) {
 RenderTargetReadback RenderDecalDepthDiscard(RhiDevice& device) {
     return RenderPPViaRendererNTex(
         device,
-        PostProcessRequest("decal", 0, std::vector<float>(24, 0.0f), /*blend=*/true),
+        PostProcessRequest("decal", {}, std::vector<float>(24, 0.0f), /*blend=*/true),
         BuildUniformTexels(128),
         {{2, BuildUniformTexels(255)}, {3, BuildUniformTexels(200)}});
 }
@@ -333,7 +333,7 @@ RenderTargetReadback RenderDecalDepthDiscard(RhiDevice& device) {
 RenderTargetReadback RenderBloomCompositeNeutral(RhiDevice& device) {
     return RenderPPViaRenderer(
         device,
-        PostProcessRequest("bloom_composite", 0,
+        PostProcessRequest("bloom_composite", {},
             {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
              0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}),
         BuildUniformTexels(128));
@@ -345,7 +345,7 @@ RenderTargetReadback RenderBloomCompositeNeutral(RhiDevice& device) {
 RenderTargetReadback RenderAtmosphereSkyDepthPass(RhiDevice& device) {
     return RenderPPViaRenderer2Tex(
         device,
-        PostProcessRequest("atmosphere_sky", 0, std::vector<float>(36, 0.0f)),
+        PostProcessRequest("atmosphere_sky", {}, std::vector<float>(36, 0.0f)),
         BuildSplitTexels(), 2, BuildUniformTexels(128));
 }
 

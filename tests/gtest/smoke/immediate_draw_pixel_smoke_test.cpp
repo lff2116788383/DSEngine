@@ -73,17 +73,18 @@ float4 PSMain(VSOut i) : SV_Target { return uColor; }
 
 enum class Api { GL, VK, DX };
 
-unsigned int MakeColorProgram(RhiDevice& d, Api api) {
+ShaderHandle MakeColorProgram(RhiDevice& d, Api api) {
     switch (api) {
         case Api::GL: return d.CreateShaderProgram(kGlVert, kGlFrag);
         case Api::VK: return d.CreateShaderProgram(kVkVert, kVkFrag);
         case Api::DX: return d.CreateShaderProgram(kDxSrc, kDxSrc);
     }
-    return 0u;
+    return {};
 }
 
 // 填好一个「画全屏三角形」的 ImmediateDrawDesc（位置属性 + uColor uniform）。
-ImmediateDrawDesc MakeFullscreenDesc(unsigned int rt, unsigned int program, const glm::vec4& color) {
+ImmediateDrawDesc MakeFullscreenDesc(RenderTargetHandle rt, ShaderHandle program,
+                                     const glm::vec4& color) {
     ImmediateDrawDesc desc;
     desc.render_target = rt;
     desc.shader_program = program;
@@ -97,7 +98,7 @@ ImmediateDrawDesc MakeFullscreenDesc(unsigned int rt, unsigned int program, cons
     return desc;
 }
 
-unsigned int MakeColorRt(RhiDevice& d) {
+RenderTargetHandle MakeColorRt(RhiDevice& d) {
     RenderTargetDesc rt_desc;
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
@@ -109,9 +110,9 @@ unsigned int MakeColorRt(RhiDevice& d) {
 // ===== 场景 1：全屏填充 =====
 // 清屏红 → ImmediateDraw 全屏三角形画绿 → 整 RT 应为绿（绘制覆盖了清屏色）。
 RenderTargetReadback RenderFill(RhiDevice& d, Api api) {
-    unsigned int rt = MakeColorRt(d);
-    unsigned int program = MakeColorProgram(d, api);
-    if (rt == 0 || program == 0) { if (rt) d.DeleteRenderTarget(rt); return {}; }
+    const auto rt = MakeColorRt(d);
+    const auto program = MakeColorProgram(d, api);
+    if (!rt || !program) { if (rt) d.DeleteRenderTarget(rt); return {}; }
 
     ImmediateDrawDesc desc = MakeFullscreenDesc(rt, program, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
     desc.clear = true;
@@ -140,9 +141,9 @@ void VerifyFill(const RenderTargetReadback& rb, const char* backend) {
 // 清屏红覆盖整 RT（clear 不受 viewport 限制）→ viewport 限定中心区域画绿 →
 // 区域内中心=绿，区域外四角=红。
 RenderTargetReadback RenderViewport(RhiDevice& d, Api api) {
-    unsigned int rt = MakeColorRt(d);
-    unsigned int program = MakeColorProgram(d, api);
-    if (rt == 0 || program == 0) { if (rt) d.DeleteRenderTarget(rt); return {}; }
+    const auto rt = MakeColorRt(d);
+    const auto program = MakeColorProgram(d, api);
+    if (!rt || !program) { if (rt) d.DeleteRenderTarget(rt); return {}; }
 
     ImmediateDrawDesc desc = MakeFullscreenDesc(rt, program, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
     desc.clear = true;
@@ -193,9 +194,9 @@ uint32_t DecodeId(const unsigned char* px) {
 }
 
 RenderTargetReadback RenderColorId(RhiDevice& d, Api api) {
-    unsigned int rt = MakeColorRt(d);
-    unsigned int program = MakeColorProgram(d, api);
-    if (rt == 0 || program == 0) { if (rt) d.DeleteRenderTarget(rt); return {}; }
+    const auto rt = MakeColorRt(d);
+    const auto program = MakeColorProgram(d, api);
+    if (!rt || !program) { if (rt) d.DeleteRenderTarget(rt); return {}; }
 
     const int stripe_w = kRtSize / 3;
     for (int i = 0; i < 3; ++i) {
@@ -231,10 +232,10 @@ void VerifyColorId(const RenderTargetReadback& rb, const char* backend) {
 // ===== 场景 4：RT blit =====
 // §5.A 纯色填 src → BlitRenderTarget(src,dst) → 读 dst，颜色与 src 一致。
 RenderTargetReadback RenderBlit(RhiDevice& d, Api api) {
-    unsigned int src = MakeColorRt(d);
-    unsigned int dst = MakeColorRt(d);
-    unsigned int program = MakeColorProgram(d, api);
-    if (src == 0 || dst == 0 || program == 0) {
+    const auto src = MakeColorRt(d);
+    const auto dst = MakeColorRt(d);
+    const auto program = MakeColorProgram(d, api);
+    if (!src || !dst || !program) {
         if (src) d.DeleteRenderTarget(src);
         if (dst) d.DeleteRenderTarget(dst);
         if (program) d.DeleteShaderProgram(program);

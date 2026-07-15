@@ -37,7 +37,7 @@ TEST(GrassComponentTest, DefaultValues_Outside) {
     EXPECT_FLOAT_EQ(gc.blade_height, 1.0f);
     EXPECT_FLOAT_EQ(gc.blade_height_variation, 0.3f);
     EXPECT_FLOAT_EQ(gc.base_color.g, 0.45f);
-    EXPECT_EQ(gc.albedo_texture, 0u);
+    EXPECT_FALSE(gc.albedo_texture);
 }
 
 // 测试 草组件：默认值情形
