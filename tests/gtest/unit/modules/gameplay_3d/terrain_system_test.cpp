@@ -100,7 +100,8 @@ TEST(TerrainSystemTest, EmptyWorldDoesNotCrash) {
     World world;
     OpenGLCommandBuffer cmd;
     dse::render::FrameContext frame;
-    sys.Render(world, cmd, frame);
+    sys.ExtractFrameRenderData(world);
+    sys.Render(cmd, frame);
 }
 
 // 测试 地形系统：禁用不渲染
@@ -114,7 +115,8 @@ TEST(TerrainSystemTest, DisabledDoesNotRender) {
 
     OpenGLCommandBuffer cmd;
     dse::render::FrameContext frame;
-    sys.Render(world, cmd, frame);
+    sys.ExtractFrameRenderData(world);
+    sys.Render(cmd, frame);
 }
 
 // ============================================================
