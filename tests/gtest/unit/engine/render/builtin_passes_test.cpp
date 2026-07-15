@@ -15,14 +15,42 @@
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
+#include "engine/render/render_scene.h"
 #include "engine/render/render_graph.h"
 #include "engine/render/rhi/rhi_types.h"
 
 #include <glm/glm.hpp>
 #include <string>
 #include <cmath>
+#include <type_traits>
 
 using namespace dse::render;
+
+// ============================================================
+// Phase 1 不可变渲染帧不变式：Execute 上下文不得暴露 World/ECS 指针
+// ============================================================
+namespace {
+template <typename T, typename = void>
+struct has_world_member : std::false_type {};
+template <typename T>
+struct has_world_member<T, std::void_t<decltype(std::declval<T&>().world)>>
+    : std::true_type {};
+}  // namespace
+
+static_assert(!has_world_member<RenderPassContext>::value,
+              "Phase 1: RenderPassContext 不得再持有 World*（渲染线程零 ECS 访问）");
+static_assert(!has_world_member<RenderScenePassContext>::value,
+              "Phase 1: RenderScenePassContext 不得再持有 World*（渲染线程零 ECS 访问）");
+
+// 测试 场景渲染上下文：默认 ECS-free（无 World，矩阵指针为空）
+TEST(RenderScenePassContextTest, DefaultIsEcsFree) {
+    RenderScenePassContext ctx;
+    EXPECT_EQ(ctx.view, nullptr);
+    EXPECT_EQ(ctx.projection, nullptr);
+    EXPECT_EQ(ctx.clip_correction, nullptr);
+    EXPECT_EQ(ctx.cascade_index, 0);
+    EXPECT_FALSE(has_world_member<RenderScenePassContext>::value);
+}
 
 // ============================================================
 // RenderPassContext 默认值

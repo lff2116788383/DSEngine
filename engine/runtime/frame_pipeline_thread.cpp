@@ -155,8 +155,9 @@ void FramePipeline::PrepareRenderFrame() {
         glm::vec2 wind_dir = wind_strength > 0.001f
             ? glm::normalize(glm::vec2(wind_x, wind_z))
             : glm::vec2(1.0f, 0.0f);
-        runtime_context_.rhi_device->SetGlobalFoliageWind(
-            glm::vec4(Time::TimeSinceStartup(), wind_strength, wind_dir.x, wind_dir.y));
+        // Phase 1：仅在主线程 Prepare 提取帧值；写入 RHI 全局态延后到渲染线程 Execute。
+        render_pass_context_.foliage_wind =
+            glm::vec4(Time::TimeSinceStartup(), wind_strength, wind_dir.x, wind_dir.y);
     }
     // 植被推力场
     {
@@ -170,7 +171,7 @@ void FramePipeline::PrepareRenderFrame() {
                 }
             }
         }
-        runtime_context_.rhi_device->SetGlobalFoliagePush(glm::vec4(push_pos, 2.0f));
+        render_pass_context_.foliage_push = glm::vec4(push_pos, 2.0f);
     }
 
     // 捕获快照 + 翻转双缓冲
@@ -219,6 +220,10 @@ void FramePipeline::ExecuteRenderFrame() {
 
     // 全局湿度同步到 RHI（渲染线程路径）
     runtime_context_.rhi_device->SetGlobalWetness(render_pass_context_.global_wetness);
+
+    // Phase 1：植被风/推力场从帧值写入 RHI 全局态（渲染线程 Execute，而非主线程 Prepare）。
+    runtime_context_.rhi_device->SetGlobalFoliageWind(render_pass_context_.foliage_wind);
+    runtime_context_.rhi_device->SetGlobalFoliagePush(render_pass_context_.foliage_push);
 
     // DDGI: 从快照配置初始化/重配置 + 同步到 RHI 全局状态
     render_pass_context_.ddgi_active = false;

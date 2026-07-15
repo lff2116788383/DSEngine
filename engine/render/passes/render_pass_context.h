@@ -190,6 +190,10 @@ struct RenderPassContext {
     /// 全局湿度（由天气系统驱动，影响 PBR 表面）
     float global_wetness = 0.0f;
 
+    /// Phase 1：植被风/推力场帧值 —— 主线程 Prepare 从 ECS 提取，渲染线程 Execute 写入 RHI。
+    glm::vec4 foliage_wind = glm::vec4(0.0f, 0.3f, 1.0f, 0.0f);  ///< (time, strength, dir.x, dir.y)
+    glm::vec4 foliage_push = glm::vec4(0.0f, 0.0f, 0.0f, 2.0f);  ///< (pos.xyz, radius)
+
     /// DDGI 系统（FramePipeline 持有生命周期，Pass 通过指针访问）
     gi::DDGISystem* ddgi_system = nullptr;
 
