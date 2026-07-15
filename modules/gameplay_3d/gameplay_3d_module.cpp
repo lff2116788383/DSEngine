@@ -350,20 +350,7 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
         hlod_system_.Update(world, hlod_cam_pos);
     }
 
-    // Impostor: 在 LOD 之后更新，利用同一帧相机位置收集远景实例
-    if (rhi_device_) {
-        glm::vec3 imp_cam_pos(0.0f);
-        auto imp_cam_v = world.registry().view<dse::Camera3DComponent, TransformComponent>();
-        for (auto e : imp_cam_v) {
-            auto& cam = imp_cam_v.get<dse::Camera3DComponent>(e);
-            if (!cam.enabled) continue;
-            imp_cam_pos = glm::vec3(imp_cam_v.get<TransformComponent>(e).local_to_world[3]);
-            break;
-        }
-        impostor_system_.SetRenderContext(rhi_device_, glm::mat4(1.0f), glm::mat4(1.0f),
-                                          imp_cam_pos, glm::vec3(0, -1, 0), glm::vec3(0.15f));
-        impostor_system_.Update(world, imp_cam_pos, *rhi_device_);
-    }
+    // Impostor 收集已迁移到 BuildRenderQueues（Prepare 阶段），避免与渲染线程 Execute 并发。
     mesh_render_system_.MarkBatchDirty();
 }
 
@@ -413,6 +400,21 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
             }
         }
     }
+    // Impostor: Prepare 阶段收集远景实例 + 快照待烘焙几何（渲染线程 Execute 仅消费快照）。
+    if (rhi_device_) {
+        glm::vec3 imp_cam_pos(0.0f);
+        auto imp_cam_v = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+        for (auto e : imp_cam_v) {
+            auto& cam = imp_cam_v.get<dse::Camera3DComponent>(e);
+            if (!cam.enabled) continue;
+            imp_cam_pos = glm::vec3(imp_cam_v.get<TransformComponent>(e).local_to_world[3]);
+            break;
+        }
+        impostor_system_.SetRenderContext(rhi_device_, glm::mat4(1.0f), glm::mat4(1.0f),
+                                          imp_cam_pos, glm::vec3(0, -1, 0), glm::vec3(0.15f));
+        impostor_system_.Update(world, imp_cam_pos, *rhi_device_);
+    }
+
     // 各渲染阶段（prez/shadow/opaque）的贡献统一通过 ISceneRenderer 注册，
     // 由内建 PreZ / Shadow / Forward / RSM Pass 在各自渲染作用域内按阶段调用。
     scene.scene_renderers.push_back(this);

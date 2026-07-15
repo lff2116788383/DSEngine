@@ -65,10 +65,30 @@ private:
     // 每帧收集的绘制批次（按 atlas 纹理分组）
     std::vector<ImpostorBatchItem> batches_;
 
-    // 尚未烘焙 atlas 的 impostor 实体：Update 在模拟线程收集，RenderOpaque 在
-    // GL 线程执行烘焙（GL 上下文仅在渲染阶段有效）。bake_attempted_ 记录已尝试过
-    // 的实体，避免缺几何数据时每帧重复烘焙。
-    std::unordered_set<uint32_t> pending_bake_;
+    // Phase 1：主线程（Prepare/Update）为待烘焙实体快照的 CPU 几何数据。
+    // 渲染线程 RenderOpaque 从此结构烘焙 atlas，不再访问 ECS。
+    struct PendingBakeData {
+        uint32_t eid = 0;
+        std::vector<float> interleaved;   // stride=12 floats：pos color uv normal
+        int draw_verts = 0;
+        glm::vec3 bmin{-1.0f};
+        glm::vec3 bmax{1.0f};
+        int frames_x = 8;
+        int frames_y = 3;
+        bool hemi_only = true;
+    };
+    std::vector<PendingBakeData> pending_bake_data_;
+
+    // Phase 1：渲染线程烘焙完成的结果，下一次 Prepare（主线程）写回 ECS，
+    // 避免在渲染线程修改 ECS 组件（跨线程写）。
+    struct BakedResult {
+        uint32_t eid = 0;
+        TextureHandle atlas;
+        float bounds_radius = 0.0f;
+    };
+    std::vector<BakedResult> baked_results_;
+
+    // 已尝试烘焙的实体，避免缺几何数据时每帧重复烘焙。
     std::unordered_set<uint32_t> bake_attempted_;
 
     // 渲染上下文（帧级别）
