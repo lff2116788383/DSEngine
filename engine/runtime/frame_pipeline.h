@@ -333,6 +333,10 @@ public:
     friend void dse::runtime::FinalizeRuntimeRenderFrame(FramePipeline& pipeline);
 
 private:
+    /// 解析 RHI 后端、创建并初始化 RHI 设备（含 D3D11/Vulkan 失败时回退到 OpenGL）。
+    /// 成功返回最终生效的后端；失败返回 RhiBackend::Invalid。
+    RhiBackend InitRhiDevice();
+
     void InitResolutionDependentRTs();
     void FreeResolutionDependentRTs();
     void SyncRenderPassContextTargets();

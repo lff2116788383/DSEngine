@@ -273,27 +273,12 @@ float PipelineValueToFloat(const dse::render::PipelineValue* value, float fallba
     return fallback;
 }
 
-bool FramePipeline::Init() {
-    if (initialized_) {
-        return true;
-    }
-    if (!runtime_context_.world) {
-        DEBUG_LOG_ERROR("FramePipeline init failed: world is not injected");
-        return false;
-    }
-    auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
-    auto t0 = std::chrono::steady_clock::now();
-    auto lap = [&t0](const char* label) {
-        auto now = std::chrono::steady_clock::now();
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - t0).count();
-        DEBUG_LOG_INFO("[InitTiming] {}: {}ms", label, ms);
-        t0 = now;
-    };
+RhiBackend FramePipeline::InitRhiDevice() {
     auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
     // P0-4.4：请求的后端无法识别或未编译时，明确报错并终止初始化，禁止静默回退到 OpenGL。
     if (rhi_backend == RhiBackend::Invalid) {
         DEBUG_LOG_ERROR("请求的 RHI 后端不可用（请检查 DSE_RHI_BACKEND：opengl/d3d11/vulkan），FramePipeline 拒绝初始化");
-        return false;
+        return RhiBackend::Invalid;
     }
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
     runtime_context_.rhi_device->SetPresentationDeferred(runtime_context_.editor_mode);
@@ -319,7 +304,7 @@ bool FramePipeline::Init() {
             DEBUG_LOG_ERROR("FramePipeline init failed: [{}] InitDevice returned false",
                 dse::render::RhiBackendToString(rhi_backend));
             if (runtime_context_.editor_mode) {
-                return false;
+                return RhiBackend::Invalid;
             }
             // 自动回退到 OpenGL
             if (rhi_backend != RhiBackend::OpenGL) {
@@ -330,13 +315,36 @@ bool FramePipeline::Init() {
                 runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
                 DEBUG_LOG_INFO("FramePipeline RHI 后端 (fallback): OpenGL");
             } else {
-                return false;
+                return RhiBackend::Invalid;
             }
         } else {
             // 立即 present 一帧黑屏，消除窗口创建后到首帧渲染前的白屏
             runtime_context_.rhi_device->BeginFrame();
             runtime_context_.rhi_device->EndFrame();
         }
+    }
+    return rhi_backend;
+}
+
+bool FramePipeline::Init() {
+    if (initialized_) {
+        return true;
+    }
+    if (!runtime_context_.world) {
+        DEBUG_LOG_ERROR("FramePipeline init failed: world is not injected");
+        return false;
+    }
+    auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
+    auto t0 = std::chrono::steady_clock::now();
+    auto lap = [&t0](const char* label) {
+        auto now = std::chrono::steady_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - t0).count();
+        DEBUG_LOG_INFO("[InitTiming] {}: {}ms", label, ms);
+        t0 = now;
+    };
+    auto rhi_backend = InitRhiDevice();
+    if (rhi_backend == RhiBackend::Invalid) {
+        return false;
     }
 
     lap("RHI device init");
