@@ -16,6 +16,9 @@ void CameraSystem::Update(World& world, float aspect_ratio) {
     for (auto entity : view3d) {
         auto& camera = view3d.get<dse::Camera3DComponent>(entity);
         auto& transform = view3d.get<TransformComponent>(entity);
+        if (!camera.enabled) {
+            continue;
+        }
         auto* follow = world.registry().try_get<CameraFollowComponent>(entity);
         if (follow && follow->enabled && follow->target != entt::null && world.registry().valid(follow->target) && world.registry().all_of<TransformComponent>(follow->target)) {
             const auto& target_tf = world.registry().get<TransformComponent>(follow->target);

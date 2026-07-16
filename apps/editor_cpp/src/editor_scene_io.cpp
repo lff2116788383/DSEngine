@@ -2022,9 +2022,26 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
     rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
     doc.Accept(writer);
 
-    std::ofstream ofs(filepath);
-    if (ofs.is_open()) {
+    const std::string tmp_path = filepath + ".tmp";
+    {
+        std::ofstream ofs(tmp_path, std::ios::binary | std::ios::trunc);
+        if (!ofs.is_open()) {
+            std::cerr << "[SaveScene] Failed to open temp file: " << tmp_path << std::endl;
+            return;
+        }
         ofs << buffer.GetString();
+        ofs.flush();
+        if (!ofs.good()) {
+            std::cerr << "[SaveScene] Failed to write temp file: " << tmp_path << std::endl;
+            return;
+        }
+    }
+    std::error_code ec;
+    std::filesystem::rename(tmp_path, filepath, ec);
+    if (ec) {
+        std::filesystem::remove(tmp_path, ec);
+        std::cerr << "[SaveScene] Failed to replace scene file: " << filepath << std::endl;
+        return;
     }
     SaveSceneBinary(registry, filepath + ".bin");
 

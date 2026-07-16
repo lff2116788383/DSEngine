@@ -18,6 +18,12 @@
 #include <mutex>
 #include <sstream>
 
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace {
 
 constexpr std::size_t kMaxLogFileSize = 10 * 1024 * 1024;  // 10 MB
@@ -122,12 +128,30 @@ void RotateLogFile() {
 }
 
 void CrashSignalHandler(int sig) {
-    auto& file = LogFile();
-    if (file.is_open()) {
-        file << "[FATAL] Process received signal " << sig << ", flushing logs." << std::endl;
-        file.flush();
-        file.close();
+    // 信号处理函数中必须只调用 async-signal-safe 的操作，故不能碰 std::ofstream/iostream。
+    // 正常日志每行以 std::endl 落盘并 flush，日志文件已包含此前诊断信息；这里仅向 stderr
+    // 写入一条固定的致命标记后立即退出，避免二次崩溃/死锁。
+    char buf[64];
+    const char prefix[] = "[FATAL] Process received signal ";
+    std::size_t n = 0;
+    for (const char* p = prefix; *p; ++p) buf[n++] = *p;
+    int s = sig;
+    if (s < 0) { buf[n++] = '-'; s = -s; }
+    char num[12];
+    int ni = 0;
+    if (s == 0) {
+        num[ni++] = '0';
+    } else {
+        while (s > 0 && ni < 11) { num[ni++] = static_cast<char>('0' + s % 10); s /= 10; }
     }
+    while (ni > 0) buf[n++] = num[--ni];
+    buf[n++] = '\n';
+#if defined(_WIN32)
+    _write(2, buf, static_cast<unsigned int>(n));
+#else
+    ssize_t written = write(2, buf, n);
+    (void)written;
+#endif
     std::_Exit(128 + sig);
 }
 

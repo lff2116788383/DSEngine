@@ -95,7 +95,7 @@ private:
     void OnJoint2DDestroyed(entt::registry& reg, entt::entity entity);
 
     b2World* physics_world_ = nullptr;
-    std::vector<entt::connection> destroy_connections_;
+    std::vector<entt::scoped_connection> destroy_connections_;
 
     std::set<ContactPair> active_contact_pairs_;
     int velocity_iterations_ = 8;
