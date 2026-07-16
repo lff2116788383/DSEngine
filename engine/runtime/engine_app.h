@@ -125,8 +125,10 @@ private:
     RuntimeServices services_{};
     std::unique_ptr<World> default_world_;
     std::unique_ptr<AssetManager> default_asset_manager_;
-    std::unique_ptr<dse::core::JobSystem> default_job_system_;
-    std::unique_ptr<FramePipeline> pipeline_;
+    // 引擎自有且会登记进 ServiceLocator 的服务改用 shared_ptr：登记的是真正共享所有权的指针，
+    // 消费者若持有 Get<>() 返回的 shared_ptr 超过 EngineInstance 生命周期也不会悬空（#24）。
+    std::shared_ptr<dse::core::JobSystem> default_job_system_;
+    std::shared_ptr<FramePipeline> pipeline_;
     float accumulator_ = 0.0f;
     std::uint64_t frame_index_ = 0;  ///< 单调递增帧序号，注入 FrameUpdateContext
     float fixed_time_step_ = 0.02f;
@@ -143,7 +145,7 @@ private:
     bool first_frame_shown_ = false;
     dse::platform::SplashScreen splash_;
     std::unique_ptr<dse::platform::PlatformApp> platform_;
-    std::unique_ptr<dse::assets::NativeFileSystem> default_file_system_;
+    std::shared_ptr<dse::assets::NativeFileSystem> default_file_system_;
 };
 
 DSE_EXPORT int RunEngine(const EngineRunConfig& config); // Keep for backwards compatibility

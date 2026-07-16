@@ -197,11 +197,11 @@ EngineInstance::EngineInstance(const EngineRunConfig& config)
         services_.asset_manager = default_asset_manager_.get();
     }
     if (services_.job_system == nullptr) {
-        default_job_system_ = std::make_unique<core::JobSystem>();
+        default_job_system_ = std::make_shared<core::JobSystem>();
         services_.job_system = default_job_system_.get();
     }
 
-    pipeline_ = std::make_unique<FramePipeline>();
+    pipeline_ = std::make_shared<FramePipeline>();
 }
 
 EngineInstance::~EngineInstance() {
@@ -223,8 +223,8 @@ bool EngineInstance::RunStartupSceneRegressionChecks() {
 }
 
 void EngineInstance::RegisterRuntimeServices() {
-    auto pipeline_shared = std::shared_ptr<FramePipeline>(pipeline_.get(), [](FramePipeline*) {});
-    service_locator().Register<FramePipeline, FramePipeline>(pipeline_shared);
+    // 引擎自有：登记真正共享所有权的指针（非空删除器），避免消费者持有引用越过 teardown 后悬空。
+    service_locator().Register<FramePipeline, FramePipeline>(pipeline_);
 
     if (services_.world) {
         auto world_shared = std::shared_ptr<World>(services_.world, [](World*) {});
@@ -235,7 +235,11 @@ void EngineInstance::RegisterRuntimeServices() {
     service_locator().Register<core::EventBus, core::EventBus>(event_bus_);
 
     if (services_.job_system) {
-        auto job_system_shared = std::shared_ptr<core::JobSystem>(services_.job_system, [](core::JobSystem*) {});
+        // 引擎自有则共享所有权；外部注入的实例仍用非拥有引用（生命周期归调用方）。
+        std::shared_ptr<core::JobSystem> job_system_shared =
+            default_job_system_
+                ? default_job_system_
+                : std::shared_ptr<core::JobSystem>(services_.job_system, [](core::JobSystem*) {});
         service_locator().Register<core::JobSystem, core::JobSystem>(job_system_shared);
     }
 
@@ -491,9 +495,10 @@ bool EngineInstance::Init() {
         services_.asset_manager->SetEventBus(event_bus_.get());
         services_.asset_manager->SetJobSystem(services_.job_system);
         if (!services_.asset_manager->GetFileSystem()) {
-            default_file_system_ = std::make_unique<dse::assets::NativeFileSystem>();
+            default_file_system_ = std::make_shared<dse::assets::NativeFileSystem>();
             services_.asset_manager->SetFileSystem(default_file_system_.get());
-            auto fs_shared = std::shared_ptr<dse::assets::FileSystem>(default_file_system_.get(), [](dse::assets::FileSystem*) {});
+            // 引擎自有：共享所有权登记（NativeFileSystem 向上转型为 FileSystem）。
+            std::shared_ptr<dse::assets::FileSystem> fs_shared = default_file_system_;
             service_locator().Register<dse::assets::FileSystem, dse::assets::FileSystem>(fs_shared);
         }
 
