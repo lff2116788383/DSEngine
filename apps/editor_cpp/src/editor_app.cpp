@@ -13,6 +13,8 @@
 
 #if defined(_WIN32)
 #include <Windows.h>
+#include <timeapi.h>
+#pragma comment(lib, "winmm.lib")
 #include <crtdbg.h>
 #include <cstdlib>
 #endif
@@ -761,6 +763,11 @@ void EditorApp::Run() {
         dse::editor::AddEditorBreadcrumb("editor: previous session crash report found");
     }
     dse::editor::AddEditorBreadcrumb("editor: entering main loop");
+#ifdef _WIN32
+    // 提升 Windows 定时器分辨率至 1ms（默认 ~15ms），改善主循环 sleep/调度精度，
+    // 与 EngineInstance::Run() 保持一致。
+    timeBeginPeriod(1);
+#endif
     while (!glfwWindowShouldClose(window_) && !dse::editor::IsExitRequested() && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
         ++frame_counter;
@@ -1041,6 +1048,9 @@ void EditorApp::Run() {
         render_profiler_.EndFrame();
         cpu_profiler_.EndFrame();
     }
+#ifdef _WIN32
+    timeEndPeriod(1);
+#endif
 }
 
 // ─── Shutdown ───────────────────────────────────────────────────────────────

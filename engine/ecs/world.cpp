@@ -22,9 +22,11 @@ void World::DestroyEntity(Entity entity) {
 }
 
 void World::Clear() {
-    if (entity_count_ == 0) {
-        return;
-    }
+    // 始终清空底层 registry：不能用 entity_count_ 作为早退守卫，否则当实体被
+    // 绕过 World API（例如编辑器场景加载直接操作 registry）创建时，entity_count_
+    // 仍为 0 会导致这里误跳过清空，把非空 registry 的销毁推迟到进程退出期
+    // （模块 DLL / RHI 已卸载之后），正是需要避免的悬挂销毁场景。
+    // clear() 作用于空 registry 是廉价的空操作。
     registry_.clear();
     entity_count_ = 0;
 }
