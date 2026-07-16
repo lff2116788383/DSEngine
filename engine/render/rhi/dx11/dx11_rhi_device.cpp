@@ -44,10 +44,20 @@ void DX11CommandBuffer::EndRenderPass() {
 void DX11CommandBuffer::ClearColor(const glm::vec4& color) {
     if (!device_) return;
     ID3D11DeviceContext* dc = device_->context().device_context();
-    ID3D11RenderTargetView* rtv = device_->context().backbuffer_rtv();
+    // 清除当前绑定的渲染目标（可能是离屏 RT），而非恒定清后备缓冲，
+    // 与 ClearDepth（用 OMGetRenderTargets）及 GL/VK 后端语义保持一致。
+    ID3D11RenderTargetView* rtv = nullptr;
+    dc->OMGetRenderTargets(1, &rtv, nullptr);
+    const bool bound = rtv != nullptr;
+    if (!bound) {
+        rtv = device_->context().backbuffer_rtv();
+    }
     if (rtv) {
         float c[4] = {color.r, color.g, color.b, color.a};
         dc->ClearRenderTargetView(rtv, c);
+    }
+    if (bound && rtv) {
+        rtv->Release();  // OMGetRenderTargets 增加了引用计数
     }
 }
 

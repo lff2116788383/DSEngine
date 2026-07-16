@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <iterator>
+#include <unordered_set>
 
 namespace dse::editor::bp {
 
@@ -181,6 +182,7 @@ private:
     const BlueprintAsset& asset_;
     int indent_ = 1;
     int var_counter_ = 0;
+    std::unordered_set<int> active_flow_nodes_;  ///< 当前流程递归链上的节点 id，用于检测环、避免无限递归
 
     std::string Indent() const { return std::string(indent_ * 4, ' '); }
     std::string FreshVar() { return "v" + std::to_string(var_counter_++); }
@@ -271,6 +273,19 @@ private:
     }
 
     void CompileFlowNode(std::ostringstream& out, const BpFunctionGraph& graph, const BpNode& node) {
+        // 环检测：若该节点已在当前流程递归链上，说明蓝图存在循环引用，
+        // 截断展开并输出提示，避免无限递归导致栈溢出崩溃。
+        if (!active_flow_nodes_.insert(node.id).second) {
+            out << Indent() << "-- [Blueprint] cycle detected at node '" << node.name
+                << "' (id " << node.id << "), flow truncated\n";
+            return;
+        }
+        struct FlowGuard {
+            std::unordered_set<int>& set;
+            int id;
+            ~FlowGuard() { set.erase(id); }
+        } flow_guard{active_flow_nodes_, node.id};
+
         if (node.name == "Branch") {
             std::string cond = InlineExpr(graph, node, 1);
             out << Indent() << "if " << cond << " then\n";

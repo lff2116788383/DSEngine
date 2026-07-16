@@ -106,8 +106,9 @@ bool Input::GetDoubleClick(unsigned short key_code) {
 }
 
 bool Input::GetLongPress(unsigned short key_code, float duration_seconds) {
+    // 非正的时长阈值没有「长按」语义：直接返回 false，避免退化成每帧为 true 的 GetKey
     if (duration_seconds <= 0.0f) {
-        duration_seconds = 0.0f;
+        return false;
     }
     if (!GetKey(key_code) || GetKeyUp(key_code)) {
         return false;
