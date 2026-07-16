@@ -71,8 +71,8 @@ local function setup_scene()
     -- refraction_strength, reflection_strength, specular_power,
     -- caustic_intensity, caustic_scale, foam_intensity, foam_depth_threshold,
     -- underwater_fog_density, underwater_fog_r/g/b
-    dse.ecs.set_water(water,
-        true,           -- enabled
+    dse.water_set(water,
+        1,              -- enabled
         -0.3,           -- water_level
         0.02, 0.08, 0.18,  -- deep color (deep blue)
         0.10, 0.30, 0.35,  -- shallow color (turquoise)

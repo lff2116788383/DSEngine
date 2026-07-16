@@ -1582,6 +1582,36 @@
           "returns": []
         },
         {
+          "c_name": "dse_audio_source_set_volume",
+          "lua_name": "set_volume",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "volume",
+              "type": "float"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_audio_source_set_pitch",
+          "lua_name": "set_pitch",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "pitch",
+              "type": "float"
+            }
+          ],
+          "returns": []
+        },
+        {
           "c_name": "dse_compat_audio_set_spatial",
           "lua_name": "set_spatial",
           "params": [
@@ -2286,6 +2316,27 @@
               "type": "float"
             }
           ]
+        },
+        {
+          "c_name": "dse_dssl_get_color",
+          "lua_name": "get_color",
+          "params": [
+            {
+              "name": "instance",
+              "type": "uint32"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_rgba",
+              "type": "float4"
+            }
+          ],
+          "returns": []
         }
       ]
     },
@@ -8341,7 +8392,8 @@
             },
             {
               "name": "path",
-              "type": "string"
+              "type": "string",
+              "default": "nullptr"
             },
             {
               "name": "intensity",
@@ -8400,6 +8452,605 @@
             {
               "name": "angle_fade",
               "type": "float"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_fog",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "density",
+              "type": "float"
+            },
+            {
+              "name": "height_falloff",
+              "type": "float"
+            },
+            {
+              "name": "height_offset",
+              "type": "float"
+            },
+            {
+              "name": "fog_start",
+              "type": "float"
+            },
+            {
+              "name": "fog_end",
+              "type": "float"
+            },
+            {
+              "name": "steps",
+              "type": "int"
+            },
+            {
+              "name": "sun_scatter",
+              "type": "float"
+            },
+            {
+              "name": "fog_r",
+              "type": "float"
+            },
+            {
+              "name": "fog_g",
+              "type": "float"
+            },
+            {
+              "name": "fog_b",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_fog_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_density",
+              "args": [
+                "e",
+                "density"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_height_falloff",
+              "args": [
+                "e",
+                "height_falloff"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_height_offset",
+              "args": [
+                "e",
+                "height_offset"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_start",
+              "args": [
+                "e",
+                "fog_start"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_end",
+              "args": [
+                "e",
+                "fog_end"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_steps",
+              "args": [
+                "e",
+                "steps"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_sun_scatter",
+              "args": [
+                "e",
+                "sun_scatter"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_fog_color",
+              "args": [
+                "e",
+                "fog_r",
+                "fog_g",
+                "fog_b"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_light_shaft",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "density",
+              "type": "float"
+            },
+            {
+              "name": "weight",
+              "type": "float"
+            },
+            {
+              "name": "decay",
+              "type": "float"
+            },
+            {
+              "name": "exposure",
+              "type": "float"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            },
+            {
+              "name": "samples",
+              "type": "int"
+            },
+            {
+              "name": "color_r",
+              "type": "float"
+            },
+            {
+              "name": "color_g",
+              "type": "float"
+            },
+            {
+              "name": "color_b",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_light_shaft_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_light_shaft_density",
+              "args": [
+                "e",
+                "density"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_light_shaft_weight",
+              "args": [
+                "e",
+                "weight"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_light_shaft_decay",
+              "args": [
+                "e",
+                "decay"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_light_shaft_exposure",
+              "args": [
+                "e",
+                "exposure"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_light_shaft_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_light_shaft_samples",
+              "args": [
+                "e",
+                "samples"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_light_shaft_color",
+              "args": [
+                "e",
+                "color_r",
+                "color_g",
+                "color_b"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_ssao",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "radius",
+              "type": "float"
+            },
+            {
+              "name": "bias",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_ssao_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_ssao_radius",
+              "args": [
+                "e",
+                "radius"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_ssao_bias",
+              "args": [
+                "e",
+                "bias"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_auto_exposure",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "exp_min",
+              "type": "float"
+            },
+            {
+              "name": "exp_max",
+              "type": "float"
+            },
+            {
+              "name": "speed_up",
+              "type": "float"
+            },
+            {
+              "name": "speed_down",
+              "type": "float"
+            },
+            {
+              "name": "compensation",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_auto_exposure_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_exposure_min",
+              "args": [
+                "e",
+                "exp_min"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_exposure_max",
+              "args": [
+                "e",
+                "exp_max"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_adaptation_speed_up",
+              "args": [
+                "e",
+                "speed_up"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_adaptation_speed_down",
+              "args": [
+                "e",
+                "speed_down"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_exposure_compensation",
+              "args": [
+                "e",
+                "compensation"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_film_grain",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            },
+            {
+              "name": "time_scale",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_film_grain_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_film_grain_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_film_grain_time_scale",
+              "args": [
+                "e",
+                "time_scale"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_outline",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "r",
+              "type": "float"
+            },
+            {
+              "name": "g",
+              "type": "float"
+            },
+            {
+              "name": "b",
+              "type": "float"
+            },
+            {
+              "name": "thickness",
+              "type": "float"
+            },
+            {
+              "name": "depth_threshold",
+              "type": "float"
+            },
+            {
+              "name": "normal_threshold",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_outline_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_outline_color",
+              "args": [
+                "e",
+                "r",
+                "g",
+                "b"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_outline_thickness",
+              "args": [
+                "e",
+                "thickness"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_outline_depth_threshold",
+              "args": [
+                "e",
+                "depth_threshold"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_outline_normal_threshold",
+              "args": [
+                "e",
+                "normal_threshold"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_vignette",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            },
+            {
+              "name": "radius",
+              "type": "float"
+            },
+            {
+              "name": "softness",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_vignette_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_vignette_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_vignette_radius",
+              "args": [
+                "e",
+                "radius"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_vignette_softness",
+              "args": [
+                "e",
+                "softness"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_post_process_bloom",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "color_grading",
+              "type": "bool"
+            },
+            {
+              "name": "threshold",
+              "type": "float"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            },
+            {
+              "name": "exposure",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_set_bloom_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_color_grading_enabled",
+              "args": [
+                "e",
+                "color_grading"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_bloom_threshold",
+              "args": [
+                "e",
+                "threshold"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_bloom_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_exposure",
+              "args": [
+                "e",
+                "exposure"
+              ]
             }
           ],
           "returns": []

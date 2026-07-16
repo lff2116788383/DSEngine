@@ -53,7 +53,7 @@ local function setup_scene(config)
     dse.ecs.add_transform(emitter, 0.0, 0.35, 0.0, 1.0, 1.0, 1.0)
     dse.ecs.add_particle_system_3d(emitter, config.max_particles or 420, config.emission_rate or 120.0)
     dse.ecs.set_particle_system_3d_params(emitter, 1.0, 2.2, 0.06, 0.18, 1.2, 3.4, 1.0, 0.56, 0.12, 0.92, 0.0, -2.2, 0.0, "")
-    local runtime_ok, active_particles, max_particles, emission_rate, life_min, life_max, size_min, size_max, speed_min, speed_max, gravity_x, gravity_y, gravity_z, color_r, color_g, color_b, color_a, texture_path, enabled, initialized, texture_handle = dse.ecs.get_particle_system_3d_state(emitter)
+    local runtime_ok, active_particles, max_particles, emission_rate, life_min, life_max, size_min, size_max, speed_min, speed_max, gravity_x, gravity_y, gravity_z, color_r, color_g, color_b, color_a, texture_path, enabled, initialized, texture_handle = dse.ecs.particle_system_3d_get_state(emitter)
     print(string.format(
         "[3D][Particles] particle_runtime_bootstrap ok=%s active_particles=%d max_particles=%d emission_rate=%.1f enabled=%s initialized=%s texture_handle=%d",
         tostring(runtime_ok),
@@ -126,7 +126,7 @@ function ParticlesShowcase3D.Update(delta_time)
             texture_path,
             enabled,
             initialized,
-            texture_handle = dse.ecs.get_particle_system_3d_state(state.emitter)
+            texture_handle = dse.ecs.particle_system_3d_get_state(state.emitter)
         local active_nonzero = (active_particles or 0) > 0
         print(string.format(
             "[3D][Particles] particle_runtime_api get_particle_system_3d_state=%s active_particles=%d active_particles_nonzero=%s max_particles=%d emission_rate=%.1f life=%.2f..%.2f size=%.2f..%.2f speed=%.2f..%.2f gravity=%.2f/%.2f/%.2f color=%.2f/%.2f/%.2f/%.2f enabled=%s initialized=%s texture_handle=%d texture_path=%s",

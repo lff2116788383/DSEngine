@@ -2,6 +2,12 @@
 -- 目标：验证 Animator3D/FSM Lua 入口；优先加载 data/animation/minimal_rig 最小真实资源，分段 cube rig 保留为截图兜底。
 local AnimationBasic3D = {}
 
+local function _anim_state_9(e)
+    local n, t, sp, lp, tr, bc, hs = dse.ecs.anim3d_get_state(e)
+    return (n ~= nil), "?", n, t, sp, lp, tr, bc, hs
+end
+
+
 
 AnimationBasic3D._meta = {
     name     = "animation basic showcase",
@@ -89,10 +95,10 @@ local function setup_actor(config)
     add_part("leg_l", -0.22, 0.05, 0.0, 0.22, 0.72, 0.24, {0.20, 0.36, 0.70, 1.0})
     add_part("leg_r", 0.22, 0.05, 0.0, 0.22, 0.72, 0.24, {0.20, 0.36, 0.70, 1.0})
     add_part("state_beacon", 1.6, 1.2, 0.0, 0.28, 0.28, 0.28, {0.2, 1.0, 0.45, 1.0}, {0.04, 0.45, 0.08})
-    local state_ok, current_state, normalized_time, clip_time, speed, loop, transitioning, bone_count, has_skeleton = dse.ecs.get_animator_3d_state(actor)
+    local state_ok, current_state, normalized_time, clip_time, speed, loop, transitioning, bone_count, has_skeleton = _anim_state_9(actor)
     print(string.format("[3D][Animation] setup: animator_resource_chain real_animation_resource mesh_path=%s material_path=%s danim_path=%s dskel_path=%s resource_paths_configured=%s; animator_state_api get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s; fallback cube rig retained", mesh_path, material_path, danim, dskel, tostring(danim ~= "" and dskel ~= ""), tostring(state_ok == true), tostring(current_state), normalized_time or -1.0, clip_time or -1.0, speed or -1.0, tostring(loop == true), tostring(transitioning == true), tostring(bone_count), tostring(has_skeleton == true)))
     if state.skinned_mesh ~= nil then
-        local mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = dse.ecs.get_animator_3d_state(state.skinned_mesh)
+        local mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = _anim_state_9(state.skinned_mesh)
         print(string.format("[3D][Animation] skinned_mesh_resource animator_state_api get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s mesh_path=%s material_path=%s", tostring(mesh_ok == true), tostring(mesh_state), mesh_norm or -1.0, mesh_clip or -1.0, mesh_speed or -1.0, tostring(mesh_loop == true), tostring(mesh_transition == true), tostring(mesh_bones), tostring(mesh_has_skeleton == true), mesh_path, material_path))
     end
 end
@@ -107,7 +113,7 @@ local function switch_state(name)
             dse.ecs.set_animator_3d_state(state.skinned_mesh, name, name == "walk" and 1.15 or 1.0, true)
             if name == "walk" then dse.ecs.set_animator_3d_param_float(state.skinned_mesh, "speed", 1.0) else dse.ecs.set_animator_3d_param_float(state.skinned_mesh, "speed", 0.0) end
         end
-        local ok, actual_state, normalized_time, clip_time, speed, loop, transitioning, bone_count, has_skeleton = dse.ecs.get_animator_3d_state(state.actor)
+        local ok, actual_state, normalized_time, clip_time, speed, loop, transitioning, bone_count, has_skeleton = _anim_state_9(state.actor)
         print(string.format("[3D][Animation] animator_state_api real_animation_resource get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s danim_path=%s dskel_path=%s", tostring(ok == true), tostring(actual_state), normalized_time or -1.0, clip_time or -1.0, speed or -1.0, tostring(loop == true), tostring(transitioning == true), tostring(bone_count), tostring(has_skeleton == true), state.resources.danim_path or "", state.resources.dskel_path or ""))
         return
     end
@@ -147,10 +153,10 @@ function AnimationBasic3D.Update(delta_time)
     end
     if state.actor ~= nil and state.time > 1.0 and state.logged_state ~= state.current_state then
         state.logged_state = state.current_state
-        local ok, actual_state, normalized_time, clip_time, speed, loop, transitioning, bone_count, has_skeleton = dse.ecs.get_animator_3d_state(state.actor)
+        local ok, actual_state, normalized_time, clip_time, speed, loop, transitioning, bone_count, has_skeleton = _anim_state_9(state.actor)
         local mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = false, "none", -1.0, -1.0, -1.0, false, false, 0, false
         if state.skinned_mesh ~= nil then
-            mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = dse.ecs.get_animator_3d_state(state.skinned_mesh)
+            mesh_ok, mesh_state, mesh_norm, mesh_clip, mesh_speed, mesh_loop, mesh_transition, mesh_bones, mesh_has_skeleton = _anim_state_9(state.skinned_mesh)
         end
         print(string.format("[3D][Animation] runtime: animator_state_api real_animation_resource get_animator_3d_state=%s state=%s normalized_time=%.2f clip_time=%.2f speed=%.2f loop=%s transitioning=%s final_bones=%s has_skeleton=%s mesh_state=%s mesh_final_bones=%s mesh_has_skeleton=%s mesh_norm=%.2f mesh_clip=%.2f", tostring(ok == true), tostring(actual_state), normalized_time or -1.0, clip_time or -1.0, speed or -1.0, tostring(loop == true), tostring(transitioning == true), tostring(bone_count), tostring(has_skeleton == true), tostring(mesh_state), tostring(mesh_bones), tostring(mesh_has_skeleton == true), mesh_norm or -1.0, mesh_clip or -1.0))
     end

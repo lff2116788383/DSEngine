@@ -137,7 +137,7 @@ function FogDemo.Update(delta_time)
     -- 动态调整雾密度（模拟天气变化）
     if state.pp then
         local density = 0.025 + math.sin(state.time * 0.15) * 0.01
-        dse.ecs.set_post_process_fog(state.pp, true, density)
+        dse.ecs.set_post_process_fog(state.pp, true, density, 0.8, 0.0, 5.0, 80.0, 32, 0.6, 0.65, 0.72, 0.80)
     end
 end
 

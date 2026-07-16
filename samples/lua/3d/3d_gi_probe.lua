@@ -69,7 +69,7 @@ local function setup_scene()
     -- GI Probe
     local probe = dse.ecs.create_entity()
     dse.ecs.add_transform(probe, 0, h/2, 0, 1, 1, 1)
-    dse.ecs.add_gi_probe(probe)
+    dse.rendering_add_gi_probe(probe)
     -- set_gi_probe 参数依赖引擎具体实现
     if dse.ecs.set_gi_probe then
         dse.ecs.set_gi_probe(probe)

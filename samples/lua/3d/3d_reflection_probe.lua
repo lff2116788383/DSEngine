@@ -84,14 +84,14 @@ local function setup_scene()
     -- 反射探针（放置在场景中心）
     local probe = dse.ecs.create_entity()
     dse.ecs.add_transform(probe, 0, 2, 0, 1, 1, 1)
-    dse.ecs.add_reflection_probe(probe, 20.0)
+    dse.rendering_add_reflection_probe(probe)
     dse.ecs.set_reflection_probe(probe, 20.0, 18, 8, 18, 256)
     table.insert(state.probes, probe)
 
     -- 第二个探针偏移位置
     local probe2 = dse.ecs.create_entity()
     dse.ecs.add_transform(probe2, -5, 2, -3, 1, 1, 1)
-    dse.ecs.add_reflection_probe(probe2, 10.0)
+    dse.rendering_add_reflection_probe(probe2)
     dse.ecs.set_reflection_probe(probe2, 10.0, 10, 6, 10, 128)
     table.insert(state.probes, probe2)
 

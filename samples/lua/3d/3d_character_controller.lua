@@ -162,7 +162,7 @@ function CharacterController3D.Update(dt)
         dz = -move_speed * dt * state.move_dir
         if not state.logged_phase[1] then
             state.logged_phase[1] = true
-            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            local _cc_ok, px, py, pz = dse.character_controller3d_get_position(char)
             state.phase_start_pos[1] = { x = px, y = py, z = pz }
             print("[3D][CharacterController] phase1=move_forward speed=" .. move_speed
                 .. " start_pos=" .. string.format("(%.2f,%.2f,%.2f)", px, py, pz))
@@ -175,14 +175,14 @@ function CharacterController3D.Update(dt)
             state.logged_phase[2] = true
             local jump_ok = dse.ecs.character_controller_3d_jump(char, jump_speed)
             state.character_velocity_y = jump_speed
-            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            local _cc_ok, px, py, pz = dse.character_controller3d_get_position(char)
             state.phase_start_pos[2] = { x = px, y = py, z = pz }
             print("[3D][CharacterController] phase2=jump jump_speed=" .. jump_speed
                 .. " jump_ok=" .. tostring(jump_ok)
                 .. " launch_y=" .. string.format("%.2f", py))
         end
         -- 跟踪跳跃峰值
-        local _, cur_y, _ = dse.ecs.character_controller_3d_get_position(char)
+        local _, _, cur_y, _ = dse.character_controller3d_get_position(char)
         if cur_y > state.jump_peak_y then
             state.jump_peak_y = cur_y
         end
@@ -193,7 +193,7 @@ function CharacterController3D.Update(dt)
         dz = -move_speed * dt * state.move_dir
         if not state.logged_phase[3] then
             state.logged_phase[3] = true
-            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            local _cc_ok, px, py, pz = dse.character_controller3d_get_position(char)
             print("[3D][CharacterController] phase3=reverse_direction dir=" .. state.move_dir
                 .. " jump_peak_y=" .. string.format("%.2f", state.jump_peak_y)
                 .. " landed=" .. tostring(state.is_grounded)
@@ -215,7 +215,7 @@ function CharacterController3D.Update(dt)
         dz = -move_speed * dt * 0.3
         if not state.logged_phase[5] then
             state.logged_phase[5] = true
-            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            local _cc_ok, px, py, pz = dse.character_controller3d_get_position(char)
             local grounded_check = dse.ecs.character_controller_3d_is_grounded(char)
             print("[3D][CharacterController] phase5=grounded_verify"
                 .. " move_api_grounded=" .. tostring(state.is_grounded)
@@ -242,7 +242,7 @@ function CharacterController3D.Update(dt)
         dx = move_speed * dt * 0.6
         if not state.logged_phase[7] then
             state.logged_phase[7] = true
-            local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+            local _cc_ok, px, py, pz = dse.character_controller3d_get_position(char)
             print("[3D][CharacterController] phase7=collider_fallback pos="
                 .. string.format("(%.2f,%.2f,%.2f)", px, py, pz)
                 .. " 角色 move 后位置应合理（不穿墙/不嵌入地面）")
@@ -277,7 +277,7 @@ function CharacterController3D.Update(dt)
     end
 
     -- 查询位置
-    local px, py, pz = dse.ecs.character_controller_3d_get_position(char)
+    local _cc_ok, px, py, pz = dse.character_controller3d_get_position(char)
 
     -- 同步可视化 marker 位置
     for _, m in ipairs(state.markers) do

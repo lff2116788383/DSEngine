@@ -100,7 +100,7 @@ function SkyboxEnvironment3D.Update(delta_time)
     state.time = state.time + dt
     local pulse = (math.sin(state.time * 0.9) + 1.0) * 0.5
     if state.sky_light ~= nil then
-        dse.ecs.set_sky_light(state.sky_light, 0.12 + pulse * 0.28, 0.18 + pulse * 0.28, 0.32 + pulse * 0.30, 0.02 + pulse * 0.06, 0.03 + pulse * 0.06, 0.06 + pulse * 0.08, 0.65 + pulse * 0.75, true)
+        dse.ecs.add_sky_light(state.sky_light, 0.12 + pulse * 0.28, 0.18 + pulse * 0.28, 0.32 + pulse * 0.30, 0.02 + pulse * 0.06, 0.03 + pulse * 0.06, 0.06 + pulse * 0.08, 0.65 + pulse * 0.75)
     end
     for i, item in ipairs(state.objects) do
         if i > 1 then

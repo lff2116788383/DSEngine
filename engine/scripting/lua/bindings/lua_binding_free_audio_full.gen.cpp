@@ -36,6 +36,20 @@ int L_dse_audio_source_set_playing(lua_State* L) {
     return 0;
 }
 
+int L_dse_audio_source_set_volume(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float volume = static_cast<float>(luaL_checknumber(L, 2));
+    dse_audio_source_set_volume(e, volume);
+    return 0;
+}
+
+int L_dse_audio_source_set_pitch(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float pitch = static_cast<float>(luaL_checknumber(L, 2));
+    dse_audio_source_set_pitch(e, pitch);
+    return 0;
+}
+
 int L_dse_compat_audio_set_spatial(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     int enabled = helper::CheckBool(L, 2) ? 1 : 0;
@@ -268,6 +282,8 @@ void RegisterAudioBindings(lua_State* L) {
     helper::RegisterBindings(L, {
         {"add_source", L_dse_audio_source_add},
         {"set_playing", L_dse_audio_source_set_playing},
+        {"set_volume", L_dse_audio_source_set_volume},
+        {"set_pitch", L_dse_audio_source_set_pitch},
         {"set_spatial", L_dse_compat_audio_set_spatial},
         {"audiorestart", L_dse_audio_source_restart},
         {"ecssetaudioloop", L_dse_audio_source_set_loop},

@@ -49,7 +49,8 @@ function M.Update(dt)
     state.elapsed = state.elapsed + dt
     -- Cast ray from left sweeping up/down
     local angle = math.sin(state.elapsed) * 0.5
-    local hit = dse.ecs.raycast_2d(-6.0, 0, math.cos(angle), math.sin(angle), 12.0)
+    local dir_x, dir_y = math.cos(angle), math.sin(angle)
+    local hit = dse.physics2d_raycast(-6.0, 0, -6.0 + dir_x * 12.0, 0 + dir_y * 12.0)
 end
 
 return M

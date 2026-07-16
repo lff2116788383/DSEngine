@@ -179,10 +179,9 @@ function AnimIKLayers3D.Update(dt)
     ecs.set_anim_layer_weight(ch, 0, state.wave_weight)
 
     -- 动画事件轮询
-    local evt = ecs.pop_animator_3d_event(ch)
-    while evt and evt ~= "" do
+    local evts = ecs.anim3d_pop_event(ch)
+    for _, evt in ipairs(evts) do
         -- print("[event] " .. evt)
-        evt = ecs.pop_animator_3d_event(ch)
     end
 
     -- Root Motion 读取
