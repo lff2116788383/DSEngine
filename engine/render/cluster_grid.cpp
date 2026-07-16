@@ -26,15 +26,47 @@ void ClusterGrid::Build(const glm::mat4& view, const glm::mat4& projection,
     tiles_x_ = (screen_width  + kClusterTileSize - 1) / kClusterTileSize;
     tiles_y_ = (screen_height + kClusterTileSize - 1) / kClusterTileSize;
 
-    const int total = tiles_x_ * tiles_y_ * kClusterZSlices;
-    cluster_infos_.resize(total);
-    light_indices_.clear();
-
     // 避免退化情况
     if (near_plane <= 0.0f) near_plane = 0.1f;
     if (far_plane <= near_plane) far_plane = near_plane + 100.0f;
 
-    const glm::mat4 inv_proj = glm::inverse(projection);
+    const int total = tiles_x_ * tiles_y_ * kClusterZSlices;
+    cluster_infos_.resize(total);
+    light_indices_.clear();
+
+    // ---- Cluster view-space AABB 缓存 ----
+    // AABB 只依赖 (projection, near, far, screen_w, screen_h)；相机移动/光源变化
+    // 不影响 AABB（它们在 view space 且由投影+屏幕尺寸唯一决定）。仅在这些参数变化
+    // 时重算，避免每帧 total×8 次逆投影射线计算。
+    const bool aabb_dirty =
+        !aabb_cache_valid_ ||
+        static_cast<int>(cluster_aabb_min_.size()) != total ||
+        cached_near_ != near_plane ||
+        cached_far_ != far_plane ||
+        cached_screen_width_ != screen_width_ ||
+        cached_screen_height_ != screen_height_ ||
+        cached_projection_ != projection;
+
+    if (aabb_dirty) {
+        const glm::mat4 inv_proj = glm::inverse(projection);
+        cluster_aabb_min_.resize(total);
+        cluster_aabb_max_.resize(total);
+        for (int tz = 0; tz < kClusterZSlices; ++tz) {
+            for (int ty = 0; ty < tiles_y_; ++ty) {
+                for (int tx = 0; tx < tiles_x_; ++tx) {
+                    const int idx = (tz * tiles_y_ + ty) * tiles_x_ + tx;
+                    ComputeClusterAABB(tx, ty, tz, near_plane, far_plane, inv_proj,
+                                       cluster_aabb_min_[idx], cluster_aabb_max_[idx]);
+                }
+            }
+        }
+        cached_projection_ = projection;
+        cached_near_ = near_plane;
+        cached_far_ = far_plane;
+        cached_screen_width_ = screen_width_;
+        cached_screen_height_ = screen_height_;
+        aabb_cache_valid_ = true;
+    }
 
     // 将光源位置变换到 view space
     struct ViewSpaceLight {
@@ -63,30 +95,24 @@ void ClusterGrid::Build(const glm::mat4& view, const glm::mat4& projection,
     };
     std::vector<ClusterLights> temp_clusters(total);
 
-    // 遍历每个 cluster，测试光源相交
-    for (int tz = 0; tz < kClusterZSlices; ++tz) {
-        for (int ty = 0; ty < tiles_y_; ++ty) {
-            for (int tx = 0; tx < tiles_x_; ++tx) {
-                glm::vec3 aabb_min, aabb_max;
-                ComputeClusterAABB(tx, ty, tz, near_plane, far_plane, inv_proj, aabb_min, aabb_max);
+    // 遍历每个 cluster，测试光源相交（AABB 取自缓存）
+    for (int idx = 0; idx < total; ++idx) {
+        const glm::vec3& aabb_min = cluster_aabb_min_[idx];
+        const glm::vec3& aabb_max = cluster_aabb_max_[idx];
 
-                int idx = (tz * tiles_y_ + ty) * tiles_x_ + tx;
+        // 测试点光源
+        for (size_t li = 0; li < vs_point_lights.size(); ++li) {
+            if (SphereAABBIntersect(vs_point_lights[li].pos, vs_point_lights[li].radius,
+                                    aabb_min, aabb_max)) {
+                temp_clusters[idx].point_indices.push_back(static_cast<uint32_t>(li));
+            }
+        }
 
-                // 测试点光源
-                for (size_t li = 0; li < vs_point_lights.size(); ++li) {
-                    if (SphereAABBIntersect(vs_point_lights[li].pos, vs_point_lights[li].radius,
-                                            aabb_min, aabb_max)) {
-                        temp_clusters[idx].point_indices.push_back(static_cast<uint32_t>(li));
-                    }
-                }
-
-                // 测试聚光灯（用包围球近似）
-                for (size_t li = 0; li < vs_spot_lights.size(); ++li) {
-                    if (SphereAABBIntersect(vs_spot_lights[li].pos, vs_spot_lights[li].radius,
-                                            aabb_min, aabb_max)) {
-                        temp_clusters[idx].spot_indices.push_back(static_cast<uint32_t>(li));
-                    }
-                }
+        // 测试聚光灯（用包围球近似）
+        for (size_t li = 0; li < vs_spot_lights.size(); ++li) {
+            if (SphereAABBIntersect(vs_spot_lights[li].pos, vs_spot_lights[li].radius,
+                                    aabb_min, aabb_max)) {
+                temp_clusters[idx].spot_indices.push_back(static_cast<uint32_t>(li));
             }
         }
     }
@@ -169,6 +195,9 @@ void ClusterGrid::Shutdown() {
     }
     cluster_infos_.clear();
     light_indices_.clear();
+    cluster_aabb_min_.clear();
+    cluster_aabb_max_.clear();
+    aabb_cache_valid_ = false;
     cluster_info_capacity_bytes_ = 0;
     light_index_capacity_bytes_  = 0;
     device_ = nullptr;

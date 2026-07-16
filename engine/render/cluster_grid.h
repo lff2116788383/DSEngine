@@ -110,6 +110,19 @@ private:
     std::vector<ClusterInfo> cluster_infos_;
     std::vector<uint32_t> light_indices_;
 
+    // Cluster view-space AABB 缓存。AABB 仅由 (projection, near, far, screen_w,
+    // screen_h) 决定（见 ComputeClusterAABB：不依赖 view 矩阵与光源），故只在这些
+    // 参数变化时重算，避免每帧重复做 total×8 次逆投影射线计算。光源相交测试仍每帧
+    // 进行（相机/光源移动时 view-space 光源位置每帧变化，不能缓存）。
+    std::vector<glm::vec3> cluster_aabb_min_;
+    std::vector<glm::vec3> cluster_aabb_max_;
+    bool     aabb_cache_valid_ = false;
+    glm::mat4 cached_projection_{0.0f};
+    float    cached_near_ = 0.0f;
+    float    cached_far_ = 0.0f;
+    int      cached_screen_width_ = 0;
+    int      cached_screen_height_ = 0;
+
     // GPU SSBO 句柄
     BufferHandle cluster_info_ssbo_;
     BufferHandle light_index_ssbo_;
