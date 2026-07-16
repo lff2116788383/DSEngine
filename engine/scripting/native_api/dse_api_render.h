@@ -928,6 +928,15 @@ DSE_CAPI void  dse_decal_add(uint32_t e, uint32_t albedo_texture);
 DSE_CAPI void  dse_decal_set(uint32_t e, float r, float g, float b, float a, float angle_fade);
 DSE_CAPI int   dse_post_process_get_state(uint32_t e, int* out_enabled, int* out_bloom, int* out_ssao,
                                            int* out_ssr, int* out_fxaa, int* out_dof);
+DSE_CAPI int   dse_post_process_set_color(uint32_t e, int enabled, float exposure, float gamma);
+DSE_CAPI int   dse_post_process_get_color_state(uint32_t e, int* out_enabled, int* out_bloom_enabled,
+                                                float* out_bloom_threshold, float* out_bloom_intensity,
+                                                int* out_color_enabled, float* out_exposure, float* out_gamma,
+                                                int* out_ssao_enabled, float* out_ssao_radius, float* out_ssao_bias,
+                                                int* out_fxaa_enabled, int* out_vignette_enabled,
+                                                float* out_vignette_intensity, float* out_vignette_radius,
+                                                float* out_vignette_softness, int* out_film_grain_enabled,
+                                                float* out_film_grain_intensity, float* out_film_grain_time_scale);
 
 // ============================================================
 // Animation 扩展

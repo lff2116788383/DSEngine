@@ -43,3 +43,48 @@ extern "C" int dse_post_process_get_state(uint32_t e, int* out_enabled, int* out
     if (out_dof) *out_dof = pp->dof_enabled ? 1 : 0;
     return 1;
 }
+
+
+extern "C" int dse_post_process_set_color(uint32_t e, int enabled, float exposure, float gamma) {
+    World* world = GW();
+    if (!world) return 0;
+    auto* pp = world->registry().try_get<PostProcessComponent>(TE(e));
+    if (!pp) return 0;
+    pp->color_grading_enabled = (enabled != 0);
+    if (!Keep(exposure)) pp->exposure = exposure;
+    if (!Keep(gamma)) pp->gamma = gamma;
+    return 1;
+}
+
+extern "C" int dse_post_process_get_color_state(uint32_t e, int* out_enabled, int* out_bloom_enabled,
+                                                float* out_bloom_threshold, float* out_bloom_intensity,
+                                                int* out_color_enabled, float* out_exposure, float* out_gamma,
+                                                int* out_ssao_enabled, float* out_ssao_radius, float* out_ssao_bias,
+                                                int* out_fxaa_enabled, int* out_vignette_enabled,
+                                                float* out_vignette_intensity, float* out_vignette_radius,
+                                                float* out_vignette_softness, int* out_film_grain_enabled,
+                                                float* out_film_grain_intensity, float* out_film_grain_time_scale) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* pp = world->registry().try_get<PostProcessComponent>(TE(e));
+    if (!pp) return 0;
+    if (out_enabled) *out_enabled = pp->enabled ? 1 : 0;
+    if (out_bloom_enabled) *out_bloom_enabled = pp->bloom_enabled ? 1 : 0;
+    if (out_bloom_threshold) *out_bloom_threshold = pp->bloom_threshold;
+    if (out_bloom_intensity) *out_bloom_intensity = pp->bloom_intensity;
+    if (out_color_enabled) *out_color_enabled = pp->color_grading_enabled ? 1 : 0;
+    if (out_exposure) *out_exposure = pp->exposure;
+    if (out_gamma) *out_gamma = pp->gamma;
+    if (out_ssao_enabled) *out_ssao_enabled = pp->ssao_enabled ? 1 : 0;
+    if (out_ssao_radius) *out_ssao_radius = pp->ssao_radius;
+    if (out_ssao_bias) *out_ssao_bias = pp->ssao_bias;
+    if (out_fxaa_enabled) *out_fxaa_enabled = pp->fxaa_enabled ? 1 : 0;
+    if (out_vignette_enabled) *out_vignette_enabled = pp->vignette_enabled ? 1 : 0;
+    if (out_vignette_intensity) *out_vignette_intensity = pp->vignette_intensity;
+    if (out_vignette_radius) *out_vignette_radius = pp->vignette_radius;
+    if (out_vignette_softness) *out_vignette_softness = pp->vignette_softness;
+    if (out_film_grain_enabled) *out_film_grain_enabled = pp->film_grain_enabled ? 1 : 0;
+    if (out_film_grain_intensity) *out_film_grain_intensity = pp->film_grain_intensity;
+    if (out_film_grain_time_scale) *out_film_grain_time_scale = pp->film_grain_time_scale;
+    return 1;
+}

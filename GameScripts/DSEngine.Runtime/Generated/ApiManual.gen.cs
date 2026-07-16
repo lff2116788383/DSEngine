@@ -143,6 +143,7 @@ public static class AudioSource {
     public static void SetBus(uint e, string busName) { Native.dse_audio_source_set_bus(e, busName); }
     public static int IsPlaying(uint e) { return Native.dse_audio_source_is_playing(e); }
     public static int GetState(uint e, out int outFlags, out float outParams, out long outRuntimeHandle, out long outClipSize, [Out] byte[] outPath, int pathCap) { return Native.dse_audio_source_get_state(e, out outFlags, out outParams, out outRuntimeHandle, out outClipSize, outPath, pathCap); }
+    public static int GetStateEx(uint e, out int outClipLoaded, out int outIsPlaying, out int outSpatial, out float outMinDist, out float outMaxDist, out float outRolloff, out float outVolume, out float outPitch, out double outRuntimeHandle, out double outClipBytes, [Out] byte[] outPath, int pathCap) { return Native.dse_audio_source_get_state_ex(e, out outClipLoaded, out outIsPlaying, out outSpatial, out outMinDist, out outMaxDist, out outRolloff, out outVolume, out outPitch, out outRuntimeHandle, out outClipBytes, outPath, pathCap); }
 }
 
 public static class AudioSpatial2D {
@@ -776,6 +777,8 @@ public static class Physics3D {
 
 public static class PostProcess {
     public static int GetState(uint e, out int outEnabled, out int outBloom, out int outSsao, out int outSsr, out int outFxaa, out int outDof) { return Native.dse_post_process_get_state(e, out outEnabled, out outBloom, out outSsao, out outSsr, out outFxaa, out outDof); }
+    public static int SetColor(uint e, int enabled, float exposure, float gamma) { return Native.dse_post_process_set_color(e, enabled, exposure, gamma); }
+    public static int GetColorState(uint e, out int outEnabled, out int outBloomEnabled, out float outBloomThreshold, out float outBloomIntensity, out int outColorEnabled, out float outExposure, out float outGamma, out int outSsaoEnabled, out float outSsaoRadius, out float outSsaoBias, out int outFxaaEnabled, out int outVignetteEnabled, out float outVignetteIntensity, out float outVignetteRadius, out float outVignetteSoftness, out int outFilmGrainEnabled, out float outFilmGrainIntensity, out float outFilmGrainTimeScale) { return Native.dse_post_process_get_color_state(e, out outEnabled, out outBloomEnabled, out outBloomThreshold, out outBloomIntensity, out outColorEnabled, out outExposure, out outGamma, out outSsaoEnabled, out outSsaoRadius, out outSsaoBias, out outFxaaEnabled, out outVignetteEnabled, out outVignetteIntensity, out outVignetteRadius, out outVignetteSoftness, out outFilmGrainEnabled, out outFilmGrainIntensity, out outFilmGrainTimeScale); }
     public static void Add(uint e) { Native.dse_post_process_add(e); }
     public static void SetColorLut(uint e, string path, float intensity) { Native.dse_post_process_set_color_lut(e, path, intensity); }
 }

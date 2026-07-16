@@ -1,7 +1,8 @@
 # DSEngine C# API 参考文档
 
 > 严格对齐 `GameScripts/DSEngine.Runtime/` 源码与 `tools/codegen/binding_defs.json` 数据源
-> 更新日期：2026-07-02
+> 更新日期：2026-07-16
+> 本次修订：新增 `dse_post_process_set_color` / `dse_post_process_get_color_state` / `dse_audio_source_get_state_ex` 三个原生函数（随 codegen 生成至 `Generated/NativeManual.gen.cs` 与 `Generated/ApiManual.gen.cs`）。
 > 运行时：.NET 8 CoreCLR (hostfxr)，P/Invoke 通过 `[LibraryImport("dse_engine")]` 源生成器
 > 组件字段访问器由 `tools/codegen/codegen.py` 从 `binding_defs.json` 自动生成至
 > `GameScripts/DSEngine.Runtime/Generated/Native.gen.cs`（45 组件 / 816 访问器）；

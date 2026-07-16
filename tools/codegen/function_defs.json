@@ -713,6 +713,699 @@
             }
           ],
           "returns": []
+        },
+        {
+          "lua_name": "set_nav_agent",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "validators": [
+            "float speed=3.5f, acceleration=8.0f, stopping_dist=0.5f, radius=0.5f, height=1.8f;",
+            "if (lua_istable(L, 2)) { lua_getfield(L, 2, \"speed\"); if (!lua_isnil(L,-1)) speed=static_cast<float>(lua_tonumber(L,-1)); lua_pop(L,1); lua_getfield(L, 2, \"acceleration\"); if (!lua_isnil(L,-1)) acceleration=static_cast<float>(lua_tonumber(L,-1)); lua_pop(L,1); lua_getfield(L, 2, \"stopping_dist\"); if (!lua_isnil(L,-1)) stopping_dist=static_cast<float>(lua_tonumber(L,-1)); lua_pop(L,1); lua_getfield(L, 2, \"radius\"); if (!lua_isnil(L,-1)) radius=static_cast<float>(lua_tonumber(L,-1)); lua_pop(L,1); lua_getfield(L, 2, \"height\"); if (!lua_isnil(L,-1)) height=static_cast<float>(lua_tonumber(L,-1)); lua_pop(L,1); }"
+          ],
+          "calls": [
+            {
+              "c_name": "dse_nav_agent_set",
+              "args": [
+                "e",
+                "speed",
+                "acceleration",
+                "stopping_dist",
+                "radius",
+                "height"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "lua_name": "set_nav_destination",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_nav_agent_set_destination",
+              "args": [
+                "e",
+                "x",
+                "y",
+                "z"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_nav_agent_arrived",
+          "lua_name": "nav_agent_arrived",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_mesh_renderer_set_texture",
+          "lua_name": "set_mesh_texture",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "slot",
+              "type": "string"
+            },
+            {
+              "name": "path",
+              "type": "string"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_handle",
+              "type": "uint32"
+            },
+            {
+              "name": "out_width",
+              "type": "int"
+            },
+            {
+              "name": "out_height",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_physics3d_get_collision_events",
+          "lua_name": "physics_3d_get_collision_events",
+          "params": [],
+          "buffer_output": {
+            "elem_type": "float",
+            "max_count": 256,
+            "stride": 11,
+            "mode": "collision_11f"
+          },
+          "returns": []
+        },
+        {
+          "c_name": "dse_physics3d_get_trigger_events",
+          "lua_name": "physics_3d_get_trigger_events",
+          "params": [],
+          "buffer_output": {
+            "elem_type": "uint32_t",
+            "max_count": 256,
+            "stride": 2,
+            "mode": "trigger_dual"
+          },
+          "returns": []
+        },
+        {
+          "c_name": "dse_physics2d_poll_collision_event",
+          "lua_name": "poll_collision_event",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_other",
+              "type": "uint32"
+            },
+            {
+              "name": "out_is_trigger",
+              "type": "int"
+            },
+            {
+              "name": "out_is_enter",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_physics2d_raycast",
+          "lua_name": "raycast_2d",
+          "params": [
+            {
+              "name": "sx",
+              "type": "float"
+            },
+            {
+              "name": "sy",
+              "type": "float"
+            },
+            {
+              "name": "ex",
+              "type": "float"
+            },
+            {
+              "name": "ey",
+              "type": "float"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_entity",
+              "type": "uint32"
+            },
+            {
+              "name": "out_point",
+              "type": "float3"
+            },
+            {
+              "name": "out_normal",
+              "type": "float3"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_terrain_get_lod",
+          "lua_name": "get_terrain_lod",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_lod",
+              "type": "int"
+            },
+            {
+              "name": "out_rx",
+              "type": "int"
+            },
+            {
+              "name": "out_rz",
+              "type": "int"
+            },
+            {
+              "name": "out_max_lod",
+              "type": "int"
+            },
+            {
+              "name": "out_lod_factor",
+              "type": "float"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_terrain_load_heightmap",
+          "lua_name": "load_terrain_heightmap",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "path",
+              "type": "string"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_w",
+              "type": "int"
+            },
+            {
+              "name": "out_h",
+              "type": "int"
+            },
+            {
+              "name": "out_ch",
+              "type": "int"
+            },
+            {
+              "name": "out_rx",
+              "type": "int"
+            },
+            {
+              "name": "out_rz",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_terrain_set_texture",
+          "lua_name": "set_terrain_texture",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "path",
+              "type": "string"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_handle",
+              "type": "uint32"
+            },
+            {
+              "name": "out_w",
+              "type": "int"
+            },
+            {
+              "name": "out_h",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "lua_name": "set_gi_probe",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_rendering_set_gi_probe",
+              "args": [
+                "e",
+                "1.0f",
+                "0.0f",
+                "0.0f",
+                "0.0f",
+                "10.0f",
+                "10.0f",
+                "10.0f",
+                "16",
+                "16",
+                "16"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_steering_get_state",
+          "lua_name": "get_steering_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_flags",
+              "type": "int"
+            },
+            {
+              "name": "out_velocity",
+              "type": "float3"
+            },
+            {
+              "name": "out_params",
+              "type": "float"
+            },
+            {
+              "name": "out_targets",
+              "type": "float"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "lua_name": "set_steering_target",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "validators": [
+            "int _behavior = 0; { const char* _m = luaL_checkstring(L, 2); if (strcmp(_m, \"flee\") == 0) _behavior = 1; else if (strcmp(_m, \"arrive\") == 0) _behavior = 2; else _behavior = 0; }",
+            "float _sx = static_cast<float>(luaL_checknumber(L, 3));",
+            "float _sy = static_cast<float>(luaL_checknumber(L, 4));",
+            "float _sz = static_cast<float>(luaL_checknumber(L, 5));"
+          ],
+          "calls": [
+            {
+              "c_name": "dse_steering_set_target",
+              "args": [
+                "e",
+                "_behavior",
+                "_sx",
+                "_sy",
+                "_sz"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_anim3d_get_state",
+          "lua_name": "get_animator_3d_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_state",
+              "type": "string",
+              "size": 256
+            },
+            {
+              "name": "out_norm",
+              "type": "float"
+            },
+            {
+              "name": "out_time",
+              "type": "float"
+            },
+            {
+              "name": "out_speed",
+              "type": "float"
+            },
+            {
+              "name": "out_loop",
+              "type": "int"
+            },
+            {
+              "name": "out_transitioning",
+              "type": "int"
+            },
+            {
+              "name": "out_bone_count",
+              "type": "int"
+            },
+            {
+              "name": "out_has_skel",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_anim3d_get_root_motion_delta",
+          "lua_name": "get_animator_3d_root_motion_delta",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_xyz",
+              "type": "float3"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_mesh_renderer_set_uvs",
+          "lua_name": "set_mesh_uvs",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "float_array_param": {
+            "name": "data",
+            "stack_index": 2
+          },
+          "out_params": [
+            {
+              "name": "out_attr_count",
+              "type": "int"
+            },
+            {
+              "name": "out_vertex_count",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_mesh_renderer_set_normals",
+          "lua_name": "set_mesh_normals",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "float_array_param": {
+            "name": "data",
+            "stack_index": 2
+          },
+          "out_params": [
+            {
+              "name": "out_attr_count",
+              "type": "int"
+            },
+            {
+              "name": "out_vertex_count",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_mesh_renderer_set_tangents",
+          "lua_name": "set_mesh_tangents",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "float_array_param": {
+            "name": "data",
+            "stack_index": 2
+          },
+          "out_params": [
+            {
+              "name": "out_attr_count",
+              "type": "int"
+            },
+            {
+              "name": "out_vertex_count",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_scene_load_sub",
+          "lua_name": "load_sub_scene",
+          "params": [
+            {
+              "name": "path",
+              "type": "string"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_entity_count",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_post_process_set_color",
+          "lua_name": "set_post_process_color",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "exposure",
+              "type": "float"
+            },
+            {
+              "name": "gamma",
+              "type": "float"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_post_process_get_color_state",
+          "lua_name": "get_post_process_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_bloom_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_bloom_threshold",
+              "type": "float"
+            },
+            {
+              "name": "out_bloom_intensity",
+              "type": "float"
+            },
+            {
+              "name": "out_color_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_exposure",
+              "type": "float"
+            },
+            {
+              "name": "out_gamma",
+              "type": "float"
+            },
+            {
+              "name": "out_ssao_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_ssao_radius",
+              "type": "float"
+            },
+            {
+              "name": "out_ssao_bias",
+              "type": "float"
+            },
+            {
+              "name": "out_fxaa_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_vignette_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_vignette_intensity",
+              "type": "float"
+            },
+            {
+              "name": "out_vignette_radius",
+              "type": "float"
+            },
+            {
+              "name": "out_vignette_softness",
+              "type": "float"
+            },
+            {
+              "name": "out_film_grain_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_film_grain_intensity",
+              "type": "float"
+            },
+            {
+              "name": "out_film_grain_time_scale",
+              "type": "float"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
         }
       ],
       "register_func": "RegisterFreeFn_ecs_gap"
@@ -1658,7 +2351,7 @@
         },
         {
           "c_name": "dse_audio_source_restart",
-          "lua_name": "audiorestart",
+          "lua_name": "restart",
           "params": [
             {
               "name": "e",
@@ -1669,7 +2362,7 @@
         },
         {
           "c_name": "dse_audio_source_set_loop",
-          "lua_name": "ecssetaudioloop",
+          "lua_name": "set_loop",
           "params": [
             {
               "name": "e",
@@ -1677,14 +2370,14 @@
             },
             {
               "name": "loop",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
         },
         {
           "c_name": "dse_audio_source_set_3d_mode",
-          "lua_name": "audioset3dmode",
+          "lua_name": "set_3d_mode",
           "params": [
             {
               "name": "e",
@@ -1692,14 +2385,14 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
         },
         {
           "c_name": "dse_audio_listener_add",
-          "lua_name": "audioaddlistener",
+          "lua_name": "add_listener",
           "params": [
             {
               "name": "e",
@@ -1707,14 +2400,15 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool",
+              "default": true
             }
           ],
           "returns": []
         },
         {
           "c_name": "dse_audio_source_set_3d_distance",
-          "lua_name": "audioset3ddistance",
+          "lua_name": "set_3d_distance",
           "params": [
             {
               "name": "e",
@@ -2088,6 +2782,67 @@
           "params": [
             {
               "name": "name",
+              "type": "string"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_audio_source_get_state_ex",
+          "lua_name": "get_source_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_clip_loaded",
+              "type": "int"
+            },
+            {
+              "name": "out_is_playing",
+              "type": "int"
+            },
+            {
+              "name": "out_spatial",
+              "type": "int"
+            },
+            {
+              "name": "out_min_dist",
+              "type": "float"
+            },
+            {
+              "name": "out_max_dist",
+              "type": "float"
+            },
+            {
+              "name": "out_rolloff",
+              "type": "float"
+            },
+            {
+              "name": "out_volume",
+              "type": "float"
+            },
+            {
+              "name": "out_pitch",
+              "type": "float"
+            },
+            {
+              "name": "out_runtime_handle",
+              "type": "double"
+            },
+            {
+              "name": "out_clip_bytes",
+              "type": "double"
+            },
+            {
+              "name": "out_path",
               "type": "string"
             }
           ],

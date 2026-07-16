@@ -44,6 +44,12 @@ DSE_CAPI int  dse_audio_snapshot_list(char* out, int cap);
 DSE_CAPI int  dse_audio_source_get_state(uint32_t e, int* out_flags, float* out_params,
                                          long long* out_runtime_handle, long long* out_clip_size,
                                          char* out_path, int path_cap);
+DSE_CAPI int  dse_audio_source_get_state_ex(uint32_t e,
+                                            int* out_clip_loaded, int* out_is_playing, int* out_spatial,
+                                            float* out_min_dist, float* out_max_dist, float* out_rolloff,
+                                            float* out_volume, float* out_pitch,
+                                            double* out_runtime_handle, double* out_clip_bytes,
+                                            char* out_path, int path_cap);
 
 // ============================================================
 // Navigation（NavMeshSystem via ServiceLocator + NavMeshAgentComponent）

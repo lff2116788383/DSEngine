@@ -45,6 +45,8 @@ int L_{{ func_id }}(lua_State* L) {
     uint32_t {{ op.name }} = 0;
 {% elif op.type == "bool" %}
     int {{ op.name }} = 0;
+{% elif op.type == "string" %}
+    char {{ op.name }}[{{ op.size if op.size is defined else 256 }}] = {0};
 {% endif %}
 {% endfor %}
 {# --- Table input: extract fields from a Lua table with defaults --- #}
@@ -200,6 +202,9 @@ int L_{{ func_id }}(lua_State* L) {
 {% set _ = call_args.append("&" + op.name) %}
 {% elif op.type in ("float", "int", "uint32", "bool") %}
 {% set _ = call_args.append("&" + op.name) %}
+{% elif op.type == "string" %}
+{% set _ = call_args.append(op.name) %}
+{% set _ = call_args.append("sizeof(" ~ op.name ~ ")") %}
 {% endif %}
 {% endfor %}
 {# --- Buffer output declaration + args --- #}
@@ -424,6 +429,9 @@ int L_{{ func_id }}(lua_State* L) {
 {% set ns2.ret_count = ns2.ret_count + 1 %}
 {% elif op.type == "bool" %}
     lua_pushboolean(L, {{ op.name }});
+{% set ns2.ret_count = ns2.ret_count + 1 %}
+{% elif op.type == "string" %}
+    lua_pushstring(L, {{ op.name }});
 {% set ns2.ret_count = ns2.ret_count + 1 %}
 {% endif %}
 {% endfor %}

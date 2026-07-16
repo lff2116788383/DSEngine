@@ -1,7 +1,8 @@
 # DSEngine Lua API 参考文档
 
 > 严格对齐 `engine/scripting/lua/bindings/` 源码
-> 更新日期：2026-07-02
+> 更新日期：2026-07-16
+> 本次修订：补齐 `samples/lua` 与 `examples/KF_Framework` 示例所用的 ECS 缺口绑定（网格 UV/法线/切线、子场景加载计数、后处理颜色/状态、导航/转向/物理事件等）与 audio 友好别名（`restart`/`set_loop`/`set_3d_mode`/`add_listener`/`set_3d_distance`）；`ecs.get_post_process_state` 对齐 19 项返回、`audio.get_source_state` 对齐 12 项返回。
 > 绑定文件：`engine/scripting/lua/bindings/` 下约 33 个手写 C++ 源文件 + 13 个 `*.gen.cpp`，
 > 涵盖 21 个顶层模块（其中 `http` / `net` 为条件编译）。
 > 实测共注册 **1169** 个 Lua 可见函数（含 §18 的 380 个 Codegen 字段访问器 + §19 的 69 个开放世界系统函数 + §20-22 的 60 个 AI/过场/Meshlet 函数 + §23-29 的 91 个世界/视频系统函数 + §30 的 37 个 2D 扩展系统函数）。

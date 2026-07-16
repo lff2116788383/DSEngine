@@ -1890,6 +1890,12 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_post_process_get_state")]
     internal static partial int dse_post_process_get_state(uint e, out int outEnabled, out int outBloom, out int outSsao, out int outSsr, out int outFxaa, out int outDof);
 
+    [LibraryImport(Lib, EntryPoint = "dse_post_process_set_color")]
+    internal static partial int dse_post_process_set_color(uint e, int enabled, float exposure, float gamma);
+
+    [LibraryImport(Lib, EntryPoint = "dse_post_process_get_color_state")]
+    internal static partial int dse_post_process_get_color_state(uint e, out int outEnabled, out int outBloomEnabled, out float outBloomThreshold, out float outBloomIntensity, out int outColorEnabled, out float outExposure, out float outGamma, out int outSsaoEnabled, out float outSsaoRadius, out float outSsaoBias, out int outFxaaEnabled, out int outVignetteEnabled, out float outVignetteIntensity, out float outVignetteRadius, out float outVignetteSoftness, out int outFilmGrainEnabled, out float outFilmGrainIntensity, out float outFilmGrainTimeScale);
+
     [LibraryImport(Lib, EntryPoint = "dse_anim3d_set_blend_tree_1d", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_anim3d_set_blend_tree_1d(uint e, string[] clips, float[] thresholds, float[] speeds, int count);
 
@@ -2276,6 +2282,9 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_audio_source_get_state")]
     internal static partial int dse_audio_source_get_state(uint e, out int outFlags, out float outParams, out long outRuntimeHandle, out long outClipSize, [Out] byte[] outPath, int pathCap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_get_state_ex")]
+    internal static partial int dse_audio_source_get_state_ex(uint e, out int outClipLoaded, out int outIsPlaying, out int outSpatial, out float outMinDist, out float outMaxDist, out float outRolloff, out float outVolume, out float outPitch, out double outRuntimeHandle, out double outClipBytes, [Out] byte[] outPath, int pathCap);
 
     [LibraryImport(Lib, EntryPoint = "dse_nav_is_ready")]
     internal static partial int dse_nav_is_ready();

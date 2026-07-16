@@ -331,6 +331,30 @@ extern "C" int dse_audio_source_get_state(uint32_t e, int* out_flags, float* out
     return 1;
 }
 
+// 扁平化音源状态：12 个位置返回值供 Lua 直接解包。
+extern "C" int dse_audio_source_get_state_ex(uint32_t e,
+        int* out_clip_loaded, int* out_is_playing, int* out_spatial,
+        float* out_min_dist, float* out_max_dist, float* out_rolloff,
+        float* out_volume, float* out_pitch,
+        double* out_runtime_handle, double* out_clip_bytes,
+        char* out_path, int path_cap) {
+    if (out_path && path_cap > 0) out_path[0] = '\0';
+    const auto* audio = GetComp<AudioSourceComponent>(e);
+    if (!audio) return 0;
+    if (out_clip_loaded) *out_clip_loaded = audio->clip ? 1 : 0;
+    if (out_is_playing) *out_is_playing = audio->is_playing ? 1 : 0;
+    if (out_spatial) *out_spatial = audio->spatial_enabled ? 1 : 0;
+    if (out_min_dist) *out_min_dist = audio->min_distance;
+    if (out_max_dist) *out_max_dist = audio->max_distance;
+    if (out_rolloff) *out_rolloff = audio->rolloff;
+    if (out_volume) *out_volume = audio->volume;
+    if (out_pitch) *out_pitch = audio->pitch;
+    if (out_runtime_handle) *out_runtime_handle = static_cast<double>(audio->runtime_handle);
+    if (out_clip_bytes) *out_clip_bytes = audio->clip ? static_cast<double>(audio->clip->GetData().size()) : 0.0;
+    CopyStr(audio->clip ? audio->clip->GetPath() : std::string(), out_path, path_cap);
+    return 1;
+}
+
 // ============================================================
 // Navigation
 // ============================================================
