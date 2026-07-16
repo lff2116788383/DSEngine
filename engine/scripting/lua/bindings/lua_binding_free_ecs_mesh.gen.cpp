@@ -126,10 +126,10 @@ int L_dse_mesh_renderer_set_material_params(lua_State* L) {
     float normal_strength = static_cast<float>(luaL_checknumber(L, 8));
     int receive_shadow = helper::CheckBool(L, 9) ? 1 : 0;
     int double_sided = helper::CheckBool(L, 10) ? 1 : 0;
-    float cr = static_cast<float>(luaL_checknumber(L, 11));
-    float cg = static_cast<float>(luaL_checknumber(L, 12));
-    float cb = static_cast<float>(luaL_checknumber(L, 13));
-    float ca = static_cast<float>(luaL_checknumber(L, 14));
+    float cr = lua_isnoneornil(L, 11) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 11));
+    float cg = lua_isnoneornil(L, 12) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 12));
+    float cb = lua_isnoneornil(L, 13) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 13));
+    float ca = lua_isnoneornil(L, 14) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 14));
     dse_mesh_renderer_set_material_params(e, metallic, roughness, ao, er, eg, eb, normal_strength, receive_shadow, double_sided, cr, cg, cb, ca);
     return 0;
 }

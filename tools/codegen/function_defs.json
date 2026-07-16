@@ -6851,7 +6851,8 @@
             },
             {
               "name": "priority",
-              "type": "int"
+              "type": "int",
+              "default": 0
             }
           ],
           "returns": []
@@ -8256,19 +8257,23 @@
             },
             {
               "name": "cr",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "cg",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "cb",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "ca",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             }
           ],
           "returns": []

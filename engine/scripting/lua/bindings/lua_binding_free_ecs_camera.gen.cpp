@@ -22,7 +22,7 @@ namespace {
 int L_dse_camera_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float ortho_size = static_cast<float>(luaL_checknumber(L, 2));
-    int priority = static_cast<int>(luaL_checkinteger(L, 3));
+    int priority = static_cast<int>(luaL_optinteger(L, 3, 0));
     dse_camera_add(e, ortho_size, priority);
     return 0;
 }
