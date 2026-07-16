@@ -28,7 +28,7 @@ int L_dse_rendering_add_skybox(lua_State* L) {
 
 int L_dse_rendering_set_gi_probe_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_rendering_set_gi_probe_enabled(e, enabled);
     return 0;
 }
@@ -43,7 +43,7 @@ int L_dse_rendering_set_light_probe_ex(lua_State* L) {
 
 int L_dse_rendering_set_light_probe_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_rendering_set_light_probe_enabled(e, enabled);
     return 0;
 }
@@ -61,7 +61,7 @@ int L_dse_rendering_set_reflection_probe_ex(lua_State* L) {
 
 int L_dse_rendering_set_reflection_probe_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_rendering_set_reflection_probe_enabled(e, enabled);
     return 0;
 }

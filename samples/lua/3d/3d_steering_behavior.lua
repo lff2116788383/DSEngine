@@ -92,7 +92,7 @@ local function setup_scene()
         -- add_steering(entity, max_velocity, max_force, mass)
         dse.ecs.add_steering(e, cfg.max_vel, cfg.max_force, cfg.mass)
         -- set_steering_target(entity, behavior, tx, ty, tz)
-        dse.steering_set_target(e, cfg.behavior, 0, 0.5, 0)
+        dse.ecs.set_steering_target(e, cfg.behavior, 0, 0.5, 0)
 
         table.insert(state.agents, {
             entity = e,

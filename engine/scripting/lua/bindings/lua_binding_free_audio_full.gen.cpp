@@ -155,7 +155,7 @@ int L_dse_audio_bus_remove_effect(lua_State* L) {
 int L_dse_audio_play_bgm(lua_State* L) {
     const char* path = luaL_checkstring(L, 1);
     float volume = static_cast<float>(luaL_checknumber(L, 2));
-    int loop = static_cast<int>(luaL_checkinteger(L, 3));
+    int loop = helper::CheckBool(L, 3) ? 1 : 0;
     int _ret = dse_audio_play_bgm(path, volume, loop);
     lua_pushinteger(L, _ret);
     return 1;
