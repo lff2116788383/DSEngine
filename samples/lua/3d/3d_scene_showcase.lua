@@ -75,7 +75,7 @@ local function add_resource_cube(name, x, y, z, sx, sy, sz, mesh_path, material_
     dse.ecs.add_transform(e, x, y, z, sx, sy, sz)
     dse.ecs.add_mesh_renderer(e, 1.0, 1.0, 1.0, 1.0)
     dse.ecs.set_mesh_path(e, mesh_path)
-    dse.ecs.set_mesh_material(e, material_path)
+    dse.ecs.mesh_set_material(e, material_path)
     table.insert(state.objects, { name = name, entity = e })
     return e
 end

@@ -103,7 +103,7 @@ int L_dse_grass_set_wind(lua_State* L) {
     float dy = static_cast<float>(luaL_checknumber(L, 3));
     float speed = static_cast<float>(luaL_checknumber(L, 4));
     float strength = static_cast<float>(luaL_checknumber(L, 5));
-    float turbulence = static_cast<float>(luaL_checknumber(L, 6));
+    float turbulence = static_cast<float>(luaL_optnumber(L, 6, 0.2));
     dse_grass_set_wind(e, dx, dy, speed, strength, turbulence);
     return 0;
 }
@@ -120,7 +120,7 @@ int L_dse_grass_set_lod(lua_State* L) {
 
 int L_dse_grass_set_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_grass_set_enabled(e, enabled);
     return 0;
 }

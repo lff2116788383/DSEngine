@@ -61,7 +61,8 @@ local function setup_scene()
         dse.ecs.set_grass_params(grass, 2000, 0.6, 1.2, 0.08, 0.03)
         dse.ecs.set_grass_color(grass, 0.22, 0.55, 0.18, 0.35, 0.70, 0.25, 0.15, 0.40, 0.12)
         dse.ecs.set_grass_wind(grass, 1.0, 0.5, 1.5, 0.7)
-        dse.ecs.set_grass_lod(grass, 40, 80, 120)
+        -- set_grass_lod: near_dist, far_dist, cast_shadow, shadow_dist
+        dse.ecs.set_grass_lod(grass, 40, 80, 1, 120)
         dse.ecs.set_grass_enabled(grass, true)
         state.grass_entity = grass
         print("[Compute] Grass system 已创建 (内部 compute shader 驱动)")

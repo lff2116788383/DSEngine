@@ -1379,7 +1379,8 @@
             },
             {
               "name": "width",
-              "type": "float"
+              "type": "float",
+              "default": 0.1
             }
           ],
           "returns": []
@@ -1436,10 +1437,25 @@
             },
             {
               "name": "closed",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
+        },
+        {
+          "c_name": "dse_line_renderer_set_points",
+          "lua_name": "line_renderer_set_points",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            }
+          ],
+          "returns": [],
+          "float_array_param": {
+            "name": "points",
+            "stack_index": 2
+          }
         },
         {
           "c_name": "dse_audio_spatial_2d_add",
@@ -8355,7 +8371,7 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "has_texture",
@@ -8711,7 +8727,8 @@
             },
             {
               "name": "turbulence",
-              "type": "float"
+              "type": "float",
+              "default": 0.2
             }
           ],
           "returns": []
@@ -8753,7 +8770,7 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []

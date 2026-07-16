@@ -225,7 +225,7 @@ int L_dse_trail_clear(lua_State* L) {
 
 int L_dse_line_renderer_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float width = static_cast<float>(luaL_checknumber(L, 2));
+    float width = static_cast<float>(luaL_optnumber(L, 2, 0.1));
     dse_line_renderer_add(e, width);
     return 0;
 }
@@ -249,8 +249,23 @@ int L_dse_line_renderer_set_color(lua_State* L) {
 
 int L_dse_line_renderer_set_closed(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int closed = static_cast<int>(luaL_checkinteger(L, 2));
+    int closed = helper::CheckBool(L, 2) ? 1 : 0;
     dse_line_renderer_set_closed(e, closed);
+    return 0;
+}
+
+int L_dse_line_renderer_set_points(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    std::vector<float> points;
+    if (lua_istable(L, 2)) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, 2, _i);
+            if (lua_isnumber(L, -1)) points.push_back(static_cast<float>(lua_tonumber(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    dse_line_renderer_set_points(e, points.data(), static_cast<int>(points.size()));
     return 0;
 }
 
@@ -327,6 +342,7 @@ void Register2DSystemsBindings(lua_State* L) {
         {"line_renderer_set_width", L_dse_line_renderer_set_width},
         {"line_renderer_set_color", L_dse_line_renderer_set_color},
         {"line_renderer_set_closed", L_dse_line_renderer_set_closed},
+        {"line_renderer_set_points", L_dse_line_renderer_set_points},
         {"add_audio_spatial_2d", L_dse_audio_spatial_2d_add},
         {"set_audio_spatial_2d_range", L_dse_audio_spatial_2d_set_range},
         {"set_audio_spatial_2d_attenuation", L_dse_audio_spatial_2d_set_attenuation},

@@ -79,7 +79,7 @@ local function setup_textured_cube(config)
     local mesh_path = (type(config) == "table" and type(config.mesh_path) == "string") and config.mesh_path or "models/cube.dmesh"
     local material_path = (type(config) == "table" and type(config.material_path) == "string") and config.material_path or "models/cube.dmat"
     dse.ecs.set_mesh_path(e, mesh_path)
-    dse.ecs.set_mesh_material(e, material_path)
+    dse.ecs.mesh_set_material(e, material_path)
     state.textured_cube = e
     print(string.format("[3D][TexturedCube] textured cube uses mesh=%s material=%s; expected albedo texture from dmat.", mesh_path, material_path))
 end

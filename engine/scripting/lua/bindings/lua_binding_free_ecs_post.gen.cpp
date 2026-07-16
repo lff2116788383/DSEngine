@@ -35,7 +35,7 @@ int L_dse_decal_add_simple(lua_State* L) {
 
 int L_dse_decal_set_full(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     int has_texture = static_cast<int>(luaL_checkinteger(L, 3));
     uint32_t texture = static_cast<uint32_t>(luaL_checkinteger(L, 4));
     float r = static_cast<float>(luaL_checknumber(L, 5));

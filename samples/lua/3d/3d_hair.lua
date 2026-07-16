@@ -76,8 +76,11 @@ local function setup_scene()
         dse.ecs.add_hair(hair, "models/cube.dmesh", 4)
         -- set_hair_physics(e, stiffness, damping, gravity_factor, strand_length, substeps)
         dse.ecs.set_hair_physics(hair, hc.stiffness, hc.damping, 1.0, hc.length_scale, 4)
-        -- set_hair_render(e, thickness, tip_thickness, opacity, ao_strength, scatter)
-        dse.ecs.set_hair_render(hair, 0.02, 0.005, 0.9, 0.3, 0.5)
+        -- set_hair_render(e, root_rgba, tip_rgba, fiber_radius, opacity)
+        dse.ecs.set_hair_render(hair,
+            hc.color[1], hc.color[2], hc.color[3], 1.0,
+            hc.color[1], hc.color[2], hc.color[3], 1.0,
+            0.02, 0.9)
         -- set_hair_wind(e, wind_x, wind_y, wind_z, turbulence, frequency)
         dse.ecs.set_hair_wind(hair, 1.0, 0.0, 0.3, 0.4, 2.0)
         dse.ecs.set_hair_enabled(hair, true)

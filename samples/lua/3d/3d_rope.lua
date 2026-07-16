@@ -84,7 +84,7 @@ function RopeDemo.Update(delta_time)
     if positions then
         for i, pos in ipairs(positions) do
             if rope_visual_entities[i] then
-                dse.ecs.set_transform_position(rope_visual_entities[i], pos[1], pos[2], pos[3])
+                dse.ecs.set_transform_position(rope_visual_entities[i], pos.x, pos.y, pos.z)
             end
         end
     end

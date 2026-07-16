@@ -75,8 +75,8 @@ local function setup_scene()
         local e = dse.ecs.create_entity()
         dse.ecs.add_transform(e, dc.x, dc.y, dc.z, dc.sx, dc.sy, dc.sz)
         dse.ecs.add_decal(e)
-        -- set_decal: enabled, albedo_tex(0=procedural), r, g, b, a, angle_fade
-        dse.ecs.set_decal(e, true, 0, dc.r, dc.g, dc.b, dc.a, dc.angle)
+        -- set_decal: enabled, has_texture(0=procedural), texture_handle, r, g, b, a, angle_fade
+        dse.ecs.set_decal(e, true, 0, 0, dc.r, dc.g, dc.b, dc.a, dc.angle)
         table.insert(state.decals, e)
     end
 

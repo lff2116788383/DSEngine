@@ -79,7 +79,7 @@ local function add_resource_cube(config)
     local mesh_path = (type(config) == "table" and type(config.mesh_path) == "string") and config.mesh_path or "models/cube.dmesh"
     local material_path = (type(config) == "table" and type(config.material_path) == "string") and config.material_path or "models/cube.dmat"
     dse.ecs.set_mesh_path(entity, mesh_path)
-    dse.ecs.set_mesh_material(entity, material_path)
+    dse.ecs.mesh_set_material(entity, material_path)
     state.resource_cube = entity
     print(string.format("[3D][StaticModel] loaded %s + %s", mesh_path, material_path))
 end

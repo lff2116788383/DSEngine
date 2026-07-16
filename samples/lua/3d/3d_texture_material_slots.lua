@@ -60,7 +60,7 @@ local function add_cube(name, x, y, z, color, metallic, roughness, emissive, mat
         dse.ecs.set_mesh_path(e, mesh_path)
     end
     if type(material_path) == "string" and material_path ~= "" then
-        dse.ecs.set_mesh_material(e, material_path)
+        dse.ecs.mesh_set_material(e, material_path)
     else
         dse.ecs.set_mesh_material(e, metallic or 0.0, roughness or 0.55, 1.0, emissive and emissive[1] or 0.0, emissive and emissive[2] or 0.0, emissive and emissive[3] or 0.0, 1.0, true, true)
     end

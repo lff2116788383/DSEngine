@@ -22,7 +22,8 @@ function M.Setup(config)
     pcall(dse.ecs.add_rigid_body, pendulum, 2, 1.0, 0)
     pcall(dse.ecs.add_box_collider, pendulum, 0.6, 0.6, 1.0, 0.3, 0.5)
     pcall(dse.ecs.add_joint_2d, pendulum, anchor1)
-    dse.ecs.set_joint_2d_revolute(pendulum, 0.0, 3.0)
+    -- set_joint_2d_revolute: enable_limit, lower_deg, upper_deg, enable_motor, motor_speed, max_torque
+    dse.ecs.set_joint_2d_revolute(pendulum, false, 0.0, 0.0, false, 0.0, 0.0)
 
     -- === Distance Joint (spring) ===
     local anchor2 = dse.ecs.create_entity()
@@ -36,7 +37,8 @@ function M.Setup(config)
     pcall(dse.ecs.add_rigid_body, bob, 2, 1.0, 0)
     pcall(dse.ecs.add_box_collider, bob, 0.8, 0.8, 1.0, 0.3, 0.5)
     pcall(dse.ecs.add_joint_2d, bob, anchor2)
-    dse.ecs.set_joint_2d_distance(bob, 4.0, 0.5, 5.0)
+    -- set_joint_2d_distance: min_len, max_len, stiffness, damping
+    dse.ecs.set_joint_2d_distance(bob, 0.5, 4.0, 5.0, 0.5)
 
     -- === Prismatic Joint (slider) ===
     local rail = dse.ecs.create_entity()
@@ -50,7 +52,8 @@ function M.Setup(config)
     pcall(dse.ecs.add_rigid_body, slider, 2, 1.0, 0)
     pcall(dse.ecs.add_box_collider, slider, 0.7, 0.7, 1.0, 0.2, 0.3)
     pcall(dse.ecs.add_joint_2d, slider, rail)
-    dse.ecs.set_joint_2d_prismatic(slider, 0.0, 1.0, -3.0, 3.0)
+    -- set_joint_2d_prismatic: axis_x, axis_y, enable_limit, lower, upper, enable_motor, motor_speed, max_force
+    dse.ecs.set_joint_2d_prismatic(slider, 0.0, 1.0, true, -3.0, 3.0, false, 0.0, 0.0)
 
     -- Ground
     local ground = dse.ecs.create_entity()

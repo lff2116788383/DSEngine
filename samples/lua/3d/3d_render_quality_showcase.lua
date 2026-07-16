@@ -79,7 +79,8 @@ local function setup_scene(config)
     -- CSM 参数
     local shadow_ok, cast_shadow, applied_strength, c0, c1, c2 = false, false, 0.0, 0.0, 0.0, 0.0
     if dse.ecs.set_directional_light_shadow then
-        shadow_ok, cast_shadow, applied_strength, c0, c1, c2 = dse.ecs.set_directional_light_shadow(light, true, shadow_strength, 10.0, 30.0, 75.0)
+        dse.ecs.set_directional_light_shadow(light, true, shadow_strength, 10.0, 30.0, 75.0)
+        shadow_ok, cast_shadow, applied_strength, c0, c1, c2 = true, true, shadow_strength, 10.0, 30.0, 75.0
     end
     state.light = light
 

@@ -68,7 +68,7 @@ local function setup_actor(config)
         dse.ecs.add_mesh_renderer(skinned, 0.35, 0.75, 1.0, 1.0)
         dse.ecs.set_mesh_path(skinned, mesh_path)
         if material_path ~= "" then
-            dse.ecs.set_mesh_material(skinned, material_path)
+            dse.ecs.mesh_set_material(skinned, material_path)
         else
             dse.ecs.set_mesh_material(skinned, 0.0, 0.45, 1.0, 0.02, 0.08, 0.12, 1.0, true, true)
         end
