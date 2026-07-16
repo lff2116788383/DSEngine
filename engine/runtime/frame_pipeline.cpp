@@ -57,6 +57,7 @@ const dse::render::RenderThinSnapshot& FramePipeline::read_snapshot() const { re
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_weather.h"
 #include "engine/core/event_bus.h"
+#include "engine/core/env_config.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/job_system.h"
 #include "engine/core/memory/memory.h"
@@ -232,8 +233,8 @@ AssetManager& RequireAssetManager(AssetManager* asset_manager) {
 }
 
 std::vector<std::string> ResolveRuntimeModules() {
-    if (const char* env_modules = std::getenv("DSE_RUNTIME_MODULES")) {
-        if (env_modules[0] != '\0') {
+    if (const char* env_modules = dse::core::env::GetRaw(dse::core::env::names::kRuntimeModules)) {
+        {
             std::vector<std::string> modules;
             std::stringstream stream(env_modules);
             std::string item;
@@ -249,12 +250,10 @@ std::vector<std::string> ResolveRuntimeModules() {
 }
 
 FramePipeline::GpuDrivenPolicy ResolveGpuDrivenPolicy() {
-    if (const char* legacy_disable = std::getenv("DSE_DISABLE_GPU_DRIVEN")) {
-        if (legacy_disable[0] != '\0' && legacy_disable[0] != '0') {
-            return FramePipeline::GpuDrivenPolicy::Off;
-        }
+    if (dse::core::env::GetBool(dse::core::env::names::kDisableGpuDriven)) {
+        return FramePipeline::GpuDrivenPolicy::Off;
     }
-    if (const char* policy = std::getenv("DSE_GPU_DRIVEN_POLICY")) {
+    if (const char* policy = dse::core::env::GetRaw(dse::core::env::names::kGpuDrivenPolicy)) {
         if (std::strcmp(policy, "off") == 0) return FramePipeline::GpuDrivenPolicy::Off;
         if (std::strcmp(policy, "force") == 0) return FramePipeline::GpuDrivenPolicy::Force;
         if (std::strcmp(policy, "with_modules") == 0) return FramePipeline::GpuDrivenPolicy::WithModules;
@@ -353,10 +352,8 @@ bool FramePipeline::Init() {
     }
     asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";
-    if (const char* env_data_root = std::getenv("DSE_DATA_ROOT")) {
-        if (env_data_root[0] != '\0') {
-            data_root = env_data_root;
-        }
+    if (const char* env_data_root = dse::core::env::GetRaw(dse::core::env::names::kDataRoot)) {
+        data_root = env_data_root;
     } else {
         const std::vector<std::string> data_candidates = {
             "data",
@@ -399,8 +396,8 @@ bool FramePipeline::Init() {
         DEBUG_LOG_INFO("{}", dse::render::DumpRenderPipelineProfile(
             rs_->render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), validation_context));
     }
-    if (const char* env_budget = std::getenv("DSE_ASYNC_UPLOAD_BUDGET")) {
-        int budget = std::atoi(env_budget);
+    {
+        int budget = dse::core::env::GetInt(dse::core::env::names::kAsyncUploadBudget, 0);
         if (budget > 0) {
             callback_budget_per_frame_ = static_cast<std::size_t>(budget);
         }
@@ -410,8 +407,8 @@ bool FramePipeline::Init() {
     if (Screen::width() <= 0 || Screen::height() <= 0) {
         Screen::set_width_height(1280, 720);
     }
-    if (const char* env_scale = std::getenv("DSE_RENDER_SCALE")) {
-        float s = static_cast<float>(std::atof(env_scale));
+    {
+        float s = dse::core::env::GetFloat(dse::core::env::names::kRenderScale, 0.0f);
         if (s > 0.0f) Screen::set_render_scale(s);
     }
     InitResolutionDependentRTs();
@@ -480,10 +477,7 @@ bool FramePipeline::Init() {
     gpu_driven_policy_ = ResolveGpuDrivenPolicy();
     gpu_driven_requested_ = (gpu_driven_policy_ != GpuDrivenPolicy::Off) &&
         rs_->render_pipeline_profile_.settings.gpu_driven;
-    gpu_driven_diag_ = [] {
-        const char* diag = std::getenv("DSE_GPU_DRIVEN_DIAG");
-        return diag && diag[0] != '\0' && diag[0] != '0';
-    }();
+    gpu_driven_diag_ = dse::core::env::GetBool(dse::core::env::names::kGpuDrivenDiag);
 
     // GPU Driven Rendering 能力检测
     if (gpu_driven_requested_ &&
@@ -746,10 +740,9 @@ bool FramePipeline::Init() {
 
     // Phase 2: 渲染线程分离（DSE_RENDER_THREAD=1 启用，编辑器模式下禁用）
     if (!runtime_context_.editor_mode) {
-        if (const char* env = std::getenv("DSE_RENDER_THREAD")) {
-            if (env[0] == '1') {
-                render_thread_mgr_->Start();
-            }
+        const std::string render_thread = dse::core::env::GetString(dse::core::env::names::kRenderThread);
+        if (!render_thread.empty() && render_thread[0] == '1') {
+            render_thread_mgr_->Start();
         }
     }
     return true;
