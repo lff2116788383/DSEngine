@@ -22,15 +22,35 @@
 #define DSE_CORE_SERVICE_LOCATOR_H
 
 #include <memory>
-#include <typeindex>
 #include <unordered_map>
 #include <cassert>
 #include <mutex>
 #include <shared_mutex>
 #include <utility>
+#include "engine/core/event_id.h"
+
+// 跨平台函数签名宏（含模板实参 T 的完整类型名）。与 event_bus.h 的 DSE_FUNCSIG
+// 分开命名，避免两者同时包含时的宏重定义。
+#if defined(_MSC_VER)
+#define DSE_SL_FUNCSIG __FUNCSIG__
+#else
+#define DSE_SL_FUNCSIG __PRETTY_FUNCTION__
+#endif
 
 namespace dse {
 namespace core {
+
+/// 由类型的编译期函数签名派生的稳定服务键。
+///
+/// 用 FNV-1a 哈希类型签名字符串，替代 std::type_index：后者在部分平台
+/// （如 Linux + -fvisibility=hidden，type_info 未跨模块合并）跨 DLL/.so 不一致，
+/// 会导致在一个模块注册、另一个模块查不到。哈希键在所有模块中一致，跨边界安全；
+/// 在 MSVC 上与原 type_index 行为等价。与 EventBus 的 EventId 机制同源。
+template<typename T>
+inline EventId ServiceTypeId() {
+    static const EventId id = MakeEventId(DSE_SL_FUNCSIG);
+    return id;
+}
 
 /**
  * @class ServiceLocator
@@ -63,7 +83,7 @@ public:
         static_assert(std::is_base_of_v<TInterface, TImpl> || std::is_same_v<TInterface, TImpl>,
             "TImpl must derive from or be the same as TInterface");
         std::unique_lock<std::shared_mutex> lock(mutex_);
-        services_[std::type_index(typeid(TInterface))] = service;
+        services_[ServiceTypeId<TInterface>()] = service;
     }
 
     /**
@@ -102,7 +122,7 @@ public:
     template<typename TInterface>
     TInterface* Get() const {
         std::shared_lock<std::shared_mutex> lock(mutex_);
-        auto it = services_.find(std::type_index(typeid(TInterface)));
+        auto it = services_.find(ServiceTypeId<TInterface>());
         if (it == services_.end()) {
             return nullptr;
         }
@@ -118,7 +138,7 @@ public:
     template<typename TInterface>
     std::shared_ptr<TInterface> GetShared() const {
         std::shared_lock<std::shared_mutex> lock(mutex_);
-        auto it = services_.find(std::type_index(typeid(TInterface)));
+        auto it = services_.find(ServiceTypeId<TInterface>());
         if (it == services_.end()) {
             return nullptr;
         }
@@ -133,7 +153,7 @@ public:
     template<typename TInterface>
     bool Has() const {
         std::shared_lock<std::shared_mutex> lock(mutex_);
-        return services_.find(std::type_index(typeid(TInterface))) != services_.end();
+        return services_.find(ServiceTypeId<TInterface>()) != services_.end();
     }
 
     /**
@@ -143,7 +163,7 @@ public:
     template<typename TInterface>
     void Reset() {
         std::unique_lock<std::shared_mutex> lock(mutex_);
-        services_.erase(std::type_index(typeid(TInterface)));
+        services_.erase(ServiceTypeId<TInterface>());
     }
 
     /**
@@ -160,7 +180,7 @@ private:
     ServiceLocator(const ServiceLocator&) = delete;
     ServiceLocator& operator=(const ServiceLocator&) = delete;
 
-    std::unordered_map<std::type_index, std::shared_ptr<void>> services_;
+    std::unordered_map<EventId, std::shared_ptr<void>> services_;
     mutable std::shared_mutex mutex_;
 };
 
