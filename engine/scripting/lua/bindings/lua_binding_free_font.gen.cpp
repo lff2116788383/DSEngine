@@ -84,13 +84,13 @@ void RegisterFontBindings(lua_State* L) {
         lua_setfield(L, -3, "font");
     }
     helper::RegisterBindings(L, {
-        {"fontload", L_dse_font_load},
-        {"fontloadcjk", L_dse_font_load_cjk},
-        {"fontunload", L_dse_font_unload},
-        {"fontsetdefault", L_dse_font_set_default},
-        {"fontmeasure", L_dse_font_measure},
-        {"fontlineheight", L_dse_font_line_height},
-        {"fontgettexture", L_dse_font_get_texture},
+        {"load", L_dse_font_load},
+        {"load_cjk", L_dse_font_load_cjk},
+        {"unload", L_dse_font_unload},
+        {"set_default", L_dse_font_set_default},
+        {"measure", L_dse_font_measure},
+        {"line_height", L_dse_font_line_height},
+        {"get_texture", L_dse_font_get_texture},
     });
     lua_pop(L, 2);
 }

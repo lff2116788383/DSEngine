@@ -112,15 +112,15 @@ void RegisterNavigationBindings(lua_State* L) {
         lua_setfield(L, -3, "nav");
     }
     helper::RegisterBindings(L, {
-        {"navisready", L_dse_nav_is_ready},
-        {"navload", L_dse_nav_load},
-        {"navsave", L_dse_nav_save},
+        {"is_ready", L_dse_nav_is_ready},
+        {"load", L_dse_nav_load},
+        {"save", L_dse_nav_save},
         {"ecssetnavagent", L_dse_nav_agent_set},
         {"ecssetnavdestination", L_dse_nav_agent_set_destination},
         {"ecsnavagenthaspath", L_dse_nav_agent_has_path},
         {"ecsnavagentarrived", L_dse_nav_agent_arrived},
         {"find_path", L_dse_nav_find_path},
-        {"nav_bake", L_dse_nav_bake},
+        {"bake", L_dse_nav_bake},
     });
     lua_pop(L, 2);
 }

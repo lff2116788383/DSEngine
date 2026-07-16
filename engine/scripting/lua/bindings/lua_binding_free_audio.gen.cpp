@@ -94,8 +94,8 @@ void RegisterFreeFn_audio(lua_State* L) {
     helper::RegisterBindings(L, {
         {"fade_out_all_sfx", L_dse_audio_fade_out_all_sfx},
         {"source_is_playing", L_dse_audio_source_is_playing},
-        {"audio_bus_get_names", L_dse_audio_bus_get_names},
-        {"audio_snapshot_list", L_dse_audio_snapshot_list},
+        {"bus_get_names", L_dse_audio_bus_get_names},
+        {"snapshot_list", L_dse_audio_snapshot_list},
         {"audio_source_get_state", L_dse_audio_source_get_state},
     });
     lua_pop(L, 2);

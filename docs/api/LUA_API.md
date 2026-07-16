@@ -562,13 +562,13 @@ dse.ecs.set_terrain_texture(terrain, "data/textures/grass.png")
 | 函数 | 参数 | 说明 |
 |------|------|------|
 | `ecs.add_water(e)` | entity | 添加水面组件（返回 bool） |
-| `ecs.set_water(e, ...)` | entity, 26个可选参数 | 设置水面参数（返回 bool） |
-| `ecs.get_water(e)` | entity | 获取水面状态 |
+| `dse.water_set(e, ...)` | entity, 26个可选参数 | 设置水面参数（返回 bool；⚠️ 扁平注册于 `dse.water_set`，非 `dse.ecs.set_water`） |
+| `dse.water_get(e)` | entity | 获取水面状态（⚠️ 扁平注册于 `dse.water_get`） |
 
-**`set_water` 参数顺序 (26 个)：**
+**`dse.water_set` 参数顺序 (26 个)：**
 `enabled, water_level, deep_r, deep_g, deep_b, shallow_r, shallow_g, shallow_b, max_depth, transparency, wave_amplitude, wave_frequency, wave_speed, wave_dir_x, wave_dir_y, refraction_strength, reflection_strength, specular_power, caustic_intensity, caustic_scale, foam_intensity, foam_depth_threshold, underwater_fog_density, uw_fog_r, uw_fog_g, uw_fog_b`
 
-**`get_water` 返回值 (19 个)：**
+**`dse.water_get` 返回值 (19 个)：**
 `ok, enabled, water_level, deep_r,g,b, shallow_r,g,b, max_depth, transparency, wave_amplitude, wave_frequency, wave_speed, wave_dir_x, wave_dir_y, refraction_strength, reflection_strength, specular_power`
 
 **示例：**
@@ -576,7 +576,7 @@ dse.ecs.set_terrain_texture(terrain, "data/textures/grass.png")
 local water = dse.ecs.create_entity()
 dse.ecs.add_transform(water, 0, 0, 0)
 dse.ecs.add_water(water)
-dse.ecs.set_water(water, true, 0.0,
+dse.water_set(water, true, 0.0,
     0.0, 0.1, 0.3,     -- deep_color
     0.1, 0.3, 0.5,     -- shallow_color
     10.0, 0.6,          -- max_depth, transparency
@@ -648,7 +648,7 @@ dse.ecs.set_water(water, true, 0.0,
 |------|------|--------|------|
 | `ecs.world_to_screen(wx, wy, wz)` | float, float, float | `sx, sy, visible` | 世界坐标投影到屏幕坐标（使用最高优先级摄像机） |
 | `ecs.screen_to_world_ray(sx, sy)` | float, float | `ox,oy,oz, dx,dy,dz` / nil | 屏幕像素反投影出世界拾取射线（起点=相机位置，方向已归一化）。无主相机返回 nil |
-| `ecs.pick_entity(sx, sy, [max_dist=1000])` | float, float, [float] | `entity, hx,hy,hz, nx,ny,nz, dist` / nil | 便捷拾取：屏幕像素 → 主相机射线 → 3D 物理 raycast，返回命中实体+命中点+法线+距离。无主相机或未命中返回 nil |
+| `ecs.pick_entity(sx, sy, [max_dist=1000])` | float, float, [float] | `entity, hx,hy,hz, nx,ny,nz, dist` / nil | 便捷拾取：屏幕像素 → 主相机射线 → 3D 物理 raycast，返回命中实体+命中点+法线+距离。无主相机或未命中返回 nil。⚠️ **规划中**：当前构建未注册此函数 |
 
 > 拾取示例（鼠标点击选中实体）：
 > ```lua
@@ -2575,6 +2575,8 @@ local local_entity = dse.repl.client_to_entity(cli, some_net_id)
 
 > 源文件：`engine/scripting/lua/bindings/lua_binding_open_world_p2p5.cpp`
 > 基于距离的 LOD 选择 + 滞回防抖 + 异步加载队列（优先级排序 + 每帧预算）
+>
+> ⚠️ **命名空间状态**：底层 C ABI 已实现并经 codegen 注册，但当前注册在 `dse.ecs` 下的通用名（`init`/`tick`/`register_mesh`/`add_lod`/`get_current_lod` 等），**独立模块表 `dse.mesh_streaming.*` 尚未注册**；且 P2-P5 四个子系统共用 `dse.ecs.init`/`tick` 会相互覆盖。下表按规划的模块化命名列出。
 
 | 函数 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
@@ -2604,6 +2606,8 @@ local lod = dse.mesh_streaming.get_current_lod(id)
 > 源文件：`engine/scripting/lua/bindings/lua_binding_open_world_p2p5.cpp`
 > 4 层物理 LOD：Full → Reduced(1/2频) → Simplified(1/4频) → Sleep
 > 高速物体永不休眠，支持强制唤醒/休眠
+>
+> ⚠️ **命名空间状态**：底层已实现，但注册在 `dse.ecs` 下的通用名（另有扁平 `dse.physics_lod_get_stats`），**独立模块表 `dse.physics_lod.*` 尚未注册**。
 
 | 函数 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
@@ -2632,6 +2636,8 @@ end
 > 源文件：`engine/scripting/lua/bindings/lua_binding_open_world_p2p5.cpp`
 > 6 种操作类型：Raise(0)/Lower(1)/Flatten(2)/Smooth(3)/Noise(4)/Stamp(5)
 > 完整 Undo/Redo + 自动通知 GeometryClipmap 脏区域
+>
+> ⚠️ **命名空间状态**：底层已实现，但注册在 `dse.ecs` 下的通用名，**独立模块表 `dse.terrain_deform.*` 尚未注册**。
 
 | 函数 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
@@ -2661,6 +2667,8 @@ dse.terrain_deform.undo()
 > 源文件：`engine/scripting/lua/bindings/lua_binding_open_world_p2p5.cpp`
 > 4 层：Full → Reduced(22050Hz mono) → Virtual → Culled
 > 距离衰减模型（Linear/Logarithmic/InverseSquare）+ 优先级驱动的最大发声数限制
+>
+> ⚠️ **命名空间状态**：底层已实现，但注册在 `dse.ecs` 下的通用名（另有扁平 `dse.audio_lod_get_stats`），**独立模块表 `dse.audio_lod.*` 尚未注册**。
 
 | 函数 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
@@ -2901,10 +2909,10 @@ Catmull-Rom 样条核心 + 道路/河流网格生成。支持浮动原点。
 | `dse.spline.evaluate(id, t)` | → x, y, z | 按参数 t∈[0,1] 采样位置 |
 | `dse.spline.get_length(id)` | → float | 获取样条总长度 |
 | `dse.spline.find_nearest(id, x, y, z)` | → t | 查找最近参数 |
-| `dse.spline.generate_road(id [, seg_len, width_seg, uv])` | → {verts, indices} | 生成道路网格 |
-| `dse.spline.generate_river(id [, seg_len, width_seg, depth])` | → {verts, indices} | 生成河流网格 |
-| `dse.spline.get_count()` | → int | 获取当前样条总数 |
-| `dse.spline.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+| `dse.spline.gen_road(id [, seg_len, width_seg, uv])` | → {verts, indices} | 生成道路网格 |
+| `dse.spline.gen_river(id [, seg_len, width_seg, depth])` | → {verts, indices} | 生成河流网格 |
+| `dse.spline.get_count()` | → int | ⚠️ **未实现/规划中**：获取当前样条总数（注意：控制点数用 `get_point_count(id)`） |
+| `dse.spline.rebase_origin(ox, oy, oz)` | → void | ⚠️ **未实现**：浮动原点重定位统一在 `dse.origin.*`（`to_absolute`/`to_local`/`get_accumulated`） |
 
 ```lua
 -- 创建道路样条
@@ -2913,7 +2921,7 @@ local road = dse.spline.create("main_road")
 dse.spline.add_point(road, 0, 0, 0, 8.0)
 dse.spline.add_point(road, 50, 0, 50, 8.0)
 dse.spline.add_point(road, 100, 5, 100, 6.0)
-local mesh = dse.spline.generate_road(road, 2.0, 4, 0.1)
+local mesh = dse.spline.gen_road(road, 2.0, 4, 0.1)
 print("Road length: " .. dse.spline.get_length(road))
 ```
 
@@ -2936,7 +2944,7 @@ Tile-based FFT 海洋模拟，支持 Phillips/JONSWAP 波谱、LOD、泡沫/焦�
 | `dse.ocean.set_wind(speed, dir_x, dir_z)` | → void | 设置风参数 |
 | `dse.ocean.set_choppiness(c)` | → void | 设置横向位移系数 |
 | `dse.ocean.get_stats()` | → table | 返回 {total_tiles, visible_tiles, fft_resolution, max_height} |
-| `dse.ocean.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+| `dse.ocean.rebase_origin(ox, oy, oz)` | → void | ⚠️ **未实现**：浮动原点重定位统一在 `dse.origin.*` |
 
 ```lua
 dse.ocean.init({fft_resolution = 256, tile_size = 100, wind_speed = 15, choppiness = 1.5})
@@ -2959,7 +2967,7 @@ local foam = dse.ocean.get_foam(player.x, player.z)
 | `dse.editor.shutdown()` | → void | 关闭编辑器工具 |
 | `dse.editor.terrain_brush(op, cx, cy, cz, radius, strength, falloff)` | → op_id | 应用地形笔刷 |
 | `dse.editor.brush_preview(cx, cy, cz, radius)` | → min_x, min_z, max_x, max_z | 笔刷预览 AABB |
-| `dse.editor.brush_weight(px, py, pz, cx, cy, cz, radius, falloff)` | → float | 计算笔刷权重 |
+| `dse.editor.brush_weight(px, py, pz, cx, cy, cz, radius, falloff)` | → float | ⚠️ **未实现/规划中**：计算笔刷权重（当前提供 `dse.editor.terrain_brush`/`brush_preview`） |
 | `dse.editor.place_foliage(cx, cy, cz, radius, density, mesh)` | → count | 散布放置植被 |
 | `dse.editor.erase_foliage(cx, cy, cz, radius)` | → count | 擦除范围内植被 |
 | `dse.editor.get_foliage_count()` | → int | 获取植被实例总数 |
@@ -2997,11 +3005,11 @@ dse.editor.undo()
 | `dse.vsm.begin_frame(frame_num, cam_x, cam_y, cam_z)` | → void | 帧开始：收集反馈 + 分配页 |
 | `dse.vsm.end_frame()` | → void | 帧结束：更新页表 |
 | `dse.vsm.get_pages_to_render()` | → int | 获取本帧待渲染页数 |
-| `dse.vsm.invalidate_region(light_id, min_x, min_y, min_z, max_x, max_y, max_z)` | → void | 标记脏区域 |
+| `dse.vsm.invalidate_region(light_id, min_x, min_y, min_z, max_x, max_y, max_z)` | → void | 标记脏区域。⚠️ 实际注册名为 `dse.vsm.invalidate` |
 | `dse.vsm.lookup_page(vx, vy, mip, light_id)` | → px, py \| nil | 查询页映射 |
 | `dse.vsm.get_stats()` | → table | 返回 {total, mapped, dirty, rendered, hit_rate, pool_usage} |
 | `dse.vsm.get_clipmap_levels()` | → int | 获取 Clipmap 层数 |
-| `dse.vsm.submit_feedback(pages_table)` | → void | 提交屏幕空间反馈 |
+| `dse.vsm.submit_feedback(pages_table)` | → void | ⚠️ **未实现/规划中**：提交屏幕空间反馈 |
 
 ```lua
 dse.vsm.init({virtual_resolution = 16384, page_size = 128, pool_pages = 1024, clipmap_levels = 6})
@@ -3033,7 +3041,7 @@ dse.vsm.end_frame()
 | `dse.eqs.execute(tid, qx, qy, qz)` | → table | 执行查询，返回 {best_x/y/z, best_score, count, time_ms} |
 | `dse.eqs.execute_at(tid, qx, qy, qz, cx, cy, cz)` | → table | 指定中心执行查询 |
 | `dse.eqs.get_template_count()` | → int | 获取模板总数 |
-| `dse.eqs.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+| `dse.eqs.rebase_origin(ox, oy, oz)` | → void | ⚠️ **未实现**：浮动原点重定位统一在 `dse.origin.*` |
 
 **生成器类型**：0=Grid, 1=Ring, 2=Cone, 3=NavMesh, 4=Random, 5=PathPoints
 
@@ -3063,17 +3071,17 @@ Cell 分包 + 增量更新 + 下载管理 + Manifest 序列化。
 | `dse.distribution.init()` | → void | 初始化分发系统 |
 | `dse.distribution.shutdown()` | → void | 关闭分发系统 |
 | `dse.distribution.package_cell(cx, cy [, lod, assets_table])` | → pkg_index | 打包 Cell |
-| `dse.distribution.start_download(pkg_index)` | → void | 开始下载 |
+| `dse.distribution.start_download(pkg_index)` | → void | ⚠️ 实际注册名为 `dse.distribution.request_download` |
 | `dse.distribution.cancel_download(pkg_index)` | → void | 取消下载 |
 | `dse.distribution.tick(dt)` | → void | 每帧驱动下载进度 |
 | `dse.distribution.update_priorities(px, py, pz)` | → void | 根据玩家位置更新优先级 |
-| `dse.distribution.get_required(px, py, pz, radius)` | → table | 获取需要的包列表 |
+| `dse.distribution.get_required(px, py, pz, radius)` | → table | ⚠️ 实际注册名为 `dse.distribution.get_missing` |
 | `dse.distribution.get_missing(px, py, pz, radius)` | → table | 获取未下载的包列表 |
 | `dse.distribution.get_stats()` | → table | 返回 {total, downloaded, downloading, speed, disk_usage} |
 | `dse.distribution.get_disk_usage()` | → int | 获取磁盘占用(bytes) |
 | `dse.distribution.save_manifest(path)` | → bool | 保存 Manifest |
 | `dse.distribution.load_manifest(path)` | → bool | 加载 Manifest |
-| `dse.distribution.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+| `dse.distribution.rebase_origin(ox, oy, oz)` | → void | ⚠️ **未实现**：浮动原点重定位统一在 `dse.origin.*` |
 
 ```lua
 dse.distribution.init()
@@ -3095,6 +3103,8 @@ print("Download speed: " .. stats.speed .. " bytes/s")
 
 完整视频播放 API。支持 MPEG-1（pl_mpeg 零依赖回退）和 H.264/H.265/VP9/AV1（FFmpeg 动态加载）。
 输出为 GPU 纹理句柄，可直接用于 UI 或 3D 世界屏幕。
+
+> ℹ️ **加载方式**：`dse.video.*` 由 `luaopen_dse_video` 按需注册，默认 Lua 宿主 bootstrap 未自动加载；需在启用视频的宿主或显式 `require` 后可用。
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
@@ -3146,7 +3156,7 @@ end
 | `dse.ecs.parallax_get_layer_count(e)` | entity | int | 返回层数 |
 
 ```lua
-local bg = dse.ecs.create()
+local bg = dse.ecs.create_entity()
 dse.ecs.add_parallax(bg)
 local far  = dse.ecs.parallax_add_layer(bg, 0.2, 0.2)  -- 远景慢速
 local mid  = dse.ecs.parallax_add_layer(bg, 0.5, 0.5)  -- 中景
@@ -3168,14 +3178,14 @@ dse.ecs.parallax_set_layer_opacity(bg, mid, 0.8)
 | `dse.ecs.add_normal_map_2d(e [, strength])` | entity, float? | — | 为实体添加法线贴图组件（默认强度 1.0） |
 
 ```lua
-local torch = dse.ecs.create()
+local torch = dse.ecs.create_entity()
 dse.ecs.add_light_2d(torch, 0)        -- 点光源
 dse.ecs.set_light_2d_color(torch, 1.0, 0.8, 0.3)
 dse.ecs.set_light_2d_intensity(torch, 2.0)
 dse.ecs.set_light_2d_range(torch, 5.0)
 dse.ecs.set_light_2d_shadow(torch, 2) -- 软阴影
 -- 全局环境光
-local ambient = dse.ecs.create()
+local ambient = dse.ecs.create_entity()
 dse.ecs.set_ambient_2d(ambient, 0.1, 0.1, 0.2, 0.3)
 ```
 
@@ -3185,12 +3195,12 @@ dse.ecs.set_ambient_2d(ambient, 0.1, 0.1, 0.2, 0.3)
 |------|------|--------|------|
 | `dse.ecs.load_sprite_sheet(path)` | string | int (sheet_id, -1 失败) | 从文件加载精灵图集 |
 | `dse.ecs.sprite_sheet_frame_count(sheet_id)` | int | int | 返回帧数 |
-| `dse.ecs.sprite_sheet_get_frame_uv(sheet_id, frame_idx)` | int, int | u0, v0, u1, v1 | 获取指定帧的 UV 坐标 |
+| `dse.sprite_sheet_get_frame_uv(sheet_id, frame_idx)` | int, int | u0, v0, u1, v1 | 获取指定帧的 UV 坐标 |
 
 ```lua
 local sheet = dse.ecs.load_sprite_sheet("data/sprites/fire.json")
 local count = dse.ecs.sprite_sheet_frame_count(sheet)
-local u0, v0, u1, v1 = dse.ecs.sprite_sheet_get_frame_uv(sheet, 0) -- 第 0 帧
+local u0, v0, u1, v1 = dse.sprite_sheet_get_frame_uv(sheet, 0) -- 第 0 帧
 ```
 
 ### 30.4 Atlas（图集）
@@ -3199,12 +3209,12 @@ local u0, v0, u1, v1 = dse.ecs.sprite_sheet_get_frame_uv(sheet, 0) -- 第 0 帧
 |------|------|--------|------|
 | `dse.ecs.load_atlas(path)` | string | int (atlas_id, -1 失败) | 从文件加载纹理图集 |
 | `dse.ecs.atlas_entry_count(atlas_id)` | int | int | 返回图集条目数 |
-| `dse.ecs.atlas_get_entry_uv(atlas_id, name)` | int, string | u0, v0, u1, v1 | 按名称获取条目 UV |
+| `dse.atlas_get_entry_uv(atlas_id, name)` | int, string | u0, v0, u1, v1 | 按名称获取条目 UV |
 
 ```lua
 local atlas = dse.ecs.load_atlas("data/ui/icons.atlas")
 local n = dse.ecs.atlas_entry_count(atlas)
-local u0, v0, u1, v1 = dse.ecs.atlas_get_entry_uv(atlas, "sword_icon")
+local u0, v0, u1, v1 = dse.atlas_get_entry_uv(atlas, "sword_icon")
 ```
 
 ### 30.5 CameraController2D（2D 摄像机控制器）
@@ -3218,7 +3228,7 @@ local u0, v0, u1, v1 = dse.ecs.atlas_get_entry_uv(atlas, "sword_icon")
 | `dse.ecs.camera_set_look_ahead(e, lax, lay)` | entity, float, float | — | 设置前瞻偏移（跟踪移动方向） |
 
 ```lua
-local cam = dse.ecs.create()
+local cam = dse.ecs.create_entity()
 dse.ecs.add_camera_controller_2d(cam)
 dse.ecs.camera_set_zoom(cam, 2.0)
 dse.ecs.camera_set_bounds(cam, -100, -50, 100, 50)
@@ -3237,7 +3247,7 @@ dse.ecs.camera_shake(cam, 0.5)
 | `dse.ecs.clear_trail(e)` | entity | — | 清除当前所有拖尾点 |
 
 ```lua
-local bullet = dse.ecs.create()
+local bullet = dse.ecs.create_entity()
 dse.ecs.add_trail_renderer(bullet, 0.3, 0.2, 0.0)
 dse.ecs.set_trail_colors(bullet, 1, 0.5, 0, 1, 1, 0, 0, 0) -- 橙→红渐隐
 dse.ecs.set_trail_emitting(bullet, true)
@@ -3256,7 +3266,7 @@ dse.ecs.clear_trail(bullet)
 | `dse.ecs.line_renderer_set_closed(e, closed)` | entity, bool | — | 设置是否首尾相连 |
 
 ```lua
-local path_vis = dse.ecs.create()
+local path_vis = dse.ecs.create_entity()
 dse.ecs.add_line_renderer(path_vis, 0.05)
 dse.ecs.line_renderer_set_points(path_vis, {
     {0, 0}, {1, 2}, {3, 1}, {5, 3}
@@ -3276,11 +3286,11 @@ dse.ecs.line_renderer_set_closed(path_vis, true)  -- 闭合多边形
 
 ```lua
 -- 音源
-local fire_src = dse.ecs.create()
+local fire_src = dse.ecs.create_entity()
 dse.ecs.add_audio_spatial_2d(fire_src, 2.0, 15.0)
 dse.ecs.set_audio_spatial_2d_attenuation(fire_src, 1, 2.0) -- inverse, rolloff=2
 -- 监听器（通常挂在玩家/摄像机上）
-local listener = dse.ecs.create()
+local listener = dse.ecs.create_entity()
 dse.ecs.add_audio_listener_2d(listener, 1.0)
 ```
 

@@ -79,7 +79,7 @@ void RegisterFreeFn_ui(lua_State* L) {
     helper::RegisterBindings(L, {
         {"is_hovered", L_dse_ui_is_hovered},
         {"is_pressed", L_dse_ui_is_pressed},
-        {"ui_get_dropdown_value", L_dse_ui_get_dropdown_value},
+        {"get_dropdown_value", L_dse_ui_get_dropdown_value},
         {"ui_get_text_input_text", L_dse_ui_get_text_input_text},
     });
     lua_pop(L, 2);

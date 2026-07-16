@@ -118,10 +118,10 @@ void RegisterMeshletBindings(lua_State* L) {
         {"cull_register", L_dse_meshlet_cull_register},
         {"cull_unregister", L_dse_meshlet_cull_unregister},
         {"cull_begin_frame", L_dse_meshlet_cull_begin_frame},
-        {"meshlet_build", L_dse_meshlet_build},
-        {"meshlet_cull_add_instance", L_dse_meshlet_cull_add_instance},
-        {"meshlet_cull_execute_cpu", L_dse_meshlet_cull_execute_cpu},
-        {"meshlet_cull_prepare", L_dse_meshlet_cull_prepare},
+        {"build", L_dse_meshlet_build},
+        {"cull_add_instance", L_dse_meshlet_cull_add_instance},
+        {"cull_execute_cpu", L_dse_meshlet_cull_execute_cpu},
+        {"cull_prepare", L_dse_meshlet_cull_prepare},
     });
     lua_pop(L, 2);
 }

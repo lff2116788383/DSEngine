@@ -146,7 +146,7 @@
         },
         {
           "c_name": "dse_audio_bus_get_names",
-          "lua_name": "audio_bus_get_names",
+          "lua_name": "bus_get_names",
           "params": [],
           "returns": [],
           "null_sep_buffer_return": {
@@ -155,7 +155,7 @@
         },
         {
           "c_name": "dse_audio_snapshot_list",
-          "lua_name": "audio_snapshot_list",
+          "lua_name": "snapshot_list",
           "params": [],
           "returns": [],
           "null_sep_buffer_return": {
@@ -1449,7 +1449,7 @@
         },
         {
           "c_name": "dse_ui_get_dropdown_value",
-          "lua_name": "ui_get_dropdown_value",
+          "lua_name": "get_dropdown_value",
           "params": [
             {
               "name": "e",
@@ -2431,7 +2431,7 @@
         },
         {
           "c_name": "dse_audio_bus_set_volume",
-          "lua_name": "bussetvolume",
+          "lua_name": "bus_set_volume",
           "params": [
             {
               "name": "name",
@@ -2450,7 +2450,7 @@
         },
         {
           "c_name": "dse_audio_bus_set_muted",
-          "lua_name": "bussetmuted",
+          "lua_name": "bus_set_muted",
           "params": [
             {
               "name": "name",
@@ -2469,7 +2469,7 @@
         },
         {
           "c_name": "dse_audio_bus_create",
-          "lua_name": "buscreate",
+          "lua_name": "bus_create",
           "params": [
             {
               "name": "name",
@@ -2493,7 +2493,7 @@
         },
         {
           "c_name": "dse_audio_bus_remove",
-          "lua_name": "busremove",
+          "lua_name": "bus_remove",
           "params": [
             {
               "name": "name",
@@ -2508,7 +2508,7 @@
         },
         {
           "c_name": "dse_audio_bus_add_effect",
-          "lua_name": "busaddeffect",
+          "lua_name": "bus_add_effect",
           "params": [
             {
               "name": "bus_name",
@@ -2562,7 +2562,7 @@
         },
         {
           "c_name": "dse_audio_bus_remove_effect",
-          "lua_name": "busremoveeffect",
+          "lua_name": "bus_remove_effect",
           "params": [
             {
               "name": "bus_name",
@@ -2581,7 +2581,7 @@
         },
         {
           "c_name": "dse_audio_play_bgm",
-          "lua_name": "audioplaybgm",
+          "lua_name": "play_bgm",
           "params": [
             {
               "name": "path",
@@ -2604,25 +2604,25 @@
         },
         {
           "c_name": "dse_audio_pause_bgm",
-          "lua_name": "audiopausebgm",
+          "lua_name": "pause_bgm",
           "params": [],
           "returns": []
         },
         {
           "c_name": "dse_audio_resume_bgm",
-          "lua_name": "audioresumebgm",
+          "lua_name": "resume_bgm",
           "params": [],
           "returns": []
         },
         {
           "c_name": "dse_audio_stop_bgm",
-          "lua_name": "audiostopbgm",
+          "lua_name": "stop_bgm",
           "params": [],
           "returns": []
         },
         {
           "c_name": "dse_audio_play_sfx",
-          "lua_name": "audioplaysfx",
+          "lua_name": "play_sfx",
           "params": [
             {
               "name": "path",
@@ -2641,7 +2641,7 @@
         },
         {
           "c_name": "dse_audio_crossfade_bgm",
-          "lua_name": "audiocrossfadebgm",
+          "lua_name": "crossfade_bgm",
           "params": [
             {
               "name": "path",
@@ -2668,7 +2668,7 @@
         },
         {
           "c_name": "dse_audio_play_sfx_random",
-          "lua_name": "audioplaysfxrandom",
+          "lua_name": "play_sfx_random",
           "params": [
             {
               "name": "path",
@@ -2694,7 +2694,7 @@
         },
         {
           "c_name": "dse_audio_preload",
-          "lua_name": "audiopreload",
+          "lua_name": "preload",
           "params": [
             {
               "name": "path",
@@ -2709,13 +2709,13 @@
         },
         {
           "c_name": "dse_audio_stop_all_sfx",
-          "lua_name": "audiostopallsfx",
+          "lua_name": "stop_all_sfx",
           "params": [],
           "returns": []
         },
         {
           "c_name": "dse_audio_set_master_volume",
-          "lua_name": "audiosetmastervolume",
+          "lua_name": "set_master_volume",
           "params": [
             {
               "name": "volume",
@@ -2726,7 +2726,7 @@
         },
         {
           "c_name": "dse_audio_set_bgm_volume",
-          "lua_name": "audiosetbgmvolume",
+          "lua_name": "set_bgm_volume",
           "params": [
             {
               "name": "volume",
@@ -2737,7 +2737,7 @@
         },
         {
           "c_name": "dse_audio_set_sfx_volume",
-          "lua_name": "audiosetsfxvolume",
+          "lua_name": "set_sfx_volume",
           "params": [
             {
               "name": "volume",
@@ -2748,7 +2748,7 @@
         },
         {
           "c_name": "dse_audio_source_set_bus",
-          "lua_name": "audiosetsourcebus",
+          "lua_name": "set_source_bus",
           "params": [
             {
               "name": "e",
@@ -2763,7 +2763,7 @@
         },
         {
           "c_name": "dse_audio_snapshot_save",
-          "lua_name": "audiosnapshotsave",
+          "lua_name": "snapshot_save",
           "params": [
             {
               "name": "name",
@@ -2778,7 +2778,7 @@
         },
         {
           "c_name": "dse_audio_snapshot_load",
-          "lua_name": "audiosnapshotload",
+          "lua_name": "snapshot_load",
           "params": [
             {
               "name": "name",
@@ -10309,7 +10309,7 @@
       "functions": [
         {
           "c_name": "dse_font_load",
-          "lua_name": "fontload",
+          "lua_name": "load",
           "params": [
             {
               "name": "font_id",
@@ -10328,7 +10328,7 @@
         },
         {
           "c_name": "dse_font_load_cjk",
-          "lua_name": "fontloadcjk",
+          "lua_name": "load_cjk",
           "params": [
             {
               "name": "font_id",
@@ -10347,7 +10347,7 @@
         },
         {
           "c_name": "dse_font_unload",
-          "lua_name": "fontunload",
+          "lua_name": "unload",
           "params": [
             {
               "name": "font_id",
@@ -10358,7 +10358,7 @@
         },
         {
           "c_name": "dse_font_set_default",
-          "lua_name": "fontsetdefault",
+          "lua_name": "set_default",
           "params": [
             {
               "name": "font_id",
@@ -10373,7 +10373,7 @@
         },
         {
           "c_name": "dse_font_measure",
-          "lua_name": "fontmeasure",
+          "lua_name": "measure",
           "params": [
             {
               "name": "text",
@@ -10397,7 +10397,7 @@
         },
         {
           "c_name": "dse_font_line_height",
-          "lua_name": "fontlineheight",
+          "lua_name": "line_height",
           "params": [
             {
               "name": "font_id",
@@ -10417,7 +10417,7 @@
         },
         {
           "c_name": "dse_font_get_texture",
-          "lua_name": "fontgettexture",
+          "lua_name": "get_texture",
           "params": [
             {
               "name": "font_id",
@@ -10680,7 +10680,7 @@
         },
         {
           "c_name": "dse_meshlet_build",
-          "lua_name": "meshlet_build",
+          "lua_name": "build",
           "params": [],
           "returns": [],
           "calls": [
@@ -10703,7 +10703,7 @@
         },
         {
           "c_name": "dse_meshlet_cull_add_instance",
-          "lua_name": "meshlet_cull_add_instance",
+          "lua_name": "cull_add_instance",
           "params": [],
           "returns": [],
           "calls": [
@@ -10722,7 +10722,7 @@
         },
         {
           "c_name": "dse_meshlet_cull_execute_cpu",
-          "lua_name": "meshlet_cull_execute_cpu",
+          "lua_name": "cull_execute_cpu",
           "params": [],
           "returns": [],
           "calls": [
@@ -10744,7 +10744,7 @@
         },
         {
           "c_name": "dse_meshlet_cull_prepare",
-          "lua_name": "meshlet_cull_prepare",
+          "lua_name": "cull_prepare",
           "params": [],
           "returns": [],
           "calls": [
@@ -10775,7 +10775,7 @@
       "functions": [
         {
           "c_name": "dse_nav_is_ready",
-          "lua_name": "navisready",
+          "lua_name": "is_ready",
           "params": [],
           "returns": [
             {
@@ -10785,7 +10785,7 @@
         },
         {
           "c_name": "dse_nav_load",
-          "lua_name": "navload",
+          "lua_name": "load",
           "params": [
             {
               "name": "path",
@@ -10800,7 +10800,7 @@
         },
         {
           "c_name": "dse_nav_save",
-          "lua_name": "navsave",
+          "lua_name": "save",
           "params": [
             {
               "name": "path",
@@ -10936,7 +10936,7 @@
         },
         {
           "c_name": "dse_nav_bake",
-          "lua_name": "nav_bake",
+          "lua_name": "bake",
           "calls": [
             {
               "c_name": "dse_nav_bake",
