@@ -1683,36 +1683,6 @@
           "returns": []
         },
         {
-          "c_name": "dse_audio_source_set_volume",
-          "lua_name": "ecssetaudiovolume",
-          "params": [
-            {
-              "name": "e",
-              "type": "uint32"
-            },
-            {
-              "name": "volume",
-              "type": "float"
-            }
-          ],
-          "returns": []
-        },
-        {
-          "c_name": "dse_audio_source_set_pitch",
-          "lua_name": "ecssetaudiopitch",
-          "params": [
-            {
-              "name": "e",
-              "type": "uint32"
-            },
-            {
-              "name": "pitch",
-              "type": "float"
-            }
-          ],
-          "returns": []
-        },
-        {
           "c_name": "dse_audio_source_set_3d_mode",
           "lua_name": "audioset3dmode",
           "params": [

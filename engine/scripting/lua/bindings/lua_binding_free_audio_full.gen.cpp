@@ -74,20 +74,6 @@ int L_dse_audio_source_set_loop(lua_State* L) {
     return 0;
 }
 
-int L_dse_audio_source_set_volume(lua_State* L) {
-    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float volume = static_cast<float>(luaL_checknumber(L, 2));
-    dse_audio_source_set_volume(e, volume);
-    return 0;
-}
-
-int L_dse_audio_source_set_pitch(lua_State* L) {
-    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float pitch = static_cast<float>(luaL_checknumber(L, 2));
-    dse_audio_source_set_pitch(e, pitch);
-    return 0;
-}
-
 int L_dse_audio_source_set_3d_mode(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     int enabled = static_cast<int>(luaL_checkinteger(L, 2));
@@ -287,8 +273,6 @@ void RegisterAudioBindings(lua_State* L) {
         {"set_spatial", L_dse_compat_audio_set_spatial},
         {"audiorestart", L_dse_audio_source_restart},
         {"ecssetaudioloop", L_dse_audio_source_set_loop},
-        {"ecssetaudiovolume", L_dse_audio_source_set_volume},
-        {"ecssetaudiopitch", L_dse_audio_source_set_pitch},
         {"audioset3dmode", L_dse_audio_source_set_3d_mode},
         {"audioaddlistener", L_dse_audio_listener_add},
         {"audioset3ddistance", L_dse_audio_source_set_3d_distance},
