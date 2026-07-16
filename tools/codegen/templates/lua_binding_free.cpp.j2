@@ -107,7 +107,11 @@ int L_{{ func_id }}(lua_State* L) {
 {% endif %}
 {% set _ = call_args.append(p.name) %}
 {% elif p.type == "uint32" %}
+{% if "default" in p %}
+    uint32_t {{ p.name }} = static_cast<uint32_t>(luaL_optinteger(L, {{ ns.stack_idx }}, {{ p.default }}));
+{% else %}
     uint32_t {{ p.name }} = static_cast<uint32_t>(luaL_checkinteger(L, {{ ns.stack_idx }}));
+{% endif %}
 {% set _ = call_args.append(p.name) %}
 {% elif p.type == "string" %}
 {% if "default" in p %}
@@ -117,7 +121,9 @@ int L_{{ func_id }}(lua_State* L) {
 {% endif %}
 {% set _ = call_args.append(p.name) %}
 {% elif p.type == "bool" %}
-{% if "default" in p %}
+{% if p.keep_on_nil is defined and p.keep_on_nil %}
+    int {{ p.name }} = lua_isnoneornil(L, {{ ns.stack_idx }}) ? -1 : (helper::CheckBool(L, {{ ns.stack_idx }}) ? 1 : 0);
+{% elif "default" in p %}
     int {{ p.name }} = helper::OptBool(L, {{ ns.stack_idx }}, {{ "true" if p.default else "false" }}) ? 1 : 0;
 {% else %}
     int {{ p.name }} = helper::CheckBool(L, {{ ns.stack_idx }}) ? 1 : 0;

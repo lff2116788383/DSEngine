@@ -1283,15 +1283,18 @@
             },
             {
               "name": "lifetime",
-              "type": "float"
+              "type": "float",
+              "default": 0.5
             },
             {
               "name": "start_width",
-              "type": "float"
+              "type": "float",
+              "default": 0.5
             },
             {
               "name": "end_width",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ],
           "returns": []
@@ -1306,7 +1309,7 @@
             },
             {
               "name": "emitting",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
@@ -1349,7 +1352,8 @@
             },
             {
               "name": "a2",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ],
           "returns": []
@@ -2992,7 +2996,7 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
@@ -4630,15 +4634,18 @@
             },
             {
               "name": "water_drag",
-              "type": "float"
+              "type": "float",
+              "default": 3.0
             },
             {
               "name": "angular_drag",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "submerge_depth",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             }
           ],
           "returns": []
@@ -5048,15 +5055,18 @@
             },
             {
               "name": "time_of_day",
-              "type": "float"
+              "type": "float",
+              "default": 12.0
             },
             {
               "name": "auto_advance",
-              "type": "bool"
+              "type": "bool",
+              "default": false
             },
             {
               "name": "time_speed",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             }
           ],
           "returns": []
@@ -5737,7 +5747,8 @@
             },
             {
               "name": "mass",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             }
           ],
           "returns": []
@@ -6882,7 +6893,7 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
@@ -6932,11 +6943,13 @@
             },
             {
               "name": "move_speed",
-              "type": "float"
+              "type": "float",
+              "default": 5.0
             },
             {
               "name": "mouse_sensitivity",
-              "type": "float"
+              "type": "float",
+              "default": 0.1
             }
           ],
           "returns": []
@@ -6971,7 +6984,8 @@
             },
             {
               "name": "texture_handle",
-              "type": "uint32"
+              "type": "uint32",
+              "default": 0
             }
           ],
           "returns": []
@@ -7175,7 +7189,7 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
@@ -7705,7 +7719,8 @@
             },
             {
               "name": "lambda",
-              "type": "float"
+              "type": "float",
+              "default": 0.75
             }
           ],
           "returns": []
@@ -8080,15 +8095,18 @@
             },
             {
               "name": "sss_r",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "sss_g",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "sss_b",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ],
           "returns": []
@@ -8156,7 +8174,7 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
@@ -8221,39 +8239,48 @@
             },
             {
               "name": "metallic",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "roughness",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "ao",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "er",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "eg",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "eb",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "normal_strength",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "receive_shadow",
-              "type": "bool"
+              "type": "bool",
+              "keep_on_nil": true
             },
             {
               "name": "double_sided",
-              "type": "bool"
+              "type": "bool",
+              "keep_on_nil": true
             },
             {
               "name": "cr",
@@ -8450,19 +8477,23 @@
             },
             {
               "name": "heightmap_path",
-              "type": "string"
+              "type": "string",
+              "default": "\"\""
             },
             {
               "name": "width",
-              "type": "float"
+              "type": "float",
+              "default": 100.0
             },
             {
               "name": "depth",
-              "type": "float"
+              "type": "float",
+              "default": 100.0
             },
             {
               "name": "max_height",
-              "type": "float"
+              "type": "float",
+              "default": 20.0
             }
           ],
           "returns": []
@@ -8557,19 +8588,23 @@
             },
             {
               "name": "density",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "spawn_radius",
-              "type": "float"
+              "type": "float",
+              "default": 50.0
             },
             {
               "name": "blade_height",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "blade_width",
-              "type": "float"
+              "type": "float",
+              "default": 0.1
             }
           ],
           "returns": []
@@ -8604,11 +8639,13 @@
             },
             {
               "name": "chunk_size",
-              "type": "float"
+              "type": "float",
+              "default": 8.0
             },
             {
               "name": "seed",
-              "type": "int"
+              "type": "int",
+              "default": 42
             }
           ],
           "returns": []
@@ -8746,7 +8783,8 @@
             },
             {
               "name": "mesh_path",
-              "type": "string"
+              "type": "string",
+              "default": "\"\""
             }
           ],
           "returns": []
@@ -11098,7 +11136,7 @@
             },
             {
               "name": "blocks_input",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []
@@ -11252,11 +11290,11 @@
             },
             {
               "name": "follow_pointer",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "reset_on_release",
-              "type": "int"
+              "type": "bool"
             }
           ],
           "returns": []

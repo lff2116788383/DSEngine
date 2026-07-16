@@ -189,16 +189,16 @@ int L_dse_camera_2d_set_look_ahead(lua_State* L) {
 
 int L_dse_trail_renderer_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float lifetime = static_cast<float>(luaL_checknumber(L, 2));
-    float start_width = static_cast<float>(luaL_checknumber(L, 3));
-    float end_width = static_cast<float>(luaL_checknumber(L, 4));
+    float lifetime = static_cast<float>(luaL_optnumber(L, 2, 0.5));
+    float start_width = static_cast<float>(luaL_optnumber(L, 3, 0.5));
+    float end_width = static_cast<float>(luaL_optnumber(L, 4, 0.0));
     dse_trail_renderer_add(e, lifetime, start_width, end_width);
     return 0;
 }
 
 int L_dse_trail_set_emitting(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int emitting = static_cast<int>(luaL_checkinteger(L, 2));
+    int emitting = helper::CheckBool(L, 2) ? 1 : 0;
     dse_trail_set_emitting(e, emitting);
     return 0;
 }
@@ -212,7 +212,7 @@ int L_dse_trail_set_colors(lua_State* L) {
     float r2 = static_cast<float>(luaL_checknumber(L, 6));
     float g2 = static_cast<float>(luaL_checknumber(L, 7));
     float b2 = static_cast<float>(luaL_checknumber(L, 8));
-    float a2 = static_cast<float>(luaL_checknumber(L, 9));
+    float a2 = static_cast<float>(luaL_optnumber(L, 9, 0.0));
     dse_trail_set_colors(e, r1, g1, b1, a1, r2, g2, b2, a2);
     return 0;
 }

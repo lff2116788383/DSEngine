@@ -314,7 +314,7 @@ int L_dse_anim3d_add_event(lua_State* L) {
 
 int L_dse_anim3d_set_extract_root_motion(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_anim3d_set_extract_root_motion(e, enabled);
     return 0;
 }

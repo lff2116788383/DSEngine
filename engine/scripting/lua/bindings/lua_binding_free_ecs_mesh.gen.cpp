@@ -42,9 +42,9 @@ int L_dse_mesh_renderer_set_advanced_material(lua_State* L) {
     float anisotropy = static_cast<float>(luaL_checknumber(L, 4));
     float pom_height_scale = static_cast<float>(luaL_checknumber(L, 5));
     float sss_strength = static_cast<float>(luaL_checknumber(L, 6));
-    float sss_r = static_cast<float>(luaL_checknumber(L, 7));
-    float sss_g = static_cast<float>(luaL_checknumber(L, 8));
-    float sss_b = static_cast<float>(luaL_checknumber(L, 9));
+    float sss_r = static_cast<float>(luaL_optnumber(L, 7, 0.0));
+    float sss_g = static_cast<float>(luaL_optnumber(L, 8, 0.0));
+    float sss_b = static_cast<float>(luaL_optnumber(L, 9, 0.0));
     dse_mesh_renderer_set_advanced_material(e, clear_coat, clear_coat_roughness, anisotropy, pom_height_scale, sss_strength, sss_r, sss_g, sss_b);
     return 0;
 }
@@ -82,7 +82,7 @@ int L_dse_morph_add_target(lua_State* L) {
 
 int L_dse_morph_simple_set_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_morph_simple_set_enabled(e, enabled);
     return 0;
 }
@@ -117,15 +117,15 @@ int L_add_mesh_renderer(lua_State* L) {
 
 int L_dse_mesh_renderer_set_material_params(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float metallic = static_cast<float>(luaL_checknumber(L, 2));
-    float roughness = static_cast<float>(luaL_checknumber(L, 3));
-    float ao = static_cast<float>(luaL_checknumber(L, 4));
-    float er = static_cast<float>(luaL_checknumber(L, 5));
-    float eg = static_cast<float>(luaL_checknumber(L, 6));
-    float eb = static_cast<float>(luaL_checknumber(L, 7));
-    float normal_strength = static_cast<float>(luaL_checknumber(L, 8));
-    int receive_shadow = helper::CheckBool(L, 9) ? 1 : 0;
-    int double_sided = helper::CheckBool(L, 10) ? 1 : 0;
+    float metallic = lua_isnoneornil(L, 2) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 2));
+    float roughness = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
+    float ao = lua_isnoneornil(L, 4) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 4));
+    float er = lua_isnoneornil(L, 5) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 5));
+    float eg = lua_isnoneornil(L, 6) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 6));
+    float eb = lua_isnoneornil(L, 7) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 7));
+    float normal_strength = lua_isnoneornil(L, 8) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 8));
+    int receive_shadow = lua_isnoneornil(L, 9) ? -1 : (helper::CheckBool(L, 9) ? 1 : 0);
+    int double_sided = lua_isnoneornil(L, 10) ? -1 : (helper::CheckBool(L, 10) ? 1 : 0);
     float cr = lua_isnoneornil(L, 11) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 11));
     float cg = lua_isnoneornil(L, 12) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 12));
     float cb = lua_isnoneornil(L, 13) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 13));

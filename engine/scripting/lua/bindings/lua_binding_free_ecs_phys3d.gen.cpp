@@ -22,7 +22,7 @@ namespace {
 int L_dse_rigidbody3d_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     int type = static_cast<int>(luaL_checkinteger(L, 2));
-    float mass = static_cast<float>(luaL_checknumber(L, 3));
+    float mass = static_cast<float>(luaL_optnumber(L, 3, 1.0));
     dse_rigidbody3d_add(e, type, mass);
     return 0;
 }

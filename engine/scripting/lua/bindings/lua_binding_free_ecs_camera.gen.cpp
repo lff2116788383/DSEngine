@@ -36,7 +36,7 @@ int L_dse_camera_set_priority(lua_State* L) {
 
 int L_dse_camera_set_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_camera_set_enabled(e, enabled);
     return 0;
 }
@@ -55,8 +55,8 @@ int L_dse_camera_set_follow(lua_State* L) {
 
 int L_dse_free_camera_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float move_speed = static_cast<float>(luaL_checknumber(L, 2));
-    float mouse_sensitivity = static_cast<float>(luaL_checknumber(L, 3));
+    float move_speed = static_cast<float>(luaL_optnumber(L, 2, 5.0));
+    float mouse_sensitivity = static_cast<float>(luaL_optnumber(L, 3, 0.1));
     dse_free_camera_add(e, move_speed, mouse_sensitivity);
     return 0;
 }
@@ -68,7 +68,7 @@ int L_dse_sprite_add(lua_State* L) {
     float b = static_cast<float>(luaL_checknumber(L, 4));
     float a = static_cast<float>(luaL_checknumber(L, 5));
     int order_in_layer = static_cast<int>(luaL_checkinteger(L, 6));
-    uint32_t texture_handle = static_cast<uint32_t>(luaL_checkinteger(L, 7));
+    uint32_t texture_handle = static_cast<uint32_t>(luaL_optinteger(L, 7, 0));
     dse_sprite_add(e, r, g, b, a, order_in_layer, texture_handle);
     return 0;
 }

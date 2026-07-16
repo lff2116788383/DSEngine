@@ -125,7 +125,7 @@ int L_dse_dir_light_set_shadow_params(lua_State* L) {
     float c0 = static_cast<float>(luaL_checknumber(L, 4));
     float c1 = static_cast<float>(luaL_checknumber(L, 5));
     float c2 = static_cast<float>(luaL_checknumber(L, 6));
-    float lambda = static_cast<float>(luaL_checknumber(L, 7));
+    float lambda = static_cast<float>(luaL_optnumber(L, 7, 0.75));
     dse_dir_light_set_shadow_params(e, enabled, strength, c0, c1, c2, lambda);
     return 0;
 }

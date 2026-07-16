@@ -99,7 +99,7 @@ int L_dse_ui_set_label_number(lua_State* L) {
 
 int L_dse_ui_add_panel(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int blocks_input = static_cast<int>(luaL_checkinteger(L, 2));
+    int blocks_input = helper::CheckBool(L, 2) ? 1 : 0;
     dse_ui_add_panel(e, blocks_input);
     return 0;
 }
@@ -157,8 +157,8 @@ int L_dse_ui_set_rich_text(lua_State* L) {
 int L_dse_ui_add_joystick(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float max_radius = static_cast<float>(luaL_checknumber(L, 2));
-    int follow_pointer = static_cast<int>(luaL_checkinteger(L, 3));
-    int reset_on_release = static_cast<int>(luaL_checkinteger(L, 4));
+    int follow_pointer = helper::CheckBool(L, 3) ? 1 : 0;
+    int reset_on_release = helper::CheckBool(L, 4) ? 1 : 0;
     dse_ui_add_joystick(e, max_radius, follow_pointer, reset_on_release);
     return 0;
 }

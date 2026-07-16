@@ -52,7 +52,7 @@ int L_dse_lod_set_min_screen_size(lua_State* L) {
 
 int L_dse_lod_set_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_lod_set_enabled(e, enabled);
     return 0;
 }

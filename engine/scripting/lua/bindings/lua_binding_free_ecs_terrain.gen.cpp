@@ -21,10 +21,10 @@ namespace {
 
 int L_dse_terrain_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    const char* heightmap_path = luaL_checkstring(L, 2);
-    float width = static_cast<float>(luaL_checknumber(L, 3));
-    float depth = static_cast<float>(luaL_checknumber(L, 4));
-    float max_height = static_cast<float>(luaL_checknumber(L, 5));
+    const char* heightmap_path = luaL_optstring(L, 2, "");
+    float width = static_cast<float>(luaL_optnumber(L, 3, 100.0));
+    float depth = static_cast<float>(luaL_optnumber(L, 4, 100.0));
+    float max_height = static_cast<float>(luaL_optnumber(L, 5, 20.0));
     dse_terrain_add(e, heightmap_path, width, depth, max_height);
     return 0;
 }
@@ -64,10 +64,10 @@ int L_dse_water_add(lua_State* L) {
 
 int L_dse_grass_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float density = static_cast<float>(luaL_checknumber(L, 2));
-    float spawn_radius = static_cast<float>(luaL_checknumber(L, 3));
-    float blade_height = static_cast<float>(luaL_checknumber(L, 4));
-    float blade_width = static_cast<float>(luaL_checknumber(L, 5));
+    float density = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    float spawn_radius = static_cast<float>(luaL_optnumber(L, 3, 50.0));
+    float blade_height = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float blade_width = static_cast<float>(luaL_optnumber(L, 5, 0.1));
     dse_grass_add(e, density, spawn_radius, blade_height, blade_width);
     return 0;
 }
@@ -79,8 +79,8 @@ int L_dse_grass_set_params(lua_State* L) {
     float blade_height = static_cast<float>(luaL_checknumber(L, 4));
     float blade_width = static_cast<float>(luaL_checknumber(L, 5));
     float blade_height_var = static_cast<float>(luaL_checknumber(L, 6));
-    float chunk_size = static_cast<float>(luaL_checknumber(L, 7));
-    int seed = static_cast<int>(luaL_checkinteger(L, 8));
+    float chunk_size = static_cast<float>(luaL_optnumber(L, 7, 8.0));
+    int seed = static_cast<int>(luaL_optinteger(L, 8, 42));
     dse_grass_set_params(e, density, spawn_radius, blade_height, blade_width, blade_height_var, chunk_size, seed);
     return 0;
 }
@@ -134,7 +134,7 @@ int L_dse_grass_get_stats(lua_State* L) {
 
 int L_dse_tree_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    const char* mesh_path = luaL_checkstring(L, 2);
+    const char* mesh_path = luaL_optstring(L, 2, "");
     dse_tree_add(e, mesh_path);
     return 0;
 }

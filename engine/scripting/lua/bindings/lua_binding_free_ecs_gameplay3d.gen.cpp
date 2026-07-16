@@ -311,9 +311,9 @@ int L_dse_buoyancy_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float water_level = static_cast<float>(luaL_checknumber(L, 2));
     float buoyancy_force = static_cast<float>(luaL_checknumber(L, 3));
-    float water_drag = static_cast<float>(luaL_checknumber(L, 4));
-    float angular_drag = static_cast<float>(luaL_checknumber(L, 5));
-    float submerge_depth = static_cast<float>(luaL_checknumber(L, 6));
+    float water_drag = static_cast<float>(luaL_optnumber(L, 4, 3.0));
+    float angular_drag = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float submerge_depth = static_cast<float>(luaL_optnumber(L, 6, 1.0));
     dse_buoyancy_add(e, water_level, buoyancy_force, water_drag, angular_drag, submerge_depth);
     return 0;
 }
@@ -478,9 +478,9 @@ int L_dse_atmosphere_set_sun_intensity(lua_State* L) {
 
 int L_dse_day_night_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float time_of_day = static_cast<float>(luaL_checknumber(L, 2));
-    int auto_advance = helper::CheckBool(L, 3) ? 1 : 0;
-    float time_speed = static_cast<float>(luaL_checknumber(L, 4));
+    float time_of_day = static_cast<float>(luaL_optnumber(L, 2, 12.0));
+    int auto_advance = helper::OptBool(L, 3, false) ? 1 : 0;
+    float time_speed = static_cast<float>(luaL_optnumber(L, 4, 1.0));
     dse_day_night_add(e, time_of_day, auto_advance, time_speed);
     return 0;
 }
