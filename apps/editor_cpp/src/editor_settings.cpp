@@ -211,9 +211,27 @@ void SaveEditorSettings(const EditorSettings& settings) {
     rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
     doc.Accept(writer);
 
-    std::ofstream ofs(file_path, std::ios::trunc);
-    if (ofs.is_open()) {
+    // 原子写：先写临时文件再 rename 替换，避免中断产生半写/损坏的设置文件
+    const std::filesystem::path tmp_path = std::filesystem::path(file_path).concat(".tmp");
+    {
+        std::ofstream ofs(tmp_path, std::ios::binary | std::ios::trunc);
+        if (!ofs.is_open()) {
+            std::cerr << "[SaveEditorSettings] Failed to open temp file: " << tmp_path << std::endl;
+            return;
+        }
         ofs << buffer.GetString();
+        ofs.flush();
+        if (!ofs.good()) {
+            std::cerr << "[SaveEditorSettings] Failed to write temp file: " << tmp_path << std::endl;
+            return;
+        }
+    }
+    std::error_code ec;
+    std::filesystem::rename(tmp_path, file_path, ec);
+    if (ec) {
+        std::filesystem::remove(tmp_path, ec);
+        std::cerr << "[SaveEditorSettings] Failed to replace settings file: " << file_path << std::endl;
+        return;
     }
 
     } catch (const std::exception& e) {

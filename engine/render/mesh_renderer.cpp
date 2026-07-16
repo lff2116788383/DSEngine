@@ -739,6 +739,9 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
     if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
     if (indirect_buffer_) device.DeleteGpuBuffer(indirect_buffer_);
+    if (white_tex_) device.DeleteTexture(white_tex_);
+    if (white_cube_tex_) device.DeleteTexture(white_cube_tex_);
+    white_tex_ = white_cube_tex_ = TextureHandle{};
     vbo_ = ibo_ = per_frame_ubo_ = per_scene_ubo_ = per_material_ubo_ = BufferHandle{};
     per_material_shaded_ubo_ = BufferHandle{};
     per_point_lights_ubo_ = BufferHandle{};

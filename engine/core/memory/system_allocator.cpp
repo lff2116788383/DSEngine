@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
+#include <cassert>
 
 namespace dse {
 namespace core {
@@ -101,7 +102,15 @@ void* SystemAllocator::Reallocate(void* ptr, size_t new_size, size_t alignment, 
         return nullptr;
     }
     BlockHeader* h = HeaderOf(ptr);
-    const size_t old_size = (h->magic == kHeaderMagic) ? h->size : 0;
+    if (h->magic != kHeaderMagic) {
+        // magic 不匹配 => 传入了非本分配器分配的指针 / 重复释放 / 堆越界破坏。
+        // 此时无法安全得知原始大小或 raw 基址（可能已损坏），既不能可靠拷贝也不能安全 free。
+        // 属调用方编程错误：debug 下断言暴露；release 下拒绝操作并返回 nullptr，
+        // 避免此前"分配新块 + 拷贝 0 字节 + 泄漏旧块"的静默数据丢失。
+        assert(false && "SystemAllocator::Reallocate 收到非法/已释放指针（magic 校验失败）");
+        return nullptr;
+    }
+    const size_t old_size = h->size;
     void* dst = Allocate(new_size, alignment, tag);
     if (dst == nullptr) {
         return nullptr;

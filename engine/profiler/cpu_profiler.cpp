@@ -90,6 +90,7 @@ void CPUProfiler::Reset() {
 }
 
 std::string CPUProfiler::ExportCSV() const {
+    std::lock_guard<std::mutex> lock(mutex_);
     std::ostringstream oss;
     oss << "Name,TotalMs,AvgMs,MinMs,MaxMs,CallCount\n";
     for (const auto& [name, stat] : stats_) {
@@ -105,6 +106,7 @@ std::string CPUProfiler::ExportCSV() const {
 }
 
 std::string CPUProfiler::ExportJSON() const {
+    std::lock_guard<std::mutex> lock(mutex_);
     std::ostringstream oss;
     oss << "{\n  \"frame_stats\": {\n"
         << "    \"frame_count\": " << frame_stats_.frame_count << ",\n"
@@ -131,6 +133,7 @@ std::string CPUProfiler::ExportJSON() const {
 }
 
 std::string CPUProfiler::ExportChromeTrace() const {
+    std::lock_guard<std::mutex> lock(mutex_);
     std::ostringstream oss;
     oss << "[\n";
     bool first = true;

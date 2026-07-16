@@ -221,7 +221,10 @@ public:
         auto& locator = ServiceLocator::Instance();
         auto* existing = locator.Get<EventBus>();
         if (existing) {
-            existing->SetOwnerLocator(&locator);
+            // 仅在 owner 尚未设置时补齐，避免覆盖 EventBus 与其原始 ServiceLocator 的关联
+            if (existing->owner_locator() == nullptr) {
+                existing->SetOwnerLocator(&locator);
+            }
             return *existing;
         }
 

@@ -120,6 +120,7 @@ Physics2DSystem::~Physics2DSystem() {
 }
 
 void Physics2DSystem::Init(World& world) {
+    world_ = &world;
     Shutdown();
 
     auto collider_view = world.registry().view<BoxCollider2DComponent>();
@@ -160,6 +161,28 @@ void Physics2DSystem::Init(World& world) {
 void Physics2DSystem::Shutdown() {
     destroy_connections_.clear();
     active_contact_pairs_.clear();
+
+    // 删除物理世界会使所有 b2Body/b2Fixture/b2Joint 失效，先清空组件里指向它们的运行时指针，
+    // 避免后续在未重新 Init 的情况下解引用到悬空指针。
+    if (world_ != nullptr) {
+        auto& reg = world_->registry();
+        for (auto entity : reg.view<RigidBody2DComponent>()) {
+            reg.get<RigidBody2DComponent>(entity).runtime_body = nullptr;
+        }
+        for (auto entity : reg.view<BoxCollider2DComponent>()) {
+            reg.get<BoxCollider2DComponent>(entity).runtime_fixture = nullptr;
+        }
+        for (auto entity : reg.view<CircleCollider2DComponent>()) {
+            reg.get<CircleCollider2DComponent>(entity).runtime_fixture = nullptr;
+        }
+        for (auto entity : reg.view<PolygonCollider2DComponent>()) {
+            reg.get<PolygonCollider2DComponent>(entity).runtime_fixture = nullptr;
+        }
+        for (auto entity : reg.view<Joint2DComponent>()) {
+            reg.get<Joint2DComponent>(entity).runtime_joint = nullptr;
+        }
+    }
+
     if (physics_world_ != nullptr) {
         delete physics_world_;
         physics_world_ = nullptr;

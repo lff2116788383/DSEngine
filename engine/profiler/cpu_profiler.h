@@ -72,7 +72,7 @@ private:
     double total_frame_time_ms_ = 0.0;
     std::vector<ProfileSample> trace_samples_;
     std::chrono::high_resolution_clock::time_point origin_time_ = std::chrono::high_resolution_clock::now();
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
 };
 
 class ScopedCPUProfile {

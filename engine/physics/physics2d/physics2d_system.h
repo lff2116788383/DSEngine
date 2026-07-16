@@ -95,6 +95,7 @@ private:
     void OnJoint2DDestroyed(entt::registry& reg, entt::entity entity);
 
     b2World* physics_world_ = nullptr;
+    World* world_ = nullptr;   ///< 最近一次 Init 绑定的 World，Shutdown 时用于清空组件运行时指针
     std::vector<entt::scoped_connection> destroy_connections_;
 
     std::set<ContactPair> active_contact_pairs_;
