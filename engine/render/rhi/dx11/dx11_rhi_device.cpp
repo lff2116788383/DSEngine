@@ -953,14 +953,13 @@ void DX11RhiDevice::SetComputeTextureImageMip(unsigned int binding, TextureHandl
         if (it != hiz_impl_->textures.end()) {
             auto& info = it->second;
             if (mip_level < 0 || mip_level >= info.mip_count) return;
-            if (read_only) {
-                ID3D11ShaderResourceView* srv = info.mip_srvs[mip_level].Get();
-                dc->CSSetShaderResources(binding, 1, &srv);
-            } else {
-                ID3D11UnorderedAccessView* uav = info.mip_uavs[mip_level].Get();
-                UINT initial_count = static_cast<UINT>(-1);
-                dc->CSSetUnorderedAccessViews(binding, 1, &uav, &initial_count);
-            }
+            // GLSL 的 readonly/writeonly storage image 经 spirv-cross 都生成
+            // RWTexture2D（u 寄存器），read_only 也必须绑 UAV；绑 SRV 会让
+            // u 槽为空、读到全 0（Hi-Z downsample 因此产出全 0 mip）。
+            ID3D11UnorderedAccessView* uav = info.mip_uavs[mip_level].Get();
+            UINT initial_count = static_cast<UINT>(-1);
+            dc->CSSetUnorderedAccessViews(binding, 1, &uav, &initial_count);
+            (void)read_only;
             return;
         }
     }
@@ -988,24 +987,67 @@ void DX11RhiDevice::SetComputeTextureSampler(unsigned int unit, TextureHandle te
     ID3D11DeviceContext* dc = context_.device_context();
     if (!dc) return;
 
+    // Hi-Z / PreZ 深度等 RT 派生纹理没有配套 sampler；HLSL SampleLevel 在无 sampler
+    // 时恒返回 0，会导致 Hi-Z 构建/遮挡剔除得到全 0 深度、把所有物体剔掉——
+    // 缺省补一个 point/clamp sampler。
+    ID3D11SamplerState* fallback_sampler = nullptr;
+    {
+        if (!compute_point_clamp_sampler_) {
+            D3D11_SAMPLER_DESC sd{};
+            sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+            sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+            sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+            sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+            sd.MinLOD = 0.0f;
+            sd.MaxLOD = D3D11_FLOAT32_MAX;
+            ID3D11Device* dev = context_.device();
+            if (dev) dev->CreateSamplerState(&sd, compute_point_clamp_sampler_.GetAddressOf());
+        }
+        fallback_sampler = compute_point_clamp_sampler_.Get();
+    }
+
     // 检查 Hi-Z 纹理
     if (hiz_impl_) {
         auto it = hiz_impl_->textures.find(texture_handle);
         if (it != hiz_impl_->textures.end() && it->second.full_srv) {
             ID3D11ShaderResourceView* srv = it->second.full_srv.Get();
             dc->CSSetShaderResources(unit, 1, &srv);
+            if (fallback_sampler) {
+                dc->CSSetSamplers(unit, 1, &fallback_sampler);
+            }
             return;
         }
     }
 
     const auto* tex = resource_mgr_.GetTexture(texture_handle.raw());
     if (tex && tex->srv) {
+        // 若该纹理（如 PreZ 深度）仍作为当前 DSV/RTV 输出绑定，运行时会拒绝
+        // SRV 绑定（读到全 0）。先解除输出绑定再绑 SRV。
+        if (tex->texture) {
+            ComPtr<ID3D11RenderTargetView> cur_rtv;
+            ComPtr<ID3D11DepthStencilView> cur_dsv;
+            dc->OMGetRenderTargets(1, cur_rtv.GetAddressOf(), cur_dsv.GetAddressOf());
+            bool conflict = false;
+            if (cur_dsv) {
+                ComPtr<ID3D11Resource> res;
+                cur_dsv->GetResource(res.GetAddressOf());
+                if (res.Get() == static_cast<ID3D11Resource*>(tex->texture.Get())) conflict = true;
+            }
+            if (!conflict && cur_rtv) {
+                ComPtr<ID3D11Resource> res;
+                cur_rtv->GetResource(res.GetAddressOf());
+                if (res.Get() == static_cast<ID3D11Resource*>(tex->texture.Get())) conflict = true;
+            }
+            if (conflict) {
+                dc->OMSetRenderTargets(0, nullptr, nullptr);
+            }
+        }
         ID3D11ShaderResourceView* srv = tex->srv.Get();
         dc->CSSetShaderResources(unit, 1, &srv);
     }
-    if (tex && tex->sampler) {
-        ID3D11SamplerState* ss = tex->sampler.Get();
-        dc->CSSetSamplers(unit, 1, &ss);
+    if (tex) {
+        ID3D11SamplerState* ss = tex->sampler ? tex->sampler.Get() : fallback_sampler;
+        if (ss) dc->CSSetSamplers(unit, 1, &ss);
     }
 }
 

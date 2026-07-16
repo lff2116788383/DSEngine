@@ -292,6 +292,10 @@ private:
     struct HiZImpl;
     std::unique_ptr<HiZImpl> hiz_impl_;
 
+    /// compute 采样缺省 point/clamp sampler（懒创建；Hi-Z/深度纹理无配套 sampler，
+    /// HLSL SampleLevel 需要显式 sampler，否则恒返回 0）
+    ComPtr<ID3D11SamplerState> compute_point_clamp_sampler_;
+
     // 异步 readback 双缓冲（避免同步 GPU pipeline drain）
     struct AsyncReadback {
         ComPtr<ID3D11Buffer> staging[2];   // 双缓冲 staging buffer
