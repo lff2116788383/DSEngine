@@ -187,6 +187,52 @@ struct SubscriptionHandle {
     bool valid = false;
 };
 
+class EventBus;
+
+/**
+ * @class ScopedSubscription
+ * @brief 订阅的 RAII 句柄：析构时自动 Unsubscribe，防止订阅者销毁后回调打到悬空 this。
+ *
+ * 建议持有 this 的订阅者把它作为成员：对象析构 → 自动断开，无需手动 Unsubscribe。
+ * 只可移动、不可拷贝。
+ */
+class ScopedSubscription {
+public:
+    ScopedSubscription() = default;
+    ScopedSubscription(EventBus* bus, SubscriptionHandle handle)
+        : bus_(bus), handle_(handle) {}
+    ~ScopedSubscription() { Reset(); }
+
+    ScopedSubscription(const ScopedSubscription&) = delete;
+    ScopedSubscription& operator=(const ScopedSubscription&) = delete;
+
+    ScopedSubscription(ScopedSubscription&& other) noexcept
+        : bus_(other.bus_), handle_(other.handle_) {
+        other.bus_ = nullptr;
+        other.handle_ = {};
+    }
+    ScopedSubscription& operator=(ScopedSubscription&& other) noexcept {
+        if (this != &other) {
+            Reset();
+            bus_ = other.bus_;
+            handle_ = other.handle_;
+            other.bus_ = nullptr;
+            other.handle_ = {};
+        }
+        return *this;
+    }
+
+    /// 立即断开订阅（幂等）。
+    void Reset();
+
+    bool active() const { return bus_ != nullptr && handle_.valid; }
+    const SubscriptionHandle& handle() const { return handle_; }
+
+private:
+    EventBus* bus_ = nullptr;
+    SubscriptionHandle handle_{};
+};
+
 /**
  * @class EventBus
  * @brief 事件总线，负责事件的分发和订阅管理
@@ -280,6 +326,16 @@ public:
         }
     }
 
+    template<typename TEvent>
+    /**
+     * @brief 订阅事件并返回 RAII 句柄，句柄析构时自动取消订阅
+     * @param callback 事件触发时的回调函数
+     * @return ScopedSubscription，生命周期结束自动 Unsubscribe
+     */
+    ScopedSubscription SubscribeScoped(std::function<void(const TEvent&)> callback) {
+        return ScopedSubscription(this, Subscribe<TEvent>(std::move(callback)));
+    }
+
     template<typename TEvent, typename... Args>
     /**
      * @brief 触发并发布事件
@@ -324,6 +380,14 @@ private:
     std::mutex mutex_;
     ServiceLocator* owner_locator_ = nullptr;
 };
+
+inline void ScopedSubscription::Reset() {
+    if (bus_ && handle_.valid) {
+        bus_->Unsubscribe(handle_);
+    }
+    bus_ = nullptr;
+    handle_ = {};
+}
 
 } // namespace core
 } // namespace dse

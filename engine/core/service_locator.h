@@ -26,6 +26,7 @@
 #include <unordered_map>
 #include <cassert>
 #include <mutex>
+#include <shared_mutex>
 #include <utility>
 
 namespace dse {
@@ -61,7 +62,7 @@ public:
     void Register(std::shared_ptr<TImpl> service) {
         static_assert(std::is_base_of_v<TInterface, TImpl> || std::is_same_v<TInterface, TImpl>,
             "TImpl must derive from or be the same as TInterface");
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
         services_[std::type_index(typeid(TInterface))] = service;
     }
 
@@ -100,7 +101,7 @@ public:
      */
     template<typename TInterface>
     TInterface* Get() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mutex_);
         auto it = services_.find(std::type_index(typeid(TInterface)));
         if (it == services_.end()) {
             return nullptr;
@@ -116,7 +117,7 @@ public:
      */
     template<typename TInterface>
     std::shared_ptr<TInterface> GetShared() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mutex_);
         auto it = services_.find(std::type_index(typeid(TInterface)));
         if (it == services_.end()) {
             return nullptr;
@@ -131,7 +132,7 @@ public:
      */
     template<typename TInterface>
     bool Has() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mutex_);
         return services_.find(std::type_index(typeid(TInterface))) != services_.end();
     }
 
@@ -141,7 +142,7 @@ public:
      */
     template<typename TInterface>
     void Reset() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
         services_.erase(std::type_index(typeid(TInterface)));
     }
 
@@ -149,7 +150,7 @@ public:
      * @brief 重置所有服务（用于 EngineInstance Shutdown）
      */
     void ResetAll() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_mutex> lock(mutex_);
         services_.clear();
     }
 
@@ -160,7 +161,7 @@ private:
     ServiceLocator& operator=(const ServiceLocator&) = delete;
 
     std::unordered_map<std::type_index, std::shared_ptr<void>> services_;
-    mutable std::mutex mutex_;
+    mutable std::shared_mutex mutex_;
 };
 
 } // namespace core

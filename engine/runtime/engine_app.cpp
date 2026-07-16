@@ -272,14 +272,9 @@ void EngineInstance::RegisterRuntimeServices() {
     }
     service_locator().Register<dse::render::FontService, dse::render::FontService>(font_service_);
 
-    service_locator().BridgeTo<FramePipeline>(core::ServiceLocator::Instance());
-    service_locator().BridgeTo<World>(core::ServiceLocator::Instance());
-    service_locator().BridgeTo<core::EventBus>(core::ServiceLocator::Instance());
-    service_locator().BridgeTo<core::JobSystem>(core::ServiceLocator::Instance());
-    service_locator().BridgeTo<scene::SceneManager>(core::ServiceLocator::Instance());
-    service_locator().BridgeTo<dse::assets::LocalizationManager>(core::ServiceLocator::Instance());
-    service_locator().BridgeTo<dse::render::FontService>(core::ServiceLocator::Instance());
-
+    // 注意：service_locator() 就是 core::ServiceLocator::Instance()（唯一全局单例），
+    // 上面的 Register 已经写入该单例，无需再 BridgeTo 到自身。兼容层入口由
+    // RegisterEngineSingletons() 负责。
     core::RegisterEngineSingletons();
 }
 
@@ -297,12 +292,8 @@ void EngineInstance::ResetRuntimeServices() {
     if (scene_manager_) { scene_manager_.reset(); }
     event_bus_.reset();
 
-    core::ServiceLocator::Instance().Reset<core::JobSystem>();
-    core::ServiceLocator::Instance().Reset<FramePipeline>();
-    core::ServiceLocator::Instance().Reset<World>();
-    core::ServiceLocator::Instance().Reset<core::EventBus>();
+    // service_locator() 即 ServiceLocator::Instance()，上面已 Reset，无需重复。
     core::UnregisterEngineSingletons();
-    core::ServiceLocator::Instance().Reset<scene::SceneManager>();
 }
 
 void EngineInstance::CleanupOnInitFailure() {
@@ -477,7 +468,7 @@ bool EngineInstance::Init() {
         services_.job_system->Init();
     }
 
-    // 先登记 EngineInstance 级服务容器，再桥接到兼容全局入口。
+    // 向全局 ServiceLocator 登记运行时服务，并注册兼容层单例入口。
     RegisterRuntimeServices();
 
     // 初始化期间保持窗口消息泵送，防止 Windows 标记"未响应"
@@ -618,7 +609,7 @@ void EngineInstance::Shutdown() {
         services_.asset_manager->SetFileSystem(nullptr);
     }
 
-    // 清理实例级/兼容级 ServiceLocator 中的服务引用（不销毁 World 本身，由 EngineInstance 管理）
+    // 清理 ServiceLocator 中登记的服务引用（不销毁 World 本身，由 EngineInstance 管理）
     ResetRuntimeServices();
 
     // FramePipeline and the default runtime services own objects whose destructors may touch

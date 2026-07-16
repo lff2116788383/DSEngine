@@ -269,3 +269,58 @@ TEST(EventTraitsTest, ResourceLoadedEventkEventId) {
     EXPECT_EQ(id, ResourceLoadedEvent::kEventId);
     EXPECT_EQ(id, events::kResourceLoaded);
 }
+
+// ============================================================
+// ScopedSubscription RAII 自动取消订阅
+// ============================================================
+
+// 作用域结束后自动 Unsubscribe，回调不再触发
+TEST(ScopedSubscriptionTest, AutoUnsubscribesOnScopeExit) {
+    EventBus bus;
+    int received = 0;
+    {
+        auto sub = bus.SubscribeScoped<TestIntEvent>(
+            [&received](const TestIntEvent& e) { received = e.value; });
+        EXPECT_TRUE(sub.active());
+        bus.Publish<TestIntEvent>(7);
+        EXPECT_EQ(received, 7);
+    }
+    // 句柄已析构：应自动断开，后续 Publish 不再改变 received
+    bus.Publish<TestIntEvent>(99);
+    EXPECT_EQ(received, 7);
+}
+
+// Reset() 立即断开且幂等
+TEST(ScopedSubscriptionTest, ResetIsIdempotent) {
+    EventBus bus;
+    int count = 0;
+    auto sub = bus.SubscribeScoped<TestIntEvent>(
+        [&count](const TestIntEvent&) { ++count; });
+    bus.Publish<TestIntEvent>(1);
+    EXPECT_EQ(count, 1);
+    sub.Reset();
+    EXPECT_FALSE(sub.active());
+    sub.Reset();  // 再次调用应安全无副作用
+    bus.Publish<TestIntEvent>(1);
+    EXPECT_EQ(count, 1);
+}
+
+// 移动语义：所有权转移，旧对象析构不误断开
+TEST(ScopedSubscriptionTest, MoveTransfersOwnership) {
+    EventBus bus;
+    int count = 0;
+    ScopedSubscription outer;
+    {
+        auto inner = bus.SubscribeScoped<TestIntEvent>(
+            [&count](const TestIntEvent&) { ++count; });
+        outer = std::move(inner);
+        EXPECT_FALSE(inner.active());
+        EXPECT_TRUE(outer.active());
+    }
+    // inner 已析构但所有权已转移给 outer，订阅仍有效
+    bus.Publish<TestIntEvent>(1);
+    EXPECT_EQ(count, 1);
+    outer.Reset();
+    bus.Publish<TestIntEvent>(1);
+    EXPECT_EQ(count, 1);
+}
