@@ -44,11 +44,11 @@ TEST_F(InputIntegrationTest, ActionMappingMultiFrameHoldStateIsCorrect) {
     EXPECT_TRUE(mapping.GetAction("Fire"));
     EXPECT_TRUE(mapping.GetActionDown("Fire"));
 
-    // Update 清理 UP 状态，但持续按下的键保留 DOWN
+    // Update 清理瞬态，但持续按下的键仍视为按住
     Input::Update();
     EXPECT_TRUE(mapping.GetAction("Fire"));
-    // 引擎的 GetKeyDown 只要 key 在 map 中且不为 UP 就返回 true
-    EXPECT_TRUE(mapping.GetActionDown("Fire"));
+    // GetActionDown 是边沿检测：按住的后续帧不再触发（仅按下当帧为 true）
+    EXPECT_FALSE(mapping.GetActionDown("Fire"));
 
     Input::RecordKey(MOUSE_BUTTON_LEFT, KEY_ACTION_UP);
     EXPECT_TRUE(mapping.GetActionUp("Fire"));

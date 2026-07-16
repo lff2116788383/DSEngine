@@ -80,6 +80,28 @@ TEST_F(InputTest, UpdateClearReleasedKeys) {
     EXPECT_FALSE(Input::GetKey(KEY_CODE_A));
 }
 
+// 测试 输入：GetKeyDown 仅在按下当帧为 true（边沿检测，非按住持续 true）
+TEST_F(InputTest, GetKeyDownIsEdgeTriggered) {
+    Input::RecordKey(KEY_CODE_A, KEY_ACTION_DOWN);
+    EXPECT_TRUE(Input::GetKeyDown(KEY_CODE_A));   // 按下当帧
+    EXPECT_TRUE(Input::GetKey(KEY_CODE_A));
+
+    Input::Update();                              // 帧结束清空瞬态
+    Input::RecordKey(KEY_CODE_A, KEY_ACTION_REPEAT);
+    EXPECT_FALSE(Input::GetKeyDown(KEY_CODE_A));  // 按住的后续帧不再触发
+    EXPECT_TRUE(Input::GetKey(KEY_CODE_A));       // 仍视为按住
+}
+
+// 测试 输入：GetKeyUp 仅在松开当帧为 true，随后帧清空
+TEST_F(InputTest, GetKeyUpIsEdgeTriggered) {
+    Input::RecordKey(KEY_CODE_A, KEY_ACTION_DOWN);
+    Input::Update();
+    Input::RecordKey(KEY_CODE_A, KEY_ACTION_UP);
+    EXPECT_TRUE(Input::GetKeyUp(KEY_CODE_A));     // 松开当帧
+    Input::Update();
+    EXPECT_FALSE(Input::GetKeyUp(KEY_CODE_A));    // 随后帧清空
+}
+
 // ============================================================
 // 鼠标输入（委托到键盘接口）
 // ============================================================

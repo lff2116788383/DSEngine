@@ -33,17 +33,13 @@ bool Input::GetKey(unsigned short key_code) {
 }
 
 bool Input::GetKeyDown(unsigned short key_code) {
-    if(key_event_map_.count(key_code)==0){
-        return false;
-    }
-    return key_event_map_[key_code]!=KEY_ACTION_UP;
+    const auto it = key_event_map_current_frame_.find(key_code);
+    return it != key_event_map_current_frame_.end() && it->second == KEY_ACTION_DOWN;
 }
 
 bool Input::GetKeyUp(unsigned short key_code) {
-    if(key_event_map_.count(key_code)==0){
-        return false;
-    }
-    return key_event_map_[key_code]==KEY_ACTION_UP;
+    const auto it = key_event_map_current_frame_.find(key_code);
+    return it != key_event_map_current_frame_.end() && it->second == KEY_ACTION_UP;
 }
 
 bool Input::GetMouseButton(unsigned short mouse_button_index) {
@@ -77,8 +73,10 @@ void Input::RecordKey(unsigned short key_code, unsigned short key_action) {
         const bool is_double_click = (click_it != key_last_click_timestamp_.end()) && ((now - click_it->second) <= 0.25f);
         key_double_click_frame_[key_code] = is_double_click;
         key_last_click_timestamp_[key_code] = now;
+        key_event_map_current_frame_[key_code] = KEY_ACTION_DOWN;   // 本帧按下边沿，供 GetKeyDown 读取
     } else if (key_action == KEY_ACTION_UP) {
         key_down_timestamp_.erase(key_code);
+        key_event_map_current_frame_[key_code] = KEY_ACTION_UP;     // 本帧松开边沿，供 GetKeyUp 读取
     }
     key_event_map_[key_code]=key_action;
 }
@@ -92,6 +90,7 @@ void Input::Update() {
         }
     }
 
+    key_event_map_current_frame_.clear();
     key_double_click_frame_.clear();
     swipe_delta_ = glm::vec2(0.0f);
     device_shaking_ = false;

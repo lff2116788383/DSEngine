@@ -22,6 +22,7 @@
 #include <thread>
 #include <deque>
 #include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 #include <atomic>
 #include <cstdint>
@@ -259,6 +260,10 @@ private:
     std::condition_variable wake_cv_;
     std::mutex wake_mutex_;
     std::atomic<bool> wake_pending_{false};
+
+    /// 生命周期锁：Submit 类接口持共享锁完成 AcquireEntry/Enqueue，Shutdown 持独占锁
+    /// 清理队列与条目池，避免 is_stopping_ 检查与 Shutdown 清理之间的 TOCTOU（访问已释放条目）。
+    std::shared_mutex lifecycle_mutex_;
 
     /// 标记线程池是否正在关闭
     std::atomic<bool> is_stopping_{false};

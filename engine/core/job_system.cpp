@@ -97,6 +97,10 @@ void JobSystem::Shutdown() {
     }
     workers_.clear();
 
+    // 独占生命周期锁：等待所有已通过 is_stopping_ 检查、仍在 AcquireEntry/Enqueue 中的
+    // Submit 完成，之后再销毁队列与条目池，避免访问已释放的 JobEntry/队列。
+    std::unique_lock<std::shared_mutex> lifecycle_lock(lifecycle_mutex_);
+
     // 清理队列中的残留任务引用
     {
         std::lock_guard<std::mutex> lock(global_queue_mutex_);
@@ -210,23 +214,27 @@ JobHandle JobSystem::Submit(const std::function<void()>& job,
         return JobHandle();
     }
 
-    if (!is_initialized_.load(std::memory_order_acquire) ||
-        is_stopping_.load(std::memory_order_acquire)) {
-        // 回退为同步执行
-        job();
-        return JobHandle();
+    {
+        // 持共享锁完成 AcquireEntry+Enqueue，避免与 Shutdown 的独占清理产生 TOCTOU
+        std::shared_lock<std::shared_mutex> lifecycle_lock(lifecycle_mutex_);
+        if (is_initialized_.load(std::memory_order_acquire) &&
+            !is_stopping_.load(std::memory_order_acquire)) {
+            JobEntry* entry = AcquireEntry();
+            entry->task = job;
+            entry->priority = priority;
+            // refcount = 1: 执行引用（JobHandle 是弱引用，不计数）
+            entry->refcount.store(1, std::memory_order_relaxed);
+            const uint32_t gen = entry->generation.load(std::memory_order_relaxed);
+
+            Enqueue(entry);
+
+            return JobHandle(entry, gen);
+        }
     }
 
-    JobEntry* entry = AcquireEntry();
-    entry->task = job;
-    entry->priority = priority;
-    // refcount = 1: 执行引用（JobHandle 是弱引用，不计数）
-    entry->refcount.store(1, std::memory_order_relaxed);
-    const uint32_t gen = entry->generation.load(std::memory_order_relaxed);
-
-    Enqueue(entry);
-
-    return JobHandle(entry, gen);
+    // 未初始化 / 正在关闭：在锁外回退为同步执行（避免同步任务再次 Submit 造成重入死锁）
+    job();
+    return JobHandle();
 }
 
 // ============================================================
@@ -240,8 +248,11 @@ JobHandle JobSystem::SubmitWithDependency(const std::function<void()>& job,
         return JobHandle();
     }
 
+    // 持共享锁贯穿 AcquireEntry/pin/入队，避免与 Shutdown 的独占清理产生 TOCTOU
+    std::shared_lock<std::shared_mutex> lifecycle_lock(lifecycle_mutex_);
     if (!is_initialized_.load(std::memory_order_acquire) ||
         is_stopping_.load(std::memory_order_acquire)) {
+        lifecycle_lock.unlock();
         // 回退为同步执行
         job();
         return JobHandle();

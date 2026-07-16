@@ -97,7 +97,21 @@ uint32_t EQSSystem::RegisterCustomScorer(const std::string& name, CustomScorerFu
 }
 
 void EQSSystem::SetCustomScorerForTemplate(uint32_t template_id, uint32_t scorer_index, uint32_t custom_id) {
-    (void)template_id; (void)scorer_index; (void)custom_id;
+    if (custom_id >= custom_scorers_.size()) {
+        return;
+    }
+    for (size_t i = 0; i < template_ids_.size(); ++i) {
+        if (template_ids_[i] == template_id) {
+            auto& scorers = templates_[i].scorers;
+            if (scorer_index >= scorers.size()) {
+                return;
+            }
+            // 关联自定义评分器：ScoreCandidate 通过 scorer.min_value 读取 custom_scorers_ 下标
+            scorers[scorer_index].type = ScorerType::Custom;
+            scorers[scorer_index].min_value = static_cast<float>(custom_id);
+            return;
+        }
+    }
 }
 
 std::vector<QueryCandidate> EQSSystem::GeneratePoints(const GeneratorConfig& config,
