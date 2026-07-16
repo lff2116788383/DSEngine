@@ -993,10 +993,12 @@ static JsonRpcResponse HandleEntityCreate(
     }
     if (params.HasMember("rotation") && params["rotation"].IsArray() && params["rotation"].Size() >= 3) {
         const auto& r = params["rotation"];
-        transform.rotation = glm::quat(glm::vec3(
-            glm::radians(r[0].GetFloat()),
-            glm::radians(r[1].GetFloat()),
-            glm::radians(r[2].GetFloat())));
+        if (r[0].IsNumber() && r[1].IsNumber() && r[2].IsNumber()) {
+            transform.rotation = glm::quat(glm::vec3(
+                glm::radians(r[0].GetFloat()),
+                glm::radians(r[1].GetFloat()),
+                glm::radians(r[2].GetFloat())));
+        }
     }
     registry.emplace<TransformComponent>(entity, transform);
 
@@ -1221,39 +1223,39 @@ static JsonRpcResponse HandleEntityModify(
     if (registry.all_of<TransformComponent>(entity)) {
         auto& t = registry.get<TransformComponent>(entity);
         if (params.HasMember("position") && params["position"].IsArray() && params["position"].Size() >= 3) {
-            const auto& p = params["position"];
-            t.position = glm::vec3(p[0].GetFloat(), p[1].GetFloat(), p[2].GetFloat());
+            t.position = ParseVec3(params["position"], t.position);
             t.dirty = true;
         }
         if (params.HasMember("rotation") && params["rotation"].IsArray() && params["rotation"].Size() >= 3) {
             const auto& r = params["rotation"];
-            t.rotation = glm::quat(glm::vec3(
-                glm::radians(r[0].GetFloat()),
-                glm::radians(r[1].GetFloat()),
-                glm::radians(r[2].GetFloat())));
-            t.dirty = true;
+            if (r[0].IsNumber() && r[1].IsNumber() && r[2].IsNumber()) {
+                t.rotation = glm::quat(glm::vec3(
+                    glm::radians(r[0].GetFloat()),
+                    glm::radians(r[1].GetFloat()),
+                    glm::radians(r[2].GetFloat())));
+                t.dirty = true;
+            }
         }
         if (params.HasMember("scale") && params["scale"].IsArray() && params["scale"].Size() >= 3) {
-            const auto& s = params["scale"];
-            t.scale = glm::vec3(s[0].GetFloat(), s[1].GetFloat(), s[2].GetFloat());
+            t.scale = ParseVec3(params["scale"], t.scale);
             t.dirty = true;
         }
     } else if (params.HasMember("position") || params.HasMember("rotation") || params.HasMember("scale")) {
         TransformComponent t;
         if (params.HasMember("position") && params["position"].IsArray() && params["position"].Size() >= 3) {
-            const auto& p = params["position"];
-            t.position = glm::vec3(p[0].GetFloat(), p[1].GetFloat(), p[2].GetFloat());
+            t.position = ParseVec3(params["position"], t.position);
         }
         if (params.HasMember("rotation") && params["rotation"].IsArray() && params["rotation"].Size() >= 3) {
             const auto& r = params["rotation"];
-            t.rotation = glm::quat(glm::vec3(
-                glm::radians(r[0].GetFloat()),
-                glm::radians(r[1].GetFloat()),
-                glm::radians(r[2].GetFloat())));
+            if (r[0].IsNumber() && r[1].IsNumber() && r[2].IsNumber()) {
+                t.rotation = glm::quat(glm::vec3(
+                    glm::radians(r[0].GetFloat()),
+                    glm::radians(r[1].GetFloat()),
+                    glm::radians(r[2].GetFloat())));
+            }
         }
         if (params.HasMember("scale") && params["scale"].IsArray() && params["scale"].Size() >= 3) {
-            const auto& s = params["scale"];
-            t.scale = glm::vec3(s[0].GetFloat(), s[1].GetFloat(), s[2].GetFloat());
+            t.scale = ParseVec3(params["scale"], t.scale);
         }
         registry.emplace<TransformComponent>(entity, t);
     }

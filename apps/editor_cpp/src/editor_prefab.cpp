@@ -42,15 +42,26 @@ void WriteQuat(rapidjson::PrettyWriter<rapidjson::StringBuffer>& w, const char* 
     w.EndArray();
 }
 
-glm::vec3 ReadVec3(const rapidjson::Value& arr) {
+// prefab 文件可能被手工编辑/损坏：非数组/长度不足/元素非数值时直接索引或 GetFloat
+// 会触发 rapidjson 断言崩溃。校验失败时返回传入默认值，保持组件原值。
+glm::vec3 ReadVec3(const rapidjson::Value& arr, glm::vec3 def = glm::vec3(0.0f)) {
+    if (!arr.IsArray() || arr.Size() < 3 ||
+        !arr[0].IsNumber() || !arr[1].IsNumber() || !arr[2].IsNumber())
+        return def;
     return glm::vec3(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat());
 }
 
-glm::vec4 ReadVec4(const rapidjson::Value& arr) {
+glm::vec4 ReadVec4(const rapidjson::Value& arr, glm::vec4 def = glm::vec4(1.0f)) {
+    if (!arr.IsArray() || arr.Size() < 4 ||
+        !arr[0].IsNumber() || !arr[1].IsNumber() || !arr[2].IsNumber() || !arr[3].IsNumber())
+        return def;
     return glm::vec4(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat(), arr[3].GetFloat());
 }
 
-glm::quat ReadQuat(const rapidjson::Value& arr) {
+glm::quat ReadQuat(const rapidjson::Value& arr, glm::quat def = glm::quat(1.0f, 0.0f, 0.0f, 0.0f)) {
+    if (!arr.IsArray() || arr.Size() < 4 ||
+        !arr[0].IsNumber() || !arr[1].IsNumber() || !arr[2].IsNumber() || !arr[3].IsNumber())
+        return def;
     return glm::quat(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat(), arr[3].GetFloat());
 }
 
@@ -132,7 +143,8 @@ entt::entity InstantiatePrefab(World& world, entt::registry& registry, const std
         return entt::null;
     }
 
-    if (!doc.HasMember("type") || std::string(doc["type"].GetString()) != "dprefab") {
+    if (!doc.HasMember("type") || !doc["type"].IsString() ||
+        std::string(doc["type"].GetString()) != "dprefab") {
         return entt::null;
     }
 
@@ -149,9 +161,9 @@ entt::entity InstantiatePrefab(World& world, entt::registry& registry, const std
     if (doc.HasMember("transform") && doc["transform"].IsObject()) {
         const auto& t = doc["transform"];
         TransformComponent tc;
-        if (t.HasMember("position")) tc.position = ReadVec3(t["position"]);
-        if (t.HasMember("rotation")) tc.rotation = ReadQuat(t["rotation"]);
-        if (t.HasMember("scale")) tc.scale = ReadVec3(t["scale"]);
+        if (t.HasMember("position")) tc.position = ReadVec3(t["position"], tc.position);
+        if (t.HasMember("rotation")) tc.rotation = ReadQuat(t["rotation"], tc.rotation);
+        if (t.HasMember("scale")) tc.scale = ReadVec3(t["scale"], tc.scale);
         tc.dirty = true;
         registry.emplace<TransformComponent>(entity, tc);
     } else {
@@ -162,13 +174,13 @@ entt::entity InstantiatePrefab(World& world, entt::registry& registry, const std
     if (doc.HasMember("mesh_renderer") && doc["mesh_renderer"].IsObject()) {
         const auto& m = doc["mesh_renderer"];
         dse::MeshRendererComponent mc;
-        if (m.HasMember("mesh_path")) mc.mesh_path = m["mesh_path"].GetString();
-        if (m.HasMember("shader_variant")) mc.shader_variant = m["shader_variant"].GetString();
-        if (m.HasMember("color")) mc.color = ReadVec4(m["color"]);
-        if (m.HasMember("metallic")) mc.metallic = m["metallic"].GetFloat();
-        if (m.HasMember("roughness")) mc.roughness = m["roughness"].GetFloat();
-        if (m.HasMember("ao")) mc.ao = m["ao"].GetFloat();
-        if (m.HasMember("visible")) mc.visible = m["visible"].GetBool();
+        if (m.HasMember("mesh_path") && m["mesh_path"].IsString()) mc.mesh_path = m["mesh_path"].GetString();
+        if (m.HasMember("shader_variant") && m["shader_variant"].IsString()) mc.shader_variant = m["shader_variant"].GetString();
+        if (m.HasMember("color")) mc.color = ReadVec4(m["color"], mc.color);
+        if (m.HasMember("metallic") && m["metallic"].IsNumber()) mc.metallic = m["metallic"].GetFloat();
+        if (m.HasMember("roughness") && m["roughness"].IsNumber()) mc.roughness = m["roughness"].GetFloat();
+        if (m.HasMember("ao") && m["ao"].IsNumber()) mc.ao = m["ao"].GetFloat();
+        if (m.HasMember("visible") && m["visible"].IsBool()) mc.visible = m["visible"].GetBool();
         registry.emplace<dse::MeshRendererComponent>(entity, mc);
     }
 
@@ -176,10 +188,10 @@ entt::entity InstantiatePrefab(World& world, entt::registry& registry, const std
     if (doc.HasMember("animator_3d") && doc["animator_3d"].IsObject()) {
         const auto& a = doc["animator_3d"];
         dse::Animator3DComponent ac;
-        if (a.HasMember("dskel_path")) ac.dskel_path = a["dskel_path"].GetString();
-        if (a.HasMember("danim_path")) ac.danim_path = a["danim_path"].GetString();
-        if (a.HasMember("speed")) ac.speed = a["speed"].GetFloat();
-        if (a.HasMember("loop")) ac.loop = a["loop"].GetBool();
+        if (a.HasMember("dskel_path") && a["dskel_path"].IsString()) ac.dskel_path = a["dskel_path"].GetString();
+        if (a.HasMember("danim_path") && a["danim_path"].IsString()) ac.danim_path = a["danim_path"].GetString();
+        if (a.HasMember("speed") && a["speed"].IsNumber()) ac.speed = a["speed"].GetFloat();
+        if (a.HasMember("loop") && a["loop"].IsBool()) ac.loop = a["loop"].GetBool();
         registry.emplace<dse::Animator3DComponent>(entity, ac);
     }
 

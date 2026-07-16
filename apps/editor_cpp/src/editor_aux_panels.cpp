@@ -250,7 +250,7 @@ unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
                         const auto& m = doc[mi];
                         if (m.HasMember("base_color_factor") && m["base_color_factor"].IsArray()) {
                             const auto bc = m["base_color_factor"].GetArray();
-                            if (bc.Size() >= 3) {
+                            if (bc.Size() >= 3 && bc[0].IsNumber() && bc[1].IsNumber() && bc[2].IsNumber()) {
                                 float r = bc[0].GetFloat(), g = bc[1].GetFloat(), b = bc[2].GetFloat();
                                 float mx = std::max({r,g,b}), mn = std::min({r,g,b});
                                 float sat = mx - mn;
@@ -261,11 +261,11 @@ unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
                     const auto& mat = doc[best_idx];
                     if (mat.HasMember("base_color_factor") && mat["base_color_factor"].IsArray()) {
                         const auto bc = mat["base_color_factor"].GetArray();
-                        if (bc.Size() >= 3) { cr = bc[0].GetFloat(); cg = bc[1].GetFloat(); cb = bc[2].GetFloat(); }
+                        if (bc.Size() >= 3 && bc[0].IsNumber() && bc[1].IsNumber() && bc[2].IsNumber()) { cr = bc[0].GetFloat(); cg = bc[1].GetFloat(); cb = bc[2].GetFloat(); }
                     }
                     if (mat.HasMember("emissive_factor") && mat["emissive_factor"].IsArray()) {
                         const auto em = mat["emissive_factor"].GetArray();
-                        if (em.Size() >= 3) { er = em[0].GetFloat(); eg = em[1].GetFloat(); eb = em[2].GetFloat(); }
+                        if (em.Size() >= 3 && em[0].IsNumber() && em[1].IsNumber() && em[2].IsNumber()) { er = em[0].GetFloat(); eg = em[1].GetFloat(); eb = em[2].GetFloat(); }
                     }
                     if (mat.HasMember("roughness_factor") && mat["roughness_factor"].IsNumber())
                         rough = mat["roughness_factor"].GetFloat();

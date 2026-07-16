@@ -654,7 +654,8 @@ static JsonRpcResponse HandlePhysicsSetGravity(
     dse::runtime::EngineInstance& engine) {
 
     float gx = 0.0f, gy = -9.81f, gz = 0.0f;
-    if (params.HasMember("gravity") && params["gravity"].IsArray() && params["gravity"].Size() >= 3) {
+    if (params.HasMember("gravity") && params["gravity"].IsArray() && params["gravity"].Size() >= 3 &&
+        params["gravity"][0].IsNumber() && params["gravity"][1].IsNumber() && params["gravity"][2].IsNumber()) {
         gx = params["gravity"][0].GetFloat();
         gy = params["gravity"][1].GetFloat();
         gz = params["gravity"][2].GetFloat();

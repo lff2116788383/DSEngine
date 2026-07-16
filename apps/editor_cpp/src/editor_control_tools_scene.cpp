@@ -244,7 +244,7 @@ static JsonRpcResponse HandleMaterialCreate(
     // base_color [r,g,b,a]
     if (params.HasMember("base_color") && params["base_color"].IsArray()) {
         rapidjson::Value bc(rapidjson::kArrayType);
-        for (auto& v : params["base_color"].GetArray()) bc.PushBack(v.GetFloat(), da);
+        for (auto& v : params["base_color"].GetArray()) bc.PushBack(v.IsNumber() ? v.GetFloat() : 0.0f, da);
         mat_obj.AddMember("base_color", bc, da);
     } else {
         rapidjson::Value bc(rapidjson::kArrayType);
@@ -255,7 +255,7 @@ static JsonRpcResponse HandleMaterialCreate(
     // emissive [r,g,b]
     if (params.HasMember("emissive") && params["emissive"].IsArray()) {
         rapidjson::Value em(rapidjson::kArrayType);
-        for (auto& v : params["emissive"].GetArray()) em.PushBack(v.GetFloat(), da);
+        for (auto& v : params["emissive"].GetArray()) em.PushBack(v.IsNumber() ? v.GetFloat() : 0.0f, da);
         mat_obj.AddMember("emissive", em, da);
     }
 

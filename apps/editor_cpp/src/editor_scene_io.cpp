@@ -49,10 +49,12 @@ void WriteVec4(rapidjson::Value& parent,
     parent.AddMember(rapidjson::Value(name, allocator).Move(), arr, allocator);
 }
 
+// 场景文件可能被手工编辑/损坏：数组元素非数值时 GetFloat 会触发 rapidjson 断言崩溃，
+// 逐元素校验 IsNumber，任一非法则保持传入默认值不变。
 void ReadVec2(const rapidjson::Value& parent, const char* name, glm::vec2& out) {
     if (parent.HasMember(name) && parent[name].IsArray()) {
         auto arr = parent[name].GetArray();
-        if (arr.Size() >= 2) {
+        if (arr.Size() >= 2 && arr[0].IsNumber() && arr[1].IsNumber()) {
             out = glm::vec2(arr[0].GetFloat(), arr[1].GetFloat());
         }
     }
@@ -61,7 +63,7 @@ void ReadVec2(const rapidjson::Value& parent, const char* name, glm::vec2& out) 
 void ReadVec3(const rapidjson::Value& parent, const char* name, glm::vec3& out) {
     if (parent.HasMember(name) && parent[name].IsArray()) {
         auto arr = parent[name].GetArray();
-        if (arr.Size() >= 3) {
+        if (arr.Size() >= 3 && arr[0].IsNumber() && arr[1].IsNumber() && arr[2].IsNumber()) {
             out = glm::vec3(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat());
         }
     }
@@ -70,7 +72,8 @@ void ReadVec3(const rapidjson::Value& parent, const char* name, glm::vec3& out) 
 void ReadVec4(const rapidjson::Value& parent, const char* name, glm::vec4& out) {
     if (parent.HasMember(name) && parent[name].IsArray()) {
         auto arr = parent[name].GetArray();
-        if (arr.Size() >= 4) {
+        if (arr.Size() >= 4 && arr[0].IsNumber() && arr[1].IsNumber() &&
+            arr[2].IsNumber() && arr[3].IsNumber()) {
             out = glm::vec4(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat(), arr[3].GetFloat());
         }
     }
@@ -883,7 +886,8 @@ static void LoadTransformJsonComponent(
     ReadVec3(t_obj, "position", t.position);
     if (t_obj.HasMember("rotation") && t_obj["rotation"].IsArray()) {
     auto rot = t_obj["rotation"].GetArray();
-    if (rot.Size() >= 4) t.rotation = glm::quat(rot[3].GetFloat(), rot[0].GetFloat(), rot[1].GetFloat(), rot[2].GetFloat());
+    if (rot.Size() >= 4 && rot[0].IsNumber() && rot[1].IsNumber() && rot[2].IsNumber() && rot[3].IsNumber())
+        t.rotation = glm::quat(rot[3].GetFloat(), rot[0].GetFloat(), rot[1].GetFloat(), rot[2].GetFloat());
     }
     ReadVec3(t_obj, "scale", t.scale);
     if (t_obj.HasMember("dirty") && t_obj["dirty"].IsBool()) t.dirty = t_obj["dirty"].GetBool();

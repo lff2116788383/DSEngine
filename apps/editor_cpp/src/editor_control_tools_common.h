@@ -23,18 +23,23 @@ inline JsonRpcResponse MakeToolError(int code, const std::string& msg) {
     return resp;
 }
 
+// 远程控制命令的 JSON 可能非法：数组元素非数值时 GetFloat 会触发 rapidjson 断言崩溃，
+// 逐元素校验 IsNumber，任一非法则返回默认值。
 inline glm::vec3 ParseVec3(const rapidjson::Value& arr, glm::vec3 def = glm::vec3(0.0f)) {
     if (!arr.IsArray() || arr.Size() < 3) return def;
+    if (!arr[0].IsNumber() || !arr[1].IsNumber() || !arr[2].IsNumber()) return def;
     return glm::vec3(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat());
 }
 
 inline glm::vec4 ParseVec4(const rapidjson::Value& arr, glm::vec4 def = glm::vec4(1.0f)) {
     if (!arr.IsArray() || arr.Size() < 4) return def;
+    if (!arr[0].IsNumber() || !arr[1].IsNumber() || !arr[2].IsNumber() || !arr[3].IsNumber()) return def;
     return glm::vec4(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat(), arr[3].GetFloat());
 }
 
 inline glm::vec2 ParseVec2(const rapidjson::Value& arr, glm::vec2 def = glm::vec2(0.0f)) {
     if (!arr.IsArray() || arr.Size() < 2) return def;
+    if (!arr[0].IsNumber() || !arr[1].IsNumber()) return def;
     return glm::vec2(arr[0].GetFloat(), arr[1].GetFloat());
 }
 

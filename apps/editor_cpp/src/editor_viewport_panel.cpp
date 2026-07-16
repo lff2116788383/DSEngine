@@ -76,7 +76,7 @@ struct AsyncImportResult {
     float position_offset_x = 0.0f;
 };
 
-static struct {
+struct AsyncImportState {
     std::mutex mtx;
     std::atomic<bool> running{false};
     std::atomic<int> total_jobs{0};
@@ -84,7 +84,13 @@ static struct {
     std::string current_file;
     std::queue<AsyncImportResult> results;
     std::thread worker;
-} s_async_import;
+    // 退出时若导入仍在进行，joinable 的 worker 被析构会触发 std::terminate；
+    // 在析构中等待其完成（导入任务有限、可终止）以避免关闭编辑器崩溃。
+    ~AsyncImportState() {
+        if (worker.joinable()) worker.join();
+    }
+};
+static AsyncImportState s_async_import;
 
 float GetCachedSceneViewportAspect() { return s_cached_scene_aspect; }
 void  SetCachedSceneViewportAspect(float aspect) { s_cached_scene_aspect = aspect; }

@@ -50,12 +50,28 @@ bool QuatEqual(const glm::quat& a, const glm::quat& b, float eps = 0.001f) {
            std::abs(a.y - b.y) < eps && std::abs(a.z - b.z) < eps;
 }
 
-glm::vec3 ReadVec3(const rapidjson::Value& arr) {
+// prefab 文件可能损坏：非数组/长度不足/元素非数值时直接索引或 GetFloat 会触发
+// rapidjson 断言崩溃。校验失败时返回传入默认值。
+glm::vec3 ReadVec3(const rapidjson::Value& arr, glm::vec3 def = glm::vec3(0.0f)) {
+    if (!arr.IsArray() || arr.Size() < 3 ||
+        !arr[0].IsNumber() || !arr[1].IsNumber() || !arr[2].IsNumber())
+        return def;
     return glm::vec3(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat());
 }
 
-glm::quat ReadQuat(const rapidjson::Value& arr) {
+glm::quat ReadQuat(const rapidjson::Value& arr, glm::quat def = glm::quat(1.0f, 0.0f, 0.0f, 0.0f)) {
+    if (!arr.IsArray() || arr.Size() < 4 ||
+        !arr[0].IsNumber() || !arr[1].IsNumber() || !arr[2].IsNumber() || !arr[3].IsNumber())
+        return def;
     return glm::quat(arr[0].GetFloat(), arr[1].GetFloat(), arr[2].GetFloat(), arr[3].GetFloat());
+}
+
+bool ReadVec4Checked(const rapidjson::Value& v, glm::vec4& out) {
+    if (!v.IsArray() || v.Size() < 4 ||
+        !v[0].IsNumber() || !v[1].IsNumber() || !v[2].IsNumber() || !v[3].IsNumber())
+        return false;
+    out = glm::vec4(v[0].GetFloat(), v[1].GetFloat(), v[2].GetFloat(), v[3].GetFloat());
+    return true;
 }
 
 /// Load the prefab JSON document from disk. Returns false on failure.
@@ -77,19 +93,19 @@ void CompareTransform(entt::registry& reg, entt::entity entity,
     if (doc.HasMember("transform") && doc["transform"].IsObject()) {
         auto& t = doc["transform"];
         if (t.HasMember("position") && t["position"].IsArray()) {
-            glm::vec3 orig = ReadVec3(t["position"]);
+            glm::vec3 orig = ReadVec3(t["position"], tf.position);
             if (!Vec3Equal(tf.position, orig)) {
                 overrides.push_back({"Transform", "Position", Vec3ToString(orig), Vec3ToString(tf.position)});
             }
         }
         if (t.HasMember("rotation") && t["rotation"].IsArray()) {
-            glm::quat orig = ReadQuat(t["rotation"]);
+            glm::quat orig = ReadQuat(t["rotation"], tf.rotation);
             if (!QuatEqual(tf.rotation, orig)) {
                 overrides.push_back({"Transform", "Rotation", QuatToString(orig), QuatToString(tf.rotation)});
             }
         }
         if (t.HasMember("scale") && t["scale"].IsArray()) {
-            glm::vec3 orig = ReadVec3(t["scale"]);
+            glm::vec3 orig = ReadVec3(t["scale"], tf.scale);
             if (!Vec3Equal(tf.scale, orig)) {
                 overrides.push_back({"Transform", "Scale", Vec3ToString(orig), Vec3ToString(tf.scale)});
             }
@@ -124,9 +140,8 @@ void CompareMeshRenderer(entt::registry& reg, entt::entity entity,
                     mesh.visible ? "true" : "false"});
             }
         }
-        if (m.HasMember("color") && m["color"].IsArray()) {
-            glm::vec4 orig = glm::vec4(m["color"][0].GetFloat(), m["color"][1].GetFloat(),
-                                      m["color"][2].GetFloat(), m["color"][3].GetFloat());
+        glm::vec4 orig;
+        if (m.HasMember("color") && ReadVec4Checked(m["color"], orig)) {
             if (!Vec3Equal(glm::vec3(orig), glm::vec3(mesh.color)) ||
                 std::abs(orig.a - mesh.color.a) > 0.001f) {
                 overrides.push_back({"MeshRenderer", "Color",
@@ -149,7 +164,7 @@ void CompareMeshRenderer(entt::registry& reg, entt::entity entity,
             }
         }
         if (m.HasMember("emissive") && m["emissive"].IsArray()) {
-            glm::vec3 orig = ReadVec3(m["emissive"]);
+            glm::vec3 orig = ReadVec3(m["emissive"], mesh.emissive);
             if (!Vec3Equal(mesh.emissive, orig)) {
                 overrides.push_back({"MeshRenderer", "Emissive",
                     Vec3ToString(orig), Vec3ToString(mesh.emissive)});
@@ -215,13 +230,13 @@ bool RevertPrefabOverride(entt::registry& registry, entt::entity entity,
         if (doc.HasMember("transform") && doc["transform"].IsObject()) {
             auto& t = doc["transform"];
             if (override_info.property_name == "Position" && t.HasMember("position")) {
-                tf.position = ReadVec3(t["position"]);
+                tf.position = ReadVec3(t["position"], tf.position);
                 tf.dirty = true;
             } else if (override_info.property_name == "Rotation" && t.HasMember("rotation")) {
-                tf.rotation = ReadQuat(t["rotation"]);
+                tf.rotation = ReadQuat(t["rotation"], tf.rotation);
                 tf.dirty = true;
             } else if (override_info.property_name == "Scale" && t.HasMember("scale")) {
-                tf.scale = ReadVec3(t["scale"]);
+                tf.scale = ReadVec3(t["scale"], tf.scale);
                 tf.dirty = true;
             }
         }
@@ -233,19 +248,18 @@ bool RevertPrefabOverride(entt::registry& registry, entt::entity entity,
         auto& mesh = registry.get<dse::MeshRendererComponent>(entity);
         if (doc.HasMember("mesh_renderer") && doc["mesh_renderer"].IsObject()) {
             auto& m = doc["mesh_renderer"];
-            if (override_info.property_name == "MeshPath" && m.HasMember("mesh_path")) {
+            if (override_info.property_name == "MeshPath" && m.HasMember("mesh_path") && m["mesh_path"].IsString()) {
                 mesh.mesh_path = m["mesh_path"].GetString();
-            } else if (override_info.property_name == "Visible" && m.HasMember("visible")) {
+            } else if (override_info.property_name == "Visible" && m.HasMember("visible") && m["visible"].IsBool()) {
                 mesh.visible = m["visible"].GetBool();
             } else if (override_info.property_name == "Color" && m.HasMember("color")) {
-                mesh.color = glm::vec4(m["color"][0].GetFloat(), m["color"][1].GetFloat(),
-                                       m["color"][2].GetFloat(), m["color"][3].GetFloat());
-            } else if (override_info.property_name == "Metallic" && m.HasMember("metallic")) {
+                ReadVec4Checked(m["color"], mesh.color);
+            } else if (override_info.property_name == "Metallic" && m.HasMember("metallic") && m["metallic"].IsNumber()) {
                 mesh.metallic = m["metallic"].GetFloat();
-            } else if (override_info.property_name == "Roughness" && m.HasMember("roughness")) {
+            } else if (override_info.property_name == "Roughness" && m.HasMember("roughness") && m["roughness"].IsNumber()) {
                 mesh.roughness = m["roughness"].GetFloat();
             } else if (override_info.property_name == "Emissive" && m.HasMember("emissive")) {
-                mesh.emissive = ReadVec3(m["emissive"]);
+                mesh.emissive = ReadVec3(m["emissive"], mesh.emissive);
             }
         }
         return true;
