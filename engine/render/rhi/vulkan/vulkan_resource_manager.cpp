@@ -171,10 +171,12 @@ void VulkanResourceManager::Shutdown() {
     }
 
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
-        if (descriptor_pools_[i] != VK_NULL_HANDLE) {
-            vkDestroyDescriptorPool(device_, descriptor_pools_[i], nullptr);
-            descriptor_pools_[i] = VK_NULL_HANDLE;
+        for (VkDescriptorPool pool : descriptor_pools_[i]) {
+            if (pool != VK_NULL_HANDLE) {
+                vkDestroyDescriptorPool(device_, pool, nullptr);
+            }
         }
+        descriptor_pools_[i].clear();
     }
 
     initialized_ = false;
@@ -1715,9 +1717,9 @@ uint32_t VulkanResourceManager::FindMemoryType(uint32_t type_filter, VkMemoryPro
 // Descriptor Pool & Set
 // ============================================================
 
-bool VulkanResourceManager::CreateDescriptorPool() {
+VkDescriptorPool VulkanResourceManager::CreateOneDescriptorPool() {
     // 每个 mesh draw 最多分配 4 个 descriptor set；重实例化/多 shadow pass 场景下
-    // 单帧 set 数可达数千（实测 3d_instancing 峰值 ~4911 set），故将容量提升 ~4×。
+    // 单帧 set 数可达数千（实测 3d_instancing 峰值 ~4911 set）。
     // descriptor pool 仅为主机端记账，成本很小。
     std::vector<VkDescriptorPoolSize> pool_sizes = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         32768},
@@ -1733,38 +1735,91 @@ bool VulkanResourceManager::CreateDescriptorPool() {
     pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
     pool_info.pPoolSizes = pool_sizes.data();
 
+    VkDescriptorPool pool = VK_NULL_HANDLE;
+    if (vkCreateDescriptorPool(device_, &pool_info, nullptr, &pool) != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to create descriptor pool");
+        return VK_NULL_HANDLE;
+    }
+    return pool;
+}
+
+bool VulkanResourceManager::CreateDescriptorPool() {
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
-        if (vkCreateDescriptorPool(device_, &pool_info, nullptr, &descriptor_pools_[i]) != VK_SUCCESS) {
+        VkDescriptorPool pool = CreateOneDescriptorPool();
+        if (pool == VK_NULL_HANDLE) {
             DEBUG_LOG_ERROR("[Vulkan] Failed to create descriptor pool for frame {}", i);
             return false;
         }
+        descriptor_pools_[i].clear();
+        descriptor_pools_[i].push_back(pool);
     }
 
-    DEBUG_LOG_INFO("[Vulkan] Descriptor pools created ({}x, maxSets=16384 each)", kMaxFramesInFlight);
+    DEBUG_LOG_INFO("[Vulkan] Descriptor pools created ({}x, maxSets=16384 each, grow-on-demand)",
+                   kMaxFramesInFlight);
     return true;
 }
 
 void VulkanResourceManager::ResetDescriptorPool(uint32_t frame_index) {
     current_pool_index_ = frame_index % kMaxFramesInFlight;
-    if (descriptor_pools_[current_pool_index_] != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
-        vkResetDescriptorPool(device_, descriptor_pools_[current_pool_index_], 0);
+    active_pool_slot_ = 0;
+    if (device_ == VK_NULL_HANDLE) return;
+    for (VkDescriptorPool pool : descriptor_pools_[current_pool_index_]) {
+        if (pool != VK_NULL_HANDLE) {
+            vkResetDescriptorPool(device_, pool, 0);
+        }
     }
 }
 
 VkDescriptorSet VulkanResourceManager::AllocateDescriptorSet(VkDescriptorSetLayout layout) {
-    VkDescriptorSetAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool = descriptor_pools_[current_pool_index_];
-    alloc_info.descriptorSetCount = 1;
-    alloc_info.pSetLayouts = &layout;
-
-    VkDescriptorSet descriptor_set;
-    VkResult result = vkAllocateDescriptorSets(device_, &alloc_info, &descriptor_set);
-    if (result != VK_SUCCESS) {
-        DEBUG_LOG_ERROR("[Vulkan] Failed to allocate descriptor set: {}", static_cast<int>(result));
+    auto& pools = descriptor_pools_[current_pool_index_];
+    if (pools.empty()) {
+        DEBUG_LOG_ERROR("[Vulkan] AllocateDescriptorSet called before pool creation");
         return VK_NULL_HANDLE;
     }
-    return descriptor_set;
+
+    // 从当前 slot 尝试分配；池满（OUT_OF_POOL_MEMORY/FRAGMENTED_POOL）时前进到下一个
+    // 已有池，若无则按需新建一个池，直至成功。这样单帧 set 数不再受单池容量硬上限约束。
+    bool grew_fresh_pool = false;
+    while (true) {
+        VkDescriptorSetAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.descriptorPool = pools[active_pool_slot_];
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &layout;
+
+        VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+        VkResult result = vkAllocateDescriptorSets(device_, &alloc_info, &descriptor_set);
+        if (result == VK_SUCCESS) {
+            return descriptor_set;
+        }
+
+        if (result != VK_ERROR_OUT_OF_POOL_MEMORY && result != VK_ERROR_FRAGMENTED_POOL) {
+            DEBUG_LOG_ERROR("[Vulkan] Failed to allocate descriptor set: {}", static_cast<int>(result));
+            return VK_NULL_HANDLE;
+        }
+
+        // 刚新建的空池仍分配失败：单个 layout 超出单池容量，无法通过扩容解决
+        if (grew_fresh_pool) {
+            DEBUG_LOG_ERROR("[Vulkan] Descriptor set exceeds single pool capacity: {}",
+                            static_cast<int>(result));
+            return VK_NULL_HANDLE;
+        }
+
+        // 当前池已满：前进到下一个已有池或新建一个池
+        if (active_pool_slot_ + 1 < pools.size()) {
+            ++active_pool_slot_;
+            continue;
+        }
+
+        VkDescriptorPool grown = CreateOneDescriptorPool();
+        if (grown == VK_NULL_HANDLE) {
+            DEBUG_LOG_ERROR("[Vulkan] Descriptor pool grow failed");
+            return VK_NULL_HANDLE;
+        }
+        pools.push_back(grown);
+        active_pool_slot_ = pools.size() - 1;
+        grew_fresh_pool = true;
+    }
 }
 
 } // namespace render

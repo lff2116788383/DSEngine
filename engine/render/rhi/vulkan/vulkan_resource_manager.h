@@ -157,7 +157,10 @@ public:
     VkSampler shadow_comparison_sampler() const { return shadow_comparison_sampler_; }
 
     // --- Descriptor Pool & Set ---
-    VkDescriptorPool descriptor_pool() const { return descriptor_pools_[current_pool_index_]; }
+    VkDescriptorPool descriptor_pool() const {
+        const auto& pools = descriptor_pools_[current_pool_index_];
+        return active_pool_slot_ < pools.size() ? pools[active_pool_slot_] : VK_NULL_HANDLE;
+    }
 
     /// 从当前帧的 DescriptorPool 分配 DescriptorSet
     /// @param layout 需要匹配的 VkDescriptorSetLayout
@@ -169,6 +172,12 @@ public:
 
     /// 创建 DescriptorPool（在 Init 中自动调用）
     bool CreateDescriptorPool();
+
+private:
+    /// 创建单个 DescriptorPool（供按需扩容使用）
+    VkDescriptorPool CreateOneDescriptorPool();
+
+public:
 
     // --- 命令缓冲池 ---
     /// 从池中获取可复用的 VkCommandBuffer（池空时创建新缓冲）
@@ -218,9 +227,12 @@ private:
     VkSampler shadow_comparison_sampler_ = VK_NULL_HANDLE;
 
     // Descriptor Pool（per-frame，避免帧间同步冲突）
+    // 每帧维护一个 pool 列表：单帧 set 数超过单个 pool 容量时按需追加新 pool，
+    // 避免 VK_ERROR_OUT_OF_POOL_MEMORY 导致 draw 用空 descriptor set 触发 DEVICE_LOST。
     static constexpr uint32_t kMaxFramesInFlight = 2;
-    VkDescriptorPool descriptor_pools_[kMaxFramesInFlight] = {};
+    std::vector<VkDescriptorPool> descriptor_pools_[kMaxFramesInFlight];
     uint32_t current_pool_index_ = 0;
+    size_t active_pool_slot_ = 0;
 
     // 资源存储
     std::unordered_map<unsigned int, VulkanTexture> textures_;
