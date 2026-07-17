@@ -7,7 +7,7 @@ layout(set = 2, binding = 2) uniform sampler2D ssaoTexture;
 layout(set = 2, binding = 3) uniform sampler2D autoExposureTex;
 layout(set = 2, binding = 5) uniform sampler3D lutTexture;
 
-layout(std140, set = 2, binding = 0) uniform SsaoApplyParams {
+layout(push_constant) uniform SsaoApplyParams {
     float exposure;
     float autoExposureEnabled;
     float lutEnabled;
