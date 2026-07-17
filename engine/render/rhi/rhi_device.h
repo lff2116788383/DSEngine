@@ -483,6 +483,13 @@ public:
     /// GL 约定的 quad UV 会上下颠倒；GL/Vulkan 不需要（Vulkan NDC Y 向下抵消）
     virtual bool NeedsFullscreenQuadVFlip() const { return false; }
 
+    /// 全屏后处理"视线重建"着色器把 vTexCoords 反算成视方向时，屏幕纵向的正负号。
+    /// 全屏 quad 在裸 clip-space 直接绘制、不过投影矫正：GL 帧缓冲 Y 向上，屏幕顶部
+    /// 对应 vTexCoords.y=1；而 Vulkan(NDC Y 向下) 与 DX11(quad V 翻转) 下屏幕顶部对应
+    /// vTexCoords.y=0，需要把 ndc.y 取反才能得到与 GL 一致的世界视线方向。
+    /// 仅影响 atmosphere_sky / volumetric_fog / volumetric_cloud / water 这类反算视线的全屏效果。
+    virtual float FullscreenRayNdcYSign() const { return 1.0f; }
+
     /// Clip-space correction matrix to convert from OpenGL NDC convention
     /// (Y-up, Z∈[-1,1]) to the target API convention.
     /// OpenGL: identity. Vulkan: Y-flip + Z remap. DX11: Z remap only.

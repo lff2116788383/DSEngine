@@ -203,6 +203,7 @@ public:
 
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
+    float FullscreenRayNdcYSign() const override { return -1.0f; }
 
     /// Vulkan: Y-flip (NDC Y-down) + Z remap ([-1,1] → [0,1])
     glm::mat4 GetProjectionCorrection() const override {
@@ -345,4 +346,4 @@ public:
 } // namespace render
 } // namespace dse
 
-#endif // DSE_RENDER_VULKAN_RHI_DEVICE_H
+#endif // DSE_RENDER_VULKAN_RHI_DEVICE_H

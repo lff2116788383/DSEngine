@@ -5,7 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 
-layout(std140, set = 2, binding = 0) uniform WaterParams {
+layout(push_constant) uniform WaterParams {
     float u_water_level;
     float u_deep_r;    float u_deep_g;    float u_deep_b;
     float u_shallow_r; float u_shallow_g; float u_shallow_b;
@@ -27,6 +27,7 @@ layout(std140, set = 2, binding = 0) uniform WaterParams {
     float u_foam_intensity; float u_foam_depth_threshold;
     float u_uw_fog_density;
     float u_uw_fog_r; float u_uw_fog_g; float u_uw_fog_b;
+    float u_ray_ndc_y_sign;
 };
 
 float WaterLinZ(float d) {
@@ -58,7 +59,7 @@ void main() {
     vec2 ndc = vTexCoords * 2.0 - 1.0;
     vec3 rayDir = normalize(camFwd
         + ndc.x * camRight * u_tan_fov_y * u_aspect
-        + ndc.y * camUp    * u_tan_fov_y);
+        + ndc.y * u_ray_ndc_y_sign * camUp * u_tan_fov_y);
 
     float denom = rayDir.y;
     if (abs(denom) < 1e-6) { FragColor = scene; return; }
@@ -126,7 +127,7 @@ void main() {
             if (ray_z <= u_near) continue;
             vec2 proj_uv = vec2(
                 dot(delta, camRight) / (ray_z * u_tan_fov_y * u_aspect),
-                dot(delta, camUp)    / (ray_z * u_tan_fov_y)
+                dot(delta, camUp) * u_ray_ndc_y_sign / (ray_z * u_tan_fov_y)
             );
             proj_uv = proj_uv * 0.5 + 0.5;
             if (proj_uv.x < 0.0 || proj_uv.x > 1.0 || proj_uv.y < 0.0 || proj_uv.y > 1.0) break;

@@ -108,7 +108,8 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
         cam_right.x, cam_right.y, cam_right.z,
         cam_up.x, cam_up.y, cam_up.z,
         cam_fwd.x, cam_fwd.y, cam_fwd.z,
-        tan_fov_y, aspect
+        tan_fov_y, aspect,
+        ctx_.rhi_device->FullscreenRayNdcYSign()
     }}.Tex(2, depth_tex));
     cmd_buffer.EndRenderPass();
 
@@ -193,7 +194,8 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
         near_p, far_p,
         right_scaled.x, right_scaled.y, right_scaled.z,
         up_scaled.x, up_scaled.y, up_scaled.z,
-        cam_fwd.x, cam_fwd.y, cam_fwd.z
+        cam_fwd.x, cam_fwd.y, cam_fwd.z,
+        ctx_.rhi_device->FullscreenRayNdcYSign()
     }}.Tex(2, depth_tex));
     cmd_buffer.EndRenderPass();
 
@@ -313,7 +315,8 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
 
     // params 布局（40 float = 160 bytes）
-    std::vector<float> params(39);
+    std::vector<float> params(40);
+    const float ray_ndc_y_sign = ctx_.rhi_device->FullscreenRayNdcYSign();
 
     for (int wi = 0; wi < snap.water_count; ++wi) {
         const auto& wc = snap.waters[wi];
@@ -342,6 +345,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
         params[33] = wc.foam_intensity;       params[34] = wc.foam_depth_threshold;
         params[35] = wc.underwater_fog_density;
         params[36] = wc.underwater_fog_color.r; params[37] = wc.underwater_fog_color.g; params[38] = wc.underwater_fog_color.b;
+        params[39] = ray_ndc_y_sign;
 
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
             PostProcessRequest{"water", scene_tex, params, true}.Tex(2, depth_tex));

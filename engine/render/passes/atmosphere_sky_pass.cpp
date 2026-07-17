@@ -111,7 +111,7 @@ void AtmosphereSkyPass::Execute(CommandBuffer& cmd_buffer) {
         atm.ozone_coeff.x, atm.ozone_coeff.y, atm.ozone_coeff.z,
         atm.ozone_center_h, atm.ozone_width,
         static_cast<float>(atm.sky_view_steps),
-        0.0f // reserved
+        ctx_.rhi_device->FullscreenRayNdcYSign()
     }}.Tex(2, depth_tex).Tex(3, transmittance_lut_));
     cmd_buffer.EndRenderPass();
 }

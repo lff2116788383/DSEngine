@@ -6,7 +6,7 @@ layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 layout(set = 2, binding = 3) uniform sampler2D u_transmittance_lut;
 
-layout(std140, set = 2, binding = 0) uniform AtmosphereSkyParams {
+layout(push_constant) uniform AtmosphereSkyParams {
     float u_sun_dir_x;  float u_sun_dir_y;  float u_sun_dir_z;
     float u_rayleigh_r; float u_rayleigh_g; float u_rayleigh_b;
     float u_rayleigh_scale_h;
@@ -26,7 +26,7 @@ layout(std140, set = 2, binding = 0) uniform AtmosphereSkyParams {
     float u_ozone_center_h;
     float u_ozone_width;
     float u_sky_view_steps;
-    float u_reserved;
+    float u_ray_ndc_y_sign;
 };
 
 const float PI = 3.14159265358979;
@@ -74,7 +74,7 @@ void main() {
     vec3 camUp    = vec3(u_up_x, u_up_y, u_up_z);
     vec3 viewDir = normalize(camFwd
         + ndc.x * camRight * u_tan_fov_y * u_aspect
-        + ndc.y * camUp    * u_tan_fov_y);
+        + ndc.y * u_ray_ndc_y_sign * camUp * u_tan_fov_y);
 
     vec3 sunDir = normalize(vec3(u_sun_dir_x, u_sun_dir_y, u_sun_dir_z));
     vec3 rayleigh_coeff = vec3(u_rayleigh_r, u_rayleigh_g, u_rayleigh_b);

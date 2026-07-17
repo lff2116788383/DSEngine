@@ -195,6 +195,7 @@ public:
     bool NeedsTextureYFlip() const override { return true; }
     bool NeedsReadbackYFlip() const override { return false; }
     bool NeedsFullscreenQuadVFlip() const override { return true; }
+    float FullscreenRayNdcYSign() const override { return -1.0f; }
 
     /// DX11: Z remap only ([-1,1] → [0,1]), Y stays up
     glm::mat4 GetProjectionCorrection() const override {

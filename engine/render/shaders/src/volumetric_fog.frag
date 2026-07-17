@@ -5,7 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 
-layout(std140, set = 2, binding = 0) uniform VolumetricFogParams {
+layout(push_constant) uniform VolumetricFogParams {
     float u_fog_r;    float u_fog_g;    float u_fog_b;
     float u_fog_density;
     float u_height_falloff;
@@ -22,6 +22,7 @@ layout(std140, set = 2, binding = 0) uniform VolumetricFogParams {
     float u_fwd_x;     float u_fwd_y;    float u_fwd_z;
     float u_tan_fov_y;
     float u_aspect;
+    float u_ray_ndc_y_sign;
 };
 
 float VFogLinZ(float d) {
@@ -41,7 +42,7 @@ void main() {
     vec3 camUp    = vec3(u_up_x,    u_up_y,    u_up_z);
     vec3 viewDir = normalize(camFwd
         + ndc.x * camRight * u_tan_fov_y * u_aspect
-        + ndc.y * camUp    * u_tan_fov_y);
+        + ndc.y * u_ray_ndc_y_sign * camUp * u_tan_fov_y);
     float cosAngle = max(dot(viewDir, camFwd), 0.0001);
     float rayLen   = viewZ / cosAngle;
 

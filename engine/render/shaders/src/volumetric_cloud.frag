@@ -5,7 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 
-layout(std140, set = 2, binding = 0) uniform VolumetricCloudParams {
+layout(push_constant) uniform VolumetricCloudParams {
     float u_cloud_bottom;
     float u_cloud_top;
     float u_coverage;
@@ -36,6 +36,7 @@ layout(std140, set = 2, binding = 0) uniform VolumetricCloudParams {
     float u_fwd_x;
     float u_fwd_y;
     float u_fwd_z;
+    float u_ray_ndc_y_sign;
 };
 
 // ============================================================
@@ -205,7 +206,7 @@ void main() {
     vec3 camPos = vec3(u_cam_pos_x, u_cam_pos_y, u_cam_pos_z);
 
     // right/up are pre-scaled by tan_fov_y * aspect / tan_fov_y respectively
-    vec3 ray_dir = normalize(camFwd + ndc.x * camRight + ndc.y * camUp);
+    vec3 ray_dir = normalize(camFwd + ndc.x * camRight + ndc.y * u_ray_ndc_y_sign * camUp);
 
     // Compute max ray distance from depth
     float max_dist = 1e10;
