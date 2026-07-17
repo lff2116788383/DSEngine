@@ -29,6 +29,8 @@ struct VulkanBuffer {
     bool is_dynamic = false;
     VkBufferUsageFlags usage_flags = 0;      ///< 创建时的 usage（同帧重写重建用）
     uint64_t last_update_frame = UINT64_MAX; ///< 最近一次 UpdateBuffer 的帧号
+    VkDeviceSize frame_write_lo = 0;         ///< 本帧已写区间下界（copy-on-write 重叠检测用）
+    VkDeviceSize frame_write_hi = 0;         ///< 本帧已写区间上界（exclusive）
 };
 
 /// Vulkan 纹理资源封装

@@ -8,6 +8,7 @@
 #include "engine/base/debug.h"
 
 #include <cstring>
+#include <algorithm>
 
 namespace dse {
 namespace render {
@@ -886,9 +887,16 @@ void VulkanResourceManager::UpdateBuffer(unsigned int handle, size_t offset, siz
 
     auto& buf = it->second;
     if (buf.is_dynamic && buf.mapped) {
-        // 命令缓冲延迟执行：同一帧内再次覆写会破坏已录制 draw 尚未读取的数据，
-        // 改为 copy-on-write：退役旧 VkBuffer（延迟销毁）并重建同规格新缓冲。
-        if (buf.last_update_frame == frame_counter_ && buf.usage_flags != 0) {
+        const VkDeviceSize write_lo = static_cast<VkDeviceSize>(offset);
+        const VkDeviceSize write_hi = static_cast<VkDeviceSize>(offset + size);
+        const bool same_frame = (buf.last_update_frame == frame_counter_);
+        // 命令缓冲延迟执行：同一帧内再次覆写「已录制 draw 尚未读取」的区间会破坏其数据。
+        // 环形/池式缓冲每帧对不同 offset 递增写入（互不重叠），无需重建；仅当本次写入与
+        // 本帧已写区间发生重叠时才 copy-on-write（退役旧 VkBuffer 延迟销毁 + 重建同规格新缓冲），
+        // 避免对每帧数千次非重叠更新做整缓冲重建 memcpy 造成帧耗时暴涨→device-lost。
+        const bool overlaps = same_frame && write_lo < buf.frame_write_hi && buf.frame_write_lo < write_hi;
+        bool recreated = false;
+        if (overlaps && buf.usage_flags != 0) {
             VkBufferCreateInfo bi{};
             bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
             bi.size = buf.size;
@@ -913,6 +921,7 @@ void VulkanResourceManager::UpdateBuffer(unsigned int handle, size_t offset, siz
                         buf.buffer = new_buffer;
                         buf.memory = new_memory;
                         buf.mapped = new_mapped;
+                        recreated = true;
                     } else {
                         vkFreeMemory(device_, new_memory, nullptr);
                         vkDestroyBuffer(device_, new_buffer, nullptr);
@@ -923,6 +932,15 @@ void VulkanResourceManager::UpdateBuffer(unsigned int handle, size_t offset, siz
             }
         }
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
+        // 更新本帧已写区间：新帧首写或刚 copy-on-write 重建后从本次写入重新起算，
+        // 否则并入已有区间（供后续写入做重叠检测）。
+        if (!same_frame || recreated) {
+            buf.frame_write_lo = write_lo;
+            buf.frame_write_hi = write_hi;
+        } else {
+            buf.frame_write_lo = std::min(buf.frame_write_lo, write_lo);
+            buf.frame_write_hi = std::max(buf.frame_write_hi, write_hi);
+        }
         buf.last_update_frame = frame_counter_;
     } else {
         // 非动态缓冲：staging 上传
