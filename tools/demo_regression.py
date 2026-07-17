@@ -230,7 +230,7 @@ def run_demo(
     env["DSE_SCREENSHOT_FRAME"] = str(screenshot_frame)
     env["DSE_SCREENSHOT_PATH"] = str(screenshot_path)
     env["DSE_AUTO_BATTLE"] = "1"
-    env["DSE_SCREENSHOT_TARGET"] = "swapchain" if backend == "vulkan" else "main"
+    env["DSE_SCREENSHOT_TARGET"] = "main"
 
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
