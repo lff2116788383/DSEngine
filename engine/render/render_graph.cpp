@@ -5,6 +5,7 @@
 
 #include "engine/render/render_graph.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/base/debug.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -241,6 +242,14 @@ bool RenderGraph::Compile() {
     // ---- 0. WAW 冲突检测：同一资源被多个 Pass 写入 ----
     for (const auto& res : resources_) {
         if (res.writers.size() > 1) {
+            std::string writers;
+            for (const auto& w : res.writers) {
+                auto it = std::find_if(passes_.begin(), passes_.end(),
+                                       [&](const PassNode& p) { return p.id == w.id; });
+                if (!writers.empty()) writers += ", ";
+                writers += (it != passes_.end()) ? it->name : std::to_string(w.id);
+            }
+            DEBUG_LOG_ERROR("RenderGraph WAW 冲突：资源 '{}' 被多个 Pass 写入 [{}]", res.name, writers);
             is_compiled_ = false;
             return false;
         }
@@ -313,6 +322,14 @@ bool RenderGraph::Compile() {
 
     // 检测循环依赖
     if (topo_order.size() != n) {
+        std::string cyclic;
+        for (size_t i = 0; i < n; ++i) {
+            if (in_degree[i] > 0) {
+                if (!cyclic.empty()) cyclic += ", ";
+                cyclic += passes_[i].name;
+            }
+        }
+        DEBUG_LOG_ERROR("RenderGraph 循环依赖，参与 Pass：[{}]", cyclic);
         is_compiled_ = false;
         return false;
     }

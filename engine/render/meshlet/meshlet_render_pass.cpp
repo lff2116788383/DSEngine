@@ -276,9 +276,14 @@ void MeshletCullRenderPass::ExecuteCPUFallback() {
 void MeshletDrawRenderPass::Setup(RenderGraph& graph) {
     auto meshlet_visibility = graph.DeclareResource("meshlet_visibility");
     auto scene_color = graph.DeclareResource("scene_color");
+    // 追加绘制到 scene RT：读 scene_color 建立与 scene_pass 的先后序，
+    // 写独立逻辑资源避免与 scene_pass 构成 WAW（RenderGraph 单写者约束）
+    auto meshlet_color = graph.DeclareResource("meshlet_scene_color");
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, meshlet_visibility);
-    graph.PassWrite(pass, scene_color);
+    graph.PassRead(pass, scene_color);
+    graph.PassWrite(pass, meshlet_color);
+    graph.MarkOutput(meshlet_color);
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
