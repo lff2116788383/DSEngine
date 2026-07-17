@@ -32,6 +32,7 @@
 #include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 #include "engine/render/shaders/generated/embed/postprocess_vert.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_vert.gen.h"
+#include "engine/render/shaders/generated/embed/shadow_gpu_driven_vert.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_frag.gen.h"
 #include "engine/render/shaders/generated/embed/gbuffer_frag.gen.h"
 #include "engine/render/shaders/generated/embed/fxaa_frag.gen.h"
@@ -69,6 +70,7 @@
 #include "engine/render/shaders/generated/embed/weather_particle_frag.gen.h"
 #include "engine/render/shaders/generated/embed/eye_frag.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert.gen.h"
+#include "engine/render/shaders/generated/embed/pbr_gpu_driven_frag.gen.h"
 #include "engine/render/shaders/generated/embed/text_sdf_frag.gen.h"
 #include "engine/render/shaders/generated/embed/ui_effects_frag.gen.h"
 
@@ -77,6 +79,7 @@
 #include "engine/render/shaders/generated/embed/pbr_frag_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/shadow_gpu_driven_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_vert_reflect.gen.h"
@@ -924,10 +927,6 @@ void DX11ShaderManager::InitGPUDrivenPBRShader() {
             pos += to.size();
         }
     };
-    auto replace_first = [](std::string& s, const std::string& from, const std::string& to) {
-        auto p = s.find(from);
-        if (p != std::string::npos) s.replace(p, from.size(), to);
-    };
 
     // --- VS patch: 添加 DrawIdCB (b7), 用 g_draw_id 替换 SV_InstanceID ---
     std::string vert_src = kpbr_gpu_driven_vert_hlsl;
@@ -952,8 +951,11 @@ void DX11ShaderManager::InitGPUDrivenPBRShader() {
         "gl_InstanceIndex = int(g_draw_id);");
     replace_all(vert_src, "gl_InstanceIndex * 80", "g_draw_id * 80");
 
-    // --- PS: 使用标准 PBR PS（material 通过 CPU per-draw 更新 PerMaterial cbuffer b3）---
-    std::string frag_src(kpbr_frag_hlsl);
+    // --- PS: 使用 GPU_DRIVEN 变体 PS，与 GPU_DRIVEN VS 输出签名匹配（含 v_material_id）。
+    // material 来自 MaterialSSBO（t30），由 v_material_id 索引；与 GL/Vulkan 一致。
+    // 若误用标准 PS，则 VS/PS interpolant 签名不一致（v_material_id 缺失导致 SV_Position
+    // 寄存器错位），DrawIndexedInstancedIndirect 因 VS-PS linkage error 静默不出任何几何。
+    std::string frag_src(kpbr_gpu_driven_frag_hlsl);
 
     gpu_driven_pbr_shader_handle_ = CreateProgram(vert_src, frag_src, "main", "main");
     if (gpu_driven_pbr_shader_handle_ == 0) {
@@ -982,37 +984,40 @@ void DX11ShaderManager::InitGPUDrivenShadowShader() {
             pos += to.size();
         }
     };
-    auto replace_first = [](std::string& s, const std::string& from, const std::string& to) {
-        auto p = s.find(from);
-        if (p != std::string::npos) s.replace(p, from.size(), to);
-    };
 
-    // Shadow VS: 从标准 shadow vert HLSL patch，替换 PushConstants u_model → ByteAddressBuffer fetch
-    std::string vert_src(kshadow_vert_hlsl);
+    // 使用 GPU_DRIVEN 变体 shadow VS：model 矩阵来自实例 SSBO（t16），vp 来自 PerFrame（b0），
+    // 与 GL/Vulkan 一致。此前误用非 GPU_DRIVEN 变体（vp 在 b1、model 走 pc_u_model 且
+    // patch 字符串不匹配），导致 PreZ/Shadow 间接绘制变换全错、深度不写入，几何被后续
+    // 大气/雾等深度相关 Pass 覆盖。
+    // DrawIndexedInstancedIndirect 无法提供 SV_InstanceID，故与 PBR GPU-driven VS 做相同
+    // patch：用 b7 的 g_draw_id 索引实例。
+    std::string vert_src = kshadow_gpu_driven_vert_hlsl;
 
-    // 注入 instance buffer 和 DrawIdCB
-    replace_first(vert_src,
-        "cbuffer PushConstants",
-        "ByteAddressBuffer _33 : register(t16);\n"
-        "cbuffer DrawIdCB : register(b7) { uint g_draw_id; };\n\n"
-        "cbuffer PushConstants");
-
-    // 替换 pc_u_model → instance buffer 读取
-    // pc_u_model 是 row_major float4x4，对应 ByteAddressBuffer 偏移 g_draw_id * 80
-    replace_all(vert_src, "mul(localPos, pc_u_model)",
-        "mul(localPos, asfloat(uint4x4(_33.Load4(g_draw_id * 80 + 0), _33.Load4(g_draw_id * 80 + 16), _33.Load4(g_draw_id * 80 + 32), _33.Load4(g_draw_id * 80 + 48))))");
-    replace_all(vert_src, "mul(boneTransform, pc_u_model)",
-        "mul(boneTransform, asfloat(uint4x4(_33.Load4(g_draw_id * 80 + 0), _33.Load4(g_draw_id * 80 + 16), _33.Load4(g_draw_id * 80 + 32), _33.Load4(g_draw_id * 80 + 48))))");
+    {
+        const std::string marker = "ByteAddressBuffer ";
+        auto mpos = vert_src.find(marker);
+        if (mpos != std::string::npos) {
+            auto eol = vert_src.find(';', mpos);
+            if (eol != std::string::npos) {
+                vert_src.insert(eol + 1, "\ncbuffer DrawIdCB : register(b7) { uint g_draw_id; };\n");
+            }
+        }
+    }
+    replace_all(vert_src,
+        "gl_InstanceIndex = int(stage_input.gl_InstanceIndex);",
+        "gl_InstanceIndex = int(g_draw_id);");
+    replace_all(vert_src, "gl_InstanceIndex * 80", "g_draw_id * 80");
 
     gpu_driven_shadow_shader_handle_ = CreateProgram(vert_src, std::string(kshadow_frag_hlsl), "main", "main");
     if (gpu_driven_shadow_shader_handle_ == 0) {
         DEBUG_LOG_ERROR("[DX11] GPU-driven Shadow shader compilation failed");
     } else {
         DEBUG_LOG_INFO("[DX11] GPU-driven Shadow shader created: handle={}", gpu_driven_shadow_shader_handle_);
-        auto* shadow_layout = GetInputLayout(shadow_shader_handle_);
-        if (shadow_layout) {
-            input_layouts_[gpu_driven_shadow_shader_handle_] = shadow_layout;
-        }
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> gpu_shadow_layout;
+        CreateInputLayoutFromReflection(kshadow_gpu_driven_vert_reflection, gpu_shadow_layout);
+        CreateInputLayoutForShader(gpu_driven_shadow_shader_handle_, gpu_shadow_layout.data(),
+                                   static_cast<int>(gpu_shadow_layout.size()));
     }
 }
 

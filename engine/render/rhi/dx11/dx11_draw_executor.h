@@ -33,6 +33,7 @@ using Microsoft::WRL::ComPtr;
 
 class DX11Context;
 class DX11ResourceManager;
+struct DX11Texture;
 class DX11PipelineStateManager;
 class DX11ShaderManager;
 
@@ -255,6 +256,14 @@ private:
 
     // 当前渲染目标句柄（MSAA resolve 使用）
     RenderTargetHandle current_rt_handle_;
+
+    /// 绑定 PS SRV 前解决 D3D11 读写冲突：scene 叠加类全屏效果（大气/水面/体积雾等）
+    /// 读写同一颜色 RT，D3D11 会强制把与已绑 RTV 冲突的 SRV 置空，采样恒为 0。
+    /// 检测到冲突时把颜色附件复制到暂存纹理并返回暂存 SRV。
+    ID3D11ShaderResourceView* ResolvePrimPsSrv(const DX11Texture* tex,
+                                               DX11ResourceManager& resource_mgr);
+    ComPtr<ID3D11Texture2D> rt_feedback_copy_tex_;          ///< RTV/SRV 冲突暂存纹理
+    ComPtr<ID3D11ShaderResourceView> rt_feedback_copy_srv_;  ///< 暂存纹理 SRV
 
     // 阴影采样器（用于 PBR pass 采样 shadow map）
     ComPtr<ID3D11SamplerState> shadow_sampler_;

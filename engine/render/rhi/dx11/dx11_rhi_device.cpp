@@ -1409,6 +1409,15 @@ void DX11RhiDevice::MultiDrawIndexedIndirect(BufferHandle indirect_buffer,
                 dc->VSSetShaderResources(16, 1, &vs_srv);
             }
         }
+        // 绑定 material SSBO 到 PS t30（GPU_DRIVEN frag 用 v_material_id 索引 MaterialSSBO）
+        auto mit = bound_ssbos_.find(gpu_driven::kSSBOBindingMaterials);
+        if (mit != bound_ssbos_.end()) {
+            const DX11SSBO* mat_ssbo = resource_mgr_.GetSSBO(mit->second.handle);
+            if (mat_ssbo && mat_ssbo->srv) {
+                ID3D11ShaderResourceView* ps_srv = mat_ssbo->srv.Get();
+                dc->PSSetShaderResources(30, 1, &ps_srv);
+            }
+        }
     }
 
     const int base_index = static_cast<int>(byte_offset / stride);

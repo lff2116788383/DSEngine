@@ -615,7 +615,8 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
     for (const auto& [slot, handle] : prim_textures_) {
         const auto* tex = resource_mgr.GetTexture(handle);
         if (tex) {
-            dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
+            ID3D11ShaderResourceView* srv = ResolvePrimPsSrv(tex, resource_mgr);
+            dc->PSSetShaderResources(slot, 1, &srv);
             if (slot < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT)
                 dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
         }
@@ -653,6 +654,54 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
 void DX11DrawExecutor::PrimBindIndexBuffer(unsigned int buffer_handle, IndexType type) {
     prim_index_buffer_handle_ = buffer_handle;
     prim_index_format_ = (type == IndexType::UInt32) ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+}
+
+ID3D11ShaderResourceView* DX11DrawExecutor::ResolvePrimPsSrv(const DX11Texture* tex,
+                                                             DX11ResourceManager& resource_mgr) {
+    if (!tex) return nullptr;
+    ID3D11ShaderResourceView* srv = tex->srv.Get();
+    if (!srv || !tex->texture || !current_rt_handle_) return srv;
+    const auto* rt = resource_mgr.GetRenderTarget(current_rt_handle_.raw());
+    if (!rt) return srv;
+
+    bool is_bound_color = (rt->color_texture.Get() == tex->texture.Get());
+    if (!is_bound_color) {
+        for (const auto& t : rt->color_textures_mrt) {
+            if (t.Get() == tex->texture.Get()) { is_bound_color = true; break; }
+        }
+    }
+    if (!is_bound_color) return srv;
+
+    ID3D11Device* dev = context_->device();
+    ID3D11DeviceContext* dc = context_->device_context();
+    if (!dev || !dc) return srv;
+
+    D3D11_TEXTURE2D_DESC td{};
+    tex->texture->GetDesc(&td);
+    bool recreate = !rt_feedback_copy_tex_;
+    if (!recreate) {
+        D3D11_TEXTURE2D_DESC cd{};
+        rt_feedback_copy_tex_->GetDesc(&cd);
+        recreate = cd.Width != td.Width || cd.Height != td.Height || cd.Format != td.Format;
+    }
+    if (recreate) {
+        D3D11_TEXTURE2D_DESC cd = td;
+        cd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        cd.MiscFlags = 0;
+        cd.Usage = D3D11_USAGE_DEFAULT;
+        cd.CPUAccessFlags = 0;
+        rt_feedback_copy_tex_.Reset();
+        rt_feedback_copy_srv_.Reset();
+        if (FAILED(dev->CreateTexture2D(&cd, nullptr, rt_feedback_copy_tex_.GetAddressOf())))
+            return srv;
+        if (FAILED(dev->CreateShaderResourceView(rt_feedback_copy_tex_.Get(), nullptr,
+                                                 rt_feedback_copy_srv_.GetAddressOf()))) {
+            rt_feedback_copy_tex_.Reset();
+            return srv;
+        }
+    }
+    dc->CopyResource(rt_feedback_copy_tex_.Get(), tex->texture.Get());
+    return rt_feedback_copy_srv_.Get();
 }
 
 void DX11DrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim /*dim*/) {
@@ -720,7 +769,8 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
     for (const auto& [slot, handle] : prim_textures_) {
         const auto* tex = resource_mgr.GetTexture(handle);
         if (tex) {
-            dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
+            ID3D11ShaderResourceView* srv = ResolvePrimPsSrv(tex, resource_mgr);
+            dc->PSSetShaderResources(slot, 1, &srv);
             // D3D11 仅 16 个采样器槽（s0..s15）。点光 cube 阴影 SRV 落在 t16..t19，
             // 其采样器经 SPIRV-Cross 去重后复用 s10（DDGI 采样器），故 slot>=16 只绑 SRV、
             // 不绑采样器；否则 PSSetSamplers(StartSlot>=16) 越界，触发运行期错误/崩溃。
@@ -804,7 +854,8 @@ void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uin
     for (const auto& [slot, handle] : prim_textures_) {
         const auto* tex = resource_mgr.GetTexture(handle);
         if (tex) {
-            dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
+            ID3D11ShaderResourceView* srv = ResolvePrimPsSrv(tex, resource_mgr);
+            dc->PSSetShaderResources(slot, 1, &srv);
             // D3D11 仅 16 个采样器槽（s0..s15）。点光 cube 阴影 SRV 落在 t16..t19，
             // 其采样器经 SPIRV-Cross 去重后复用 s10（DDGI 采样器），故 slot>=16 只绑 SRV、
             // 不绑采样器；否则 PSSetSamplers(StartSlot>=16) 越界，触发运行期错误/崩溃。
@@ -989,15 +1040,16 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
     terrain_params.tiling = glm::vec4(10.0f);
     UpdateConstantBuffer(terrain_params_cb_.Get(), &terrain_params, sizeof(terrain_params));
 
+    // GPU_DRIVEN frag cbuffer 布局（无 PerMaterial b3，material 走 SSBO t30）：
+    // b0=PerFrame b1=PerScene b2=LightProbeData b3=TerrainParams b4=SpotLightData
     ID3D11Buffer* ps_cbs[] = {
         per_frame_cb_.Get(),
         per_scene_cb_.Get(),
         nullptr,
-        per_material_cb_.Get(),
         terrain_params_cb_.Get(),
         per_spot_matrices_cb_.Get()
     };
-    dc->PSSetConstantBuffers(0, 6, ps_cbs);
+    dc->PSSetConstantBuffers(0, 5, ps_cbs);
 }
 
 // ============================================================
