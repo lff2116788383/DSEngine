@@ -27,6 +27,8 @@ struct VulkanBuffer {
     VkDeviceSize size = 0;
     void* mapped = nullptr;          ///< 持久映射指针（动态缓冲使用）
     bool is_dynamic = false;
+    VkBufferUsageFlags usage_flags = 0;      ///< 创建时的 usage（同帧重写重建用）
+    uint64_t last_update_frame = UINT64_MAX; ///< 最近一次 UpdateBuffer 的帧号
 };
 
 /// Vulkan 纹理资源封装
@@ -114,6 +116,9 @@ public:
     unsigned int CreateUniformBuffer(size_t size, const void* data, bool is_dynamic);
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data);
     void DeleteBuffer(unsigned int handle);
+
+    /// 帧开始时推进帧计数并回收已过 in-flight 窗口的退役缓冲
+    void BeginFrameBufferGC(uint32_t frames_in_flight);
     const VulkanBuffer* GetBuffer(unsigned int handle) const;
 
     // --- SSBO (Storage Buffer) ---
@@ -230,6 +235,15 @@ private:
     unsigned int next_ssbo_handle_ = 415000;
     unsigned int next_indirect_handle_ = 418000;
     unsigned int next_render_target_handle_ = 420000;
+
+    /// 同帧多次覆写动态缓冲时退役的旧 VkBuffer（命令缓冲仍引用，需过 in-flight 窗口后销毁）
+    struct RetiredBuffer {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        uint64_t retired_frame = 0;
+    };
+    std::vector<RetiredBuffer> retired_buffers_;
+    uint64_t frame_counter_ = 0;
 
     bool initialized_ = false;
 };

@@ -479,6 +479,9 @@ public:
     virtual bool NeedsTextureYFlip() const { return true; }
     /// OpenGL readback is bottom-up and needs flip; D3D11/Vulkan readback is top-down
     virtual bool NeedsReadbackYFlip() const { return true; }
+    /// 全屏 quad 后处理采样是否需要翻转 V：DX11 的 NDC Y 向上而纹理原点在左上，
+    /// GL 约定的 quad UV 会上下颠倒；GL/Vulkan 不需要（Vulkan NDC Y 向下抵消）
+    virtual bool NeedsFullscreenQuadVFlip() const { return false; }
 
     /// Clip-space correction matrix to convert from OpenGL NDC convention
     /// (Y-up, Z∈[-1,1]) to the target API convention.

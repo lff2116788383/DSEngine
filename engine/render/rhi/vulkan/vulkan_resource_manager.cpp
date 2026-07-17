@@ -772,6 +772,7 @@ unsigned int VulkanResourceManager::CreateBuffer(size_t size, const void* data, 
     buffer_info.usage = is_index ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     buffer_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    buf.usage_flags = buffer_info.usage;
 
     if (vkCreateBuffer(device_, &buffer_info, nullptr, &buf.buffer) != VK_SUCCESS) return 0;
 
@@ -857,6 +858,7 @@ unsigned int VulkanResourceManager::CreateUniformBuffer(size_t size, const void*
     buffer_info.size = size;
     buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    buf.usage_flags = buffer_info.usage;
     if (vkCreateBuffer(device_, &buffer_info, nullptr, &buf.buffer) != VK_SUCCESS) return 0;
 
     VkMemoryRequirements mem_reqs;
@@ -882,7 +884,44 @@ void VulkanResourceManager::UpdateBuffer(unsigned int handle, size_t offset, siz
 
     auto& buf = it->second;
     if (buf.is_dynamic && buf.mapped) {
+        // 命令缓冲延迟执行：同一帧内再次覆写会破坏已录制 draw 尚未读取的数据，
+        // 改为 copy-on-write：退役旧 VkBuffer（延迟销毁）并重建同规格新缓冲。
+        if (buf.last_update_frame == frame_counter_ && buf.usage_flags != 0) {
+            VkBufferCreateInfo bi{};
+            bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bi.size = buf.size;
+            bi.usage = buf.usage_flags;
+            bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            VkBuffer new_buffer = VK_NULL_HANDLE;
+            if (vkCreateBuffer(device_, &bi, nullptr, &new_buffer) == VK_SUCCESS) {
+                VkMemoryRequirements reqs;
+                vkGetBufferMemoryRequirements(device_, new_buffer, &reqs);
+                VkMemoryAllocateInfo ai{};
+                ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+                ai.allocationSize = reqs.size;
+                ai.memoryTypeIndex = FindMemoryType(reqs.memoryTypeBits,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                VkDeviceMemory new_memory = VK_NULL_HANDLE;
+                if (vkAllocateMemory(device_, &ai, nullptr, &new_memory) == VK_SUCCESS) {
+                    vkBindBufferMemory(device_, new_buffer, new_memory, 0);
+                    void* new_mapped = nullptr;
+                    if (vkMapMemory(device_, new_memory, 0, buf.size, 0, &new_mapped) == VK_SUCCESS && new_mapped) {
+                        memcpy(new_mapped, buf.mapped, buf.size);  // 保留旧内容，支持局部 offset 更新
+                        retired_buffers_.push_back({buf.buffer, buf.memory, frame_counter_});
+                        buf.buffer = new_buffer;
+                        buf.memory = new_memory;
+                        buf.mapped = new_mapped;
+                    } else {
+                        vkFreeMemory(device_, new_memory, nullptr);
+                        vkDestroyBuffer(device_, new_buffer, nullptr);
+                    }
+                } else {
+                    vkDestroyBuffer(device_, new_buffer, nullptr);
+                }
+            }
+        }
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
+        buf.last_update_frame = frame_counter_;
     } else {
         // 非动态缓冲：staging 上传
         VkBuffer staging_buffer;
@@ -920,6 +959,23 @@ void VulkanResourceManager::UpdateBuffer(unsigned int handle, size_t offset, siz
         vkDestroyBuffer(device_, staging_buffer, nullptr);
         vkFreeMemory(device_, staging_memory, nullptr);
     }
+}
+
+void VulkanResourceManager::BeginFrameBufferGC(uint32_t frames_in_flight) {
+    ++frame_counter_;
+    if (retired_buffers_.empty()) return;
+    size_t w = 0;
+    for (size_t i = 0; i < retired_buffers_.size(); ++i) {
+        RetiredBuffer& rb = retired_buffers_[i];
+        if (frame_counter_ >= rb.retired_frame + frames_in_flight + 1) {
+            // vkFreeMemory 隐式 unmap，无需先 vkUnmapMemory
+            if (rb.buffer != VK_NULL_HANDLE) vkDestroyBuffer(device_, rb.buffer, nullptr);
+            if (rb.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rb.memory, nullptr);
+        } else {
+            retired_buffers_[w++] = rb;
+        }
+    }
+    retired_buffers_.resize(w);
 }
 
 void VulkanResourceManager::DeleteBuffer(unsigned int handle) {

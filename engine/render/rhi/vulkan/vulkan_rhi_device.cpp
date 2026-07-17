@@ -376,6 +376,7 @@ void VulkanRhiDevice::BeginFrame() {
     }
 
     resource_mgr_.ResetDescriptorPool(context_.current_frame());
+    resource_mgr_.BeginFrameBufferGC(VulkanContext::MAX_FRAMES_IN_FLIGHT);
 
     gpu_timer_.ResetGpuTimers();
 }

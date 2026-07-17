@@ -592,6 +592,15 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
                 if (t && t->image_view) {
                     info.imageView = t->image_view;
                     if (t->sampler) info.sampler = t->sampler;
+                } else if (const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(it->second)) {
+                    // RT 颜色/深度纹理句柄是 RT handle 代理（见 GetRenderTargetColorTexture），
+                    // 不在 texture 注册表中，需按 RT 解析（后处理采样 scene/ui 等 RT 依赖此路径）
+                    if (rt->color_texture.image_view != VK_NULL_HANDLE) {
+                        info.imageView = rt->color_texture.image_view;
+                    } else if (rt->depth_texture.image_view != VK_NULL_HANDLE) {
+                        info.imageView = rt->depth_texture.image_view;
+                        info.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                    }
                 }
             }
             size_t base = img_pool.size();

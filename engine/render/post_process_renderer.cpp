@@ -36,11 +36,18 @@ const uint16_t kQuadIndices[6] = {0, 1, 2, 0, 2, 3};
 void PostProcessRenderer::EnsureResources(RhiDevice& device) {
     if (init_) return;
 
+    // DX11：NDC Y 向上但纹理原点在左上，GL 约定 UV 会整屏上下颠倒，需翻转 V
+    PPVertex quad[4];
+    std::memcpy(quad, kQuad, sizeof(kQuad));
+    if (device.NeedsFullscreenQuadVFlip()) {
+        for (PPVertex& v : quad) v.v = 1.0f - v.v;
+    }
+
     GpuBufferDesc vb_desc;
-    vb_desc.size = sizeof(kQuad);
+    vb_desc.size = sizeof(quad);
     vb_desc.usage = GpuBufferUsage::kVertex;
     vb_desc.is_dynamic = false;
-    quad_vbo_ = device.CreateGpuBuffer(vb_desc, kQuad);
+    quad_vbo_ = device.CreateGpuBuffer(vb_desc, quad);
 
     GpuBufferDesc ib_desc;
     ib_desc.size = sizeof(kQuadIndices);
