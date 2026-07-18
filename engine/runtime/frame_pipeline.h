@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 #include <cstddef>
+#include <atomic>
 
 // Extracted responsibility classes
 #include "engine/runtime/frame_stats_collector.h"
@@ -410,6 +411,18 @@ private:
     const dse::render::RenderThinSnapshot& read_snapshot() const;
     void CaptureThinSnapshot();
     void FlipSnapshotIndex() { snapshot_write_idx_ = 1 - snapshot_write_idx_; }
+
+    // F2: 薄快照契约的调试期断言。当前 Render() 时序 Wait→BeginFrame→Prepare→Signal
+    // 使主线程写快照(CaptureThinSnapshot)与渲染线程读快照(ExecuteRenderFrame)全局串行、
+    // 不重叠；此不变量此前仅为隐式约定，下面在 Debug 下固化。若日后启用真流水
+    // （Prepare(N+1) 与 Execute(N) 并发于双缓冲不同 slot），需改为按 slot 判定。
+    std::atomic<bool> snapshot_writing_{false};
+    std::atomic<bool> snapshot_reading_{false};
+    struct SnapshotPhaseScope {
+        std::atomic<bool>& flag;
+        explicit SnapshotPhaseScope(std::atomic<bool>& f) : flag(f) { flag.store(true, std::memory_order_release); }
+        ~SnapshotPhaseScope() { flag.store(false, std::memory_order_release); }
+    };
 
     /// Phase 2: 渲染线程管理（委托给 RenderThreadManager）
     std::unique_ptr<RenderThreadManager> render_thread_mgr_;

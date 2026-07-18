@@ -26,8 +26,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cstring>
+#include <cassert>
 
 void FramePipeline::CaptureThinSnapshot() {
+    assert(!snapshot_reading_.load(std::memory_order_acquire) &&
+           "F2: 薄快照契约违反——渲染线程读快照期间主线程不得写");
+    SnapshotPhaseScope f2_write_scope(snapshot_writing_);
     auto& snap = write_snapshot();
     snap.Reset();
 

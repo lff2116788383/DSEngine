@@ -26,6 +26,7 @@
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
 #include <chrono>
+#include <cassert>
 #include <algorithm>
 #include <iostream>
 
@@ -188,6 +189,9 @@ void FramePipeline::PrepareRenderFrame() {
 }
 
 void FramePipeline::ExecuteRenderFrame() {
+    assert(!snapshot_writing_.load(std::memory_order_acquire) &&
+           "F2: 薄快照契约违反——主线程写快照期间渲染线程不得读");
+    SnapshotPhaseScope f2_read_scope(snapshot_reading_);
     rs_->render_profiler_.BeginFrame();
     auto render_begin = std::chrono::high_resolution_clock::now();
 
