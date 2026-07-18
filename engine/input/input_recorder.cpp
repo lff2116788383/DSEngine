@@ -7,6 +7,8 @@
 #include "engine/input/input.h"
 #include <sstream>
 #include <iomanip>
+#include <charconv>
+#include <cstdlib>
 
 namespace dse {
 namespace input {
@@ -61,21 +63,42 @@ bool InputRecorder::ImportJSON(const std::string& json) {
         size_t ts_start = pos + 6; // after {"ts":
         size_t ts_end = json.find(',', ts_start);
         if (ts_end == std::string::npos) return false;
-        evt.timestamp = std::stod(json.substr(ts_start, ts_end - ts_start));
+        {
+            const std::string ts_str = json.substr(ts_start, ts_end - ts_start);
+            const char* b = ts_str.c_str();
+            char* endp = nullptr;
+            const double ts = std::strtod(b, &endp);
+            if (endp == b || *endp != '\0') return false;  // 空或非法数值：拒绝畸形录制文件
+            evt.timestamp = ts;
+        }
 
         size_t key_start = json.find("\"key\":", ts_end);
         if (key_start == std::string::npos) return false;
         key_start += 6;
         size_t key_end = json.find(',', key_start);
         if (key_end == std::string::npos) return false;
-        evt.key_code = static_cast<unsigned short>(std::stoi(json.substr(key_start, key_end - key_start)));
+        {
+            int key = 0;
+            const char* b = json.data() + key_start;
+            const char* e = json.data() + key_end;
+            const auto r = std::from_chars(b, e, key);
+            if (r.ec != std::errc{} || r.ptr != e) return false;
+            evt.key_code = static_cast<unsigned short>(key);
+        }
 
         size_t action_start = json.find("\"action\":", key_end);
         if (action_start == std::string::npos) return false;
         action_start += 9;
         size_t action_end = json.find('}', action_start);
         if (action_end == std::string::npos) return false;
-        evt.key_action = static_cast<unsigned short>(std::stoi(json.substr(action_start, action_end - action_start)));
+        {
+            int action = 0;
+            const char* b = json.data() + action_start;
+            const char* e = json.data() + action_end;
+            const auto r = std::from_chars(b, e, action);
+            if (r.ec != std::errc{} || r.ptr != e) return false;
+            evt.key_action = static_cast<unsigned short>(action);
+        }
 
         events_.push_back(evt);
         pos = action_end + 1;
