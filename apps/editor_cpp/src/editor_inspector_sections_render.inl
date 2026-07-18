@@ -447,4 +447,4 @@ void DrawTerrainSection(EditorContext& context) {
 
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
-}
+}

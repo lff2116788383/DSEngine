@@ -1,4 +1,4 @@
-﻿#include "editor_locale.h"
+#include "editor_locale.h"
 #include "editor_hierarchy_panel.h"
 #include "editor_entity_snapshot.h"
 

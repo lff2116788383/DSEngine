@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "editor_imgui_backend.h"
 
 namespace dse::editor {

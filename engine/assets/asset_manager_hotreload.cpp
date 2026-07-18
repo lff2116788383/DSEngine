@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file asset_manager_hotreload.cpp
  * @brief AssetManager LRU cache, hot reload, and file watcher.
  */

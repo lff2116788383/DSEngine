@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "engine/assets/compiler/raw_scene_data.h"
 #include "engine/assets/compiler/anim_compress.h"

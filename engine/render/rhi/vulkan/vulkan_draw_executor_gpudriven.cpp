@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file vulkan_draw_executor_gpudriven.cpp
  * @brief VulkanDrawExecutor frame management, compute dispatch, and GPU-driven rendering.
  */

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file builtin_passes_advanced.cpp
  * @brief Advanced render passes: VolumetricFog, VolumetricCloud, WBOIT, Water,
  *        Decal, HiZBuild, HiZCull, GPUCull, RSM, DDGI, SSSBlur, Weather.

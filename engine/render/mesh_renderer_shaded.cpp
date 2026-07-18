@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file mesh_renderer_shaded.cpp
  * @brief MeshRenderer advanced shading methods (PBR, skinned, morph).
  */

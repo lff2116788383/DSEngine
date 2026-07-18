@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file asset_manager_loaders.cpp
  * @brief AssetManager asset loading methods (texture, cubemap, shader, audio, mesh).
  */

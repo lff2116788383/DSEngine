@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file gl_resource_manager.cpp
  * @brief GLResourceManager 瀹炵幇 - GPU 璧勬簮绠＄悊鍣?
  */

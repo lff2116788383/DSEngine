@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file mesh_renderer.cpp
  * @brief MeshRenderer resource management and basic draw methods.
  *

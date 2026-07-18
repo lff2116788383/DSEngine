@@ -1,4 +1,4 @@
-﻿#include "engine/reflect/component_serializer.h"
+#include "engine/reflect/component_serializer.h"
 
 namespace dse::reflect {
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file frame_pipeline_snapshot.cpp
  * @brief FramePipeline thin snapshot capture — CaptureThinSnapshot.
  */

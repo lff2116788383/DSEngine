@@ -1,4 +1,4 @@
-﻿#include "editor_locale.h"
+#include "editor_locale.h"
 #include "editor_scene_tabs.h"
 
 #include <filesystem>

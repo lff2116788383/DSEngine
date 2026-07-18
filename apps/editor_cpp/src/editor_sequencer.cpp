@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file editor_sequencer.cpp
  * @brief Cinematic Sequencer — multi-track timeline editor (UE-Sequencer level)
  *

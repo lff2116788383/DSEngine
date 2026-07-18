@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file frame_pipeline_render.cpp
  * @brief FramePipeline render path — RunRenderInternal, BuildRenderGraph, ExecuteRenderGraph.
  */

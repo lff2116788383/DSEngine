@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file vulkan_rhi_device_frame.cpp
  * @brief VulkanRhiDevice frame management, GPU-driven, VAO, debug modes.
  */

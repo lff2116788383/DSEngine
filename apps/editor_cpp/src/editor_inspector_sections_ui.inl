@@ -694,4 +694,4 @@ void DrawUIAnimationSection(EditorContext& context) {
     }
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
-}
+}

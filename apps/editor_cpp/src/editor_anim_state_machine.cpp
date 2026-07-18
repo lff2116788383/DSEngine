@@ -1,4 +1,4 @@
-﻿#include "editor_locale.h"
+#include "editor_locale.h"
 #include "editor_anim_state_machine.h"
 #include "editor_console_panel.h"
 #include "engine/ecs/components_3d.h"

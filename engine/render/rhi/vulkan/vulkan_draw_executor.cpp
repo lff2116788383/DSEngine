@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file vulkan_draw_executor.cpp
  * @brief Vulkan 绘制执行器实现
  *

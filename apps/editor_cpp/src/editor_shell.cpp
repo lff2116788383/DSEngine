@@ -1,4 +1,4 @@
-﻿#include "editor_shell.h"
+#include "editor_shell.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"

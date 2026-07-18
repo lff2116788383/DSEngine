@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file asset_manager_test.cpp
  * @brief AssetManager 缓存机制单元测试
  *

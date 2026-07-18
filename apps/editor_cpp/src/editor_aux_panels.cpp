@@ -1,4 +1,4 @@
-﻿#include "editor_locale.h"
+#include "editor_locale.h"
 #include "editor_aux_panels.h"
 #include "editor_panel_registry.h"
 

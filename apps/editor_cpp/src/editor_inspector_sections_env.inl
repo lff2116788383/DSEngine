@@ -378,4 +378,4 @@ void DrawLightmapSection(EditorContext& context) {
         ImGui::Checkbox("Use AO", &comp.use_ao);
         ImGui::Unindent();
     }
-}
+}

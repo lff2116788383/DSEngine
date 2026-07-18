@@ -1,4 +1,4 @@
-﻿#ifndef DSE_VULKAN_RHI_DEVICE_INTERNAL_H
+#ifndef DSE_VULKAN_RHI_DEVICE_INTERNAL_H
 #define DSE_VULKAN_RHI_DEVICE_INTERNAL_H
 
 #include "engine/render/rhi/vulkan/vulkan_rhi_device.h"

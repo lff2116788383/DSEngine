@@ -1,4 +1,4 @@
-﻿#include "editor_imgui_backend_gl.h"
+#include "editor_imgui_backend_gl.h"
 #include <glad/gl.h>
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"

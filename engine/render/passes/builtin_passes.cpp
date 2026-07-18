@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file builtin_passes.cpp
  * @brief 引擎内置渲染 Pass 实现
  *

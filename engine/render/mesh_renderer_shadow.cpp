@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file mesh_renderer_shadow.cpp
  * @brief MeshRenderer shadow/depth-only rendering methods.
  */

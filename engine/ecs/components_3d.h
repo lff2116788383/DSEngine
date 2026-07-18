@@ -1,4 +1,4 @@
-﻿#ifndef DSE_COMPONENTS_3D_H
+#ifndef DSE_COMPONENTS_3D_H
 #define DSE_COMPONENTS_3D_H
 
 #include "engine/ecs/transform.h"

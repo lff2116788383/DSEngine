@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file mesh_renderer_instancing.cpp
  * @brief MeshRenderer hardware instancing and indirect rendering methods.
  */

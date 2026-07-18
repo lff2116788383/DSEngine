@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file vulkan_draw_executor_renderpass.cpp
  * @brief VulkanDrawExecutor render pass management and primitive drawing API.
  */

@@ -1,4 +1,4 @@
-﻿#include "engine/assets/compiler/raw_scene_data.h"
+#include "engine/assets/compiler/raw_scene_data.h"
 #include "engine/assets/compiler/importer.h"
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION

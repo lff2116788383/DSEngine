@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file ubo_manager.cpp
  * @brief UBO 绠＄悊鍣ㄥ疄鐜?
  */

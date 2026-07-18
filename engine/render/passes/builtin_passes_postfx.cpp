@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file builtin_passes_postfx.cpp
  * @brief Post-processing render passes: Bloom, AutoExposure, SSAO, Contact Shadow,
  *        FXAA, TAA, DOF, MotionVector, MotionBlur, SSR, Outline, LightShaft.

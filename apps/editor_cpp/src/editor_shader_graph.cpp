@@ -1,4 +1,4 @@
-﻿#include "editor_locale.h"
+#include "editor_locale.h"
 #include "editor_shader_graph.h"
 #include "editor_icons.h"
 #include "editor_console_panel.h"

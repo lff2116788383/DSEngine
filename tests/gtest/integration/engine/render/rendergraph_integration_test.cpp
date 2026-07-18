@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file rendergraph_integration_test.cpp
  * @brief RenderGraph 集成测试
  *

@@ -379,7 +379,7 @@ void DrawTransformSection(EditorContext& context) {
     }
     ImGui::PopID();
 }
-
+
 #include "editor_inspector_sections_render.inl"
 
 #include "editor_inspector_sections_ui.inl"

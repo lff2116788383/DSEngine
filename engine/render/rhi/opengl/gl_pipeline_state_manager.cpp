@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file gl_pipeline_state_manager.cpp
  * @brief GLPipelineStateManager 瀹炵幇 - 绠＄嚎鐘舵€佺鐞嗗櫒锛堝甫 Diff 浼樺寲锛?
  */

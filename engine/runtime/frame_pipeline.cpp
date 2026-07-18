@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file frame_pipeline.cpp
  * @brief 引擎主循环与帧流水线，协调更新、物理和渲染的执行顺序
  */

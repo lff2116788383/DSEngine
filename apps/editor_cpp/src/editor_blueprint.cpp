@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file editor_blueprint.cpp
  * @brief Blueprint editor UI - variable panel, node registry, function graphs, canvas
  */

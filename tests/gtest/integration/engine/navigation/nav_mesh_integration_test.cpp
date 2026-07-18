@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file nav_mesh_integration_test.cpp
  * @brief NavMesh 集成测试 - 使用真实场景数据
  */
