@@ -456,26 +456,26 @@ void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
     if (mip_count <= 0) return;
 
-    const int base_w = Screen::width();
-    const int base_h = Screen::height();
+    const TextureHandle depth_tex = rhi->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
+    if (!depth_tex) return;
 
-    // Step 1: Copy PreZ depth â†’ Hi-Z mip 0
-    {
-        TextureHandle depth_tex = rhi->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
-        if (!depth_tex) return;
+    // Hi-Z 纹理按渲染分辨率创建，dispatch/mip 尺寸须与之一致（避免 render_scale != 1 时越界）。
+    const int base_w = Screen::render_width()  > 0 ? Screen::render_width()  : Screen::width();
+    const int base_h = Screen::render_height() > 0 ? Screen::render_height() : Screen::height();
 
-        rhi->SetComputeTextureSampler(0, depth_tex);
-        rhi->SetComputeTextureImageMip(0, hiz_gpu_tex, 0, false, true);
+    // 整条 Hi-Z build（copy + 全部 downsample）录制进单个命令缓冲：dispatch 间以
+    // ComputeMemoryBarrier 建立 compute→compute 依赖，一次提交完成。逐 mip 独立
+    // vkQueueSubmit+vkQueueWaitIdle 会在部分驱动上触发 GPU 挂起/设备丢失。
+    rhi->BeginComputePass();
 
-        rhi->SetComputeUniformVec2i(hiz_copy_shader_, "u_dst_size", base_w, base_h);
+    // Step 1: Copy PreZ depth → Hi-Z mip 0
+    rhi->SetComputeTextureSampler(0, depth_tex);
+    rhi->SetComputeTextureImageMip(0, hiz_gpu_tex, 0, false, true);
+    rhi->SetComputeUniformVec2i(hiz_copy_shader_, "u_dst_size", base_w, base_h);
+    rhi->DispatchCompute(hiz_copy_shader_, (base_w + 15) / 16, (base_h + 15) / 16, 1);
+    rhi->ComputeMemoryBarrier();
 
-        unsigned int groups_x = (base_w + 15) / 16;
-        unsigned int groups_y = (base_h + 15) / 16;
-        rhi->DispatchCompute(hiz_copy_shader_, groups_x, groups_y, 1);
-        rhi->ComputeMemoryBarrier();
-    }
-
-    // Step 2: Iterative downsample mip N-1 â†’ mip N
+    // Step 2: Iterative downsample mip N-1 → mip N
     for (int mip = 1; mip < mip_count; ++mip) {
         int src_w = std::max(1, base_w >> (mip - 1));
         int src_h = std::max(1, base_h >> (mip - 1));
@@ -488,12 +488,11 @@ void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
         rhi->SetComputeUniformVec2i(hiz_downsample_shader_, "u_src_size", src_w, src_h);
         rhi->SetComputeUniformVec2i(hiz_downsample_shader_, "u_dst_size", dst_w, dst_h);
 
-        unsigned int groups_x = (dst_w + 15) / 16;
-        unsigned int groups_y = (dst_h + 15) / 16;
-        rhi->DispatchCompute(hiz_downsample_shader_, groups_x, groups_y, 1);
+        rhi->DispatchCompute(hiz_downsample_shader_, (dst_w + 15) / 16, (dst_h + 15) / 16, 1);
         rhi->ComputeMemoryBarrier();
     }
 
+    rhi->EndComputePass();
     ctx_.hiz_culling_enabled = true;
 }
 

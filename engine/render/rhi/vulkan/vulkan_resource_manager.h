@@ -259,6 +259,10 @@ private:
     std::vector<RetiredBuffer> retired_buffers_;
     uint64_t frame_counter_ = 0;
 
+    /// host 直写持久映射 SSBO/indirect 缓冲前，每帧至多同步一次在飞帧（见 SyncHostWriteWithGpu）
+    uint64_t host_write_synced_frame_ = 0;
+    void SyncHostWriteWithGpu();
+
     bool initialized_ = false;
 };
 

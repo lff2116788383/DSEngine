@@ -203,6 +203,19 @@ VkCommandBuffer VulkanResourceManager::BeginSingleTimeCommands() {
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(command_buffer, &begin_info);
 
+    // 单次命令与在飞帧的主命令缓冲同队列提交后可乱序重叠执行。GPU-driven 路径每帧
+    // 通过单次命令写 instance/draw-cmd SSBO（staging copy / cull compute），若与上一帧
+    // 尚在读取同一 indirect buffer 的 vkCmdDrawIndexedIndirect 重叠，会产生写读竞争
+    // （表现为间歇性超长 GPU 停顿乃至 VK_ERROR_DEVICE_LOST）。此全局屏障对提交序在前
+    // 的所有命令建立执行+内存依赖，仅在 GPU 侧序列化，不引入 CPU 等待。
+    VkMemoryBarrier submit_order_barrier{};
+    submit_order_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    submit_order_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+    submit_order_barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+    vkCmdPipelineBarrier(command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0, 1, &submit_order_barrier, 0, nullptr, 0, nullptr);
+
     return command_buffer;
 }
 
@@ -1063,8 +1076,20 @@ void VulkanResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_
     if (it == ssbos_.end()) return;
     auto& buf = it->second;
     if (buf.mapped) {
+        SyncHostWriteWithGpu();
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
     }
+}
+
+void VulkanResourceManager::SyncHostWriteWithGpu() {
+    // SSBO / indirect 缓冲是持久映射单例（无 per-frame ring）：GPU-driven 路径每帧 CPU
+    // 直写 instance/draw-cmd 数据，而上一在飞帧的 vkCmdDrawIndexedIndirect 可能仍在
+    // 读取同一块内存。撞上时 GPU 会读到撕裂的 indirect 参数（巨量 indexCount/
+    // instanceCount），表现为秒级 GPU 停顿乃至 TDR 触发 VK_ERROR_DEVICE_LOST。
+    // 每帧首次 host 写前等待在飞帧 fence，保证写入时 GPU 不再引用这些缓冲。
+    if (host_write_synced_frame_ == frame_counter_) return;
+    host_write_synced_frame_ = frame_counter_;
+    if (context_) context_->WaitForAllInFlightFrames();
 }
 
 void VulkanResourceManager::DeleteSSBO(unsigned int handle) {
@@ -1130,6 +1155,7 @@ void VulkanResourceManager::UpdateIndirectBuffer(unsigned int handle, size_t off
     if (it == indirect_buffers_.end()) return;
     auto& buf = it->second;
     if (buf.mapped) {
+        SyncHostWriteWithGpu();
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
     }
 }

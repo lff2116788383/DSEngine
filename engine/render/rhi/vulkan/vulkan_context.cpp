@@ -224,6 +224,12 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     return result;
 }
 
+void VulkanContext::WaitForAllInFlightFrames() {
+    if (device_ == VK_NULL_HANDLE || in_flight_fences_.empty()) return;
+    vkWaitForFences(device_, static_cast<uint32_t>(in_flight_fences_.size()),
+                    in_flight_fences_.data(), VK_TRUE, UINT64_MAX);
+}
+
 void VulkanContext::AdvanceFrame() {
     current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
     // 本次 present 周期结束，下一帧需要重新 acquire。

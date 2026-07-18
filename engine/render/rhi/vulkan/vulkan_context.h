@@ -109,6 +109,10 @@ public:
     VkSemaphore render_finished_semaphore() const { return render_finished_semaphores_[current_frame_]; }
     VkFence in_flight_fence() const { return in_flight_fences_[current_frame_]; }
 
+    /// 等待所有在飞帧的提交在 GPU 上执行完毕（fence 初始为 signaled，可安全等待）。
+    /// 用于 host 侧直写 GPU 正在读取的持久映射缓冲（SSBO/indirect）前的同步。
+    void WaitForAllInFlightFrames();
+
     /// Pipeline Cache（跨启动复用管线编译结果）
     VkPipelineCache pipeline_cache() const { return pipeline_cache_; }
 

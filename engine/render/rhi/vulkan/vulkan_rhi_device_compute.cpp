@@ -37,6 +37,17 @@ void VulkanRhiDevice::BeginComputePass() {
 void VulkanRhiDevice::EndComputePass() {
     if (!in_compute_pass_ || compute_cmd_buffer_ == VK_NULL_HANDLE) return;
 
+    // 批处理 compute 可能写 indirect draw 参数 / SSBO，后续提交的图形命令缓冲会以
+    // indirect / vertex / fragment 读取，须在同一命令缓冲尾部补齐可用性屏障。
+    VkMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(compute_cmd_buffer_, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0, 1, &barrier, 0, nullptr, 0, nullptr);
+
     resource_mgr_.EndSingleTimeCommands(compute_cmd_buffer_);
     compute_cmd_buffer_ = VK_NULL_HANDLE;
     in_compute_pass_ = false;
@@ -207,9 +218,10 @@ void VulkanRhiDevice::DispatchCompute(ShaderHandle shader_handle,
         VkMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
         barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+        // GPU cull compute 直接写 indirect draw 参数，后续图形提交以 DRAW_INDIRECT 读取。
+        barrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
         vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                              0, 1, &barrier, 0, nullptr, 0, nullptr);
         resource_mgr_.EndSingleTimeCommands(cmd);
     }
