@@ -168,7 +168,19 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
     if (pipeline.NeedsReadbackYFlip()) {
         FlipImageRowsRgba8(readback.pixels, readback.width, readback.height);
     }
-    std::filesystem::create_directories(std::filesystem::path(screenshot_path).parent_path());
+    // parent_path() 对无目录的相对路径（如 "shot.png"）为空，create_directories("")
+    // 在 MSVC 上会抛 filesystem_error，未捕获 → std::terminate。用 error_code 重载并
+    // 跳过空目录，避免截图路径不含目录时崩溃。
+    const std::filesystem::path parent_dir = std::filesystem::path(screenshot_path).parent_path();
+    if (!parent_dir.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(parent_dir, ec);
+        if (ec) {
+            std::cerr << "Failed to create screenshot directory: " << parent_dir.string()
+                      << " (" << ec.message() << ")\n";
+            return false;
+        }
+    }
     if (stbi_write_png(screenshot_path.c_str(), readback.width, readback.height, 4, readback.pixels.data(), readback.width * 4) == 0) {
         std::cerr << "Failed to write screenshot png: " << screenshot_path << "\n";
         return false;
