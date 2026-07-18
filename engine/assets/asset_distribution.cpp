@@ -6,6 +6,7 @@
 #include "engine/assets/asset_distribution.h"
 #include "engine/assets/sha256.h"
 #include "engine/assets/binary_patch.h"
+#include "engine/base/debug.h"
 #ifdef DSE_ENABLE_HTTP
 #include "engine/http/http_client.h"
 #include "engine/core/service_locator.h"
@@ -588,7 +589,11 @@ uint64_t AssetDistribution::GetDiskUsage() const {
                     usage += entry.file_size();
                 }
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            DEBUG_LOG_WARN("[AssetDistribution] Cache size scan failed: {}", e.what());
+        } catch (...) {
+            DEBUG_LOG_WARN("[AssetDistribution] Cache size scan failed");
+        }
     }
 
     // 如果没有缓存目录或文件系统中无文件，按已安装包的 size_bytes 统计
@@ -631,7 +636,11 @@ uint64_t AssetDistribution::PurgeOldCache(uint32_t max_age_days) {
                 if (!ec) freed += fsize;
             }
         }
-    } catch (...) {}
+    } catch (const std::exception& e) {
+        DEBUG_LOG_WARN("[AssetDistribution] Cache purge failed: {}", e.what());
+    } catch (...) {
+        DEBUG_LOG_WARN("[AssetDistribution] Cache purge failed");
+    }
 
     return freed;
 }

@@ -307,7 +307,11 @@ void ReflectionProbeSystem::GenerateBRDFLUT(RhiDevice* rhi_device) {
                 fout.write(reinterpret_cast<const char*>(pixels.data()), static_cast<std::streamsize>(data_bytes));
                 DEBUG_LOG_INFO("[ReflectionProbeSystem] BRDF LUT cached to disk");
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            DEBUG_LOG_WARN("[ReflectionProbeSystem] Failed to write BRDF LUT cache: {}", e.what());
+        } catch (...) {
+            DEBUG_LOG_WARN("[ReflectionProbeSystem] Failed to write BRDF LUT cache");
+        }
     }
 
     brdf_lut_handle_ = rhi_device->CreateTexture2D(lut_size, lut_size, pixels.data(), true);

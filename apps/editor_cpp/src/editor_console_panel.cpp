@@ -224,6 +224,7 @@ bool TryOpenSourceFromLog(const std::string& message) {
     }
 
     int line_num = 0;
+    // 有意的解析回退：无行号时保持 0，不视为错误。
     try { line_num = std::stoi(line_str); } catch (...) {}
     return OpenInExternalEditor(file_path, line_num);
 }

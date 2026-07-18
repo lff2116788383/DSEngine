@@ -2,6 +2,7 @@
 #include "editor_aux_panels.h"
 #include "editor_panel_registry.h"
 
+#include "engine/base/debug.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
@@ -553,7 +554,7 @@ void DrawProjectPanel() {
                         s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
                     }
                     if (ImGui::MenuItem(T("Delete"))) {
-                        try { std::filesystem::remove_all(path); } catch (...) {}
+                        try { std::filesystem::remove_all(path); } catch (const std::exception& e) { DEBUG_LOG_WARN("[Editor] Delete failed: {}", e.what()); } catch (...) { DEBUG_LOG_WARN("[Editor] Delete failed"); }
                     }
                     if (ImGui::MenuItem(T("Copy Path"))) {
                         ImGui::SetClipboardText(path.string().c_str());
@@ -599,7 +600,11 @@ void DrawProjectPanel() {
                     if (ImGui::InputText("##rename_project", s_rename_buf, sizeof(s_rename_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
                         try {
                             std::filesystem::rename(path, path.parent_path() / s_rename_buf);
-                        } catch (...) {}
+                        } catch (const std::exception& e) {
+                            DEBUG_LOG_WARN("[Editor] Rename failed: {}", e.what());
+                        } catch (...) {
+                            DEBUG_LOG_WARN("[Editor] Rename failed");
+                        }
                         s_rename_target.clear();
                     }
                     if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
@@ -693,7 +698,7 @@ void DrawProjectPanel() {
                         s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
                     }
                     if (ImGui::MenuItem(T("Delete"))) {
-                        try { std::filesystem::remove_all(path); } catch (...) {}
+                        try { std::filesystem::remove_all(path); } catch (const std::exception& e) { DEBUG_LOG_WARN("[Editor] Delete failed: {}", e.what()); } catch (...) { DEBUG_LOG_WARN("[Editor] Delete failed"); }
                     }
                     if (ImGui::MenuItem(T("Copy Path"))) {
                         ImGui::SetClipboardText(path.string().c_str());

@@ -267,7 +267,11 @@ ComPtr<ID3DBlob> DX11ShaderManager::CompileShader(const std::string& source,
             fout.write(static_cast<const char*>(blob->GetBufferPointer()),
                        static_cast<std::streamsize>(blob->GetBufferSize()));
         }
-    } catch (...) {}
+    } catch (const std::exception& e) {
+        DEBUG_LOG_WARN("[D3D11] Failed to write shader disk cache '{}': {}", cache_path, e.what());
+    } catch (...) {
+        DEBUG_LOG_WARN("[D3D11] Failed to write shader disk cache '{}'", cache_path);
+    }
 
     return blob;
 }

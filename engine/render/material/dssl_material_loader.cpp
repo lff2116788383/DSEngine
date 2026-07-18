@@ -331,6 +331,7 @@ static JsonValue ParseJsonValue(const std::string& s, size_t& i) {
         size_t start = i;
         while (i < s.size() && (s[i] == '-' || s[i] == '+' || s[i] == '.' || s[i] == 'e' || s[i] == 'E'
                || (s[i] >= '0' && s[i] <= '9'))) ++i;
+        // 有意的解析回退：无效数字保留默认 num_val=0，不视为错误。
         try { val.num_val = std::stod(s.substr(start, i - start)); } catch (...) {}
     }
     return val;
