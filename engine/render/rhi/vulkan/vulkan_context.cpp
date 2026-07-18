@@ -201,13 +201,7 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueueSubmit frame={} imgIdx={} cmdCount={}",
                    current_frame_, current_image_index_, submit_info.commandBufferCount);
 
-    VkResult result = vkQueueSubmit(graphics_queue_, 1, &submit_info, in_flight_fences_[current_frame_]);
-    if (result != VK_SUCCESS) {
-        DEBUG_LOG_ERROR("[Vulkan] vkQueueSubmit failed: {}", static_cast<int>(result));
-        return result;
-    }
-    DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueueSubmit OK");
-
+    VkResult result;
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
@@ -218,8 +212,19 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     present_info.pSwapchains = swapchains;
     present_info.pImageIndices = &current_image_index_;
 
-    DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueuePresentKHR");
-    result = vkQueuePresentKHR(present_queue_, &present_info);
+    {
+        // VkQueue 访问须外部同步：与主线程资源上传的 vkQueueSubmit 串行化。
+        std::lock_guard<std::mutex> queue_lock(queue_submit_mutex_);
+        result = vkQueueSubmit(graphics_queue_, 1, &submit_info, in_flight_fences_[current_frame_]);
+        if (result != VK_SUCCESS) {
+            DEBUG_LOG_ERROR("[Vulkan] vkQueueSubmit failed: {}", static_cast<int>(result));
+            return result;
+        }
+        DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueueSubmit OK");
+
+        DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueuePresentKHR");
+        result = vkQueuePresentKHR(present_queue_, &present_info);
+    }
     DEBUG_LOG_TRACE("[Vulkan] PresentFrame: vkQueuePresentKHR result={}", static_cast<int>(result));
     return result;
 }

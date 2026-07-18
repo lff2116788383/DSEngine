@@ -17,6 +17,7 @@
 #include <vector>
 #include <string>
 #include <optional>
+#include <mutex>
 
 namespace dse {
 namespace render {
@@ -84,6 +85,11 @@ public:
     VkQueue graphics_queue() const { return graphics_queue_; }
     VkQueue present_queue() const { return present_queue_; }
     VkQueue transfer_queue() const { return transfer_queue_; }
+
+    /// 保护对 VkQueue 的提交（vkQueueSubmit/vkQueueWaitIdle/vkQueuePresentKHR）。
+    /// Vulkan 规范要求 VkQueue 访问外部同步：渲染线程的帧提交与主线程的资源上传
+    /// （EndSingleTimeCommands）会作用于同一 graphics_queue_，须经此锁串行化。
+    std::mutex& queue_submit_mutex() { return queue_submit_mutex_; }
 
     const QueueFamilyIndices& queue_families() const { return queue_families_; }
     const VkSurfaceFormatKHR& surface_format() const { return surface_format_; }
@@ -180,6 +186,7 @@ private:
     VkQueue graphics_queue_ = VK_NULL_HANDLE;
     VkQueue present_queue_ = VK_NULL_HANDLE;
     VkQueue transfer_queue_ = VK_NULL_HANDLE;
+    std::mutex queue_submit_mutex_;
 
     QueueFamilyIndices queue_families_;
 

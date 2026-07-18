@@ -227,8 +227,13 @@ void VulkanResourceManager::EndSingleTimeCommands(VkCommandBuffer command_buffer
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buffer;
 
-    vkQueueSubmit(context_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
-    vkQueueWaitIdle(context_->graphics_queue());
+    {
+        // VkQueue 访问须外部同步：与渲染线程的帧提交（PresentFrame）串行化，
+        // 避免多线程并发 vkQueueSubmit 同一 graphics_queue 的未定义行为。
+        std::lock_guard<std::mutex> queue_lock(context_->queue_submit_mutex());
+        vkQueueSubmit(context_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
+        vkQueueWaitIdle(context_->graphics_queue());
+    }
 
     vkFreeCommandBuffers(device_, command_pool_, 1, &command_buffer);
 }
