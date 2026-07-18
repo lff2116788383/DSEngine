@@ -344,6 +344,13 @@ void VulkanRhiDevice::WaitIdle() {
     active_render_cmd_ = VK_NULL_HANDLE;
 }
 
+void VulkanRhiDevice::WaitForInFlightGpuUse() {
+    if (!initialized_) return;
+    // 仅等在飞帧 fence（不触碰队列、不做整设备 idle）；供销毁可能仍被在飞帧引用的
+    // 缓冲前调用，可安全从渲染线程使用。
+    context_.WaitForAllInFlightFrames();
+}
+
 void VulkanRhiDevice::BeginFrame() {
     if (!initialized_) return;
 

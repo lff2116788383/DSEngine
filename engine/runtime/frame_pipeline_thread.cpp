@@ -279,12 +279,14 @@ void FramePipeline::ExecuteRenderFrame() {
         if (count > 0) {
             if (static_cast<size_t>(count) > render_resources_.hiz_ssbo_capacity) {
                 const size_t new_cap = static_cast<size_t>(count) * 2;
-                // FIXME: [2026-07-18] GPU-driven SSBO 增长同类 UAF（与 mesh_render_system.cpp 已修复处同源）：
-                // 旧 hiz_aabb/hiz_visibility 缓冲可能仍被在飞帧的 GPU meshlet-cull 引用，直接 Delete 属 GPU use-after-free。
-                // 此处跑在渲染线程，不能照搬主线程的 rhi->WaitIdle()（与主线程 EndSingleTimeCommands
-                // 的队列提交存在外部同步顾虑）；应改用「删缓冲前等在飞帧 fence」的跨后端原语
-                // （参 vulkan_resource_manager.cpp SyncHostWriteWithGpu / WaitForAllInFlightFrames）。
-                // capacity 起始 65536、按 2× 摊还增长，极少触发，暂记为已知低风险 latent。
+                // GPU-driven SSBO 增长同类 UAF（与 mesh_render_system.cpp 已修复处同源）：旧
+                // hiz_aabb/hiz_visibility 缓冲可能仍被在飞帧的 GPU meshlet-cull 引用，直接 Delete
+                // 属 GPU use-after-free。此处跑在渲染线程，不能照搬主线程的 rhi->WaitIdle()
+                // （vkDeviceWaitIdle 与主线程 EndSingleTimeCommands 的队列提交存在外部同步顾虑）；
+                // 改用轻量的「删缓冲前等在飞帧 fence」原语——只等 in-flight fences、不触碰队列，
+                // 与渲染线程每帧 UpdateGpuBuffer→SyncHostWriteWithGpu 走的同一同步路径。
+                // capacity 起始 65536、按 2× 摊还增长，极少触发。
+                runtime_context_.rhi_device->WaitForInFlightGpuUse();
                 runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
                 runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
                 {

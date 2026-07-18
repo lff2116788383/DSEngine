@@ -186,6 +186,11 @@ public:
 
     virtual void Shutdown() = 0;
     virtual void WaitIdle() {}
+    /// 销毁可能仍被在飞帧 GPU 引用的资源前的轻量同步：仅等待所有在飞帧的提交 fence，
+    /// 不做整设备 idle（不触碰队列，可安全从渲染线程调用，区别于 WaitIdle=vkDeviceWaitIdle）。
+    /// Vulkan：等 in-flight fences（见 VulkanContext::WaitForAllInFlightFrames）。
+    /// GL/DX11：no-op——glDeleteBuffers / ID3D11Buffer::Release 由驱动延迟到 GPU 用完，删缓冲本就安全。
+    virtual void WaitForInFlightGpuUse() {}
     virtual void BeginFrame() = 0;
     virtual RenderTargetHandle CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual void DeleteRenderTarget(RenderTargetHandle render_target_handle) { (void)render_target_handle; }
