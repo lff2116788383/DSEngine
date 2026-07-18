@@ -124,7 +124,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// VolumetricCloudPass â€” Guerrilla-style raymarching volumetric clouds
+// VolumetricCloudPass — Guerrilla-style raymarching volumetric clouds
 // ============================================================
 
 void VolumetricCloudPass::Setup(RenderGraph& graph) {
@@ -212,7 +212,7 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// WBOITPass â€” Weighted Blended Order-Independent Transparency
+// WBOITPass — Weighted Blended Order-Independent Transparency
 // ============================================================
 
 void WBOITPass::Setup(RenderGraph& graph) {
@@ -270,7 +270,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// WaterPass â€” Screen-Space Water / Ocean (Gerstner wave + refraction)
+// WaterPass — Screen-Space Water / Ocean (Gerstner wave + refraction)
 // ============================================================
 
 void WaterPass::Setup(RenderGraph& graph) {
@@ -944,7 +944,7 @@ void DDGIUpdatePass::Execute(CommandBuffer& /*cmd_buffer*/) {
 }
 
 // ============================================================
-// SSSBlurPass â€” Separable Subsurface Scattering
+// SSSBlurPass — Separable Subsurface Scattering
 // ============================================================
 
 void SSSBlurPass::Setup(RenderGraph& graph) {
@@ -970,7 +970,7 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
 
-    // Pass 1: Horizontal blur â†’ sss_temp
+    // Pass 1: Horizontal blur → sss_temp
     cmd_buffer.BeginRenderPass({ctx_.render_targets.sss_temp, glm::vec4(0.0f), true});
     {
         auto req = PostProcessRequest("sss_blur", scene_color_tex, {
@@ -985,7 +985,7 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
     }
     cmd_buffer.EndRenderPass();
 
-    // Pass 2: Vertical blur â†’ back to scene RT
+    // Pass 2: Vertical blur → back to scene RT
     const TextureHandle sss_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.sss_temp);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
     {
@@ -1003,7 +1003,7 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// WeatherPass â€” Screen-Space Weather Particles (rain / snow)
+// WeatherPass — Screen-Space Weather Particles (rain / snow)
 // ============================================================
 
 void WeatherPass::Setup(RenderGraph& graph) {

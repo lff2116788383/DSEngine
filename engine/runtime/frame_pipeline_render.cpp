@@ -1,6 +1,6 @@
 ﻿/**
  * @file frame_pipeline_render.cpp
- * @brief FramePipeline render path â€” RunRenderInternal, BuildRenderGraph, ExecuteRenderGraph.
+ * @brief FramePipeline render path — RunRenderInternal, BuildRenderGraph, ExecuteRenderGraph.
  */
 
 #include "engine/runtime/frame_pipeline.h"

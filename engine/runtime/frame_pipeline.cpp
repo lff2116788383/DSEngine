@@ -458,8 +458,8 @@ bool FramePipeline::Init() {
                        render_resources_.hiz_cull_shader.raw());
     }
 
-    // CSM Shadow Atlas: single 4096Ã—2048 depth texture, cascades rendered via viewport
-    // Layout: cascade 0 (2048Ã—2048) at (0,0); cascade 1 (1024Ã—1024) at (2048,0); cascade 2 (512Ã—512) at (3072,0)
+    // CSM Shadow Atlas: single 4096×2048 depth texture, cascades rendered via viewport
+    // Layout: cascade 0 (2048×2048) at (0,0); cascade 1 (1024×1024) at (2048,0); cascade 2 (512×512) at (3072,0)
     render_resources_.shadow_atlas_render_target = runtime_context_.rhi_device->CreateRenderTarget({4096, 2048, false, true});
     // Legacy per-cascade RTs kept for compatibility (spot/point shadow code paths)
     constexpr int kShadowResolutions[CSM_CASCADES] = {2048, 1024, 512};
@@ -502,7 +502,7 @@ bool FramePipeline::Init() {
         if (render_resources_.gpu_driven_supported &&
             !runtime_context_.rhi_device->HasGPUDrivenPBRShader()) {
             render_resources_.gpu_driven_supported = false;
-            DEBUG_LOG_WARN("GPU Driven Rendering: disabled â€” GPU-driven PBR shader unavailable");
+            DEBUG_LOG_WARN("GPU Driven Rendering: disabled — GPU-driven PBR shader unavailable");
         }
         DEBUG_LOG_INFO("GPU Driven Rendering: supported={}, cull_shader={}",
                        render_resources_.gpu_driven_supported,

@@ -1,6 +1,6 @@
 ﻿/**
  * @file frame_pipeline_snapshot.cpp
- * @brief FramePipeline thin snapshot capture â€” CaptureThinSnapshot.
+ * @brief FramePipeline thin snapshot capture — CaptureThinSnapshot.
  */
 
 #include "engine/runtime/frame_pipeline.h"

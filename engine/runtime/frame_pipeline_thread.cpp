@@ -1,6 +1,6 @@
 ﻿/**
  * @file frame_pipeline_thread.cpp
- * @brief FramePipeline render frame execution â€” PrepareRenderFrame + ExecuteRenderFrame.
+ * @brief FramePipeline render frame execution — PrepareRenderFrame + ExecuteRenderFrame.
  *        Render thread lifecycle is now managed by RenderThreadManager.
  */
 

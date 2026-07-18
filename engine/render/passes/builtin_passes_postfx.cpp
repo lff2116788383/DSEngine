@@ -234,7 +234,7 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
     } else {
         // tonemapping / ssao_apply 已迁到 PostProcessRenderer：UBO 为 4 标量
-        // {manual_exposure, auto_exposure_enabled, lut_enabled, lut_intensity}ï¼›
+        // {manual_exposure, auto_exposure_enabled, lut_enabled, lut_intensity}；
         // enable 标志按纹理在否在调用点派生（旧 binder 原由 FindTex 推导）。
         // 可选纹理仅在非零时挂载——渲染器纹理循环遇 handle==0 即停，避免中断后续绑定。
         const float ae_enabled  = ae_tex ? 1.0f : 0.0f;
@@ -299,7 +299,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"lum_compute", scene_color_tex});
     cmd_buffer.EndRenderPass();
 
-    // Pass 2: 64x64 â†’ 1x1 adapted exposure (EMA blend with previous frame)
+    // Pass 2: 64x64 → 1x1 adapted exposure (EMA blend with previous frame)
     const TextureHandle lum_temp_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_temp);
     const TextureHandle prev_adapted_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[read_idx]);
 
@@ -634,7 +634,7 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
     float far_plane  = active_cam.valid ? active_cam.far_clip  : 10000.0f;
 
-    // Pass 1: DOF â†’ dof RT
+    // Pass 1: DOF → dof RT
     post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"dof", depth_tex, {
@@ -753,7 +753,7 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     }}.Tex(2, main_color_tex));
     cmd_buffer.EndRenderPass();
 
-    // dof RT â†’ main RT
+    // dof RT → main RT
     const TextureHandle mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (mb_tex) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
@@ -875,7 +875,7 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// LightShaftPass â€” screen-space radial blur (God Ray)
+// LightShaftPass — screen-space radial blur (God Ray)
 // ============================================================
 
 void LightShaftPass::Setup(RenderGraph& graph) {

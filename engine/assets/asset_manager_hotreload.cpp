@@ -156,7 +156,7 @@ std::size_t AssetManager::EvictLRU() {
                 estimated_memory_usage_ = 0;
             }
             ++evicted;
-            // RemoveLru inline â€” will erase from map after loop
+            // RemoveLru inline — will erase from map after loop
         }
     }
 

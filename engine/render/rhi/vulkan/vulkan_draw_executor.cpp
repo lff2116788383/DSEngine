@@ -179,7 +179,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                       indices.size() * sizeof(uint16_t), indices.data());
     }
 
-    // --- VFX UBO ring buffer (256B aligned Ã— 64 slots = 16KB, for ui_effects PS params) ---
+    // --- VFX UBO ring buffer (256B aligned × 64 slots = 16KB, for ui_effects PS params) ---
     CreateVulkanBuffer(device, physical_device, 256 * 64,
                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -1206,7 +1206,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         return false;
     };
 
-    // Set 0 (layouts[0]): PerFrame UBO â€” binding 0
+    // Set 0 (layouts[0]): PerFrame UBO — binding 0
     if (has_binding(0, 0)) {
         push_ubo(sets[0], 0);
     }
@@ -1262,7 +1262,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         if (has_binding(2, 9)) push_ubo(sets[2], 9);
     }
 
-    // Set 3 (layouts[3]): point_shadow_maps[4] â€” binding 0
+    // Set 3 (layouts[3]): point_shadow_maps[4] — binding 0
     if (set_count > 3 && has_binding(3, 0)) {
         size_t base = push_img(sets[3], 0, 4);
         img_fixups.push_back({writes.size() - 1, base});
