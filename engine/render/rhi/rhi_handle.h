@@ -3,7 +3,9 @@
  * @brief 类型安全的 GPU 资源句柄 — 编译期区分 Buffer/Texture/RT/Pipeline/VAO
  *
  * 零运行时开销（sizeof == sizeof(unsigned int)）。
- * Debug 构建可启用 DSE_DEBUG_HANDLES 获得 generation counter 验证层。
+ * 注意：当前 id 为裸 uint32_t，无世代校验（注释曾提及的 DSE_DEBUG_HANDLES 世代验证层尚未实现）。
+ * 后果：id 回收复用后，滞留的旧句柄会静默绑定到新资源（无崩溃、无告警，表现为诡异渲染错误）。
+ * TODO: [N4] 至少在 Debug 构建落实世代验证层（句柄高位叠加世代计数 + 查表时校验）。
  */
 
 #ifndef DSE_RHI_HANDLE_H
