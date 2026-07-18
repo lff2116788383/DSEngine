@@ -2002,6 +2002,22 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         return 0;
     }
 
+    const size_t required_count = static_cast<size_t>(cmd_index);
+
+    // GPU-driven 缓冲增长时会先销毁旧缓冲再重建（下方各块）。旧缓冲可能仍被在飞帧
+    // （GPU 尚未完成）的 compute / indirect draw 引用，直接销毁属 GPU 端 use-after-free
+    // → 秒级停顿乃至 TDR 触发 VK_ERROR_DEVICE_LOST。增长按 2× 容量摊还，是低频事件，
+    // 销毁前同步一次 GPU 足以保证安全（GPU-driven 仅在渲染线程未激活时运行，此处即
+    // 提交线程，WaitIdle 无跨线程队列同步问题）。
+    const bool needs_gpu_buffer_grow =
+        (ctx.gpu_aabb_ssbo && ctx.gpu_aabb_capacity > 0 && gpu_aabbs_.size() > ctx.gpu_aabb_capacity) ||
+        (ctx.gpu_draw_cmd_ssbo && required_count > gpu_draw_cmd_capacity_) ||
+        (ctx.gpu_instance_ssbo && required_count > gpu_instance_capacity_) ||
+        (ctx.gpu_material_ssbo && gpu_materials_.size() > gpu_material_capacity_);
+    if (needs_gpu_buffer_grow) {
+        rhi->WaitIdle();
+    }
+
     if (ctx.gpu_aabb_ssbo || !gpu_aabbs_.empty()) {
         const size_t needed = gpu_aabbs_.size();
         if (ctx.gpu_aabb_ssbo && ctx.gpu_aabb_capacity > 0 && needed > ctx.gpu_aabb_capacity) {
@@ -2020,8 +2036,6 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
             rhi->UpdateGpuBuffer(ctx.gpu_aabb_ssbo, 0, needed * sizeof(HiZAABB), gpu_aabbs_.data());
         }
     }
-
-    const size_t required_count = static_cast<size_t>(cmd_index);
 
     // 上传 DrawCommands 到 SSBO（binding 6，供 compute shader 读写）
     {
