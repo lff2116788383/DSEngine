@@ -227,13 +227,24 @@ void VulkanResourceManager::EndSingleTimeCommands(VkCommandBuffer command_buffer
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buffer;
 
+    // 用一次性 fence 只等待“本次提交”完成，而非 vkQueueWaitIdle 排空整条队列
+    // （后者会连带等待渲染线程在同一 graphics_queue 上的帧任务，破坏 CPU/GPU 重叠、
+    //  且每帧 GPU-driven 的 compute 提交都会触发一次整队列 idle）。
+    VkFence fence = VK_NULL_HANDLE;
+    VkFenceCreateInfo fence_info{};
+    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    vkCreateFence(device_, &fence_info, nullptr, &fence);
+
     {
         // VkQueue 访问须外部同步：与渲染线程的帧提交（PresentFrame）串行化，
         // 避免多线程并发 vkQueueSubmit 同一 graphics_queue 的未定义行为。
+        // 仅在锁内提交；fence 等待放到锁外，缩短持锁时间、避免阻塞渲染线程提交。
         std::lock_guard<std::mutex> queue_lock(context_->queue_submit_mutex());
-        vkQueueSubmit(context_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
-        vkQueueWaitIdle(context_->graphics_queue());
+        vkQueueSubmit(context_->graphics_queue(), 1, &submit_info, fence);
     }
+
+    vkWaitForFences(device_, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(device_, fence, nullptr);
 
     vkFreeCommandBuffers(device_, command_pool_, 1, &command_buffer);
 }
