@@ -144,12 +144,10 @@ void MeshRenderer::EnsureMorphCapacity(RhiDevice& device, size_t morph_bytes) {
 }
 
 void MeshRenderer::EnsureIndirectBuffer(RhiDevice& device) {
-    if (indirect_buffer_) return;
-    GpuBufferDesc d_desc;
-    d_desc.size = sizeof(DrawElementsIndirectCommand);  // 单条间接绘制命令
-    d_desc.usage = GpuBufferUsage::kIndirect;
-    d_desc.is_dynamic = true;
-    indirect_buffer_ = device.CreateGpuBuffer(d_desc, nullptr);
+    // 单条 DrawElementsIndirectCommand 每帧 host 写 → per-in-flight ring。间接绘制在
+    // BeginFrame/AcquireNextImage 之后记录，Acquire 当前槽位即安全覆写，无需额外 fence。
+    indirect_buffer_ = indirect_ring_.Acquire(device,
+        sizeof(DrawElementsIndirectCommand), GpuBufferUsage::kIndirect);
 }
 
 void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
@@ -722,7 +720,7 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     bone_ring_.Shutdown(device);
     instance_ring_.Shutdown(device);
     morph_ring_.Shutdown(device);
-    if (indirect_buffer_) device.DeleteGpuBuffer(indirect_buffer_);
+    indirect_ring_.Shutdown(device);
     if (white_tex_) device.DeleteTexture(white_tex_);
     if (white_cube_tex_) device.DeleteTexture(white_cube_tex_);
     white_tex_ = white_cube_tex_ = TextureHandle{};

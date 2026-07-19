@@ -672,6 +672,7 @@ private:
     PerInFlightBuffer bone_ring_;
     PerInFlightBuffer instance_ring_;
     PerInFlightBuffer morph_ring_;
+    PerInFlightBuffer indirect_ring_;  ///< N3：单条间接绘制命令每帧 host 写 → per-in-flight ring
     size_t vbo_capacity_ = 0;
     size_t ibo_capacity_ = 0;
     bool init_ = false;
