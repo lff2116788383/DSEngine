@@ -127,14 +127,9 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
         return false;
     }
 
-    // 分配初始 SSBO
-    GpuBufferDesc src_desc{};
-    src_desc.size = kInitialVertexCapacity * kSrcVertexSize;
-    src_desc.usage = GpuBufferUsage::kStorage;
-    src_desc.is_dynamic = true;
-    src_buffer_ = rhi_->CreateGpuBuffer(src_desc, nullptr);
-    src_buffer_capacity_ = src_desc.size;
-
+    // 输入 SSBO（src/bone/morph/instance/morph_weight）现由 per-in-flight ring 惰性分配
+    // （每帧 UploadData 按需 Acquire 当前槽位），不再在 Init 预建持久单份。仅 dst 输出缓冲
+    // 仍为手动双缓冲（GPU 写 + 跨帧 readback），在此预建。
     GpuBufferDesc dst_desc{};
     dst_desc.size = kInitialVertexCapacity * kDstVertexSize;
     dst_desc.usage = GpuBufferUsage::kStorage;
@@ -143,38 +138,6 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
     dst_buffer_[1] = rhi_->CreateGpuBuffer(dst_desc, nullptr);
     dst_buffer_capacity_ = dst_desc.size;
     dst_write_idx_ = 0;
-
-    GpuBufferDesc bone_desc{};
-    bone_desc.size = kInitialBoneCapacity * sizeof(glm::mat4);
-    bone_desc.usage = GpuBufferUsage::kStorage;
-    bone_desc.is_dynamic = true;
-    bone_buffer_ = rhi_->CreateGpuBuffer(bone_desc, nullptr);
-    bone_buffer_capacity_ = bone_desc.size;
-
-    // Morph delta buffer: 初始 16 bytes（占位避免 Vulkan 验证层 binding 3 未绑定警告）
-    // 有 morph delta 数据时按需扩容
-    GpuBufferDesc morph_desc{};
-    morph_desc.size = 16;
-    morph_desc.usage = GpuBufferUsage::kStorage;
-    morph_desc.is_dynamic = true;
-    morph_buffer_ = rhi_->CreateGpuBuffer(morph_desc, nullptr);
-    morph_buffer_capacity_ = morph_desc.size;
-
-    // Morph 权重 buffer（binding 5）：同样 16 bytes 占位，有数据时按需扩容
-    GpuBufferDesc morph_w_desc{};
-    morph_w_desc.size = 16;
-    morph_w_desc.usage = GpuBufferUsage::kStorage;
-    morph_w_desc.is_dynamic = true;
-    morph_weight_buffer_ = rhi_->CreateGpuBuffer(morph_w_desc, nullptr);
-    morph_weight_buffer_capacity_ = morph_w_desc.size;
-
-    // P2: Instance info buffer
-    GpuBufferDesc inst_desc{};
-    inst_desc.size = 64 * sizeof(InstanceInfoGPU);  // 64 instances initially
-    inst_desc.usage = GpuBufferUsage::kStorage;
-    inst_desc.is_dynamic = true;
-    instance_buffer_ = rhi_->CreateGpuBuffer(inst_desc, nullptr);
-    instance_buffer_capacity_ = inst_desc.size;
 
     available_ = true;
     DEBUG_LOG_INFO("[GPUSkinning] Initialized (shader={}, initial_capacity={}v/{}b)",
@@ -189,13 +152,18 @@ void GPUSkinningSystem::Shutdown() {
         rhi_->DeleteComputeShader(skinning_shader_);
         skinning_shader_ = {};
     }
-    if (src_buffer_) { rhi_->DeleteGpuBuffer(src_buffer_); src_buffer_ = {}; }
+    src_ring_.Shutdown(*rhi_);
+    bone_ring_.Shutdown(*rhi_);
+    morph_ring_.Shutdown(*rhi_);
+    morph_weight_ring_.Shutdown(*rhi_);
+    instance_ring_.Shutdown(*rhi_);
+    src_buffer_ = {};
+    bone_buffer_ = {};
+    morph_buffer_ = {};
+    morph_weight_buffer_ = {};
+    instance_buffer_ = {};
     if (dst_buffer_[0]) { rhi_->DeleteGpuBuffer(dst_buffer_[0]); dst_buffer_[0] = {}; }
     if (dst_buffer_[1]) { rhi_->DeleteGpuBuffer(dst_buffer_[1]); dst_buffer_[1] = {}; }
-    if (bone_buffer_) { rhi_->DeleteGpuBuffer(bone_buffer_); bone_buffer_ = {}; }
-    if (morph_buffer_) { rhi_->DeleteGpuBuffer(morph_buffer_); morph_buffer_ = {}; }
-    if (morph_weight_buffer_) { rhi_->DeleteGpuBuffer(morph_weight_buffer_); morph_weight_buffer_ = {}; }
-    if (instance_buffer_) { rhi_->DeleteGpuBuffer(instance_buffer_); instance_buffer_ = {}; }
 
     available_ = false;
     rhi_ = nullptr;
@@ -225,22 +193,9 @@ void GPUSkinningSystem::Submit(SkinningRequest request) {
     pending_requests_.push_back(std::move(request));
 }
 
-void GPUSkinningSystem::EnsureBufferCapacity() {
-    const size_t needed_src = static_cast<size_t>(total_dst_vertices_) * kSrcVertexSize;
+void GPUSkinningSystem::EnsureDstCapacity() {
+    // dst 输出缓冲仍手动双缓冲（GPU 写 + 跨帧 readback，不走 host-write ring）。
     const size_t needed_dst = static_cast<size_t>(total_dst_vertices_) * kDstVertexSize;
-    const size_t needed_bone = static_cast<size_t>(total_bone_count_) * sizeof(glm::mat4);
-
-    if (needed_src > src_buffer_capacity_) {
-        if (src_buffer_) rhi_->DeleteGpuBuffer(src_buffer_);
-        size_t new_cap = needed_src * 2;
-        GpuBufferDesc desc{};
-        desc.size = new_cap;
-        desc.usage = GpuBufferUsage::kStorage;
-        desc.is_dynamic = true;
-        src_buffer_ = rhi_->CreateGpuBuffer(desc, nullptr);
-        src_buffer_capacity_ = new_cap;
-    }
-
     if (needed_dst > dst_buffer_capacity_) {
         if (dst_buffer_[0]) rhi_->DeleteGpuBuffer(dst_buffer_[0]);
         if (dst_buffer_[1]) rhi_->DeleteGpuBuffer(dst_buffer_[1]);
@@ -252,56 +207,6 @@ void GPUSkinningSystem::EnsureBufferCapacity() {
         dst_buffer_[0] = rhi_->CreateGpuBuffer(desc, nullptr);
         dst_buffer_[1] = rhi_->CreateGpuBuffer(desc, nullptr);
         dst_buffer_capacity_ = new_cap;
-    }
-
-    if (needed_bone > bone_buffer_capacity_) {
-        if (bone_buffer_) rhi_->DeleteGpuBuffer(bone_buffer_);
-        size_t new_cap = needed_bone * 2;
-        GpuBufferDesc desc{};
-        desc.size = new_cap;
-        desc.usage = GpuBufferUsage::kStorage;
-        desc.is_dynamic = true;
-        bone_buffer_ = rhi_->CreateGpuBuffer(desc, nullptr);
-        bone_buffer_capacity_ = new_cap;
-    }
-
-    // Morph delta buffer
-    const size_t needed_morph = static_cast<size_t>(total_morph_vec4s_) * 16;  // 16 bytes per vec4
-    if (needed_morph > morph_buffer_capacity_) {
-        if (morph_buffer_) rhi_->DeleteGpuBuffer(morph_buffer_);
-        size_t new_cap = (std::max)(needed_morph * 2, static_cast<size_t>(16));  // 最小 16 bytes 占位
-        GpuBufferDesc desc{};
-        desc.size = new_cap;
-        desc.usage = GpuBufferUsage::kStorage;
-        desc.is_dynamic = true;
-        morph_buffer_ = rhi_->CreateGpuBuffer(desc, nullptr);
-        morph_buffer_capacity_ = new_cap;
-    }
-
-    // Morph 权重 buffer（binding 5）
-    const size_t needed_morph_w = static_cast<size_t>(total_morph_weights_) * sizeof(float);
-    if (needed_morph_w > morph_weight_buffer_capacity_) {
-        if (morph_weight_buffer_) rhi_->DeleteGpuBuffer(morph_weight_buffer_);
-        size_t new_cap = (std::max)(needed_morph_w * 2, static_cast<size_t>(16));
-        GpuBufferDesc desc{};
-        desc.size = new_cap;
-        desc.usage = GpuBufferUsage::kStorage;
-        desc.is_dynamic = true;
-        morph_weight_buffer_ = rhi_->CreateGpuBuffer(desc, nullptr);
-        morph_weight_buffer_capacity_ = new_cap;
-    }
-
-    // P2: instance info buffer
-    const size_t needed_inst = pending_requests_.size() * sizeof(InstanceInfoGPU);
-    if (needed_inst > instance_buffer_capacity_) {
-        if (instance_buffer_) rhi_->DeleteGpuBuffer(instance_buffer_);
-        size_t new_cap = needed_inst * 2;
-        GpuBufferDesc desc{};
-        desc.size = new_cap;
-        desc.usage = GpuBufferUsage::kStorage;
-        desc.is_dynamic = true;
-        instance_buffer_ = rhi_->CreateGpuBuffer(desc, nullptr);
-        instance_buffer_capacity_ = new_cap;
     }
 }
 
@@ -385,20 +290,40 @@ void GPUSkinningSystem::UploadData() {
         bone_offset += static_cast<uint32_t>(req.bone_matrices.size());
     }
 
-    // 上传到 GPU
+    // 上传到 GPU：每帧 Acquire ring 当前槽位（其 fence 已在 AcquireNextImage 等待），写当前
+    // 槽位、不触发跨帧总闸。morph/morph_weight 即使本帧无数据也 Acquire 至少 16B 占位，保证
+    // binding 3/5 始终有有效缓冲（与原 16B 占位语义一致，避免 Vulkan 验证层未绑定警告）。
+    const size_t src_bytes = (std::max)(total_src_bytes, static_cast<size_t>(16));
+    src_buffer_ = src_ring_.Acquire(*rhi_, src_bytes, GpuBufferUsage::kStorage);
     rhi_->UpdateGpuBuffer(src_buffer_, 0, total_src_bytes, packed_src_.data());
+
+    const size_t bone_bytes =
+        (std::max)(static_cast<size_t>(total_bone_count_) * sizeof(glm::mat4), static_cast<size_t>(16));
+    bone_buffer_ = bone_ring_.Acquire(*rhi_, bone_bytes, GpuBufferUsage::kStorage);
     rhi_->UpdateGpuBuffer(bone_buffer_, 0,
                           total_bone_count_ * sizeof(glm::mat4), packed_bones_.data());
+
+    const size_t morph_bytes =
+        (std::max)(static_cast<size_t>(total_morph_vec4s_) * 16, static_cast<size_t>(16));
+    morph_buffer_ = morph_ring_.Acquire(*rhi_, morph_bytes, GpuBufferUsage::kStorage);
     if (total_morph_vec4s_ > 0) {
         rhi_->UpdateGpuBuffer(morph_buffer_, 0,
                               static_cast<size_t>(total_morph_vec4s_) * 16,
                               packed_morph_deltas_.data());
     }
+
+    const size_t morph_w_bytes =
+        (std::max)(static_cast<size_t>(total_morph_weights_) * sizeof(float), static_cast<size_t>(16));
+    morph_weight_buffer_ = morph_weight_ring_.Acquire(*rhi_, morph_w_bytes, GpuBufferUsage::kStorage);
     if (total_morph_weights_ > 0) {
         rhi_->UpdateGpuBuffer(morph_weight_buffer_, 0,
                               static_cast<size_t>(total_morph_weights_) * sizeof(float),
                               packed_morph_weights_.data());
     }
+
+    const size_t inst_bytes =
+        (std::max)(packed_instances_.size() * sizeof(InstanceInfoGPU), static_cast<size_t>(16));
+    instance_buffer_ = instance_ring_.Acquire(*rhi_, inst_bytes, GpuBufferUsage::kStorage);
     rhi_->UpdateGpuBuffer(instance_buffer_, 0,
                           packed_instances_.size() * sizeof(InstanceInfoGPU),
                           packed_instances_.data());
@@ -407,7 +332,7 @@ void GPUSkinningSystem::UploadData() {
 void GPUSkinningSystem::Dispatch() {
     if (!available_ || pending_requests_.empty()) return;
 
-    EnsureBufferCapacity();
+    EnsureDstCapacity();
     UploadData();
 
     // P2: 绑定所有 SSBO + 单次 Dispatch（双缓冲写入当前帧 buffer）

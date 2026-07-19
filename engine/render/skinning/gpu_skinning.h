@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <glm/glm.hpp>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/per_in_flight_buffer.h"
 
 namespace dse {
 namespace render {
@@ -98,19 +99,24 @@ private:
     ShaderHandle skinning_shader_;  ///< compute shader handle
 
     // SSBO 资源
-    BufferHandle src_buffer_;           ///< 源顶点 SSBO
-    BufferHandle dst_buffer_[2];        ///< 输出顶点 SSBO（双缓冲，消除 readback 同步阻塞）
-    BufferHandle bone_buffer_;          ///< 骨骼矩阵 SSBO
-    BufferHandle morph_buffer_;         ///< morph delta SSBO (binding 3)
-    BufferHandle instance_buffer_;      ///< P2: per-instance info SSBO
-    BufferHandle morph_weight_buffer_;  ///< morph 权重 SSBO (binding 5，解除 4-target 上限)
+    // N3：每帧 host 写的输入 SSBO（src/bone/morph/instance/morph_weight）改 per-in-flight
+    // ring，写当前槽位、不再触发跨帧总闸。Dispatch 在 ExecuteRenderFrame（BeginFrame/
+    // AcquireNextImage 之后）执行——当前槽位 fence 已等待，覆写/重建安全，无需额外 wait。
+    // 下列 BufferHandle 为 ring 的「当前槽位视图」，每帧 UploadData 时 Acquire 刷新，供 Bind 用。
+    BufferHandle src_buffer_;           ///< 源顶点 SSBO（当前槽位视图）
+    BufferHandle dst_buffer_[2];        ///< 输出顶点 SSBO（GPU 写，双缓冲消除 readback 同步阻塞）
+    BufferHandle bone_buffer_;          ///< 骨骼矩阵 SSBO（当前槽位视图）
+    BufferHandle morph_buffer_;         ///< morph delta SSBO binding 3（当前槽位视图）
+    BufferHandle instance_buffer_;      ///< P2: per-instance info SSBO（当前槽位视图）
+    BufferHandle morph_weight_buffer_;  ///< morph 权重 SSBO binding 5（当前槽位视图）
 
-    size_t src_buffer_capacity_ = 0;
+    PerInFlightBuffer src_ring_;
+    PerInFlightBuffer bone_ring_;
+    PerInFlightBuffer morph_ring_;
+    PerInFlightBuffer instance_ring_;
+    PerInFlightBuffer morph_weight_ring_;
+
     size_t dst_buffer_capacity_ = 0;    ///< 双缓冲共享容量（两个 buffer 大小相同）
-    size_t bone_buffer_capacity_ = 0;
-    size_t morph_buffer_capacity_ = 0;
-    size_t instance_buffer_capacity_ = 0;
-    size_t morph_weight_buffer_capacity_ = 0;
     uint32_t dst_write_idx_ = 0;        ///< 当前帧写入的 dst buffer 索引 (0 or 1)
 
     // 本帧请求（owned）
@@ -134,7 +140,7 @@ private:
     uint32_t prev_total_vertices_ = 0;
     std::vector<uint8_t> readback_raw_;  ///< 缓存 readback 临时缓冲（避免每帧分配）
 
-    void EnsureBufferCapacity();
+    void EnsureDstCapacity();
     void UploadData();
     void ReadBackPrevFrame();
 };
