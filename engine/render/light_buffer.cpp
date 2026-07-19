@@ -17,30 +17,10 @@ void LightBuffer::Init(RhiDevice* device) {
     device_ = device;
     if (!device_) return;
 
-    // 预分配初始容量（64 个光源）
-    const int initial_point = 64;
-    const int initial_spot  = 64;
-
-    const size_t point_ssbo_size = sizeof(LightBufferHeader) + sizeof(GPUPointLight) * initial_point;
-    const size_t spot_ssbo_size  = sizeof(LightBufferHeader) + sizeof(GPUSpotLight)  * initial_spot;
-
-    GpuBufferDesc desc;
-    desc.usage = GpuBufferUsage::kStorage;
-    desc.is_dynamic = true;
-
-    desc.size = point_ssbo_size;
-    desc.debug_name = "point_light_ssbo";
-    point_light_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
-
-    desc.size = spot_ssbo_size;
-    desc.debug_name = "spot_light_ssbo";
-    spot_light_ssbo_  = device_->CreateGpuBuffer(desc, nullptr);
-
-    point_light_capacity_ = initial_point;
-    spot_light_capacity_  = initial_spot;
-
-    point_lights_.reserve(initial_point);
-    spot_lights_.reserve(initial_spot);
+    // SSBO 现由 per-in-flight ring 惰性分配（首帧 Upload 时按需 Acquire 当前槽位），
+    // 不再在 Init 预建单份持久缓冲。仅预留 CPU 容器容量。
+    point_lights_.reserve(64);
+    spot_lights_.reserve(64);
 }
 
 void LightBuffer::CollectLightsFromView(const RenderSceneView& view, const glm::vec3& camera_offset) {
@@ -97,28 +77,13 @@ void LightBuffer::Upload() {
     const int pc = static_cast<int>(point_lights_.size());
     const int sc = static_cast<int>(spot_lights_.size());
 
-    // 如果当前容量不足，重新分配 SSBO
-    if (pc > point_light_capacity_) {
-        if (point_light_ssbo_) {
-            device_->DeleteGpuBuffer(point_light_ssbo_);
-        }
-        point_light_capacity_ = std::max(pc, point_light_capacity_ * 2);
-        const size_t new_size = sizeof(LightBufferHeader) + sizeof(GPUPointLight) * point_light_capacity_;
-        GpuBufferDesc desc{new_size, GpuBufferUsage::kStorage, true, "point_light_ssbo"};
-        point_light_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
-    }
-    if (sc > spot_light_capacity_) {
-        if (spot_light_ssbo_) {
-            device_->DeleteGpuBuffer(spot_light_ssbo_);
-        }
-        spot_light_capacity_ = std::max(sc, spot_light_capacity_ * 2);
-        const size_t new_size = sizeof(LightBufferHeader) + sizeof(GPUSpotLight) * spot_light_capacity_;
-        GpuBufferDesc desc{new_size, GpuBufferUsage::kStorage, true, "spot_light_ssbo"};
-        spot_light_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
-    }
-
-    // 上传点光源 SSBO
-    if (point_light_ssbo_) {
+    // per-in-flight ring：写当前槽位（其 fence 已在 BeginFrame/AcquireNextImage 等待），
+    // 仅(重)建当前槽位、不触发跨帧总闸。与原实现一致：每帧都写 header（count 可为 0），
+    // 使绑定点始终有效缓冲。
+    {
+        const size_t size = sizeof(LightBufferHeader) +
+                            sizeof(GPUPointLight) * static_cast<size_t>(std::max(pc, 1));
+        point_light_ssbo_ = point_light_ring_.Acquire(*device_, size, GpuBufferUsage::kStorage);
         LightBufferHeader header{};
         header.count = pc;
         device_->UpdateGpuBuffer(point_light_ssbo_, 0, sizeof(header), &header);
@@ -128,8 +93,10 @@ void LightBuffer::Upload() {
         }
     }
 
-    // 上传聚光灯 SSBO
-    if (spot_light_ssbo_) {
+    {
+        const size_t size = sizeof(LightBufferHeader) +
+                            sizeof(GPUSpotLight) * static_cast<size_t>(std::max(sc, 1));
+        spot_light_ssbo_ = spot_light_ring_.Acquire(*device_, size, GpuBufferUsage::kStorage);
         LightBufferHeader header{};
         header.count = sc;
         device_->UpdateGpuBuffer(spot_light_ssbo_, 0, sizeof(header), &header);
@@ -148,18 +115,12 @@ void LightBuffer::Bind() {
 
 void LightBuffer::Shutdown() {
     if (!device_) return;
-    if (point_light_ssbo_) {
-        device_->DeleteGpuBuffer(point_light_ssbo_);
-        point_light_ssbo_ = {};
-    }
-    if (spot_light_ssbo_) {
-        device_->DeleteGpuBuffer(spot_light_ssbo_);
-        spot_light_ssbo_ = {};
-    }
+    point_light_ring_.Shutdown(*device_);
+    spot_light_ring_.Shutdown(*device_);
+    point_light_ssbo_ = {};
+    spot_light_ssbo_ = {};
     point_lights_.clear();
     spot_lights_.clear();
-    point_light_capacity_ = 0;
-    spot_light_capacity_  = 0;
     device_ = nullptr;
 }
 

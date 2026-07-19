@@ -8,6 +8,7 @@
 #include "engine/base/debug.h"
 
 #include <cstring>
+#include <cstdlib>
 #include <algorithm>
 
 namespace dse {
@@ -1112,7 +1113,18 @@ void VulkanResourceManager::SyncHostWriteWithGpu() {
     // 每帧首次 host 写前等待在飞帧 fence，保证写入时 GPU 不再引用这些缓冲。
     if (host_write_synced_frame_ == frame_counter_) return;
     host_write_synced_frame_ = frame_counter_;
-    if (context_) context_->WaitForAllInFlightFrames();
+    if (context_) {
+        context_->WaitForAllInFlightFrames();
+        // N3 诊断（DSE_LOG_HOSTSYNC=1）：统计总闸实际触发帧数。所有每帧 host 写方都改成
+        // per-in-flight ring 后，本计数应保持为 0（该场景已无跨帧总闸等待）。
+        static const bool log_host_sync = std::getenv("DSE_LOG_HOSTSYNC") != nullptr;
+        if (log_host_sync) {
+            static uint64_t fired = 0;
+            ++fired;
+            if (fired == 1 || (fired % 30) == 0)
+                DEBUG_LOG_INFO("[N3] SyncHostWriteWithGpu fired: count={} frame={}", fired, frame_counter_);
+        }
+    }
 }
 
 void VulkanResourceManager::DeleteSSBO(unsigned int handle) {

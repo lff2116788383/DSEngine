@@ -151,13 +151,9 @@ void ClusterGrid::Upload() {
     const size_t total_info_bytes = header_bytes + info_bytes;
     const size_t index_bytes = light_indices_.empty() ? sizeof(uint32_t) : light_indices_.size() * sizeof(uint32_t);
 
-    // ClusterInfo SSBO = header + ClusterInfo[]
-    if (total_info_bytes > cluster_info_capacity_bytes_) {
-        if (cluster_info_ssbo_) device_->DeleteGpuBuffer(cluster_info_ssbo_);
-        cluster_info_capacity_bytes_ = total_info_bytes;
-        GpuBufferDesc desc{total_info_bytes, GpuBufferUsage::kStorage, true, "cluster_info_ssbo"};
-        cluster_info_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
-    }
+    // ClusterInfo SSBO = header + ClusterInfo[]。per-in-flight ring：写当前槽位（其 fence
+    // 已在 BeginFrame/AcquireNextImage 等待），仅(重)建当前槽位、不触发跨帧总闸。
+    cluster_info_ssbo_ = cluster_info_ring_.Acquire(*device_, total_info_bytes, GpuBufferUsage::kStorage);
     if (cluster_info_ssbo_) {
         device_->UpdateGpuBuffer(cluster_info_ssbo_, 0, header_bytes, &header_);
         if (!cluster_infos_.empty()) {
@@ -166,12 +162,7 @@ void ClusterGrid::Upload() {
     }
 
     // Light index SSBO
-    if (index_bytes > light_index_capacity_bytes_) {
-        if (light_index_ssbo_) device_->DeleteGpuBuffer(light_index_ssbo_);
-        light_index_capacity_bytes_ = index_bytes;
-        GpuBufferDesc desc{index_bytes, GpuBufferUsage::kStorage, true, "light_index_ssbo"};
-        light_index_ssbo_ = device_->CreateGpuBuffer(desc, nullptr);
-    }
+    light_index_ssbo_ = light_index_ring_.Acquire(*device_, index_bytes, GpuBufferUsage::kStorage);
     if (light_index_ssbo_ && !light_indices_.empty()) {
         device_->UpdateGpuBuffer(light_index_ssbo_, 0, light_indices_.size() * sizeof(uint32_t), light_indices_.data());
     }
@@ -185,21 +176,15 @@ void ClusterGrid::Bind() {
 
 void ClusterGrid::Shutdown() {
     if (!device_) return;
-    if (cluster_info_ssbo_) {
-        device_->DeleteGpuBuffer(cluster_info_ssbo_);
-        cluster_info_ssbo_ = {};
-    }
-    if (light_index_ssbo_) {
-        device_->DeleteGpuBuffer(light_index_ssbo_);
-        light_index_ssbo_ = {};
-    }
+    cluster_info_ring_.Shutdown(*device_);
+    light_index_ring_.Shutdown(*device_);
+    cluster_info_ssbo_ = {};
+    light_index_ssbo_ = {};
     cluster_infos_.clear();
     light_indices_.clear();
     cluster_aabb_min_.clear();
     cluster_aabb_max_.clear();
     aabb_cache_valid_ = false;
-    cluster_info_capacity_bytes_ = 0;
-    light_index_capacity_bytes_  = 0;
     device_ = nullptr;
 }
 

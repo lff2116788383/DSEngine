@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/per_in_flight_buffer.h"
 
 namespace dse {
 namespace render {
@@ -123,13 +124,15 @@ private:
     int      cached_screen_width_ = 0;
     int      cached_screen_height_ = 0;
 
-    // GPU SSBO 句柄
+    // GPU SSBO 句柄（per-in-flight ring 的「当前槽位视图」，供 Bind 使用）。
     BufferHandle cluster_info_ssbo_;
     BufferHandle light_index_ssbo_;
 
-    // SSBO 容量跟踪
-    size_t cluster_info_capacity_bytes_ = 0;
-    size_t light_index_capacity_bytes_  = 0;
+    // N3：每帧 host 写的 SSBO 改 per-in-flight ring，写当前槽位、不再触发跨帧总闸。
+    // Upload 在 ExecuteRenderFrame（BeginFrame/AcquireNextImage 之后）执行——当前槽位
+    // fence 已等待，覆写/重建安全，无需额外 WaitForCurrentFrameSlotGpu。
+    PerInFlightBuffer cluster_info_ring_;
+    PerInFlightBuffer light_index_ring_;
 };
 
 } // namespace render

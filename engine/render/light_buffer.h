@@ -19,6 +19,7 @@
 #include <glm/glm.hpp>
 #include <cstring>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/per_in_flight_buffer.h"
 
 namespace dse {
 namespace render {
@@ -98,13 +99,14 @@ public:
 private:
     RhiDevice* device_ = nullptr;
 
-    // GPU SSBO 句柄
+    // GPU SSBO 句柄（per-in-flight ring 的「当前槽位视图」，供 Bind 使用）。
     BufferHandle point_light_ssbo_;
     BufferHandle spot_light_ssbo_;
 
-    // SSBO 当前分配容量（元素数）
-    int point_light_capacity_ = 0;
-    int spot_light_capacity_  = 0;
+    // N3：每帧 host 写的光源 SSBO 改 per-in-flight ring（Upload 在 BeginFrame 之后，
+    // 当前槽位 fence 已等待），写当前槽位、不再触发跨帧总闸。
+    PerInFlightBuffer point_light_ring_;
+    PerInFlightBuffer spot_light_ring_;
 
     // CPU 端光源数据
     std::vector<GPUPointLight> point_lights_;
