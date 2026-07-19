@@ -273,40 +273,40 @@ void FramePipeline::ExecuteRenderFrame() {
     }
 
     // Hi-Z AABB 上传
-    if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
+    if (render_resources_.hiz_visibility_ssbo) {
         const auto& aabbs = modules_impl_->CachedAABBs();
         const int count = modules_impl_->CachedAABBCount();
         if (count > 0) {
+            // hiz_visibility 仍为单缓冲（GPU compute 写、跨帧读回语义），容量不足时增长。
             if (static_cast<size_t>(count) > render_resources_.hiz_ssbo_capacity) {
                 const size_t new_cap = static_cast<size_t>(count) * 2;
-                // GPU-driven SSBO 增长同类 UAF（与 mesh_render_system.cpp 已修复处同源）：旧
-                // hiz_aabb/hiz_visibility 缓冲可能仍被在飞帧的 GPU meshlet-cull 引用，直接 Delete
-                // 属 GPU use-after-free。此处跑在渲染线程，不能照搬主线程的 rhi->WaitIdle()
-                // （vkDeviceWaitIdle 与主线程 EndSingleTimeCommands 的队列提交存在外部同步顾虑）；
-                // 改用轻量的「删缓冲前等在飞帧 fence」原语——只等 in-flight fences、不触碰队列，
-                // 与渲染线程每帧 UpdateGpuBuffer→SyncHostWriteWithGpu 走的同一同步路径。
+                // 旧 hiz_visibility 可能仍被在飞帧 GPU meshlet-cull 引用，直接 Delete 属 GPU
+                // use-after-free。渲染线程不能照搬主线程 rhi->WaitIdle()（vkDeviceWaitIdle 与主线程
+                // EndSingleTimeCommands 队列提交有外部同步顾虑）；用「删缓冲前等在飞帧 fence」原语。
                 // capacity 起始 65536、按 2× 摊还增长，极少触发。
                 runtime_context_.rhi_device->WaitForInFlightGpuUse();
-                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
                 runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
                 {
                     dse::render::GpuBufferDesc d{new_cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"};
                     render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
                 }
-                {
-                    dse::render::GpuBufferDesc d{new_cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
-                    render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
-                }
                 render_resources_.hiz_ssbo_capacity = new_cap;
-                render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
                 render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
-                render_pass_context_.hiz_aabb_capacity = new_cap;
-                DEBUG_LOG_INFO("[Hi-Z] SSBO resized (render thread): new_capacity={}", new_cap);
+                DEBUG_LOG_INFO("[Hi-Z] visibility SSBO resized (render thread): new_capacity={}", new_cap);
             }
+            // hiz_aabb：per-in-flight ring。上传在 ExecuteRenderFrame 内、BeginRuntimeRenderFrame
+            //（AcquireNextImage 已等待当前槽位 fence）之后，故 Acquire 当前槽位即可安全覆写、无需额外等待；
+            // 每帧只写当前槽位、不再触发跨帧总闸（skip_host_sync=true）。
+            render_resources_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ring.Acquire(
+                *runtime_context_.rhi_device,
+                static_cast<size_t>(count) * sizeof(dse::gameplay3d::HiZAABB),
+                dse::render::GpuBufferUsage::kStorage);
             runtime_context_.rhi_device->UpdateGpuBuffer(
                 render_resources_.hiz_aabb_ssbo, 0,
                 count * sizeof(dse::gameplay3d::HiZAABB),
                 aabbs.data());
+            render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
+            render_pass_context_.hiz_aabb_capacity = static_cast<size_t>(count);
             render_pass_context_.hiz_object_count = count;
         } else {
             render_pass_context_.hiz_object_count = 0;

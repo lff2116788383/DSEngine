@@ -857,10 +857,8 @@ void FramePipeline::Shutdown() {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
             render_resources_.hiz_visibility_ssbo = {};
         }
-        if (render_resources_.hiz_aabb_ssbo) {
-            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
-            render_resources_.hiz_aabb_ssbo = {};
-        }
+        render_resources_.hiz_aabb_ring.Shutdown(*runtime_context_.rhi_device);
+        render_resources_.hiz_aabb_ssbo = {};
     }
 
     // GPU Driven 资源清理
@@ -980,8 +978,7 @@ void FramePipeline::InitResolutionDependentRTs() {
             const size_t cap = dse::runtime::RenderPipelineResources::kHiZMaxObjects;
             render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(
                 {cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"}, nullptr);
-            render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(
-                {cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"}, nullptr);
+            // N3：hiz_aabb 每帧 host 写，改 per-in-flight ring（首帧上传时惰性 Acquire），此处不预建。
             render_resources_.hiz_ssbo_capacity = cap;
         }
     }
@@ -1024,10 +1021,8 @@ void FramePipeline::FreeResolutionDependentRTs() {
             d.DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
             render_resources_.hiz_visibility_ssbo = {};
         }
-        if (render_resources_.hiz_aabb_ssbo) {
-            d.DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
-            render_resources_.hiz_aabb_ssbo = {};
-        }
+        render_resources_.hiz_aabb_ring.Shutdown(d);
+        render_resources_.hiz_aabb_ssbo = {};
         render_resources_.hiz_ssbo_capacity = {};
     }
 }

@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/per_in_flight_buffer.h"
 
 namespace dse::runtime {
 
@@ -41,8 +42,9 @@ struct RenderPipelineResources {
     static constexpr size_t kHiZMaxObjects = 65536;
     TextureHandle hiz_texture = {};        // Hi-Z depth mipmap (R32F, RHI handle)
     dse::render::BufferHandle hiz_visibility_ssbo; // Visibility SSBO for Hi-Z culling
-    dse::render::BufferHandle hiz_aabb_ssbo;         // AABB SSBO for Hi-Z culling
-    size_t hiz_ssbo_capacity = 0;        // SSBO 当前容量（对象数）
+    dse::render::BufferHandle hiz_aabb_ssbo;         // AABB SSBO（ring 当前槽位视图，每帧 host 写）
+    dse::render::PerInFlightBuffer hiz_aabb_ring;    // N3：hiz_aabb 每帧 host 写，per-in-flight ring
+    size_t hiz_ssbo_capacity = 0;        // hiz_visibility SSBO 当前容量（对象数）
     ShaderHandle hiz_copy_shader = {};    // Compute: depth → Hi-Z mip 0
     ShaderHandle hiz_downsample_shader = {}; // Compute: mip N-1 → mip N
     ShaderHandle hiz_cull_shader = {};    // Compute: AABB 過濾
