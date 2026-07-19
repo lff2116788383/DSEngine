@@ -50,13 +50,15 @@ void Particle3DSystem::SetAssetManager(AssetManager* asset_manager) {
 
 void Particle3DSystem::Shutdown(World& world) {
     if (!rhi_) return;
+    // per-in-flight ring 拥有全部槽位缓冲，统一释放（组件 instance_vbo 只是当前槽位视图）。
+    for (auto& [id, ring] : instance_rings_) {
+        ring.Shutdown(*rhi_);
+    }
+    instance_rings_.clear();
     auto view = world.registry().view<ParticleSystem3DComponent>();
     for (auto entity : view) {
         auto& ps = view.get<ParticleSystem3DComponent>(entity);
-        if (ps.instance_vbo) {
-            rhi_->DeleteGpuBuffer(ps.instance_vbo);
-            ps.instance_vbo = {};
-        }
+        ps.instance_vbo = {};
     }
 }
 
@@ -107,6 +109,13 @@ void Particle3DSystem::Update(World& world, float delta_time) {
     if (!rhi_) return;
     auto& asset_manager = RequireAssetManager(asset_manager_);
 
+    // 实例 SSBO 上传发生在主线程 Update 阶段（BeginFrame/AcquireNextImage 之前，当前帧槽位
+    // fence 尚未等待）。改 per-in-flight ring 后须在覆写当前槽位前显式等一次「本槽位」fence
+    // （仅此槽位、不等其它在飞帧，保留 2 帧重叠），否则 host 写与 N 帧前仍在读该槽位的 GPU
+    // 竞争 → 设备丢失。与 mesh_render_system::PrepareGPUScene 同理，每帧仅需等一次；此处惰性
+    // 触发——仅当本帧确有实例上传时才等，避免无粒子帧的无谓停顿。
+    bool slot_fence_waited = false;
+
     auto particle_view = world.registry().view<ParticleSystem3DComponent>();
     auto transform_view = world.registry().view<TransformComponent>();
     for (auto entity : particle_view) {
@@ -119,14 +128,7 @@ void Particle3DSystem::Update(World& world, float delta_time) {
         if (!ps.initialized) {
             ps.particles.resize(ps.max_particles);
             for (auto& p : ps.particles) p.life = -1.0f; // All dead initially
-
-            // 创建每实例 SSBO（std430：{ vec4 pos_size; vec4 color } = 8 floats/粒子），
-            // 供 ParticleRenderer 经通用原语 BindStorageBuffer 绑定（跨三后端 SSBO/StructuredBuffer）。
-            dse::render::GpuBufferDesc inst_desc;
-            inst_desc.size = static_cast<size_t>(ps.max_particles) * 8 * sizeof(float);
-            inst_desc.usage = dse::render::GpuBufferUsage::kStorage;
-            inst_desc.is_dynamic = true;
-            ps.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr);
+            // 每实例 SSBO 改 per-in-flight ring（见下方 Acquire），此处不再预建单份缓冲。
             ps.initialized = true;
         }
 
@@ -185,6 +187,16 @@ void Particle3DSystem::Update(World& world, float delta_time) {
 
         // 3. Upload to GPU
         if (ps.active_particle_count > 0 && !gpu_data.empty()) {
+            // std430：{ vec4 pos_size; vec4 color } = 8 floats/粒子。ring 当前槽位供
+            // ParticleRenderer 经通用原语 BindStorageBuffer 绑定（跨三后端 SSBO/StructuredBuffer）。
+            if (!slot_fence_waited) {
+                rhi_->WaitForCurrentFrameSlotGpu();
+                slot_fence_waited = true;
+            }
+            auto& ring = instance_rings_[static_cast<std::uint32_t>(entity)];
+            ps.instance_vbo = ring.Acquire(
+                *rhi_, static_cast<size_t>(ps.max_particles) * 8 * sizeof(float),
+                dse::render::GpuBufferUsage::kStorage);
             rhi_->UpdateGpuBuffer(ps.instance_vbo, 0,
                                   gpu_data.size() * sizeof(float), gpu_data.data());
         }
