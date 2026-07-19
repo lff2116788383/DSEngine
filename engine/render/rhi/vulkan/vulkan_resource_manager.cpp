@@ -1093,8 +1093,8 @@ void VulkanResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_
     if (it == ssbos_.end()) return;
     auto& buf = it->second;
     if (buf.mapped) {
-        // per-in-flight ring 缓冲写当前槽位（fence 已等待），无需跨帧总闸同步。
-        if (!buf.skip_host_sync) SyncHostWriteWithGpu();
+        // 每帧 host 写的 SSBO/indirect 均已改 per-in-flight ring（写当前槽位、其 fence 已等待），
+        // 直写映射内存即可，无需跨帧同步（N3：总闸 SyncHostWriteWithGpu 已移除）。
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
     }
 }
@@ -1103,28 +1103,6 @@ void VulkanResourceManager::SetSkipHostSync(unsigned int handle, bool is_indirec
     auto& map = is_indirect ? indirect_buffers_ : ssbos_;
     auto it = map.find(handle);
     if (it != map.end()) it->second.skip_host_sync = true;
-}
-
-void VulkanResourceManager::SyncHostWriteWithGpu() {
-    // SSBO / indirect 缓冲是持久映射单例（无 per-frame ring）：GPU-driven 路径每帧 CPU
-    // 直写 instance/draw-cmd 数据，而上一在飞帧的 vkCmdDrawIndexedIndirect 可能仍在
-    // 读取同一块内存。撞上时 GPU 会读到撕裂的 indirect 参数（巨量 indexCount/
-    // instanceCount），表现为秒级 GPU 停顿乃至 TDR 触发 VK_ERROR_DEVICE_LOST。
-    // 每帧首次 host 写前等待在飞帧 fence，保证写入时 GPU 不再引用这些缓冲。
-    if (host_write_synced_frame_ == frame_counter_) return;
-    host_write_synced_frame_ = frame_counter_;
-    if (context_) {
-        context_->WaitForAllInFlightFrames();
-        // N3 诊断（DSE_LOG_HOSTSYNC=1）：统计总闸实际触发帧数。所有每帧 host 写方都改成
-        // per-in-flight ring 后，本计数应保持为 0（该场景已无跨帧总闸等待）。
-        static const bool log_host_sync = std::getenv("DSE_LOG_HOSTSYNC") != nullptr;
-        if (log_host_sync) {
-            static uint64_t fired = 0;
-            ++fired;
-            if (fired == 1 || (fired % 30) == 0)
-                DEBUG_LOG_INFO("[N3] SyncHostWriteWithGpu fired: count={} frame={}", fired, frame_counter_);
-        }
-    }
 }
 
 void VulkanResourceManager::DeleteSSBO(unsigned int handle) {
@@ -1190,8 +1168,8 @@ void VulkanResourceManager::UpdateIndirectBuffer(unsigned int handle, size_t off
     if (it == indirect_buffers_.end()) return;
     auto& buf = it->second;
     if (buf.mapped) {
-        // per-in-flight ring 缓冲写当前槽位（fence 已等待），无需跨帧总闸同步。
-        if (!buf.skip_host_sync) SyncHostWriteWithGpu();
+        // 每帧 host 写的 SSBO/indirect 均已改 per-in-flight ring（写当前槽位、其 fence 已等待），
+        // 直写映射内存即可，无需跨帧同步（N3：总闸 SyncHostWriteWithGpu 已移除）。
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
     }
 }
