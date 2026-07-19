@@ -214,10 +214,8 @@ void GrassSystem::ShutdownComputeResources() {
         rhi_->DeleteComputeShader(wind_compute_shader_);
         wind_compute_shader_ = {};
     }
-    if (input_ssbo_) {
-        rhi_->DeleteGpuBuffer(input_ssbo_);
-        input_ssbo_ = {};
-    }
+    input_ring_.Shutdown(*rhi_);
+    input_ssbo_ = {};
     if (output_ssbo_) {
         rhi_->DeleteGpuBuffer(output_ssbo_);
         output_ssbo_ = {};
@@ -227,27 +225,22 @@ void GrassSystem::ShutdownComputeResources() {
 }
 
 void GrassSystem::EnsureSSBOCapacity(size_t required_count) {
+    // input_ssbo_ 改 per-in-flight ring（见 RenderInternal，每帧 Acquire 当前槽位）；此处
+    // 仅管理 GPU 计算输出缓冲 output_ssbo_（GPU 写 + 同帧回读，非 host 每帧写，不触发总闸）。
     if (required_count <= ssbo_capacity_) return;
 
     size_t new_cap = std::max(required_count, ssbo_capacity_ * 2);
     new_cap = std::max(new_cap, size_t(1024));
 
-    if (input_ssbo_) rhi_->DeleteGpuBuffer(input_ssbo_);
     if (output_ssbo_) rhi_->DeleteGpuBuffer(output_ssbo_);
 
-    {
-        dse::render::GpuBufferDesc d{new_cap * sizeof(GrassGPUInstance), dse::render::GpuBufferUsage::kStorage, true, "grass_input"};
-        input_ssbo_ = rhi_->CreateGpuBuffer(d, nullptr);
-    }
     {
         dse::render::GpuBufferDesc d{new_cap * sizeof(glm::mat4), dse::render::GpuBufferUsage::kStorage, true, "grass_output"};
         output_ssbo_ = rhi_->CreateGpuBuffer(d, nullptr);
     }
 
-    if (!input_ssbo_ || !output_ssbo_) {
+    if (!output_ssbo_) {
         DEBUG_LOG_ERROR("[GrassSystem] SSBO allocation failed, disabling GPU compute");
-        if (input_ssbo_) { rhi_->DeleteGpuBuffer(input_ssbo_); input_ssbo_ = {}; }
-        if (output_ssbo_) { rhi_->DeleteGpuBuffer(output_ssbo_); output_ssbo_ = {}; }
         ssbo_capacity_ = 0;
         gpu_compute_enabled_ = false;
         return;
@@ -737,6 +730,12 @@ void GrassSystem::RenderInternal(CommandBuffer& cmd_buffer, const dse::render::F
         }
 
         if (use_gpu) {
+            // input_ssbo_ 每帧 host 写 → per-in-flight ring。RenderInternal 在 BeginFrame/
+            // AcquireNextImage 之后执行，当前槽位 fence 已等待，Acquire 当前槽位即可安全
+            // 覆写，无需额外 fence；本帧 dispatch 同帧回读消费，跨帧不残留。
+            input_ssbo_ = input_ring_.Acquire(*rhi_,
+                total_count * sizeof(GrassGPUInstance),
+                dse::render::GpuBufferUsage::kStorage);
             rhi_->UpdateGpuBuffer(input_ssbo_, 0,
                 lod0_count * sizeof(GrassGPUInstance), lod0_gpu.data());
             if (!lod1_gpu.empty()) {

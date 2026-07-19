@@ -4,6 +4,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
+#include "engine/render/rhi/per_in_flight_buffer.h"
 #include "engine/render/mesh_renderer.h"
 #include "engine/render/frame_context.h"
 #include <glm/glm.hpp>
@@ -154,6 +155,9 @@ private:
     void EnsureSSBOCapacity(size_t required_count);
 
     dse::render::ShaderHandle wind_compute_shader_;
+    // N3：input_ssbo_ 每帧 host 写 → per-in-flight ring（input_ring_ 拥有槽位缓冲，
+    // input_ssbo_ 仅为当前槽位视图）。output_ssbo_ 为 GPU 写+同帧回读，非 host 每帧写，继续单份。
+    dse::render::PerInFlightBuffer input_ring_;
     dse::render::BufferHandle input_ssbo_;
     dse::render::BufferHandle output_ssbo_;
     size_t ssbo_capacity_ = 0;
