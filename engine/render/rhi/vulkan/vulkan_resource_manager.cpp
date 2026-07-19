@@ -1092,9 +1092,16 @@ void VulkanResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_
     if (it == ssbos_.end()) return;
     auto& buf = it->second;
     if (buf.mapped) {
-        SyncHostWriteWithGpu();
+        // per-in-flight ring 缓冲写当前槽位（fence 已等待），无需跨帧总闸同步。
+        if (!buf.skip_host_sync) SyncHostWriteWithGpu();
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
     }
+}
+
+void VulkanResourceManager::SetSkipHostSync(unsigned int handle, bool is_indirect) {
+    auto& map = is_indirect ? indirect_buffers_ : ssbos_;
+    auto it = map.find(handle);
+    if (it != map.end()) it->second.skip_host_sync = true;
 }
 
 void VulkanResourceManager::SyncHostWriteWithGpu() {
@@ -1171,7 +1178,8 @@ void VulkanResourceManager::UpdateIndirectBuffer(unsigned int handle, size_t off
     if (it == indirect_buffers_.end()) return;
     auto& buf = it->second;
     if (buf.mapped) {
-        SyncHostWriteWithGpu();
+        // per-in-flight ring 缓冲写当前槽位（fence 已等待），无需跨帧总闸同步。
+        if (!buf.skip_host_sync) SyncHostWriteWithGpu();
         memcpy(static_cast<unsigned char*>(buf.mapped) + offset, data, size);
     }
 }

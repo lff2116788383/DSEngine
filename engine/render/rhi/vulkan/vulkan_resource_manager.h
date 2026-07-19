@@ -31,6 +31,7 @@ struct VulkanBuffer {
     uint64_t last_update_frame = UINT64_MAX; ///< 最近一次 UpdateBuffer 的帧号
     VkDeviceSize frame_write_lo = 0;         ///< 本帧已写区间下界（copy-on-write 重叠检测用）
     VkDeviceSize frame_write_hi = 0;         ///< 本帧已写区间上界（exclusive）
+    bool skip_host_sync = false;             ///< per-in-flight ring 缓冲：host 写入跳过跨帧总闸（SyncHostWriteWithGpu）
 };
 
 /// Vulkan 纹理资源封装
@@ -128,6 +129,10 @@ public:
     void UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data);
     void DeleteSSBO(unsigned int handle);
     const VulkanBuffer* GetSSBO(unsigned int handle) const;
+
+    /// 标记 SSBO/indirect 缓冲为 per-in-flight ring 管理（host 写入跳过跨帧总闸）。
+    /// is_indirect=true 查 indirect_buffers_，否则查 ssbos_。
+    void SetSkipHostSync(unsigned int handle, bool is_indirect);
 
     // --- Indirect Draw Buffer ---
     unsigned int CreateIndirectBuffer(size_t size, const void* data);

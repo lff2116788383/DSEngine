@@ -899,7 +899,14 @@ BufferHandle VulkanRhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const v
         if (h) gpu_buffer_usage_map_[h.raw()] = desc.usage;
         return h;
     }
-    return RhiDevice::CreateGpuBuffer(desc, initial_data);
+    BufferHandle h = RhiDevice::CreateGpuBuffer(desc, initial_data);
+    if (h && desc.per_in_flight) {
+        // base 分发：kStorage 优先建为 SSBO；仅 kIndirect 且非 kStorage 才建为 indirect buffer。
+        const bool is_indirect = has(desc.usage, GpuBufferUsage::kIndirect) &&
+                                 !has(desc.usage, GpuBufferUsage::kStorage);
+        resource_mgr_.SetSkipHostSync(h.raw(), is_indirect);
+    }
+    return h;
 }
 
 void VulkanRhiDevice::UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) {

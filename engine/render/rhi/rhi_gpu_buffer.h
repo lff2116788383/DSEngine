@@ -53,6 +53,10 @@ struct GpuBufferDesc {
     GpuBufferUsage usage = GpuBufferUsage::kVertex;
     bool is_dynamic = false;       // HOST_VISIBLE，允许 CPU 每帧写入
     const char* debug_name = nullptr;
+    /// 该缓冲由 per-in-flight ring 管理（PerInFlightBuffer）：每帧只写当前在飞槽位、
+    /// 其 fence 已在 AcquireNextImage 等待，故 host 写入无需跨帧总闸同步
+    /// （Vulkan SyncHostWriteWithGpu）。仅 Vulkan 消费；GL/DX11（N=1）忽略。
+    bool per_in_flight = false;
 };
 
 } // namespace render
