@@ -127,37 +127,20 @@ void MeshRenderer::EnsureIndexCapacity(RhiDevice& device, size_t index_bytes) {
     ibo_capacity_ = index_bytes;
 }
 
+// N3：bone/instance/morph 每帧（每网格）host 写，改 per-in-flight ring。绘制均在 BeginFrame/
+// AcquireNextImage 之后执行（当前槽位 fence 已等待），Acquire 当前槽位即安全覆写；容量只增不减，
+// 与原 Ensure*Capacity 语义一致（帧内多网格复用行为等价）。成员句柄刷新为 ring 当前槽位视图，
+// 后续 UpdateGpuBuffer/BindStorageBuffer 调用点无需改动。
 void MeshRenderer::EnsureBoneCapacity(RhiDevice& device, size_t bone_bytes) {
-    if (bone_ssbo_ && bone_ssbo_capacity_ >= bone_bytes) return;
-    if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
-    GpuBufferDesc b_desc;
-    b_desc.size = bone_bytes;
-    b_desc.usage = GpuBufferUsage::kStorage;
-    b_desc.is_dynamic = true;
-    bone_ssbo_ = device.CreateGpuBuffer(b_desc, nullptr);
-    bone_ssbo_capacity_ = bone_bytes;
+    bone_ssbo_ = bone_ring_.Acquire(device, bone_bytes, GpuBufferUsage::kStorage);
 }
 
 void MeshRenderer::EnsureInstanceCapacity(RhiDevice& device, size_t instance_bytes) {
-    if (instance_ssbo_ && instance_ssbo_capacity_ >= instance_bytes) return;
-    if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
-    GpuBufferDesc i_desc;
-    i_desc.size = instance_bytes;
-    i_desc.usage = GpuBufferUsage::kStorage;
-    i_desc.is_dynamic = true;
-    instance_ssbo_ = device.CreateGpuBuffer(i_desc, nullptr);
-    instance_ssbo_capacity_ = instance_bytes;
+    instance_ssbo_ = instance_ring_.Acquire(device, instance_bytes, GpuBufferUsage::kStorage);
 }
 
 void MeshRenderer::EnsureMorphCapacity(RhiDevice& device, size_t morph_bytes) {
-    if (morph_ssbo_ && morph_ssbo_capacity_ >= morph_bytes) return;
-    if (morph_ssbo_) device.DeleteGpuBuffer(morph_ssbo_);
-    GpuBufferDesc m_desc;
-    m_desc.size = morph_bytes;
-    m_desc.usage = GpuBufferUsage::kStorage;
-    m_desc.is_dynamic = true;
-    morph_ssbo_ = device.CreateGpuBuffer(m_desc, nullptr);
-    morph_ssbo_capacity_ = morph_bytes;
+    morph_ssbo_ = morph_ring_.Acquire(device, morph_bytes, GpuBufferUsage::kStorage);
 }
 
 void MeshRenderer::EnsureIndirectBuffer(RhiDevice& device) {
@@ -736,8 +719,9 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     if (per_terrain_ubo_) device.DeleteGpuBuffer(per_terrain_ubo_);
     if (per_light_probe_ubo_) device.DeleteGpuBuffer(per_light_probe_ubo_);
     if (per_ddgi_ubo_) device.DeleteGpuBuffer(per_ddgi_ubo_);
-    if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
-    if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
+    bone_ring_.Shutdown(device);
+    instance_ring_.Shutdown(device);
+    morph_ring_.Shutdown(device);
     if (indirect_buffer_) device.DeleteGpuBuffer(indirect_buffer_);
     if (white_tex_) device.DeleteTexture(white_tex_);
     if (white_cube_tex_) device.DeleteTexture(white_cube_tex_);
@@ -750,8 +734,9 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     per_ddgi_ubo_ = BufferHandle{};
     bone_ssbo_ = BufferHandle{};
     instance_ssbo_ = BufferHandle{};
+    morph_ssbo_ = BufferHandle{};
     indirect_buffer_ = BufferHandle{};
-    vbo_capacity_ = ibo_capacity_ = bone_ssbo_capacity_ = instance_ssbo_capacity_ = 0;
+    vbo_capacity_ = ibo_capacity_ = 0;
     init_ = false;
 }
 

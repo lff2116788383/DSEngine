@@ -26,6 +26,7 @@
 
 #include "engine/render/rhi/rhi_handle.h"
 #include "engine/render/rhi/rhi_types.h"  // IndexType（ExternalShadedMesh 用）
+#include "engine/render/rhi/per_in_flight_buffer.h"
 
 namespace dse {
 namespace render {
@@ -659,15 +660,20 @@ private:
     BufferHandle per_frame_ubo_;
     BufferHandle per_scene_ubo_;
     BufferHandle per_material_ubo_;
-    BufferHandle bone_ssbo_;
-    BufferHandle instance_ssbo_;
-    BufferHandle morph_ssbo_;       ///< morph 增量 SSBO（set7.b0，slot=0，Final-Feat-5；[target*vertex_count+vertex]）
+    // N3：bone/instance/morph 为每帧（每网格）host 写的 SSBO，过去每帧首次写触发
+    // SyncHostWriteWithGpu 总闸。绘制均在 BeginFrame/AcquireNextImage 之后执行（当前槽位
+    // fence 已等待），故改 per-in-flight ring：下列 BufferHandle 为 ring 当前槽位视图，
+    // 由 Ensure*Capacity 每次 Acquire 刷新，写当前槽位、不再触发跨帧总闸。容量只增不
+    // 减（与原 Ensure*Capacity 语义一致），故帧内多网格复用行为与改造前等价。
+    BufferHandle bone_ssbo_;        ///< 骨骼矩阵 SSBO（ring 当前槽位视图）
+    BufferHandle instance_ssbo_;    ///< 每实例 model SSBO（ring 当前槽位视图）
+    BufferHandle morph_ssbo_;       ///< morph 增量 SSBO（set7.b0，slot=0，Final-Feat-5；ring 当前槽位视图）
     BufferHandle indirect_buffer_;  ///< GPU-driven 间接绘制命令缓冲（B2b-5，单条 DrawElementsIndirectCommand）
+    PerInFlightBuffer bone_ring_;
+    PerInFlightBuffer instance_ring_;
+    PerInFlightBuffer morph_ring_;
     size_t vbo_capacity_ = 0;
     size_t ibo_capacity_ = 0;
-    size_t bone_ssbo_capacity_ = 0;
-    size_t instance_ssbo_capacity_ = 0;
-    size_t morph_ssbo_capacity_ = 0;
     bool init_ = false;
 };
 
