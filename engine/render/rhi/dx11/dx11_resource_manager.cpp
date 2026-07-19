@@ -433,6 +433,7 @@ unsigned int DX11ResourceManager::CreateConstantBuffer(size_t size, const void* 
 }
 
 void DX11ResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool /*is_index*/) {
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     if (!device_) return;
     auto it = buffers_.find(handle);
     if (it == buffers_.end()) return;
@@ -521,6 +522,7 @@ unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
 }
 
 void DX11ResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     auto it = ssbos_.find(handle);
     if (it == ssbos_.end() || !data || size == 0) return;
 
@@ -834,6 +836,7 @@ unsigned int DX11ResourceManager::GetRenderTargetDepthTextureHandle(unsigned int
 }
 
 DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(unsigned int handle) const {
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     ReadbackResult result;
     auto it = render_targets_.find(handle);
     if (it == render_targets_.end() || !it->second.color_texture) return result;
@@ -888,6 +891,7 @@ DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(u
 }
 
 DX11ResourceManager::DepthReadbackResult DX11ResourceManager::ReadRenderTargetDepth(unsigned int handle) const {
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     DepthReadbackResult result;
     auto it = render_targets_.find(handle);
     if (it == render_targets_.end() || !it->second.has_depth || !it->second.depth_texture) return result;
@@ -1023,6 +1027,7 @@ void DX11ResourceManager::QueueTextureUpload(unsigned int handle, int width, int
 }
 
 void DX11ResourceManager::FlushPendingUploads() {
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     if (!dc_) return;
 
     std::lock_guard<std::mutex> lock(pending_uploads_mutex_);
@@ -1071,6 +1076,7 @@ unsigned int DX11ResourceManager::CreateIndirectBuffer(size_t size, const void* 
 void DX11ResourceManager::UpdateIndirectBuffer(unsigned int handle,
                                                 size_t offset, size_t size,
                                                 const void* data) {
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     if (!dc_ || !data) return;
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end() || !it->second.buffer) return;

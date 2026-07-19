@@ -288,6 +288,7 @@ void DX11RhiDevice::Shutdown() {
 }
 
 void DX11RhiDevice::BeginFrame() {
+    frame_ctx_lock_ = std::unique_lock<std::recursive_mutex>(context_.immediate_context_mutex());
     current_frame_stats_ = RenderStats{};
     resource_mgr_.FlushPendingUploads();
     draw_executor_.BeginFrame();
@@ -768,12 +769,15 @@ void DX11RhiDevice::EndFrame() {
         dc->Flush();
     }
 
+    if (frame_ctx_lock_.owns_lock()) frame_ctx_lock_.unlock();
+
     // Present 由 PresentFrame() 单独调用，不在 EndFrame 内执行
     // 这使 render 计时不包含 Present 延迟，与 OpenGL 行为一致
 }
 
 void DX11RhiDevice::PresentFrame() {
     if (!initialized_) return;
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_.immediate_context_mutex());
     context_.Present(vsync_enabled_);
 }
 

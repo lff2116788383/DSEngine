@@ -16,6 +16,7 @@
 #include <dxgi.h>
 #include <wrl/client.h>
 #include <string>
+#include <mutex>
 
 namespace dse {
 namespace render {
@@ -64,6 +65,11 @@ public:
     ID3D11DeviceContext* device_context() const { return context_.Get(); }
     IDXGISwapChain* swapchain() const { return swapchain_.Get(); }
 
+    /// F1+: serialize cross-thread access to the immediate context (dc_).
+    /// Render thread holds this for the whole frame; uploads/readbacks on
+    /// other threads take it too. Recursive to allow in-frame nested calls.
+    std::recursive_mutex& immediate_context_mutex() { return immediate_context_mutex_; }
+
     ID3D11RenderTargetView* backbuffer_rtv() const { return backbuffer_rtv_.Get(); }
     ID3D11DepthStencilView* backbuffer_dsv() const { return backbuffer_dsv_.Get(); }
 
@@ -91,6 +97,7 @@ private:
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<IDXGISwapChain> swapchain_;
+    std::recursive_mutex immediate_context_mutex_;
 
     ComPtr<ID3D11RenderTargetView> backbuffer_rtv_;
     ComPtr<ID3D11DepthStencilView> backbuffer_dsv_;

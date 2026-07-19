@@ -21,6 +21,7 @@
 #include "engine/render/rhi/dx11/dx11_draw_executor.h"
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <cstdint>
 #include <unordered_map>
@@ -241,6 +242,11 @@ private:
     DX11ShaderManager shader_mgr_;
     DX11PipelineStateManager state_mgr_;
     DX11DrawExecutor draw_executor_{global_render_state_};
+
+    /// Acquired in BeginFrame, released in EndFrame: holds the immediate
+    /// context lock for the whole frame so cross-thread resource uploads/
+    /// readbacks are mutually exclusive with this frame's draws (F1+ DX11).
+    std::unique_lock<std::recursive_mutex> frame_ctx_lock_;
 
     // --- Wireframe rasterizer state cache ---
     ID3D11RasterizerState* wireframe_rasterizer_state_ = nullptr;
