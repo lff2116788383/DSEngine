@@ -119,6 +119,10 @@ public:
     /// 用于 host 侧直写 GPU 正在读取的持久映射缓冲（SSBO/indirect）前的同步。
     void WaitForAllInFlightFrames();
 
+    /// 仅等待「当前帧槽位」(current_frame_) 的提交 fence（其它在飞帧不等）。
+    /// 供 per-in-flight ring 在 AcquireNextImage 之前 host 写当前槽位前的最小同步。
+    void WaitForCurrentFrameFence();
+
     /// Pipeline Cache（跨启动复用管线编译结果）
     VkPipelineCache pipeline_cache() const { return pipeline_cache_; }
 

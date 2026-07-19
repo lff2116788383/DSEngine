@@ -47,6 +47,7 @@ public:
     void Shutdown() override;
     void WaitIdle() override;
     void WaitForInFlightGpuUse() override;
+    void WaitForCurrentFrameSlotGpu() override;
     void BeginFrame() override;
     // 引擎双缓冲（MAX_FRAMES_IN_FLIGHT）+ 当前在飞槽位（context_.current_frame()）。
     // 供 PerInFlightBuffer 据此 N 缓冲动态资源（RHI_ABSTRACTION_BOUNDARY §8.2 D9）。

@@ -2004,71 +2004,50 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
 
     const size_t required_count = static_cast<size_t>(cmd_index);
 
-    // GPU-driven 缓冲增长时会先销毁旧缓冲再重建（下方各块）。旧缓冲可能仍被在飞帧
-    // （GPU 尚未完成）的 compute / indirect draw 引用，直接销毁属 GPU 端 use-after-free
-    // → 秒级停顿乃至 TDR 触发 VK_ERROR_DEVICE_LOST。增长按 2× 容量摊还，是低频事件，
-    // 销毁前同步一次 GPU 足以保证安全（GPU-driven 仅在渲染线程未激活时运行，此处即
-    // 提交线程，WaitIdle 无跨线程队列同步问题）。
-    const bool needs_gpu_buffer_grow =
-        (ctx.gpu_aabb_ssbo && ctx.gpu_aabb_capacity > 0 && gpu_aabbs_.size() > ctx.gpu_aabb_capacity) ||
-        (ctx.gpu_draw_cmd_ssbo && required_count > gpu_draw_cmd_capacity_) ||
-        (ctx.gpu_instance_ssbo && required_count > gpu_instance_capacity_) ||
-        (ctx.gpu_material_ssbo && gpu_materials_.size() > gpu_material_capacity_);
-    if (needs_gpu_buffer_grow) {
-        rhi->WaitIdle();
-    }
+    // GPU-driven SSBO/indirect 改用 per-in-flight ring（N3）：每帧向 CurrentFrameSlot()
+    // 对应的槽位缓冲写入，仅(重)建/覆写当前槽位，其余在飞槽位不动；host 写入带 per-buffer
+    // skip_host_sync 标志、不再触发跨帧总闸（SyncHostWriteWithGpu，等全部在飞帧），改为
+    // 下方仅等「本槽位」fence，恢复相邻帧 CPU/GPU 2 帧流水重叠。容量按 2 的幂摊还增长。
+    //
+    // ⚠ 时序：PrepareGPUScene 在 PrepareRenderFrame 阶段执行，早于 ExecuteRenderFrame 里的
+    // BeginFrame(AcquireNextImage)——即当前帧槽位 fence 此刻尚未等待。故在覆写/重建当前
+    // 槽位缓冲前必须显式等一次「本槽位」fence（仅此槽位，不等其它在飞帧，保留 2 帧重叠），
+    // 否则 host 写入会与 N 帧前仍在读该槽位的 GPU 竞争 → VK_ERROR_DEVICE_LOST。
+    rhi->WaitForCurrentFrameSlotGpu();
 
-    if (ctx.gpu_aabb_ssbo || !gpu_aabbs_.empty()) {
+    auto ring_bytes = [](size_t count, size_t elem, size_t floor_count) -> size_t {
+        size_t c = floor_count;
+        while (c < count) c <<= 1;
+        return c * elem;
+    };
+
+    if (!gpu_aabbs_.empty()) {
         const size_t needed = gpu_aabbs_.size();
-        if (ctx.gpu_aabb_ssbo && ctx.gpu_aabb_capacity > 0 && needed > ctx.gpu_aabb_capacity) {
-            rhi->DeleteGpuBuffer(ctx.gpu_aabb_ssbo);
-            ctx.gpu_aabb_ssbo = {};
-            ctx.gpu_aabb_capacity = 0;
-        }
-        if (!ctx.gpu_aabb_ssbo && needed > 0) {
-            const size_t new_cap = needed * 2;
-            dse::render::GpuBufferDesc d{new_cap * sizeof(HiZAABB),
-                dse::render::GpuBufferUsage::kStorage, true, "gpu_aabb"};
-            ctx.gpu_aabb_ssbo = rhi->CreateGpuBuffer(d, nullptr);
-            ctx.gpu_aabb_capacity = new_cap;
-        }
-        if (ctx.gpu_aabb_ssbo && needed > 0) {
-            rhi->UpdateGpuBuffer(ctx.gpu_aabb_ssbo, 0, needed * sizeof(HiZAABB), gpu_aabbs_.data());
-        }
+        ctx.gpu_aabb_ssbo = gpu_aabb_ring_.Acquire(
+            *rhi, ring_bytes(needed, sizeof(HiZAABB), 64),
+            dse::render::GpuBufferUsage::kStorage);
+        rhi->UpdateGpuBuffer(ctx.gpu_aabb_ssbo, 0, needed * sizeof(HiZAABB), gpu_aabbs_.data());
+    } else {
+        ctx.gpu_aabb_ssbo = {};
     }
 
     // 上传 DrawCommands 到 SSBO（binding 6，供 compute shader 读写）
     {
         const size_t cmd_size = required_count * sizeof(DrawElementsIndirectCommand);
-        if (ctx.gpu_draw_cmd_ssbo && required_count > gpu_draw_cmd_capacity_) {
-            rhi->DeleteGpuBuffer(ctx.gpu_draw_cmd_ssbo);
-            ctx.gpu_draw_cmd_ssbo = {};
-        }
-        if (!ctx.gpu_draw_cmd_ssbo) {
-            const size_t alloc_count = std::max(required_count, static_cast<size_t>(128));
-            // compute（gpu_cull）写 instance_count + DrawIndexedIndirect 读取 → 须 kStorage|kIndirect。
-            //   GL 对 indirect usage 宽松（任意缓冲可绑 GL_DRAW_INDIRECT_BUFFER），WebGPU 严格校验 usage。
-            dse::render::GpuBufferDesc desc{alloc_count * sizeof(DrawElementsIndirectCommand),
-                dse::render::GpuBufferUsage::kStorage | dse::render::GpuBufferUsage::kIndirect, true, "gpu_draw_cmd"};
-            ctx.gpu_draw_cmd_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
-            gpu_draw_cmd_capacity_ = alloc_count;
-        }
+        // compute（gpu_cull）写 instance_count + DrawIndexedIndirect 读取 → 须 kStorage|kIndirect。
+        //   GL 对 indirect usage 宽松（任意缓冲可绑 GL_DRAW_INDIRECT_BUFFER），WebGPU 严格校验 usage。
+        ctx.gpu_draw_cmd_ssbo = gpu_draw_cmd_ring_.Acquire(
+            *rhi, ring_bytes(required_count, sizeof(DrawElementsIndirectCommand), 128),
+            dse::render::GpuBufferUsage::kStorage | dse::render::GpuBufferUsage::kIndirect);
         rhi->UpdateGpuBuffer(ctx.gpu_draw_cmd_ssbo, 0, cmd_size, gpu_draw_cmds_.data());
     }
 
     // 上传 GPUInstanceData SSBO（binding 5）
     {
         const size_t inst_size = required_count * sizeof(dse::render::GPUInstanceData);
-        if (ctx.gpu_instance_ssbo && required_count > gpu_instance_capacity_) {
-            rhi->DeleteGpuBuffer(ctx.gpu_instance_ssbo);
-            ctx.gpu_instance_ssbo = {};
-        }
-        if (!ctx.gpu_instance_ssbo) {
-            const size_t alloc_count = std::max(required_count, static_cast<size_t>(128));
-            dse::render::GpuBufferDesc desc{alloc_count * sizeof(dse::render::GPUInstanceData), dse::render::GpuBufferUsage::kStorage, true, "gpu_instance"};
-            ctx.gpu_instance_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
-            gpu_instance_capacity_ = alloc_count;
-        }
+        ctx.gpu_instance_ssbo = gpu_instance_ring_.Acquire(
+            *rhi, ring_bytes(required_count, sizeof(dse::render::GPUInstanceData), 128),
+            dse::render::GpuBufferUsage::kStorage);
         rhi->UpdateGpuBuffer(ctx.gpu_instance_ssbo, 0, inst_size, gpu_instances_.data());
     }
 
@@ -2076,16 +2055,9 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
     if (!gpu_materials_.empty()) {
         const size_t mat_count = gpu_materials_.size();
         const size_t mat_size = mat_count * sizeof(dse::render::GPUMaterialData);
-        if (ctx.gpu_material_ssbo && mat_count > gpu_material_capacity_) {
-            rhi->DeleteGpuBuffer(ctx.gpu_material_ssbo);
-            ctx.gpu_material_ssbo = {};
-        }
-        if (!ctx.gpu_material_ssbo) {
-            const size_t alloc_count = std::max(mat_count, static_cast<size_t>(64));
-            dse::render::GpuBufferDesc desc{alloc_count * sizeof(dse::render::GPUMaterialData), dse::render::GpuBufferUsage::kStorage, true, "gpu_material"};
-            ctx.gpu_material_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
-            gpu_material_capacity_ = alloc_count;
-        }
+        ctx.gpu_material_ssbo = gpu_material_ring_.Acquire(
+            *rhi, ring_bytes(mat_count, sizeof(dse::render::GPUMaterialData), 64),
+            dse::render::GpuBufferUsage::kStorage);
         rhi->UpdateGpuBuffer(ctx.gpu_material_ssbo, 0, mat_size, gpu_materials_.data());
     }
 
@@ -2161,9 +2133,12 @@ void MeshRenderSystem::CleanupGPUResources(RhiDevice* rhi) {
     mega_ibo_index_count_ = 0;
     file_mesh_registry_.clear();
     inline_mesh_registry_.clear();
-    gpu_draw_cmd_capacity_ = 0;
-    gpu_instance_capacity_ = 0;
-    gpu_material_capacity_ = 0;
+    // per-in-flight ring 拥有 GPU-driven SSBO/indirect 的全部槽位缓冲，统一在此释放
+    // （frame_pipeline 不再单独 Delete 这些句柄）。
+    gpu_draw_cmd_ring_.Shutdown(*rhi);
+    gpu_instance_ring_.Shutdown(*rhi);
+    gpu_material_ring_.Shutdown(*rhi);
+    gpu_aabb_ring_.Shutdown(*rhi);
 }
 
 } // namespace gameplay3d

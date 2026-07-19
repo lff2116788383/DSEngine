@@ -865,24 +865,15 @@ void FramePipeline::Shutdown() {
 
     // GPU Driven 资源清理
     if (runtime_context_.rhi_device) {
+        // gpu_draw_cmd/instance/material/aabb SSBO 现由 MeshRenderSystem 的 per-in-flight
+        // ring 拥有并在 CleanupGPUResources 内释放全部槽位；此处仅清空 render_resources_
+        // 里持有的（末槽位）句柄，避免残留悬垂引用，切勿再次 Delete（否则二次释放）。
         modules_impl_->CleanupGPUResources(runtime_context_.rhi_device.get());
-        if (render_resources_.gpu_draw_cmd_ssbo) {
-            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_draw_cmd_ssbo);
-            render_resources_.gpu_draw_cmd_ssbo = {};
-        }
-        if (render_resources_.gpu_aabb_ssbo) {
-            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_aabb_ssbo);
-            render_resources_.gpu_aabb_ssbo = {};
-            render_resources_.gpu_aabb_capacity = {};
-        }
-        if (render_resources_.gpu_instance_ssbo) {
-            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_instance_ssbo);
-            render_resources_.gpu_instance_ssbo = {};
-        }
-        if (render_resources_.gpu_material_ssbo) {
-            runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_material_ssbo);
-            render_resources_.gpu_material_ssbo = {};
-        }
+        render_resources_.gpu_draw_cmd_ssbo = {};
+        render_resources_.gpu_aabb_ssbo = {};
+        render_resources_.gpu_aabb_capacity = {};
+        render_resources_.gpu_instance_ssbo = {};
+        render_resources_.gpu_material_ssbo = {};
         if (render_resources_.gpu_indirect_buffer) {
             runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.gpu_indirect_buffer);
             render_resources_.gpu_indirect_buffer = {};

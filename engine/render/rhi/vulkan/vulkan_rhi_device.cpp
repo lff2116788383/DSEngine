@@ -351,6 +351,13 @@ void VulkanRhiDevice::WaitForInFlightGpuUse() {
     context_.WaitForAllInFlightFrames();
 }
 
+void VulkanRhiDevice::WaitForCurrentFrameSlotGpu() {
+    if (!initialized_) return;
+    // 仅等当前帧槽位自身 fence（不等其它在飞帧）——供 GPU-driven ring 在 AcquireNextImage
+    // 之前 host 写当前槽位前使用，保证该槽位上一占用帧 GPU 已完成，覆写/重建安全。
+    context_.WaitForCurrentFrameFence();
+}
+
 void VulkanRhiDevice::BeginFrame() {
     if (!initialized_) return;
 

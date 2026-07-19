@@ -28,6 +28,8 @@ BufferHandle PerInFlightBuffer::Acquire(RhiDevice& device, size_t byte_size, Gpu
         desc.size = byte_size;
         desc.usage = usage;
         desc.is_dynamic = true;
+        // ring 语义即「每帧只写当前槽位、其 fence 已等待」→ host 写入无需跨帧总闸同步。
+        desc.per_in_flight = true;
         s.handle = device.CreateGpuBuffer(desc, nullptr);
         s.capacity = byte_size;
     }

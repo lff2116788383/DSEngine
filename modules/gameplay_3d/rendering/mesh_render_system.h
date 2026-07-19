@@ -9,6 +9,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/gpu_scene_types.h"
+#include "engine/render/rhi/per_in_flight_buffer.h"
 #include "engine/render/hiz_types.h"
 #include "engine/render/static_batch/static_batch_builder.h"
 #include "engine/render/frame_context.h"
@@ -184,9 +185,13 @@ private:
     std::unordered_map<uint64_t, uint32_t> material_dedup_;
     std::vector<dse::render::GPUDrawTextures> gpu_tex_keys_;
     std::vector<dse::render::TextureBucket> gpu_texture_buckets_;
-    size_t gpu_draw_cmd_capacity_ = 0;
-    size_t gpu_instance_capacity_ = 0;
-    size_t gpu_material_capacity_ = 0;
+    /// GPU-driven SSBO/indirect 的 per-in-flight ring（N3）：每帧只写当前在飞槽位、
+    /// 其 fence 已等待，故 host 写入不再触发跨帧总闸（SyncHostWriteWithGpu），恢复
+    /// CPU/GPU 2 帧流水；每个 ring 各自按容量增长，仅(重)建当前槽位。
+    dse::render::PerInFlightBuffer gpu_draw_cmd_ring_;
+    dse::render::PerInFlightBuffer gpu_instance_ring_;
+    dse::render::PerInFlightBuffer gpu_material_ring_;
+    dse::render::PerInFlightBuffer gpu_aabb_ring_;
 
     /// Mega buffer registry: file mesh 用 mesh_path 做 key（去重）；inline mesh 用 entity id 做 key（独立）
     std::unordered_map<std::string, dse::render::MeshBatchEntry> file_mesh_registry_;

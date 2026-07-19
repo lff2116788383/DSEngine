@@ -191,6 +191,13 @@ public:
     /// Vulkan：等 in-flight fences（见 VulkanContext::WaitForAllInFlightFrames）。
     /// GL/DX11：no-op——glDeleteBuffers / ID3D11Buffer::Release 由驱动延迟到 GPU 用完，删缓冲本就安全。
     virtual void WaitForInFlightGpuUse() {}
+    /// per-in-flight ring 写当前槽位前的最小同步：仅等待「当前帧槽位」自身的上一次提交
+    /// fence（即 CurrentFrameSlot() 对应 fence），不等其它在飞帧——因此紧邻的上一帧 GPU
+    /// 工作仍可与本帧 CPU 准备重叠（保留 2 帧流水），区别于 WaitForInFlightGpuUse=等全部。
+    /// 用于 GPU-driven 等在 BeginFrame(AcquireNextImage) 之前就 host 写 ring 槽位的路径：
+    /// 该处槽位 fence 尚未在 AcquireNextImage 等待，需在覆写/重建前显式等一次本槽位 fence。
+    /// Vulkan：vkWaitForFences(in_flight_fences_[current_frame_])。GL/DX11：no-op（N=1，驱动序列化）。
+    virtual void WaitForCurrentFrameSlotGpu() {}
     virtual void BeginFrame() = 0;
     virtual RenderTargetHandle CreateRenderTarget(const RenderTargetDesc& desc) = 0;
     virtual void DeleteRenderTarget(RenderTargetHandle render_target_handle) { (void)render_target_handle; }

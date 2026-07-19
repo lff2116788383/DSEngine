@@ -229,6 +229,11 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
     return result;
 }
 
+void VulkanContext::WaitForCurrentFrameFence() {
+    if (device_ == VK_NULL_HANDLE || current_frame_ >= in_flight_fences_.size()) return;
+    vkWaitForFences(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
+}
+
 void VulkanContext::WaitForAllInFlightFrames() {
     if (device_ == VK_NULL_HANDLE || in_flight_fences_.empty()) return;
     vkWaitForFences(device_, static_cast<uint32_t>(in_flight_fences_.size()),
