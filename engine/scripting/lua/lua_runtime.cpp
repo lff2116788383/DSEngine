@@ -536,6 +536,18 @@ bool BootstrapLuaRuntime() {
     luaL_requiref(state.state, LUA_STRLIBNAME, luaopen_string, 1);
     lua_pop(state.state, 1);
     luaL_requiref(state.state, LUA_MATHLIBNAME, luaopen_math, 1);
+    // Deterministic RNG for reproducible capture/regression (DSE_FIXED_DT set).
+    if (const char* det_env = std::getenv("DSE_FIXED_DT"); det_env && det_env[0] != '\0') {
+        lua_getfield(state.state, -1, "randomseed");
+        if (lua_isfunction(state.state, -1)) {
+            lua_pushinteger(state.state, 0);
+            if (lua_pcall(state.state, 1, 0, 0) != LUA_OK) {
+                lua_pop(state.state, 1);
+            }
+        } else {
+            lua_pop(state.state, 1);
+        }
+    }
     lua_pop(state.state, 1);
     luaL_requiref(state.state, LUA_UTF8LIBNAME, luaopen_utf8, 1);
     lua_pop(state.state, 1);

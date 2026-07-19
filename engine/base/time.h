@@ -100,6 +100,13 @@ private:
     //~zh 全局时间缩放（0=暂停, 1=正常）
     //~en Global time scale (0=paused, 1=normal)
     static float time_scale_;
+
+    // Deterministic capture mode (enabled when DSE_FIXED_DT>0):
+    // fixed timestep + sim_time replaces the wall clock so screenshots reproduce.
+    static bool deterministic_;
+    static bool deterministic_checked_;
+    static float deterministic_dt_;
+    static float sim_time_;
 };
 
 

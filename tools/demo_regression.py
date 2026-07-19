@@ -231,6 +231,7 @@ def run_demo(
     env["DSE_SCREENSHOT_PATH"] = str(screenshot_path)
     env["DSE_AUTO_BATTLE"] = "1"
     env["DSE_SCREENSHOT_TARGET"] = "main"
+    env["DSE_FIXED_DT"] = "0.0166666667"  # deterministic 60fps timestep for reproducible screenshots
 
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
