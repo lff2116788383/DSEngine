@@ -108,18 +108,23 @@ void FluidSystem::Init(World& world, RhiDevice* rhi) {
 
 void FluidSystem::Shutdown(World& world) {
     if (!rhi_) return;
+    // per-in-flight ring 拥有全部槽位缓冲，统一释放（组件 instance_vbo 只是当前槽位视图）。
+    for (auto& [id, ring] : instance_rings_) {
+        ring.Shutdown(*rhi_);
+    }
+    instance_rings_.clear();
     auto view = world.registry().view<FluidEmitterComponent>();
     for (auto entity : view) {
         auto& fluid = view.get<FluidEmitterComponent>(entity);
-        if (fluid.instance_vbo) {
-            rhi_->DeleteGpuBuffer(fluid.instance_vbo);
-            fluid.instance_vbo = {};
-        }
+        fluid.instance_vbo = {};
     }
 }
 
 void FluidSystem::Update(World& world, float delta_time) {
     if (delta_time <= 0.0f) return;
+
+    // ring 上传每帧至多等一次本槽位 fence（见 UploadGpuData），跨实体共享该标志。
+    bool slot_fence_waited = false;
 
     auto view = world.registry().view<FluidEmitterComponent, TransformComponent>();
     for (auto entity : view) {
@@ -140,27 +145,20 @@ void FluidSystem::Update(World& world, float delta_time) {
         fluid.gpu_dirty = true;
 
         // Upload particle data to GPU for rendering
-        UploadGpuData(fluid);
+        UploadGpuData(entity, fluid, slot_fence_waited);
     }
 }
 
-void FluidSystem::UploadGpuData(FluidEmitterComponent& fluid) {
+void FluidSystem::UploadGpuData(entt::entity entity, FluidEmitterComponent& fluid, bool& slot_fence_waited) {
     if (!rhi_ || !fluid.gpu_dirty) return;
     fluid.gpu_dirty = false;
 
     const uint32_t count = fluid.active_count;
     if (count == 0) return;
 
-    // 首次使用创建每实例 SSBO（std430：{ vec4 pos_size; vec4 color } = 8 floats/粒子），
+    // 每实例 SSBO（std430：{ vec4 pos_size; vec4 color } = 8 floats/粒子）改 per-in-flight ring，
     // 供 ParticleRenderer 经通用原语 BindStorageBuffer 绑定。
     const size_t max_particles = 16384;
-    if (!fluid.instance_vbo) {
-        dse::render::GpuBufferDesc inst_desc;
-        inst_desc.size = max_particles * 8 * sizeof(float);
-        inst_desc.usage = dse::render::GpuBufferUsage::kStorage;
-        inst_desc.is_dynamic = true;
-        fluid.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr);
-    }
 
     // std430 布局：pos_size = (pos.xyz, size)，color = (r,g,b,a)。
     std::vector<float> gpu_data;
@@ -181,7 +179,18 @@ void FluidSystem::UploadGpuData(FluidEmitterComponent& fluid) {
     }
 
     if (!gpu_data.empty()) {
-        rhi_->UpdateGpuBuffer(dse::render::BufferHandle{fluid.instance_vbo}, 0,
+        // ring 上传发生在主线程 Update（BeginFrame/AcquireNextImage 之前，当前帧槽位 fence 未等）。
+        // 覆写当前槽位前显式等一次「本槽位」fence（仅此槽位、保留 2 帧重叠），否则 host 写与 N 帧
+        // 前仍在读该槽位的 GPU 竞争 → 设备丢失。每帧仅需等一次，惰性触发。
+        if (!slot_fence_waited) {
+            rhi_->WaitForCurrentFrameSlotGpu();
+            slot_fence_waited = true;
+        }
+        auto& ring = instance_rings_[static_cast<std::uint32_t>(entity)];
+        fluid.instance_vbo = ring.Acquire(
+            *rhi_, max_particles * 8 * sizeof(float),
+            dse::render::GpuBufferUsage::kStorage);
+        rhi_->UpdateGpuBuffer(fluid.instance_vbo, 0,
                               gpu_data.size() * sizeof(float), gpu_data.data());
     }
 }

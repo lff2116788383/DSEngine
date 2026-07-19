@@ -3,6 +3,9 @@
 
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/per_in_flight_buffer.h"
+#include <cstdint>
+#include <unordered_map>
 
 namespace dse {
 struct FluidEmitterComponent;
@@ -63,7 +66,11 @@ private:
     SpatialHash spatial_hash_;
     RhiDevice* rhi_ = nullptr;
 
-    void UploadGpuData(FluidEmitterComponent& fluid);
+    // N3：每实例 SSBO 每帧 host 写，改 per-in-flight ring（同 Particle3DSystem）。ring 由系统
+    // 按 entity 持有——不放进 ECS 组件（组件会被编辑器快照拷贝，ring 持 GPU 句柄不可拷贝共享）。
+    std::unordered_map<std::uint32_t, dse::render::PerInFlightBuffer> instance_rings_;
+
+    void UploadGpuData(entt::entity entity, FluidEmitterComponent& fluid, bool& slot_fence_waited);
 };
 
 } // namespace gameplay3d
