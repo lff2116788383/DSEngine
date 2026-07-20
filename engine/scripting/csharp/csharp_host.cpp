@@ -104,9 +104,6 @@ bool CSharpHost::load_hostfxr() {
 #endif
 
     return s_hostfxr_init && s_hostfxr_get_delegate && s_hostfxr_close;
-#else
-    // DSE_CSHARP_NO_NETHOST 分支
-    return false;
 #endif
 }
 

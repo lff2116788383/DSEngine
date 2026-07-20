@@ -87,7 +87,7 @@ if [ "$WITH_NET" = "1" ] && [ -e /usr/include/openssl/ssl.h ]; then
     # WITH_NET=1 且 HTTP 可用时，尝试启用 C#（需要 dotnet CLI）
     if command -v dotnet >/dev/null 2>&1; then
         CSHARP_FLAG="-DDSE_ENABLE_CSHARP=ON"
-        DOTNET_FLAG="-- DOTNET_EXECUTABLE=$(command -v dotnet)"
+        DOTNET_FLAG="-DDOTNET_EXECUTABLE=$(command -v dotnet)"
         ok "C# 启用：dotnet=$(dotnet --version | head -1 | awk '{print $2}')"
     fi
 fi
