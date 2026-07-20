@@ -73,6 +73,25 @@ if [ "$WITH_NET" = "1" ]; then
     ok "网络层启用：protoc=$(protoc --version | awk '{print $2}')  libsodium=$(pkg-config --modversion libsodium)"
 fi
 
+# HTTP 层需要系统 OpenSSL 开发包（Linux 已在 ci.yml 中安装 libssl-dev）
+# C# 在 Linux 无 nethost 走运行时回退，脚本只构建 dse_engine/lua/net/http 目标，
+# 不触发 dotnet 构建（除非显式 DOTNET=1）。
+HTTP_FLAG="-DDSE_ENABLE_HTTP=OFF"
+CSHARP_FLAG="-DDSE_ENABLE_CSHARP=OFF"
+if [ -e /usr/include/openssl/ssl.h ]; then
+    HTTP_FLAG="-DDSE_ENABLE_HTTP=ON"
+    ok "HTTP 层启用：系统 OpenSSL ($(/usr/bin/openssl version | awk '{print $2}'))"
+fi
+DOTNET_FLAG=""
+if [ "$WITH_NET" = "1" ] && [ -e /usr/include/openssl/ssl.h ]; then
+    # WITH_NET=1 且 HTTP 可用时，尝试启用 C#（需要 dotnet CLI）
+    if command -v dotnet >/dev/null 2>&1; then
+        CSHARP_FLAG="-DDSE_ENABLE_CSHARP=ON"
+        DOTNET_FLAG="-- DOTNET_EXECUTABLE=$(command -v dotnet)"
+        ok "C# 启用：dotnet=$(dotnet --version | head -1 | awk '{print $2}')"
+    fi
+fi
+
 # ── 2. 配置 ──────────────────────────────────────────────────────────────────
 step "配置 CMake ($BUILD_TYPE)"
 cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G "$GENERATOR" \
@@ -85,7 +104,7 @@ cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G "$GENERATOR" \
     -DDSE_ENABLE_PHYSX=OFF \
     -DDSE_ENABLE_D3D11=OFF \
     -DDSE_ENABLE_VULKAN=OFF \
-    $NET_FLAG \
+    $NET_FLAG $HTTP_FLAG $CSHARP_FLAG $DOTNET_FLAG \
     || die "CMake 配置失败。"
 ok "配置完成：$BUILD_DIR"
 
@@ -127,7 +146,7 @@ if command -v file >/dev/null 2>&1; then
 fi
 ok "Lua 运行时可执行文件: $LUA_EXE"
 
-# ── 5. (可选) 网络层回环 smoke ────────────────────────────────────────────────
+# ── 5. (可选) 网络层/HTTP/C# 回环 smoke ─────────────────────────────────────
 if [ "$WITH_NET" = "1" ]; then
     step "构建并运行网络层回环 smoke (dse_net_smoke)"
     cmake --build "$BUILD_DIR" --target dse_net_smoke -j "$JOBS" || die "构建 dse_net_smoke 失败。"
@@ -142,6 +161,26 @@ if [ "$WITH_NET" = "1" ]; then
     [ -n "$CAPI_SMOKE" ] && [ -f "$CAPI_SMOKE" ] || die "未找到 dse_net_capi_smoke 可执行文件。"
     "$CAPI_SMOKE" || die "C ABI 回环 smoke 失败。"
     ok "C ABI 回环 smoke 通过: $CAPI_SMOKE"
+
+    # HTTP smoke（若 HTTP 层已启用）
+    if [ -e /usr/include/openssl/ssl.h ]; then
+        step "构建并运行 HTTP 回环 smoke (dse_http_smoke)"
+        cmake --build "$BUILD_DIR" --target dse_http_smoke -j "$JOBS" || die "构建 dse_http_smoke 失败。"
+        HTTP_SMOKE="$(find "$SRC_DIR/bin" "$BUILD_DIR" -maxdepth 3 -type f -name 'dse_http_smoke' 2>/dev/null | head -1)"
+        [ -n "$HTTP_SMOKE" ] && [ -f "$HTTP_SMOKE" ] || die "未找到 dse_http_smoke 可执行文件。"
+        "$HTTP_SMOKE" || die "HTTP 回环 smoke 失败。"
+        ok "HTTP 回环 smoke 通过: $HTTP_SMOKE"
+    fi
+fi
+
+# C# smoke（若 C# 已启用且 dotnet CLI 可用）
+if [ "$WITH_NET" = "1" ] && [ -e /usr/include/openssl/ssl.h ] && command -v dotnet >/dev/null 2>&1; then
+    step "构建并运行 C# 回环 smoke (dse_csharp_smoke)"
+    cmake --build "$BUILD_DIR" --target dse_csharp_smoke -j "$JOBS" || die "构建 dse_csharp_smoke 失败。"
+    CS_SMOKE="$(find "$SRC_DIR/bin" "$BUILD_DIR" -maxdepth 3 -type f -name 'dse_csharp_smoke' 2>/dev/null | head -1)"
+    [ -n "$CS_SMOKE" ] && [ -f "$CS_SMOKE" ] || die "未找到 dse_csharp_smoke 可执行文件。"
+    "$CS_SMOKE" || die "C# 回环 smoke 失败。"
+    ok "C# 回环 smoke 通过: $CS_SMOKE"
 fi
 
 echo -e "\n${c_cyan}==================== RESULT ====================${c_rst}"
@@ -149,4 +188,6 @@ ok "Linux 构建验证全部通过 ($BUILD_TYPE)"
 echo -e "   引擎库: $ENGINE_LIB"
 echo -e "   可执行: $LUA_EXE"
 [ "$WITH_NET" = "1" ] && echo -e "   网络 smoke: 通过"
+[ "$WITH_NET" = "1" ] && [ -e /usr/include/openssl/ssl.h ] && echo -e "   HTTP smoke: 通过"
+[ "$WITH_NET" = "1" ] && [ -e /usr/include/openssl/ssl.h ] && command -v dotnet >/dev/null 2>&1 && echo -e "   C# smoke: 通过"
 exit 0

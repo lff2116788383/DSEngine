@@ -25,13 +25,24 @@ typedef char char_t;
 // We load these dynamically to avoid hard link-time dependency on a specific
 // .NET SDK install location.
 
+#ifndef DSE_CSHARP_NO_NETHOST
 #include <nethost.h>
 #include <coreclr_delegates.h>
 #include <hostfxr.h>
+#else
+// 降级分支：nethost 头不可用时提供最小类型声明，使文件能编译。
+// 此分支下所有运行时初始化函数将返回 false，C# 功能实际不可用。
+typedef void* hostfxr_handle;
+typedef int (hostfxr_initialize_for_runtime_config_fn)(const char_t* runtime_config_path, const void* host_path, void** host_context);
+typedef int (hostfxr_get_runtime_delegate_fn)(void* host_context, int delegate_type_id, void** delegate);
+typedef void (hostfxr_close_fn)(void* host_context);
+typedef int (load_assembly_and_get_function_pointer_fn)(const char_t* assembly_path, const char_t* type_name, const char_t* method_name, const char_t* delegate_type_name, void* reserved, void** function_pointer);
+#endif
 
 // hostfxr 函数指针类型（hostfxr_initialize_for_runtime_config_fn /
-// hostfxr_get_runtime_delegate_fn / hostfxr_close_fn）由 <hostfxr.h> 提供，
-// 这里不再自行 typedef，否则与官方头声明冲突（C2116）。
+// hostfxr_get_runtime_delegate_fn / hostfxr_close_fn）由 <hostfxr.h> 提供。
+// DSE_CSHARP_NO_NETHOST 分支已在上方提供 typedef，避免重复定义。
+// 如果存在 <hostfxr.h>，由该头提供类型定义。
 
 // Loaded function pointers
 static hostfxr_initialize_for_runtime_config_fn s_hostfxr_init   = nullptr;
@@ -56,6 +67,10 @@ static std::wstring to_wide(const std::string& s) {
 // ── Load hostfxr dynamically ────────────────────────────────────────────────
 
 bool CSharpHost::load_hostfxr() {
+#ifdef DSE_CSHARP_NO_NETHOST
+    std::cerr << "[DSE-CS] nethost headers not available at build time, C# disabled.\n";
+    return false;
+#else
     // Get hostfxr path from nethost
     char_t buffer[4096];
     size_t buffer_size = sizeof(buffer) / sizeof(char_t);
@@ -89,6 +104,10 @@ bool CSharpHost::load_hostfxr() {
 #endif
 
     return s_hostfxr_init && s_hostfxr_get_delegate && s_hostfxr_close;
+#else
+    // DSE_CSHARP_NO_NETHOST 分支
+    return false;
+#endif
 }
 
 // ── Get managed entry points ────────────────────────────────────────────────

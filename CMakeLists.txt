@@ -707,7 +707,10 @@ if(DSE_ENABLE_CSHARP)
     file(GLOB _dse_nethost_dirs
         "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64/*/runtimes/win-x64/native"
     )
-    find_path(NETHOST_INCLUDE_DIR nethost.h
+    # 用 coreclr_delegates.h 作为探测锚点（而非 nethost.h），确保命中的目录同时包含
+    # nethost.h + hostfxr.h + coreclr_delegates.h 三个头（仅 nethost.h 的旧版本 host pack
+    # 可能缺失其他两 头，导致编译 C1083）。
+    find_path(NETHOST_INCLUDE_DIR coreclr_delegates.h
         PATHS ${_dse_nethost_dirs}
               "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64"
         PATH_SUFFIXES "runtimes/win-x64/native"

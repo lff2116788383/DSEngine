@@ -66,23 +66,24 @@ jobs:
 
       # 网络层(GNS)默认 ON 且是 v1 必备：Windows 需预构建静态 libsodium+protobuf 并把
       # 目录传给 configure，否则 find_package(sodium) 直接失败。预构建产物按脚本/子模块
-      # 指针缓存，命中后秒过。HTTP(OpenSSL)/C# 在托管矩阵关闭（见下）故此处不构建 OpenSSL。
-      - name: Cache prebuilt net deps (libsodium + protobuf)
+      # 指针缓存，命中后秒过。HTTP(OpenSSL) 同样需预构建并缓存。
+      - name: Cache prebuilt net/http deps (libsodium + protobuf + OpenSSL)
         uses: actions/cache@v4
         with:
-          path: C:/dse_net_deps
-          key: netdeps-${{ hashFiles('.gitmodules', 'scripts/ci/prebuild_win_net_http_deps.ps1') }}
+          path: |
+            C:/dse_net_deps
+            C:/ossl-win64
+          key: netdeps-${{ hashFiles('.gitmodules','scripts/ci/prebuild_win_net_http_deps.ps1','scripts/build_windows_openssl.ps1') }}
           restore-keys: |
             netdeps-
 
-      - name: Prebuild net deps (libsodium + protobuf)
+      - name: Prebuild net/http deps (libsodium + protobuf + OpenSSL)
         shell: pwsh
-        run: ./scripts/ci/prebuild_win_net_http_deps.ps1
+        run: ./scripts/ci/prebuild_win_net_http_deps.ps1 -IncludeOpenSSL
 
       # NET=ON：网络层是 v1 必备，已在本地(MSVC)验证 configure+build+loopback 冒烟通过。
-      # HTTP/C# 在托管矩阵暂关：HTTP(OpenSSL) 需 runner Perl 且未本地验证；C# 的 .NET
-      # nethost 头(coreclr_delegates.h)在参考环境缺失导致引擎编译失败。二者仍由 bootstrap
-      # /nightly 覆盖，待独立验证后再纳入托管矩阵。
+      # HTTP/C# 现已启用：HTTP(OpenSSL) 用 Strawberry Perl + NASM 预构建（runner 自带）；
+      # C# 用 .NET 8 host pack（runner 自带），nethost 头探测改用 coreclr_delegates.h 确保全齐。
       - name: CMake Configure
         run: |
           cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
@@ -97,10 +98,11 @@ jobs:
             -DDSE_ENABLE_JOLT=ON `
             -DDSE_ENABLE_PCH=ON `
             -DDSE_ENABLE_NET=ON `
-            -DDSE_ENABLE_HTTP=OFF `
-            -DDSE_ENABLE_CSHARP=OFF `
+            -DDSE_ENABLE_HTTP=ON `
+            -DDSE_ENABLE_CSHARP=ON `
             -DDSE_NET_SODIUM_DIR="$env:DSE_NET_SODIUM_DIR" `
-            -DDSE_NET_PROTOBUF_DIR="$env:DSE_NET_PROTOBUF_DIR"
+            -DDSE_NET_PROTOBUF_DIR="$env:DSE_NET_PROTOBUF_DIR" `
+            -DDSE_HTTP_OPENSSL_DIR="$env:DSE_HTTP_OPENSSL_DIR"
 
       - name: Build Engine
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_engine --parallel
@@ -118,9 +120,9 @@ jobs:
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_example_lua --parallel
 
       # 网络层运行时冒烟（v1 必备）：编译并在下方 ctest 里实际运行 GNS loopback 冒烟。
-      # HTTP/C# 在托管矩阵未启用；net_http/csharp label 在 ctest 里排除以免"exe 未构建"误红。
-      - name: Build net smoke tests
-        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_net_smoke dse_net_capi_smoke --parallel
+      # HTTP/C# 已启用并构建相应 smoke，net_http/csharp label 在 ctest 里不再排除。
+      - name: Build net/http/csharp smoke tests
+        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_net_smoke dse_net_capi_smoke dse_http_smoke dse_csharp_smoke --parallel
 
       - name: Copy Runtime Assets
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_copy_assets
@@ -149,11 +151,11 @@ jobs:
       # (three-RHI golden/soak, shader-graph preview) which asserts a real GPU
       # (device.is_software==false) and cannot pass here. It is gated instead by
       # the self-hosted gpu-smoke job below (ctest -L gpu).
-      # 排除：gpu（无 GPU 托管 runner）、csharp（托管程序集运行时冒烟，留 nightly）、
-      # net_http（http 冒烟 exe 未构建；net 冒烟在下一步按名单独跑）。
-      - name: Run Tests (exclude GPU-only + net_http + csharp smoke)
+      # 排除：gpu（无 GPU 托管 runner）、csharp（托管程序集运行时冒烟，若 runner 无外网可能失败）。
+      # net_http 已启用并构建相应 smoke，故从排除项去掉。
+      - name: Run Tests (exclude GPU-only + csharp smoke)
         working-directory: ${{ env.BUILD_DIR }}
-        run: ctest -C ${{ matrix.config }} -LE "gpu|net_http|csharp" --output-on-failure --timeout 120 -T Test
+        run: ctest -C ${{ matrix.config }} -LE "gpu|csharp" --output-on-failure --timeout 120 -T Test
         timeout-minutes: 15
 
       - name: Run net smoke (GNS loopback)
