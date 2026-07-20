@@ -64,6 +64,25 @@ jobs:
           restore-keys: |
             deps-${{ matrix.label }}-
 
+      # 网络层(GNS)默认 ON 且是 v1 必备：Windows 需预构建静态 libsodium+protobuf 并把
+      # 目录传给 configure，否则 find_package(sodium) 直接失败。预构建产物按脚本/子模块
+      # 指针缓存，命中后秒过。HTTP(OpenSSL)/C# 在托管矩阵关闭（见下）故此处不构建 OpenSSL。
+      - name: Cache prebuilt net deps (libsodium + protobuf)
+        uses: actions/cache@v4
+        with:
+          path: C:/dse_net_deps
+          key: netdeps-${{ hashFiles('.gitmodules', 'scripts/ci/prebuild_win_net_http_deps.ps1') }}
+          restore-keys: |
+            netdeps-
+
+      - name: Prebuild net deps (libsodium + protobuf)
+        shell: pwsh
+        run: ./scripts/ci/prebuild_win_net_http_deps.ps1
+
+      # NET=ON：网络层是 v1 必备，已在本地(MSVC)验证 configure+build+loopback 冒烟通过。
+      # HTTP/C# 在托管矩阵暂关：HTTP(OpenSSL) 需 runner Perl 且未本地验证；C# 的 .NET
+      # nethost 头(coreclr_delegates.h)在参考环境缺失导致引擎编译失败。二者仍由 bootstrap
+      # /nightly 覆盖，待独立验证后再纳入托管矩阵。
       - name: CMake Configure
         run: |
           cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
@@ -76,7 +95,12 @@ jobs:
             -DDSE_ENABLE_D3D11=ON `
             -DDSE_ENABLE_PHYSX=OFF `
             -DDSE_ENABLE_JOLT=ON `
-            -DDSE_ENABLE_PCH=ON
+            -DDSE_ENABLE_PCH=ON `
+            -DDSE_ENABLE_NET=ON `
+            -DDSE_ENABLE_HTTP=OFF `
+            -DDSE_ENABLE_CSHARP=OFF `
+            -DDSE_NET_SODIUM_DIR="$env:DSE_NET_SODIUM_DIR" `
+            -DDSE_NET_PROTOBUF_DIR="$env:DSE_NET_PROTOBUF_DIR"
 
       - name: Build Engine
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_engine --parallel
@@ -92,6 +116,11 @@ jobs:
 
       - name: Build Lua Runtime
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_example_lua --parallel
+
+      # 网络层运行时冒烟（v1 必备）：编译并在下方 ctest 里实际运行 GNS loopback 冒烟。
+      # HTTP/C# 在托管矩阵未启用；net_http/csharp label 在 ctest 里排除以免"exe 未构建"误红。
+      - name: Build net smoke tests
+        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_net_smoke dse_net_capi_smoke --parallel
 
       - name: Copy Runtime Assets
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.config }} --target dse_copy_assets
@@ -120,10 +149,17 @@ jobs:
       # (three-RHI golden/soak, shader-graph preview) which asserts a real GPU
       # (device.is_software==false) and cannot pass here. It is gated instead by
       # the self-hosted gpu-smoke job below (ctest -L gpu).
-      - name: Run Tests (exclude GPU-only smoke)
+      # 排除：gpu（无 GPU 托管 runner）、csharp（托管程序集运行时冒烟，留 nightly）、
+      # net_http（http 冒烟 exe 未构建；net 冒烟在下一步按名单独跑）。
+      - name: Run Tests (exclude GPU-only + net_http + csharp smoke)
         working-directory: ${{ env.BUILD_DIR }}
-        run: ctest -C ${{ matrix.config }} -LE gpu --output-on-failure --timeout 120 -T Test
+        run: ctest -C ${{ matrix.config }} -LE "gpu|net_http|csharp" --output-on-failure --timeout 120 -T Test
         timeout-minutes: 15
+
+      - name: Run net smoke (GNS loopback)
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ctest -C ${{ matrix.config }} -R "^dse_net_smoke$|^dse_net_capi_smoke$" --output-on-failure --timeout 120 -T Test
+        timeout-minutes: 10
 
       # P2-3 release-matrix gate: explicit, GPU-free structural gate (file/API/
       # workflow presence). Runs on Debug only to avoid redundant re-runs; can be
@@ -164,6 +200,11 @@ jobs:
         with:
           arch: x64
 
+      # 与 build-and-test 一致：预构建网络层依赖（自托管 runner 上幂等复用）。
+      - name: Prebuild net deps (libsodium + protobuf)
+        shell: pwsh
+        run: ./scripts/ci/prebuild_win_net_http_deps.ps1
+
       - name: CMake Configure (GPU backends on)
         run: |
           cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
@@ -176,7 +217,12 @@ jobs:
             -DDSE_ENABLE_D3D11=ON `
             -DDSE_ENABLE_PHYSX=OFF `
             -DDSE_ENABLE_JOLT=ON `
-            -DDSE_ENABLE_PCH=ON
+            -DDSE_ENABLE_PCH=ON `
+            -DDSE_ENABLE_NET=ON `
+            -DDSE_ENABLE_HTTP=OFF `
+            -DDSE_ENABLE_CSHARP=OFF `
+            -DDSE_NET_SODIUM_DIR="$env:DSE_NET_SODIUM_DIR" `
+            -DDSE_NET_PROTOBUF_DIR="$env:DSE_NET_PROTOBUF_DIR"
 
       - name: Build engine + smoke tests
         run: |
@@ -240,6 +286,8 @@ jobs:
           restore-keys: |
             deps-editor-
 
+      # 本 job 只做 editor 编译校验，与网络/HTTP/C# 无关：关掉三者以免拉入 libsodium/
+      # protobuf/OpenSSL/.NET 依赖（这些在 build-and-test 里覆盖）。
       - name: CMake Configure (editor ON, D3D11, no Vulkan)
         run: |
           cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
@@ -252,7 +300,10 @@ jobs:
             -DDSE_ENABLE_D3D11=ON `
             -DDSE_ENABLE_PHYSX=OFF `
             -DDSE_ENABLE_JOLT=ON `
-            -DDSE_ENABLE_PCH=ON
+            -DDSE_ENABLE_PCH=ON `
+            -DDSE_ENABLE_NET=OFF `
+            -DDSE_ENABLE_HTTP=OFF `
+            -DDSE_ENABLE_CSHARP=OFF
 
       - name: Build Editor (dse_editor_cpp)
         run: cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_editor_cpp --parallel
@@ -294,17 +345,22 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install build deps (toolchain + X11/GL dev libs)
+      - name: Install build deps (toolchain + X11/GL + net/HTTP dev libs)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev \
+            libsodium-dev libprotobuf-dev protobuf-compiler libssl-dev
 
-      - name: Verify Linux build (engine static lib + Lua runtime ELF)
+      # 网络层是 v1 必备：装 libsodium/protobuf 后用 WITH_NET=1 实际启用并跑 net loopback
+      # 冒烟（HTTP 层用系统 OpenSSL，默认 ON；C# 在 Linux 无 nethost 走运行时回退，脚本
+      # 只构建 dse_engine/lua/net 目标，不触发 dotnet 构建）。
+      - name: Verify Linux build (engine static lib + Lua runtime ELF + net smoke)
         run: bash scripts/verify_linux_build.sh
         env:
           BUILD_TYPE: Release
+          WITH_NET: "1"
 
   # ───────────────────────────────────────────────────────────────────────────
   # Android arm64-v8a APK 打包验证——复用 scripts/verify_android_apk.ps1（本地已验证）。
@@ -350,7 +406,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DDSE_BUILD_GTESTS=OFF -DDSE_ENABLE_3D=ON -DDSE_ENABLE_JOLT=ON \
-            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF
+            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF \
+            -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build build_host --target dse_shader_compiler -j "$(nproc)"
 
       - name: Verify Android APK (arm64-v8a, NativeActivity, signed)
@@ -388,7 +445,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DDSE_BUILD_GTESTS=OFF -DDSE_ENABLE_3D=ON -DDSE_ENABLE_JOLT=ON \
-            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF
+            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF \
+            -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build build_host --target dse_shader_compiler -j "$(nproc)"
 
       - name: Generate shader embed headers (incl. ESSL 300 for WebGL2)

@@ -43,7 +43,7 @@ jobs:
       - name: Configure + Build (gtest targets)
         shell: pwsh
         run: |
-          cmake --preset windows-x64-debug -DDSE_BUILD_EDITOR=OFF
+          cmake --preset windows-x64-debug -DDSE_BUILD_EDITOR=OFF -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build out/build/windows-x64-debug --target dse_gtest_unit_tests dse_gtest_integration_tests dse_gtest_smoke_tests
 
       # 部署运行时 DLL：
@@ -109,7 +109,7 @@ jobs:
       - name: Configure + Build (editor + ImGui Test Engine)
         shell: pwsh
         run: |
-          cmake --preset windows-x64-debug -DDSE_EDITOR_UI_TESTS=ON -DDSE_ENABLE_VULKAN=OFF
+          cmake --preset windows-x64-debug -DDSE_EDITOR_UI_TESTS=ON -DDSE_ENABLE_VULKAN=OFF -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build out/build/windows-x64-debug --target dse_editor_cpp
 
       # 部署 Mesa 软件 OpenGL（llvmpipe）：把 x64 下的全部 DLL 拷到 uitest exe 旁，
@@ -177,7 +177,7 @@ jobs:
       - name: Build Editor
         shell: pwsh
         run: |
-          cmake --preset windows-x64-debug
+          cmake --preset windows-x64-debug -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build out/build/windows-x64-debug --target dse_editor_cpp
 
       - uses: actions/setup-python@v5
@@ -218,7 +218,7 @@ jobs:
       - name: Build Editor
         shell: pwsh
         run: |
-          cmake --preset windows-x64-debug
+          cmake --preset windows-x64-debug -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build out/build/windows-x64-debug --target dse_editor_cpp
 
       - uses: actions/setup-python@v5
@@ -260,7 +260,7 @@ jobs:
       - name: Build Editor
         shell: pwsh
         run: |
-          cmake --preset windows-x64-debug
+          cmake --preset windows-x64-debug -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build out/build/windows-x64-debug --target dse_editor_cpp
 
       - uses: actions/setup-python@v5
