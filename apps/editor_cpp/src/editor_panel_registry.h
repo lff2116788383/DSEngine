@@ -126,6 +126,38 @@ public:
     /// dispatch point that replaces the hardcoded panel calls in DrawEditorUI.
     void DrawAll(EditorContext& ctx);
 
+    /// Returns the visible flag pointer of the panel currently being drawn.
+    /// Panels call this to pass to ImGui::Begin(name, p_open) so they get a
+    /// close (×) button that toggles visibility. Returns nullptr for panels
+    /// with no visibility flag (always-drawn panels) — ImGui::Begin(name, nullptr)
+    /// behaves identically to ImGui::Begin(name).
+    bool* GetCurrentPanelOpen() const { return current_panel_open_; }
+
+    /// Returns the id string of the panel currently being drawn.
+    const std::string& GetCurrentPanelId() const { return current_panel_id_; }
+
+    /// Whether any panel is currently maximized.
+    bool HasMaximizedPanel() const { return !maximized_window_name_.empty(); }
+
+    /// Whether the given ImGui window name is the currently maximized one.
+    bool IsMaximized(const char* window_name) const {
+        return window_name && maximized_window_name_ == window_name;
+    }
+
+    /// Toggle maximize for the given ImGui window name. When maximized, the
+    /// window is undocked from its dock node and resized to fill the entire
+    /// dockspace; restoring re-docks it back to its original dock node.
+    void ToggleMaximize(const char* window_name);
+
+    /// Cancel any active maximize (keep the window where it currently is).
+    /// Used on layout reset / project switch so the maximized state does not
+    /// leak across sessions.
+    void ResetMaximize();
+
+    /// Draw a maximize/restore (□) button in the panel title bar, to the left
+    /// of the ImGui-provided close (×) button. Call right after ImGui::Begin.
+    void DrawMaximizeRestoreButton();
+
     /// Render the Window menu contents (checkbox items grouped by category)
     /// for all toggleable panels. Replaces the hardcoded MenuItem list.
     void DrawWindowMenu();
@@ -135,11 +167,22 @@ public:
     void SetActiveBackend(std::string backend) { active_backend_ = std::move(backend); }
     const std::string& ActiveBackend() const { return active_backend_; }
 
+    /// Set the dockspace ID (called from BeginEditorShell). Used to query the
+    /// dockspace position/size when a panel is maximized.
+    void SetDockspaceId(unsigned int id) { dockspace_id_ = id; }
+
 private:
     PanelRegistry() = default;
+    void RestoreMaximize();
     std::vector<PanelEntry> panels_;
     std::string active_backend_;
     bool inited_ = false;
+    bool* current_panel_open_ = nullptr;  // set by DrawAll before calling draw
+    std::string current_panel_id_;        // id of panel currently being drawn
+    std::string maximized_window_name_;   // ImGui window name of the maximized window (empty = none)
+    std::string maximized_panel_id_;      // panel hosting the maximized window (for DrawAll dispatch)
+    unsigned int maximized_dock_id_ = 0;  // dock node to restore the window into (0 = was floating)
+    unsigned int dockspace_id_ = 0;       // dockspace ID (for querying position/size)
 };
 
 /// Self-registration helper. A panel module places

@@ -12,6 +12,7 @@
 #include "engine/terrain/world_editor_tools.h"
 #include "engine/terrain/spline_system.h"
 #include "imgui.h"
+#include "editor_panel_registry.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -262,10 +263,11 @@ void DrawTerrainToolsPanel(EditorContext& ctx) {
     (void)ctx; // Available for future engine integration
     EnsureInitialized();
 
-    if (!ImGui::Begin("Terrain Tools")) {
+    if (!ImGui::Begin("Terrain Tools", PanelRegistry::Get().GetCurrentPanelOpen())) {
         ImGui::End();
         return;
     }
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // Tab bar
     if (ImGui::BeginTabBar("TerrainToolsTabs")) {

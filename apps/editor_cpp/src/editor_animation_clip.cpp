@@ -257,7 +257,8 @@ void DrawAnimationClipEditor(EditorContext& /*ctx*/) {
     InitDemoSkeleton();
     auto& state = s_state;
 
-    ImGui::Begin(MDI_ICON_ANIMATION "  Animation Clip Editor");
+    ImGui::Begin(MDI_ICON_ANIMATION "  Animation Clip Editor", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // ─── Toolbar ─────────────────────────────────────────────────────────
     {

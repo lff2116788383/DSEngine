@@ -294,6 +294,7 @@ DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
         bool* open = self ? self->visible : nullptr;
         ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Anim Retarget", open)) {
+            PanelRegistry::Get().DrawMaximizeRestoreButton();
             DrawAnimRetargetPanel(ctx);
         }
         ImGui::End();

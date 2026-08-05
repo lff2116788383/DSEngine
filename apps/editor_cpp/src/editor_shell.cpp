@@ -22,6 +22,7 @@
 #include "editor_locale.h"
 #include "editor_scene_camera.h"
 #include "editor_scene_view_mode.h"
+#include "editor_panel_registry.h"
 #include "engine/ecs/transform.h"
 
 #include <filesystem>
@@ -87,6 +88,9 @@ void BuildDefaultDockLayout(ImGuiID dockspace_id, const ImVec2& viewport_size) {
 
 void ResetEditorLayout() {
     s_layout_dirty = true;
+    // 布局重建后旧的 dock node 已失效，残留的最大化状态会指向无效窗口，
+    // 在重建前清理，避免最大化状态跨布局/跨项目泄漏。
+    PanelRegistry::Get().ResetMaximize();
 }
 
 void RequestExit() {
@@ -121,6 +125,8 @@ void BeginEditorShell() {
     ImGuiIO& io = ImGui::GetIO();
     if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
         const ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        // 把 dockspace ID 传给 PanelRegistry，供面板最大化时查询 dockspace 区域
+        PanelRegistry::Get().SetDockspaceId(dockspace_id);
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         BuildDefaultDockLayout(dockspace_id, shell_size);
     }

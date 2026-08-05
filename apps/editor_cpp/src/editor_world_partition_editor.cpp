@@ -169,7 +169,8 @@ void DrawWorldPartitionEditor(EditorContext& /*ctx*/) {
     UpdateStreamingSimulation();
     auto& state = s_state;
 
-    ImGui::Begin(MDI_ICON_GRID "  World Partition Editor");
+    ImGui::Begin(MDI_ICON_GRID "  World Partition Editor", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // ─── Toolbar ─────────────────────────────────────────────────────────
     {

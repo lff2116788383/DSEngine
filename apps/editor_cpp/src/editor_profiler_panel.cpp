@@ -98,7 +98,8 @@ void DrawProfilerPanel(EditorContext& context) {
     auto& g_last_profiled_frame = LastProfiledFrame();
     auto& g_profiler_export_status = ProfilerExportStatus();
 
-    ImGui::Begin("Profiler");
+    ImGui::Begin("Profiler", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     if (ImGui::Button("Reset Profilers")) {
         g_cpu_profiler.Reset();

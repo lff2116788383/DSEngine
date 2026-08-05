@@ -2,6 +2,7 @@
 #include "editor_shader_graph.h"
 #include "editor_icons.h"
 #include "editor_console_panel.h"
+#include "editor_panel_registry.h"
 #include "editor_context.h"
 
 #include "engine/assets/asset_manager.h"
@@ -610,7 +611,8 @@ void ShaderGraphResetGraph() {
 }
 
 void DrawShaderGraphPanel(EditorContext& ctx) {
-    ImGui::Begin("Shader Graph");
+    ImGui::Begin("Shader Graph", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& state = GetState();
     InitDefaultGraph(state);

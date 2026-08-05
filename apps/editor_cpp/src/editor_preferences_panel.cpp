@@ -104,6 +104,7 @@ void DrawPreferencesPanel(bool* p_open) {
         ImGui::End();
         return;
     }
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     bool changed = false;
 

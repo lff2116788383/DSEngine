@@ -326,7 +326,8 @@ void DrawProjectPanel() {
     static std::filesystem::path s_rename_target;
     static char s_rename_buf[128] = "";
 
-    ImGui::Begin("Project");
+    ImGui::Begin("Project", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     const std::filesystem::path base_data_path = GetProjectBaseDataPath();
     std::filesystem::path& current_path = GetCurrentProjectPanelPath();
@@ -729,7 +730,8 @@ void DrawConsolePanel() {
 void DrawLocalizationPreviewPanel(EditorContext& ctx,
                                   char* key_buf, std::size_t key_size,
                                   char* fallback_buf, std::size_t fallback_size) {
-    ImGui::Begin("Localization Preview");
+    ImGui::Begin("Localization Preview", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
     auto& localization = dse::gameplay2d::LocalizationSystem::GetInstance();
     ImGui::Text("Current Language: %s", localization.GetCurrentLanguage().c_str());
     if (ctx.read_only) {
@@ -854,7 +856,8 @@ const AnimClipCache* GetOrLoadAnimClipCache(const std::string& anim_path, AssetM
 void DrawAnimationPanel(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto selected_entity = ctx.selected_entity;
-    ImGui::Begin("Animation");
+    ImGui::Begin("Animation", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     bool has_animator = (selected_entity != entt::null &&
                          registry.valid(selected_entity) &&

@@ -5,6 +5,7 @@
 #include "editor_icons.h"
 #include "editor_locale.h"
 #include "editor_external_editor.h"
+#include "editor_panel_registry.h"
 
 #include <algorithm>
 #include <deque>
@@ -308,7 +309,8 @@ std::string ExportConsoleLogs(const std::string& directory) {
 }
 
 void DrawConsolePanelImpl() {
-    ImGui::Begin("Console");
+    ImGui::Begin("Console", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     if (ImGui::Button(T("Clear"))) {
         std::lock_guard<std::mutex> lock(GetLogMutex());

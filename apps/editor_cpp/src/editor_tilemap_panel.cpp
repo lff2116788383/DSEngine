@@ -6,6 +6,7 @@
 #include "editor_icons.h"
 #include "editor_undo.h"
 #include "editor_shortcuts.h"
+#include "editor_panel_registry.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -72,7 +73,8 @@ static glm::vec3 ScreenToWorld(const glm::vec2& screen_pos,
 // ---------------------------------------------------------------------------
 
 void DrawTilemapEditorPanel(entt::registry& registry, entt::entity selected_entity) {
-    ImGui::Begin("Tile Palette");
+    ImGui::Begin("Tile Palette", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& state = GetTilemapEditorState();
 

@@ -205,6 +205,7 @@ void AIConfigManager::DrawConfigWindow() {
     
     ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("AI Configuration", &show_config_)) {
+        PanelRegistry::Get().DrawMaximizeRestoreButton();
         // Provider selection
         if (config_.providers.empty()) {
             config_.providers.push_back({"OpenAI"});

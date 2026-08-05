@@ -1189,6 +1189,7 @@ void EditorApp::RegisterPanels() {
         [this](Ctx& ctx){
             ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
             if (ImGui::Begin("Plugins", &panels_.plugins)) {
+                dse::editor::PanelRegistry::Get().DrawMaximizeRestoreButton();
                 dse::editor::DrawPluginManagerPanel(plugin_manager_);
             }
             ImGui::End();
@@ -1202,6 +1203,7 @@ void EditorApp::RegisterPanels() {
         [this](Ctx&){
             ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
             if (ImGui::Begin("AI Agent", &panels_.ai_agent)) {
+                dse::editor::PanelRegistry::Get().DrawMaximizeRestoreButton();
                 agent_panel_.Draw(*control_server_, *engine_instance_);
             }
             ImGui::End();

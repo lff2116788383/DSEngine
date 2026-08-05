@@ -1,4 +1,5 @@
 #include "editor_task_service.h"
+#include "editor_panel_registry.h"
 
 #include <algorithm>
 
@@ -185,6 +186,7 @@ void BackgroundTaskService::DrawPanel(bool* open) {
     if (open && !*open) return;
     Update();
     if (!ImGui::Begin("Background Tasks", open)) { ImGui::End(); return; }
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto views = Snapshot();
     if (views.empty()) {

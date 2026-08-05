@@ -1,6 +1,7 @@
 #include "editor_locale.h"
 #include "editor_anim_state_machine.h"
 #include "editor_console_panel.h"
+#include "editor_panel_registry.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/animation_state_machine.h"
 #include "engine/ecs/animation_state_machine_serialize.h"
@@ -253,7 +254,8 @@ void DrawSelectedStateInspector(dse::gameplay3d::AnimationStateMachine& asm_ref,
 } // namespace
 
 void DrawAnimStateMachinePanel(EditorContext& ctx) {
-    ImGui::Begin("Anim State Machine");
+    ImGui::Begin("Anim State Machine", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     entt::entity entity = ctx.selected_entity;
 

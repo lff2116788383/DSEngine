@@ -15,6 +15,7 @@ void DrawUndoHistoryPanel(bool* p_open) {
         ImGui::End();
         return;
     }
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& mgr = GetUndoRedoManager();
 

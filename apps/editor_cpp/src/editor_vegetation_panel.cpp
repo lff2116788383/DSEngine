@@ -8,6 +8,7 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/vegetation_mask.h"
 #include "editor_undo.h"
+#include "editor_panel_registry.h"
 #include "editor_shortcuts.h"
 
 #include "imgui.h"
@@ -76,7 +77,8 @@ void ComputeMaskExtents(entt::registry& registry,
 void DrawVegetationEditorPanel(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto selected_entity = ctx.selected_entity;
-    ImGui::Begin("Vegetation Brush");
+    ImGui::Begin("Vegetation Brush", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& state = GetVegetationEditorState();
 

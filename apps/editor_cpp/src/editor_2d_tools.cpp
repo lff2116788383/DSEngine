@@ -295,6 +295,7 @@ void DrawSpriteSlicerPanel() {
     if (!st.open) return;
 
     ImGui::Begin(MDI_ICON_GRID " Sprite Slicer", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // Toolbar
     if (ImGui::Button(MDI_ICON_FOLDER_OPEN "  Open Texture...")) {
@@ -555,6 +556,7 @@ void DrawAtlasPackerPanel() {
     if (!st.open) return;
 
     ImGui::Begin(MDI_ICON_LAYERS " Atlas Packer", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     ImGui::InputInt("Max Size", &st.current_atlas.max_size);
     st.current_atlas.max_size = std::max(256, std::min(8192, st.current_atlas.max_size));
@@ -703,6 +705,7 @@ void DrawAnim2DEditorPanel() {
     if (!st.open) return;
 
     ImGui::Begin(MDI_ICON_MOVIE " 2D Animation", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // Clip selection
     if (st.current_anim.clips.empty()) {
@@ -865,6 +868,7 @@ void DrawNineSliceEditorPanel() {
     if (!st.open) return;
 
     ImGui::Begin("9-Slice Editor", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     ImGui::Text("Texture: %s (%dx%d)", st.current.texture_path.c_str(),
                 st.current.tex_width, st.current.tex_height);
@@ -1037,6 +1041,7 @@ void DrawCollisionEditor2DPanel() {
     if (!st.open) return;
 
     ImGui::Begin("2D Collision Editor", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // Add shape buttons
     if (ImGui::Button("+ Box")) AddCollisionShape2D(Shape2DType::Box);
@@ -1282,6 +1287,7 @@ void DrawParticle2DEditorPanel() {
     if (!st.open) return;
 
     ImGui::Begin(MDI_ICON_FLASH " 2D Particles", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& cfg = st.config;
 
@@ -1487,6 +1493,7 @@ void DrawParallaxEditorPanel() {
     if (!st.open) return;
 
     ImGui::Begin(MDI_ICON_LAYERS " Parallax Editor", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     ImGui::DragFloat("Base Speed", &st.config.base_speed, 0.1f, 0.0f, 10.0f);
     ImGui::Separator();
@@ -1745,6 +1752,7 @@ void DrawLight2DEditorPanel() {
     if (!st.open) return;
 
     ImGui::Begin(MDI_ICON_FLASH " 2D Lighting", &st.open);
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // Ambient
     if (ImGui::CollapsingHeader("Ambient", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1841,23 +1849,40 @@ void DrawLight2DEditorPanel() {
     ImGui::End();
 }
 
-DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
-    dse::editor::PanelEntry e;
-    e.id = "tools_2d";
-    e.display_name = "2D Tools";
-    e.category = "Tool";
-    e.default_visible = true;
-    e.draw = [](dse::editor::EditorContext&) {
-        DrawSpriteSlicerPanel();
-        DrawAtlasPackerPanel();
-        DrawAnim2DEditorPanel();
-        DrawNineSliceEditorPanel();
-        DrawCollisionEditor2DPanel();
-        DrawParticle2DEditorPanel();
-        DrawParallaxEditorPanel();
-        DrawLight2DEditorPanel();
+namespace {
+// 每个 2D 工具窗口作为独立面板注册（拥有独立的 id / visible 标志）。
+// 之前聚合为单个 tools_2d 面板时，8 个窗口共享同一个 current_panel_id_，
+// 点击任一窗口的最大化按钮都会作用于错误的窗口，且 DrawAll 无法只放大
+// 目标窗口。拆分后一个 draw 回调对应一个窗口，最大化行为才正确。
+void Register2DTools(dse::editor::PanelRegistry& reg) {
+    struct ToolReg {
+        const char* id;
+        const char* display_name;
+        bool* open;
+        void (*draw)();
     };
-    reg.Register(std::move(e));
-});
+    const ToolReg tools[] = {
+        {"sprite_slicer",      "Sprite Slicer",       &s_slicer_state.open,      DrawSpriteSlicerPanel},
+        {"atlas_packer",       "Atlas Packer",        &s_atlas_state.open,       DrawAtlasPackerPanel},
+        {"anim2d_editor",      "2D Animation",        &s_anim2d_state.open,      DrawAnim2DEditorPanel},
+        {"nineslice_editor",   "9-Slice Editor",      &s_nineslice_state.open,   DrawNineSliceEditorPanel},
+        {"collision_editor_2d", "2D Collision Editor", &s_collision2d_state.open, DrawCollisionEditor2DPanel},
+        {"particle_2d",        "2D Particles",        &s_particle2d_state.open,  DrawParticle2DEditorPanel},
+        {"parallax_editor",    "Parallax Editor",     &s_parallax_state.open,    DrawParallaxEditorPanel},
+        {"light2d_editor",     "2D Lighting",         &s_light2d_state.open,     DrawLight2DEditorPanel},
+    };
+    for (const auto& t : tools) {
+        dse::editor::PanelEntry e;
+        e.id = t.id;
+        e.display_name = t.display_name;
+        e.category = "Tool";
+        e.visible = t.open;
+        e.draw = [draw = t.draw](dse::editor::EditorContext&) { draw(); };
+        reg.Register(std::move(e));
+    }
+}
+} // namespace
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) { Register2DTools(reg); });
 
 }  // namespace dse::editor::tools2d

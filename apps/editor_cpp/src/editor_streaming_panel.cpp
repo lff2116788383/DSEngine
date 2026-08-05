@@ -162,6 +162,7 @@ DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
         bool* open = self ? self->visible : nullptr;
         ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Streaming Debug", open)) {
+            PanelRegistry::Get().DrawMaximizeRestoreButton();
             DrawStreamingDebugPanel(ctx);
         }
         ImGui::End();

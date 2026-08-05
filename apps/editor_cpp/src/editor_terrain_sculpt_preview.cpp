@@ -207,7 +207,8 @@ void DrawTerrainSculptPreview(EditorContext& /*ctx*/) {
     InitTerrainPreview();
     auto& state = s_state;
 
-    ImGui::Begin(MDI_ICON_TERRAIN "  Terrain Sculpt Preview");
+    ImGui::Begin(MDI_ICON_TERRAIN "  Terrain Sculpt Preview", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // ─── Brush Settings ──────────────────────────────────────────────────
     ImGui::BeginChild("BrushSettings", ImVec2(220, 0), ImGuiChildFlags_Borders);

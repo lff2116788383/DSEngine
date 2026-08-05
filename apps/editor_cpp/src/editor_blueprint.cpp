@@ -1280,6 +1280,7 @@ DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
         bool* open = self ? self->visible : nullptr;
         ImGui::SetNextWindowSize(ImVec2(1100, 700), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Blueprint Editor", open)) {
+            PanelRegistry::Get().DrawMaximizeRestoreButton();
             dse::editor::bp::DrawBlueprintEditor(ctx);
         }
         ImGui::End();

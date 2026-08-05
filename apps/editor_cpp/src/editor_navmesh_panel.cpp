@@ -8,6 +8,7 @@
 #include "engine/core/service_locator.h"
 #include "engine/base/debug.h"
 #include "imgui.h"
+#include "editor_panel_registry.h"
 #include "imgui_internal.h"
 
 #include <glm/glm.hpp>
@@ -189,7 +190,8 @@ ImVec2 WorldToScreen(const glm::vec3& wp,
 } // namespace
 
 void DrawNavMeshPanel(EditorContext& ctx) {
-    ImGui::Begin("NavMesh");
+    ImGui::Begin("NavMesh", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& state = GetState();
     auto& s = state.settings;

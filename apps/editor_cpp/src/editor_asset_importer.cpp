@@ -393,6 +393,7 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
         ImGui::End();
         return;
     }
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& state = s_state;
 

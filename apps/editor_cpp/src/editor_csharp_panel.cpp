@@ -318,6 +318,7 @@ DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
         bool* open = self ? self->visible : nullptr;
         ImGui::SetNextWindowSize(ImVec2(400, 450), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("C# Scripts", open)) {
+            PanelRegistry::Get().DrawMaximizeRestoreButton();
             DrawCSharpPanel(ctx);
         }
         ImGui::End();

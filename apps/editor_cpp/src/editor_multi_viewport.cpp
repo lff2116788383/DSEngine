@@ -45,7 +45,8 @@ void GetViewportCameraMatrices(int camera_index,
 }
 
 void DrawMultiViewportConfigPanel() {
-    ImGui::Begin("Multi-Viewport");
+    ImGui::Begin("Multi-Viewport", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& mvs = GetMultiViewportState();
 

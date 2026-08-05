@@ -3,6 +3,7 @@
 #include "editor_icons.h"
 #include "editor_project.h"
 #include "editor_external_editor.h"
+#include "editor_panel_registry.h"
 #include "editor_gpu.h"
 
 #include "engine/assets/asset_manager.h"
@@ -247,7 +248,8 @@ void InvalidateThumbnailCache() {
 }
 
 void DrawAssetBrowserPanel() {
-    ImGui::Begin("Asset Browser");
+    ImGui::Begin("Asset Browser", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& db = AssetDatabase::Get();
     auto& state = GetState();

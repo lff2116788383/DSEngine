@@ -18,6 +18,7 @@
 #include "editor_terrain_panel.h"
 #include "editor_vegetation_panel.h"
 #include "editor_audio_panel.h"
+#include "editor_panel_registry.h"
 #include "editor_preferences_panel.h"
 #include "editor_selection_outline.h"
 #include "editor_physics_debug.h"
@@ -664,7 +665,8 @@ void DrawSceneViewportPanel(EditorContext& ctx,
     int& current_gizmo_operation = ctx.current_gizmo_operation;
     int current_gizmo_mode = ctx.current_gizmo_mode;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::Begin("Scene");
+    ImGui::Begin("Scene", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
     const ImVec2 scene_content_origin = ImGui::GetCursorScreenPos(); // 内容区域起点（tab 栏之下）
     ImVec2 scene_panel_size = ImGui::GetContentRegionAvail();
     // 所有 overlay / gizmo 必须用 scene_content_origin（内容区域起点），
@@ -1669,7 +1671,8 @@ void DrawPhysicsColliderOverlay(
 
 void DrawGameViewportPanel(unsigned int texture_id) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::Begin("Game");
+    ImGui::Begin("Game", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
     ImVec2 game_panel_size = ImGui::GetContentRegionAvail();
     if (texture_id != 0) {
         ImGui::Image((ImTextureID)EditorImGuiTextureId(texture_id), game_panel_size, ImVec2(0, 1), ImVec2(1, 0));

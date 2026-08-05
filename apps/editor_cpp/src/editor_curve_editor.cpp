@@ -297,6 +297,7 @@ DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
         bool* open = self ? self->visible : nullptr;
         ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Curve Editor", open)) {
+            PanelRegistry::Get().DrawMaximizeRestoreButton();
             static dse::editor::CurveEditorState s_curve_state;
             static bool s_curve_init = false;
             if (!s_curve_init) {

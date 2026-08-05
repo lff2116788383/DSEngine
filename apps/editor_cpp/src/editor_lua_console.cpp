@@ -95,7 +95,8 @@ int InputCallback(ImGuiInputTextCallbackData* data) {
 void DrawLuaConsolePanel() {
     auto& state = GetState();
 
-    ImGui::Begin(MDI_ICON_CODE "  Lua Console");
+    ImGui::Begin(MDI_ICON_CODE "  Lua Console", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // Toolbar
     if (ImGui::SmallButton("Clear")) {

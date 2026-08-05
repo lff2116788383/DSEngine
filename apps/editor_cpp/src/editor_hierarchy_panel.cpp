@@ -513,7 +513,8 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
 } // namespace
 
 void DrawHierarchyPanel(EditorContext& context) {
-    ImGui::Begin("Hierarchy");
+    ImGui::Begin("Hierarchy", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // Search bar
     ImGui::SetNextItemWidth(-1);

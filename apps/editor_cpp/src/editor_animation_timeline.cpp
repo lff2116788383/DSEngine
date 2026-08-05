@@ -1,6 +1,7 @@
 #include "editor_animation_timeline.h"
 #include "editor_context.h"
 #include "editor_icons.h"
+#include "editor_panel_registry.h"
 
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
@@ -146,7 +147,8 @@ ImU32 TrackColor(int idx) {
 } // namespace
 
 void DrawAnimationTimelinePanel(EditorContext& ctx) {
-    ImGui::Begin("Animation Timeline");
+    ImGui::Begin("Animation Timeline", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
     auto& state = GetState();
     InitDefaultClip(state);
 

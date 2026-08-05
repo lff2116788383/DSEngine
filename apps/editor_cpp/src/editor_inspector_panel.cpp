@@ -944,7 +944,8 @@ void InspectorRegistry::DrawRemoveComponentMenu(EditorContext& context) {
 void DrawInspectorPanel(EditorContext& context) {
     RegisterAllInspectorSections();
 
-    ImGui::Begin("Inspector");
+    ImGui::Begin("Inspector", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     if (IsEditorInPlayMode()) {
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.3f, 0.15f, 0.0f, 0.8f));

@@ -7,6 +7,7 @@
 #include "editor_icons.h"
 #include "editor_undo.h"
 #include "editor_shortcuts.h"
+#include "editor_panel_registry.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -35,7 +36,8 @@ TerrainEditorState& GetTerrainEditorState() {
 void DrawTerrainEditorPanel(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto selected_entity = ctx.selected_entity;
-    ImGui::Begin("Terrain Brush");
+    ImGui::Begin("Terrain Brush", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     auto& state = GetTerrainEditorState();
 

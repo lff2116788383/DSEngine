@@ -75,7 +75,8 @@ void DrawLuaDebuggerPanel(EditorContext& ctx) {
     (void)ctx;
     auto& dbg = dse::scripting::LuaDebugger::Instance();
 
-    ImGui::Begin("Lua Debugger");
+    ImGui::Begin("Lua Debugger", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // ── Toolbar ──────────────────────────────────────────────────────────────
     {

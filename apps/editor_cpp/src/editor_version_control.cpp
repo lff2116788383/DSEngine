@@ -357,7 +357,8 @@ void DrawConflictsTab() {
 void DrawVersionControlPanel(EditorContext& /*ctx*/) {
     EnsureInit();
 
-    ImGui::Begin(MDI_ICON_SOURCE_BRANCH "  Version Control");
+    ImGui::Begin(MDI_ICON_SOURCE_BRANCH "  Version Control", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     if (g.git_missing || !g.status.is_repo) {
         ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", g.banner.empty() ? "No repository" : g.banner.c_str());

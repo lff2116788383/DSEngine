@@ -15,6 +15,7 @@
 #include "editor_plugin_hot_reload.h"
 #include "editor_icons.h"
 #include "editor_task_service.h"
+#include "editor_panel_registry.h"
 
 #include "engine/core/dynamic_library.h"
 #include "engine/platform/process.h"
@@ -401,7 +402,8 @@ void DrawPluginHotReloadPanel(EditorContext& /*ctx*/) {
         }
     }
 
-    ImGui::Begin(MDI_ICON_RELOAD "  Plugin Hot Reload");
+    ImGui::Begin(MDI_ICON_RELOAD "  Plugin Hot Reload", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // ─── Toolbar ─────────────────────────────────────────────────────────
     {

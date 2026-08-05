@@ -75,7 +75,8 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
     EnsureInitialized();
     auto& state = s_state;
 
-    ImGui::Begin(MDI_ICON_MOVIE_OPEN "  Sequencer");
+    ImGui::Begin(MDI_ICON_MOVIE_OPEN "  Sequencer", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     // ─── Toolbar ─────────────────────────────────────────────────────────
     {

@@ -22,7 +22,8 @@ namespace dse::editor {
 void DrawMaterialPanel(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto selected_entity = ctx.selected_entity;
-    ImGui::Begin("Material");
+    ImGui::Begin("Material", PanelRegistry::Get().GetCurrentPanelOpen());
+    PanelRegistry::Get().DrawMaximizeRestoreButton();
 
     bool has_mesh = (selected_entity != entt::null &&
                      registry.valid(selected_entity) &&
