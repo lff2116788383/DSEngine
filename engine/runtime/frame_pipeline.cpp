@@ -1264,6 +1264,10 @@ unsigned int FramePipeline::GetSceneTextureId() const {
     return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target).raw();
 }
 
+dse::render::RenderTargetHandle FramePipeline::GetSceneRenderTarget() const {
+    return render_resources_.scene_render_target;
+}
+
 unsigned int FramePipeline::GetMainTextureId() const {
     if (!runtime_context_.rhi_device || !render_resources_.main_render_target) return 0;
     return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.main_render_target).raw();

@@ -1107,6 +1107,8 @@ void EditorApp::Shutdown() {
 
     if (engine_instance_) {
         engine_instance_->asset_manager()->StopFileWatcher();
+        // 释放编辑器自建的多视口 blit RT（须在 RHI 设备销毁前）
+        dse::editor::ReleaseMultiViewportBlitTargets();
         engine_instance_->Shutdown();
         engine_instance_.reset();
         dse::editor::SetEditorRhiDevice(nullptr);

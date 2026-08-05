@@ -17,6 +17,9 @@ void DrawSceneViewportPanel(EditorContext& ctx,
 
 void DrawGameViewportPanel(unsigned int texture_id);
 
+/// 释放多视口 blit RT（编辑器关闭、RHI 设备销毁前调用）。
+void ReleaseMultiViewportBlitTargets();
+
 /// 缓存 Scene 面板的 aspect ratio（上一帧），供 SetEditorCamera 使用
 float GetCachedSceneViewportAspect();
 void  SetCachedSceneViewportAspect(float aspect);

@@ -32,4 +32,21 @@ unsigned int EditorCreateTexture2D(int width, int height, const uint8_t* rgba8,
 /// 经 RHI 释放 EditorCreateTexture2D 返回的纹理句柄。
 void EditorDeleteTexture(unsigned int handle);
 
+// ── RenderTarget / Blit（多视口）────────────────────────────────────────────
+// 多视口各子视口用 RHI BlitRenderTarget 从场景 RT 拷贝独立画面，
+// 替代原先的裸 GL glBlitFramebuffer，跨 OpenGL / Vulkan / D3D11 统一可用。
+
+/// 经 RHI 创建一张单采样颜色 RenderTarget（多视口 blit 目标）。
+/// 返回 RT 句柄；设备未就绪返回 0。
+unsigned int EditorCreateBlitTarget(int width, int height);
+
+/// 把 src RT 内容拷贝到 dst RT（内部处理 MSAA 源解析；dst 需按同尺寸创建）。
+void EditorBlitRenderTarget(unsigned int src_rt, unsigned int dst_rt);
+
+/// 取 RT 的颜色纹理句柄（供 ImGui 显示；无效返回 0）。
+unsigned int EditorRenderTargetColorTexture(unsigned int rt);
+
+/// 经 RHI 释放 EditorCreateBlitTarget 创建的 RT。
+void EditorDeleteBlitTarget(unsigned int rt);
+
 }  // namespace dse::editor

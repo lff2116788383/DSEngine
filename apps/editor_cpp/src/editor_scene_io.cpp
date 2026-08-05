@@ -769,6 +769,8 @@ const std::vector<ComponentCopyEntry>& GetComponentCopyRegistry() {
     return entries;
 }
 
+}  // namespace（结束组件拷贝匿名域；CopyRegisteredComponents 对外暴露供复用）
+
 void CopyRegisteredComponents(entt::registry& dst,
                               entt::entity dst_entity,
                               entt::registry& src,
@@ -781,6 +783,8 @@ void CopyRegisteredComponents(entt::registry& dst,
         entry.copy(dst, dst_entity, src, src_entity);
     }
 }
+
+namespace {  // 组件拷贝其余内部工具（后续 json io 也在匿名域）
 
 }
 

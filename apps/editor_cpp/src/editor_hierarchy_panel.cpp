@@ -163,6 +163,9 @@ void ReparentViaBus(EditorContext& context, entt::entity dragged,
 // 把 create / delete / duplicate 写操作收敛到 CommandBus（复用 dsengine_entity_*
 // 工具与统一撤销栈），消除"面板直接改 registry + 自挂 LambdaCommand"的双写。
 // command_bus 缺失（理论上仅非 GUI 装配）时退回与工具等价的全组件快照直写兜底。
+// 以下三个函数对外暴露（editor_hierarchy_panel.h），供快捷键等复用。
+
+}  // namespace（结束面板匿名域，以下为对外暴露的写路径收敛函数）
 
 // 创建实体：name + 额外组件类型（如 "UIRenderer"）。返回新实体（失败为 entt::null）。
 entt::entity CreateEntityViaBus(EditorContext& context, const std::string& name,
@@ -280,6 +283,8 @@ entt::entity DuplicateEntityViaBus(EditorContext& context, entt::entity source) 
         }), false);
     return dst;
 }
+
+namespace {  // 以下为面板内部工具与状态
 
 // Pre-computed set of entities visible under current search filter (includes ancestors of matches)
 static std::unordered_set<entt::entity> s_visible_entities;

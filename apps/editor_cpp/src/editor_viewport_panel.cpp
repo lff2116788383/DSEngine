@@ -35,6 +35,7 @@
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/platform/screen.h"
 #include "engine/platform/process.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -587,56 +588,51 @@ void DrawSceneGizmo(ImDrawList* draw_list,
 
 } // namespace
 
-// 多视口 FBO 隔离：为每个子视口维护独立纹理拷贝
-static unsigned int s_mvp_textures[4] = {};
-static unsigned int s_mvp_fbos[2] = {}; // read / draw
-static int s_mvp_tex_w = 0, s_mvp_tex_h = 0;
+// 多视口隔离：为每个子视口维护独立单采样 RT（经 RHI BlitRenderTarget 从场景 RT 拷贝，
+// 跨 OpenGL / Vulkan / D3D11 统一可用；原先的裸 GL glBlitFramebuffer 仅 GL 生效且从不释放）。
+static unsigned int s_mvp_rts[4] = {};
+static int s_mvp_rt_w = 0, s_mvp_rt_h = 0;
 
-static unsigned int CopySceneTextureForViewport(int index, unsigned int src_tex) {
-    if (src_tex == 0 || index < 0 || index >= 4) return src_tex;
-    // 裸 GL 拷贝仅在 OpenGL 后端有效；其他后端直接复用源纹理（各子视口共享同一画面）
-    {
-        auto* rhi = dse::editor::EditorRhi();
-        if (rhi && rhi->GetBackend() != RhiBackend::OpenGL) return src_tex;
-    }
-    // 查询源纹理尺寸
-    int tw = 0, th = 0;
-    glBindTexture(GL_TEXTURE_2D, src_tex);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    if (tw <= 0 || th <= 0) return src_tex;
-
-    // 如尺寸变化，重建所有子视口纹理
-    if (tw != s_mvp_tex_w || th != s_mvp_tex_h) {
-        for (int i = 0; i < 4; ++i) {
-            if (s_mvp_textures[i]) glDeleteTextures(1, &s_mvp_textures[i]);
-            s_mvp_textures[i] = 0;
+// 释放全部多视口 blit RT（尺寸变化重建、编辑器关闭时调用）。
+static void ReleaseMvpBlitTargetsImpl() {
+    for (int i = 0; i < 4; ++i) {
+        if (s_mvp_rts[i] != 0) {
+            dse::editor::EditorDeleteBlitTarget(s_mvp_rts[i]);
+            s_mvp_rts[i] = 0;
         }
-        s_mvp_tex_w = tw;
-        s_mvp_tex_h = th;
     }
-    // 确保目标纹理存在
-    if (s_mvp_textures[index] == 0) {
-        glGenTextures(1, &s_mvp_textures[index]);
-        glBindTexture(GL_TEXTURE_2D, s_mvp_textures[index]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, tw, th, 0, GL_RGBA, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glBindTexture(GL_TEXTURE_2D, 0);
+    s_mvp_rt_w = 0;
+    s_mvp_rt_h = 0;
+}
+
+// 编辑器关闭前调用（RHI 设备销毁前），修复 s_mvp_textures/s_mvp_fbos 从不释放的泄漏。
+void ReleaseMultiViewportBlitTargets() { ReleaseMvpBlitTargetsImpl(); }
+
+static unsigned int CopySceneTextureForViewport(int index, FramePipeline* pipeline) {
+    if (!pipeline || index < 0 || index >= 4) return 0;
+    auto* rhi = dse::editor::EditorRhi();
+    if (!rhi) return 0;
+    const dse::render::RenderTargetHandle src_rt = pipeline->GetSceneRenderTarget();
+    if (!src_rt) return 0;
+
+    // 场景 RT 按 Screen::render_width/height 创建（frame_pipeline.cpp），
+    // blit 目标须同尺寸（D3D11 ResolveSubresource / CopyResource 要求源目标同尺寸）。
+    const int tw = Screen::render_width();
+    const int th = Screen::render_height();
+    if (tw <= 0 || th <= 0) return 0;
+
+    if (tw != s_mvp_rt_w || th != s_mvp_rt_h) {
+        ReleaseMultiViewportBlitTargets();
+        s_mvp_rt_w = tw;
+        s_mvp_rt_h = th;
     }
-    // 确保 FBO 存在
-    if (s_mvp_fbos[0] == 0) glGenFramebuffers(2, s_mvp_fbos);
+    if (s_mvp_rts[index] == 0) {
+        s_mvp_rts[index] = dse::editor::EditorCreateBlitTarget(tw, th);
+    }
+    if (s_mvp_rts[index] == 0) return 0;
 
-    // Blit: src → dst
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, s_mvp_fbos[0]);
-    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src_tex, 0);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, s_mvp_fbos[1]);
-    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_mvp_textures[index], 0);
-    glBlitFramebuffer(0, 0, tw, th, 0, 0, tw, th, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    return s_mvp_textures[index];
+    dse::editor::EditorBlitRenderTarget(src_rt.raw(), s_mvp_rts[index]);
+    return dse::editor::EditorRenderTargetColorTexture(s_mvp_rts[index]);
 }
 
 // 多视口辅助：绘制单个子视口（带标签和边框）
@@ -837,12 +833,12 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             int saved_view_mode = static_cast<int>(GetCurrentSceneViewMode());
             pipeline->SetSceneViewMode(mvs.cameras[vi].render_mode);
 
-            // 用该相机重新渲染场景，并拷贝到独立纹理
-            unsigned int scene_tex = pipeline->RenderSceneWithCamera(vp_view, vp_proj);
+            // 用该相机重新渲染场景，并拷贝到独立纹理（经 RHI BlitRenderTarget，跨后端）
+            pipeline->RenderSceneWithCamera(vp_view, vp_proj);
 
             // 恢复全局 scene view mode
             pipeline->SetSceneViewMode(saved_view_mode);
-            unsigned int tex = CopySceneTextureForViewport(vi, scene_tex);
+            unsigned int tex = CopySceneTextureForViewport(vi, pipeline);
             bool is_active = (vi == mvs.active_camera);
             DrawSubViewport(mv_dl, sub_origin, sub_size, tex,
                             mvs.cameras[vi].name.c_str(), is_active);

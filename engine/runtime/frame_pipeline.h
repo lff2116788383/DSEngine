@@ -277,6 +277,12 @@ public:
     unsigned int GetSceneTextureId() const;
 
     /**
+     * @brief 获取场景渲染目标句柄（RenderSceneWithCamera 的落点）。
+     * 供编辑器多视口用 RHI BlitRenderTarget 做跨后端拷贝（替代裸 GL blit）。
+     */
+    dse::render::RenderTargetHandle GetSceneRenderTarget() const;
+
+    /**
      * @brief 获取渲染管线中游戏视图（最终合成）的纹理句柄 (用于编辑器集成)
      * @return 纹理 ID
      */

@@ -27,9 +27,9 @@
 namespace dse::editor {
 
 void CreateEmptyEntity(EditorContext& context) {
-    auto new_ent = context.world.CreateEntity();
-    context.registry.emplace<EditorNameComponent>(new_ent, "New Entity");
-    context.registry.emplace<TransformComponent>(new_ent);
+    // 收敛到 CommandBus（dsengine_entity_create 工具 + 统一撤销栈）；缺门面时退回快照直写
+    entt::entity new_ent = CreateEntityViaBus(context, "New Entity", {});
+    if (new_ent == entt::null) return;
     SelectionManager::Get().SetSingle(new_ent);
     context.selected_entity = new_ent;
     EditorLog(LogLevel::Info, "Created empty entity");
@@ -39,100 +39,10 @@ void DuplicateSelectedEntity(EditorContext& context) {
     if (context.selected_entity == entt::null || !context.registry.valid(context.selected_entity)) {
         return;
     }
-
-    const entt::entity source = context.selected_entity;
-    auto new_ent = context.world.CreateEntity();
-
-    auto copy_component = [&](auto type_tag) {
-        using Component = decltype(type_tag);
-        if (context.registry.all_of<Component>(source) && !context.registry.all_of<Component>(new_ent)) {
-            context.registry.emplace<Component>(new_ent, context.registry.get<Component>(source));
-        }
-    };
-    auto copy_runtime_reset_component = [&](auto type_tag, auto reset_runtime) {
-        using Component = decltype(type_tag);
-        if (context.registry.all_of<Component>(source) && !context.registry.all_of<Component>(new_ent)) {
-            auto component = context.registry.get<Component>(source);
-            reset_runtime(component);
-            context.registry.emplace<Component>(new_ent, std::move(component));
-        }
-    };
-
-    copy_component(EditorNameComponent{});
-    if (context.registry.all_of<EditorNameComponent>(new_ent)) {
-        context.registry.get<EditorNameComponent>(new_ent).name += " (Copy)";
-    }
-
-    copy_component(TransformComponent{});
-    copy_component(SpriteRendererComponent{});
-    copy_runtime_reset_component(UIRendererComponent{}, [](UIRendererComponent& ui) {
-        ui.is_hovered = false;
-        ui.is_pressed = false;
-        ui.runtime_model = glm::mat4(1.0f);
-    });
-    copy_runtime_reset_component(UILabelComponent{}, [](UILabelComponent& label) {
-        label.runtime_glyph_entities.clear();
-        label.dirty = true;
-    });
-    copy_component(UIAnchorComponent{});
-    copy_component(UIGridLayoutComponent{});
-    copy_component(UICanvasScalerComponent{});
-    copy_component(UIAnimationComponent{});
-    copy_runtime_reset_component(UIRichTextComponent{}, [](UIRichTextComponent& rich) {
-        rich.dirty = true;
-    });
-    copy_runtime_reset_component(RigidBody2DComponent{}, [](RigidBody2DComponent& rigidbody) {
-        rigidbody.runtime_body = nullptr;
-    });
-    copy_runtime_reset_component(ParticleEmitterComponent{}, [](ParticleEmitterComponent& emitter) {
-        emitter.particles.clear();
-        emitter.emit_accumulator = 0.0f;
-        emitter.pending_burst = 0;
-    });
-    copy_component(dse::Camera3DComponent{});
-    copy_component(dse::DirectionalLight3DComponent{});
-    copy_component(dse::PointLightComponent{});
-    copy_component(dse::SpotLightComponent{});
-    copy_component(dse::MeshRendererComponent{});
-    copy_component(dse::Animator3DComponent{});
-    copy_component(dse::FreeCameraControllerComponent{});
-    copy_component(dse::TerrainComponent{});
-    copy_component(ScriptComponent{});
-    copy_component(dse::SubSceneComponent{});
-    copy_runtime_reset_component(dse::RigidBody3DComponent{}, [](dse::RigidBody3DComponent& rigidbody) {
-        rigidbody.runtime_body = nullptr;
-    });
-    copy_runtime_reset_component(dse::BoxCollider3DComponent{}, [](dse::BoxCollider3DComponent& collider) {
-        collider.runtime_shape = nullptr;
-    });
-    copy_runtime_reset_component(dse::SphereCollider3DComponent{}, [](dse::SphereCollider3DComponent& collider) {
-        collider.runtime_shape = nullptr;
-    });
-    copy_runtime_reset_component(dse::CapsuleCollider3DComponent{}, [](dse::CapsuleCollider3DComponent& collider) {
-        collider.runtime_shape = nullptr;
-    });
-    copy_runtime_reset_component(dse::MeshCollider3DComponent{}, [](dse::MeshCollider3DComponent& collider) {
-        collider.runtime_shape = nullptr;
-    });
-    copy_runtime_reset_component(AudioSourceComponent{}, [](AudioSourceComponent& audio) {
-        audio.runtime_handle = 0;
-        audio.is_playing = false;
-        audio.restart_requested = false;
-    });
-    copy_component(AudioListenerComponent{});
-    copy_runtime_reset_component(dse::ParticleSystem3DComponent{}, [](dse::ParticleSystem3DComponent& ps) {
-        ps.particles.clear();
-        ps.emission_accumulator = 0.0f;
-        ps.active_particle_count = 0;
-        ps.instance_vbo = {};
-        ps.texture_handle = {};
-        ps.initialized = false;
-    });
-    copy_component(dse::PostProcessComponent{});
-
-    if (context.registry.all_of<TransformComponent>(new_ent)) {
-        context.registry.get<TransformComponent>(new_ent).dirty = true;
-    }
+    // 收敛到 CommandBus（dsengine_entity_duplicate 工具 + 统一撤销栈）；缺门面时退回
+    // EntitySnapshot 全组件快照复制。原先 30+ 组件的内联拷贝清单已删除，改走单一路径。
+    entt::entity new_ent = DuplicateEntityViaBus(context, context.selected_entity);
+    if (new_ent == entt::null) return;
     context.selected_entity = new_ent;
 }
 
@@ -140,7 +50,8 @@ void DeleteSelectedEntity(EditorContext& context) {
     if (context.selected_entity == entt::null || !context.registry.valid(context.selected_entity)) {
         return;
     }
-    context.world.DestroyEntity(context.selected_entity);
+    // 收敛到 CommandBus（dsengine_entity_delete 工具 + 统一撤销栈），撤销可完整还原
+    DeleteEntityViaBus(context, context.selected_entity);
     context.selected_entity = entt::null;
 }
 
@@ -155,35 +66,15 @@ void CopySelectedEntity(EditorContext& ctx) {
     s_clipboard_registry = std::make_unique<entt::registry>();
     entt::entity src = ctx.selected_entity;
     entt::entity dst = s_clipboard_registry->create();
-
-    auto copy_c = [&](auto tag) {
-        using C = decltype(tag);
-        if (ctx.registry.all_of<C>(src)) s_clipboard_registry->emplace<C>(dst, ctx.registry.get<C>(src));
-    };
-    copy_c(EditorNameComponent{});
-    copy_c(TransformComponent{});
-    copy_c(SpriteRendererComponent{});
-    copy_c(UIRendererComponent{});
-    copy_c(UILabelComponent{});
-    copy_c(UIAnchorComponent{});
-    copy_c(UIGridLayoutComponent{});
-    copy_c(UICanvasScalerComponent{});
-    copy_c(UIAnimationComponent{});
-    copy_c(UIRichTextComponent{});
-    copy_c(RigidBody2DComponent{});
-    copy_c(ParticleEmitterComponent{});
-    copy_c(dse::Camera3DComponent{});
-    copy_c(dse::DirectionalLight3DComponent{});
-    copy_c(dse::PointLightComponent{});
-    copy_c(dse::MeshRendererComponent{});
-    copy_c(dse::Animator3DComponent{});
-    copy_c(dse::FreeCameraControllerComponent{});
-    copy_c(dse::TerrainComponent{});
-    copy_c(dse::RigidBody3DComponent{});
-    copy_c(dse::BoxCollider3DComponent{});
-    copy_c(dse::SphereCollider3DComponent{});
-    copy_c(dse::ParticleSystem3DComponent{});
-    copy_c(dse::PostProcessComponent{});
+    // 走组件拷贝注册表（editor_scene_io.cpp），与 Duplicate/场景复制同源
+    CopyRegisteredComponents(*s_clipboard_registry, dst, ctx.registry, src, false);
+    // 剪贴板不携带层级/兄弟序信息：粘贴目标恒为根（与既有行为一致）
+    if (s_clipboard_registry->all_of<ParentComponent>(dst)) {
+        s_clipboard_registry->remove<ParentComponent>(dst);
+    }
+    if (s_clipboard_registry->all_of<SiblingIndexComponent>(dst)) {
+        s_clipboard_registry->remove<SiblingIndexComponent>(dst);
+    }
 
     s_clipboard_has_data = true;
     EditorLog(LogLevel::Info, "Entity copied to clipboard");
@@ -201,35 +92,7 @@ void PasteEntity(EditorContext& ctx) {
     auto clipboard_view = s_clipboard_registry->view<EditorNameComponent>();
     for (auto src_ent : clipboard_view) {
         auto new_ent = ctx.world.CreateEntity();
-        auto paste_c = [&](auto tag) {
-            using C = decltype(tag);
-            if (s_clipboard_registry->all_of<C>(src_ent))
-                ctx.registry.emplace_or_replace<C>(new_ent, s_clipboard_registry->get<C>(src_ent));
-        };
-        paste_c(EditorNameComponent{});
-        paste_c(TransformComponent{});
-        paste_c(SpriteRendererComponent{});
-        paste_c(UIRendererComponent{});
-        paste_c(UILabelComponent{});
-        paste_c(UIAnchorComponent{});
-        paste_c(UIGridLayoutComponent{});
-        paste_c(UICanvasScalerComponent{});
-        paste_c(UIAnimationComponent{});
-        paste_c(UIRichTextComponent{});
-        paste_c(RigidBody2DComponent{});
-        paste_c(ParticleEmitterComponent{});
-        paste_c(dse::Camera3DComponent{});
-        paste_c(dse::DirectionalLight3DComponent{});
-        paste_c(dse::PointLightComponent{});
-        paste_c(dse::MeshRendererComponent{});
-        paste_c(dse::Animator3DComponent{});
-        paste_c(dse::FreeCameraControllerComponent{});
-        paste_c(dse::TerrainComponent{});
-        paste_c(dse::RigidBody3DComponent{});
-        paste_c(dse::BoxCollider3DComponent{});
-        paste_c(dse::SphereCollider3DComponent{});
-        paste_c(dse::ParticleSystem3DComponent{});
-        paste_c(dse::PostProcessComponent{});
+        CopyRegisteredComponents(ctx.registry, new_ent, *s_clipboard_registry, src_ent, false);
 
         if (ctx.registry.all_of<EditorNameComponent>(new_ent)) {
             ctx.registry.get<EditorNameComponent>(new_ent).name += " (Paste)";
@@ -604,7 +467,7 @@ void ProcessShortcuts(EditorContext& context) {
                 auto entities = sel.GetAll();
                 for (auto ent : entities) {
                     if (context.registry.valid(ent)) {
-                        context.world.DestroyEntity(ent);
+                        DeleteEntityViaBus(context, ent);
                     }
                 }
                 sel.Clear();
