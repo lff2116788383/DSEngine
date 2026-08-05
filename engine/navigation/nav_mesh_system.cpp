@@ -17,6 +17,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <vector>
 #include <memory>
 #include <cstdint>
@@ -400,21 +401,19 @@ bool NavMeshSystem::SaveNavMesh(const std::string& path) const {
         return false;
     }
 
-    FILE* fp = nullptr;
-#if defined(_WIN32)
-    fopen_s(&fp, path.c_str(), "wb");
-#else
-    fp = fopen(path.c_str(), "wb");
-#endif
+    std::ofstream fp(path, std::ios::binary);
     if (!fp) {
         DEBUG_LOG_ERROR("[NavMesh] SaveNavMesh: cannot open {}", path);
         return false;
     }
 
     NavMeshFileHeader hdr{ NAVMESH_MAGIC, NAVMESH_VERSION, tile->dataSize };
-    fwrite(&hdr, sizeof(hdr), 1, fp);
-    fwrite(tile->data, tile->dataSize, 1, fp);
-    fclose(fp);
+    fp.write(reinterpret_cast<const char*>(&hdr), sizeof(hdr));
+    fp.write(reinterpret_cast<const char*>(tile->data), tile->dataSize);
+    if (!fp) {
+        DEBUG_LOG_ERROR("[NavMesh] SaveNavMesh: write failed {}", path);
+        return false;
+    }
     DEBUG_LOG_INFO("[NavMesh] saved {} ({} bytes)", path, tile->dataSize);
     return true;
 }
@@ -424,43 +423,36 @@ bool NavMeshSystem::LoadNavMesh(const std::string& path) {
         DEBUG_LOG_ERROR("[NavMesh] LoadNavMesh called before Init()");
         return false;
     }
-    FILE* fp = nullptr;
-#if defined(_WIN32)
-    fopen_s(&fp, path.c_str(), "rb");
-#else
-    fp = fopen(path.c_str(), "rb");
-#endif
+    std::ifstream fp(path, std::ios::binary);
     if (!fp) return false;
 
     NavMeshFileHeader hdr{};
-    if (fread(&hdr, sizeof(hdr), 1, fp) != 1 ||
+    fp.read(reinterpret_cast<char*>(&hdr), sizeof(hdr));
+    if (!fp ||
         hdr.magic != NAVMESH_MAGIC || hdr.version != NAVMESH_VERSION ||
         hdr.data_size <= 0) {
-        fclose(fp);
         DEBUG_LOG_ERROR("[NavMesh] LoadNavMesh: bad header in {}", path);
         return false;
     }
 
     // data_size 来自文件头，畸形文件可声称近 2G 触发巨额预分配；先按实际剩余字节核对。
-    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return false; }
-    const long file_end = ftell(fp);
+    fp.seekg(0, std::ios::end);
+    const std::streamoff file_end = fp.tellg();
     if (file_end < 0 ||
-        static_cast<long long>(hdr.data_size) > file_end - static_cast<long>(sizeof(hdr))) {
-        fclose(fp);
+        static_cast<long long>(hdr.data_size) > file_end - static_cast<std::streamoff>(sizeof(hdr))) {
         DEBUG_LOG_ERROR("[NavMesh] LoadNavMesh: data_size {} exceeds file {} in {}",
                         hdr.data_size, file_end, path);
         return false;
     }
-    fseek(fp, static_cast<long>(sizeof(hdr)), SEEK_SET);
+    fp.seekg(static_cast<std::streamoff>(sizeof(hdr)), std::ios::beg);
 
     unsigned char* data = static_cast<unsigned char*>(dtAlloc(hdr.data_size, DT_ALLOC_PERM));
-    if (!data) { fclose(fp); return false; }
-    if ((int)fread(data, 1, hdr.data_size, fp) != hdr.data_size) {
+    if (!data) return false;
+    fp.read(reinterpret_cast<char*>(data), hdr.data_size);
+    if (fp.gcount() != hdr.data_size) {
         dtFree(data);
-        fclose(fp);
         return false;
     }
-    fclose(fp);
 
     ReleaseNavMesh();
     nav_mesh_ = dtAllocNavMesh();
