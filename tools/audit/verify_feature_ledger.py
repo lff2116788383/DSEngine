@@ -37,6 +37,13 @@ PANEL_PATTERN = re.compile(r'\badd\(\s*"([^"]+)"')
 # registrar lambda as `e.id = "..."`; capture those blocks across all sources.
 SELF_REGISTER_BLOCK = re.compile(r"DSE_EDITOR_PANEL\(.*?\n\}\);", re.DOTALL)
 SELF_REGISTER_ID = re.compile(r'\.id\s*=\s*"([^"]+)"')
+# Some panels register from a tools table whose id is assigned via a variable
+# (e.g. editor_2d_tools.cpp's ToolReg table: {"sprite_slicer", "Sprite Slicer",
+# &state, DrawFn}). The plain SELF_REGISTER_ID regex cannot see those, so scan
+# the table rows explicitly. Requiring `&` as the third element keeps the match
+# specific to registrar tables (state-pointer rows) and avoids generic
+# {"key", "label", ...} matches elsewhere.
+TOOL_TABLE_ROW = re.compile(r'\{\s*"([a-z0-9_]+)"\s*,\s*"[^"]+"\s*,\s*&')
 
 
 def fail(errors: list[str], message: str) -> None:
@@ -76,6 +83,9 @@ def collect_registered_panels(errors: list[str]) -> set[str]:
                 continue
             for block in SELF_REGISTER_BLOCK.findall(module_source):
                 panels.update(SELF_REGISTER_ID.findall(block))
+            # Tool-table registrars assign `e.id` from a variable, so the literal
+            # ids only appear in the table rows (see TOOL_TABLE_ROW).
+            panels.update(TOOL_TABLE_ROW.findall(module_source))
     except OSError as exc:
         fail(errors, f"cannot scan self-registered editor panels: {exc}")
     return panels

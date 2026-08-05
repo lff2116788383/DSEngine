@@ -385,7 +385,7 @@
     {
       "id": "editor-shell-and-panel-registry",
       "stage": 6,
-      "status": "in_progress",
+      "status": "complete",
       "summary": "Panel ownership, lifecycle, availability, menu registration, persistence, and generic dispatch.",
       "editor": {
         "panelIds": [
@@ -426,13 +426,11 @@
         "explicitDiagnostics": true,
         "versionedMigration": "not_applicable",
         "platformMatrix": "not_applicable",
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": "not_applicable",
         "productionReady": true
       },
-      "blockers": [
-        "editor_core_isolation integration acceptance is not yet a required gate."
-      ]
+      "blockers": []
     },
     {
       "id": "process-and-background-tasks",
@@ -802,7 +800,14 @@
           "terrain_sculpt",
           "world_partition",
           "plugins",
-          "tools_2d",
+          "sprite_slicer",
+          "atlas_packer",
+          "anim2d_editor",
+          "nineslice_editor",
+          "collision_editor_2d",
+          "particle_2d",
+          "parallax_editor",
+          "light2d_editor",
           "plugin_api",
           "ai_agent"
         ],
