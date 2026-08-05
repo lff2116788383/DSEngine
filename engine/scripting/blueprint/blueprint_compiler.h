@@ -27,6 +27,7 @@ BpVarType BpVarTypeFromName(const char* name);
 struct BpVariable {
     std::string name;
     BpVarType type = BpVarType::Float;
+    BpVarType array_element_type = BpVarType::Float;  // 当 type == Array 时的元素类型
     bool   default_bool = false;
     int    default_int = 0;
     float  default_float = 0.0f;

@@ -15,6 +15,10 @@ class AssetManager;
 namespace dse {
 namespace gameplay3d {
 
+// CPU 发射 + SSBO 渲染路径（ParticleSystem3DComponent）。
+// 与 engine/render/particles/gpu_particle_system.h（GpuParticleComponent，
+// 全 GPU compute + indirect draw）按组件互斥选择：同一实体二选一。
+// 桌面端（有 compute）优先 GPU 路径；WebGL2 / 无 compute 后端走本路径。
 class Particle3DSystem {
 public:
     Particle3DSystem() = default;

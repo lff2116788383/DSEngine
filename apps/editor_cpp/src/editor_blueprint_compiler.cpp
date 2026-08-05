@@ -134,6 +134,7 @@ const BpPin* FindPin(const BpFunctionGraph& graph, int pin_id) {
         ::dse::bp::BpVariable runtime_variable;
         runtime_variable.name = variable.name;
         runtime_variable.type = ToRuntimeType(variable.type);
+        runtime_variable.array_element_type = ToRuntimeType(variable.array_element_type);
         runtime_variable.default_bool = variable.default_bool;
         runtime_variable.default_int = variable.default_int;
         runtime_variable.default_float = variable.default_float;

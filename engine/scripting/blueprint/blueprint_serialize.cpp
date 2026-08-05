@@ -182,6 +182,7 @@ std::string SerializeBlueprintAsset(const BlueprintAsset& asset) {
         w.StartArray();
         for (int i = 0; i < 4; ++i) w.Double(static_cast<double>(var.default_vec[i]));
         w.EndArray();
+        w.Key("array_element_type"); w.String(BpVarTypeName(var.array_element_type));
         w.Key("is_exposed");     w.Bool(var.is_exposed);
         w.EndObject();
     }
@@ -297,6 +298,8 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
             BpVariable var;
             if (v.HasMember("name") && v["name"].IsString()) var.name = v["name"].GetString();
             if (v.HasMember("type") && v["type"].IsString()) var.type = BpVarTypeFromName(v["type"].GetString());
+            if (v.HasMember("array_element_type") && v["array_element_type"].IsString())
+                var.array_element_type = BpVarTypeFromName(v["array_element_type"].GetString());
             if (v.HasMember("default_bool") && v["default_bool"].IsBool()) var.default_bool = v["default_bool"].GetBool();
             if (v.HasMember("default_int") && v["default_int"].IsInt()) var.default_int = v["default_int"].GetInt();
             if (v.HasMember("default_float") && v["default_float"].IsNumber()) var.default_float = v["default_float"].GetFloat();

@@ -78,6 +78,16 @@ struct BlueprintInstance {
     bool initialized = false;
 };
 
+// ─── 可恢复单步执行状态 ─────────────────────────────────────────────────────
+// 供编辑器调试器逐条执行与运行时相同的字节码（无独立"仿真"路径）。
+struct StepState {
+    const CompiledFunction* func = nullptr;
+    std::vector<BpValue> regs;
+    int pc = 0;
+    bool finished = false;
+    BpValue result;
+};
+
 // ─── ECS 桥接（由引擎运行时提供，字段索引 0 = TransformComponent.position）───
 
 class IBlueprintEcsBridge {
@@ -108,6 +118,16 @@ public:
     BpValue Execute(const CompiledFunction& func, VmContext& ctx,
                     const std::vector<BpValue>& args = {});
 
+    /// Prepare a resumable execution paused before the first instruction.
+    /// 供编辑器调试器单步执行（BeginStep/StepOnce/CurrentNode）。
+    void BeginStep(StepState& state, const CompiledFunction& func, VmContext& ctx,
+                   const std::vector<BpValue>& args = {});
+    /// Execute exactly one bytecode instruction (Call is stepped over).
+    /// Returns the source node id of the next instruction, or -1 when finished.
+    int StepOnce(StepState& state, VmContext& ctx);
+    /// Source graph node id mapped to the instruction at the current pc (-1 if none).
+    int CurrentNode(const StepState& state) const;
+
     void RunInit(BlueprintInstance& instance, uint32_t entity_id, IBlueprintEcsBridge* ecs);
     void RunUpdate(BlueprintInstance& instance, uint32_t entity_id, float dt, IBlueprintEcsBridge* ecs);
 
@@ -116,6 +136,12 @@ public:
     const std::string& GetLastError() const { return last_error_; }
 
 private:
+    enum class StepResult { Continue, Returned };
+    // Execute the single instruction at `pc` (advancing it); shared by Execute
+    // and StepOnce so both run identical bytecode semantics.
+    StepResult RunOne(const CompiledFunction& func, VmContext& ctx,
+                      std::vector<BpValue>& regs, int& pc, BpValue& out_return);
+
     std::vector<std::pair<std::string, ExternFn>> extern_functions_;
     std::unordered_map<std::string, int> extern_index_;
     int instruction_count_ = 0;
