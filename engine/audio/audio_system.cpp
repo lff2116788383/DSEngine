@@ -566,6 +566,8 @@ void AudioSystem::PlaySfx(const std::string& filepath, float volume, bool loop) 
         nullptr,
         &new_sound->value);
     if (result != MA_SUCCESS) {
+        std::cerr << "[Audio] SFX init FAILED '" << filepath
+                  << "' ma_result=" << static_cast<int>(result) << std::endl;
         return;
     }
 
@@ -633,16 +635,11 @@ bool AudioSystem::PreloadAudio(const std::string& filepath) {
 }
 
 // 选择 BGM 载入标志。
-// 桌面端使用流式解码 (MA_SOUND_FLAG_STREAM) 以降低内存占用; 但单线程 Web
-// 构建 (未启用 pthreads, 见 DEBT-4) 没有后台作业线程, miniaudio 的流式解码
-// 作业 (page 解码) 不会被执行 -> 输出静音。因此 Web 端改为整段载入内存同步
-// 解码 (flag 0), 与 SFX 路径一致。BGM 片段通常很小, 内存解码完全可接受。
+// 统一使用整段载入内存解码 (flag 0, 与 SFX/Web 一致)：miniaudio 的 vorbis 解码器
+// 在 stream (MA_SOUND_FLAG_STREAM) 模式下走 stb_vorbis_open_filename 磁盘路径，
+// 无法从自定义 VFS (bundle/dpak) 播放音频。BGM 片段很小, 内存解码完全可接受。
 static ma_uint32 SelectBgmSoundFlags() {
-#if defined(__EMSCRIPTEN__)
     return 0;
-#else
-    return MA_SOUND_FLAG_STREAM;
-#endif
 }
 
 bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) {

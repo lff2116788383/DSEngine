@@ -4,6 +4,7 @@
  */
 
 #include "engine/project/project_scaffold.h"
+#include "engine/project/build_service.h"  // FindEngineRoot：定位 repo 根以找到 templates/
 
 #include <filesystem>
 #include <fstream>
@@ -66,6 +67,50 @@ bool WriteTextFile(const fs::path& path, const std::string& content, std::string
         return false;
     }
     return true;
+}
+
+bool ReadTextFile(const fs::path& path, std::string& out, std::string& error) {
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs.is_open()) {
+        error = "无法读取文件: " + path.string();
+        return false;
+    }
+    std::ostringstream ss;
+    ss << ifs.rdbuf();
+    out = ss.str();
+    return true;
+}
+
+// Platformer 品类模板：从 repo 的 templates/platformer_2d 拷贝素材（CC0）到
+// 项目 assets/，并把完整游戏脚本写入 scripts/main.lua（替换纯色占位版）。
+bool ScaffoldPlatformerTemplate(const fs::path& root, std::string& error) {
+    std::error_code ec;
+    const std::string engine_root = FindEngineRoot(fs::current_path(ec).string());
+    if (engine_root.empty()) {
+        error = "无法定位引擎根目录（未找到 CMakePresets.json），无法复制平台跳跃模板素材";
+        return false;
+    }
+    const fs::path tpl = fs::path(engine_root) / "templates" / "platformer_2d";
+    const fs::path tpl_assets = tpl / "assets";
+    if (!fs::exists(tpl_assets, ec) || !fs::is_directory(tpl_assets, ec)) {
+        error = "平台跳跃模板素材缺失: " + tpl_assets.string();
+        return false;
+    }
+
+    // 1) 拷贝素材（覆盖空占位目录）
+    fs::copy(tpl_assets, root / "assets",
+             fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+        error = "复制平台跳跃模板素材失败: " + ec.message();
+        return false;
+    }
+
+    // 2) 写入完整游戏脚本
+    std::string body;
+    if (!ReadTextFile(tpl / "scripts" / "main.lua", body, error)) {
+        return false;
+    }
+    return WriteTextFile(root / "scripts" / "main.lua", body, error);
 }
 
 std::string BuildProjectDescriptor(const std::string& name,
@@ -744,7 +789,12 @@ ScaffoldResult ScaffoldProject(const std::string& project_root,
         return result;
     }
     if (HasLuaScripting(tmpl)) {
-        if (!WriteTextFile(root / "scripts" / "main.lua", BuildMainLua(name, tmpl), result.error)) {
+        if (tmpl == ProjectTemplate::Platformer2D) {
+            // 品类模板：拷贝 CC0 素材 + 写入完整游戏脚本（替换纯色占位版）
+            if (!ScaffoldPlatformerTemplate(root, result.error)) {
+                return result;
+            }
+        } else if (!WriteTextFile(root / "scripts" / "main.lua", BuildMainLua(name, tmpl), result.error)) {
             return result;
         }
     }

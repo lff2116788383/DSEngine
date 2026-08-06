@@ -239,7 +239,12 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         // 可选纹理仅在非零时挂载——渲染器纹理循环遇 handle==0 即停，避免中断后续绑定。
         const float ae_enabled  = ae_tex ? 1.0f : 0.0f;
         const float lut_enabled = lut_handle ? 1.0f : 0.0f;
-        if (ssao_tex) {
+        // 纯 2D 场景（未配置后处理、且无 3D 相机）：直接线性 copy，避免 ACES tonemap + gamma
+        // 把 2D 精灵颜色提亮洗白（精灵色 → 显示色应为线性）。需要 HDR 语义的 3D 场景仍走 tonemapping。
+        if (!pp_enabled && snap.camera_2d.valid && !snap.camera_3d.valid) {
+            post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+                PostProcessRequest{"copy", scene_color_tex, {}});
+        } else if (ssao_tex) {
             PostProcessRequest req{"ssao_apply", scene_color_tex,
                 {pp_config.exposure, ae_enabled, lut_enabled, lut_intensity}};
             req.Tex(2, ssao_tex);
