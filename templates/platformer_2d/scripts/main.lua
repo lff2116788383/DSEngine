@@ -56,11 +56,17 @@ local function audio_path(path) return resolve_path(path) end
 -- flag: 终点旗帜 { x, y }
 -- start: 出生点 { x, y }
 -- bounds: 相机边界 { minx, miny, maxx, maxy }
+--
+-- 坐标说明：主地面顶面（grass_mid 顶部）在 y = -1.0，地面上的物体应以其为基准：
+--   出生点/旗帜：y = -0.05（玩家中心 = 地面 + 碰撞半高 0.95）
+--   史莱姆：     y = -0.45（精灵半高 0.55，脚踩在地面上）
+--   尖刺：       y = -1.35（碰撞盒上沿恰好到地面，玩家踩上才受伤）
+--   弹簧：       y = -0.6（精灵半高 0.4，底部在地面上）
 local LEVELS = {
     {
         name = "Level 1 - Meadow",
-        start = { x = -13.0, y = -0.5 },
-        flag  = { x = 13.0, y = -0.5 },
+        start = { x = -13.0, y = -0.05 },
+        flag  = { x = 13.0, y = -0.05 },
         bounds = { -22.0, -10.0, 22.0, 10.0 },
         platforms = {
             { x = -16.0, y = -2.5, hw = 14.0, hh = 1.5 },   -- 主地面
@@ -77,17 +83,17 @@ local LEVELS = {
             { x = 5.0,   y = 3.4 },  { x = 9.0,  y = -0.5 },
         },
         gems = { { x = 1.0, y = 3.0 } },
-        springs = { { x = 7.5, y = -1.5 } },
-        spikes = { { x = 2.0, y = -2.1, w = 0.55, h = 0.35 } },
+        springs = { { x = 7.5, y = -0.6 } },
+        spikes = { { x = 2.0, y = -1.35, w = 0.55, h = 0.35 } },
         enemies = {
-            { x = -8.0, y = -2.0, kind = "slime", range = 3.0 },
-            { x = 11.0, y = -2.0, kind = "slime_static" },
+            { x = -8.0, y = -0.45, kind = "slime", range = 3.0 },
+            { x = 11.0, y = -0.45, kind = "slime_static" },
         },
     },
     {
         name = "Level 2 - Sky Bridges",
-        start = { x = -16.0, y = -0.5 },
-        flag  = { x = 16.0, y = -0.5 },
+        start = { x = -16.0, y = -0.05 },
+        flag  = { x = 16.0, y = -0.05 },
         bounds = { -24.0, -12.0, 24.0, 12.0 },
         platforms = {
             { x = -18.0, y = -2.5, hw = 7.0,  hh = 1.5 },
@@ -110,19 +116,20 @@ local LEVELS = {
         gems = { { x = -1.5, y = 4.6 } },
         springs = {},
         spikes = {
-            { x = -13.0, y = -2.1, w = 0.8, h = 0.35 },
-            { x = 15.0,  y = -2.1, w = 0.8, h = 0.35 },
+            { x = -13.0, y = -1.35, w = 0.8, h = 0.35 },
+            { x = 15.0,  y = -1.35, w = 0.8, h = 0.35 },
         },
         enemies = {
-            { x = -7.0, y = -2.0, kind = "slime", range = 2.5 },
-            { x = 2.0,  y = 2.8,  kind = "fly",   range = 4.0 },
-            { x = 12.0, y = -2.0, kind = "slime", range = 2.0 },
+            -- 中央缺口无地面：用空中巡逻的 fly 替代原漂浮的 slime
+            { x = -7.0, y = 1.5, kind = "fly", range = 4.0 },
+            { x = 2.0,  y = 2.8, kind = "fly", range = 4.0 },
+            { x = 12.0, y = -0.45, kind = "slime", range = 2.0 },
         },
     },
     {
         name = "Level 3 - Final Trial",
-        start = { x = -16.0, y = -0.5 },
-        flag  = { x = 16.0, y = -0.5 },
+        start = { x = -16.0, y = -0.05 },
+        flag  = { x = 16.0, y = -0.05 },
         bounds = { -24.0, -14.0, 24.0, 14.0 },
         platforms = {
             { x = -18.0, y = -2.5, hw = 6.0,  hh = 1.5 },
@@ -147,17 +154,17 @@ local LEVELS = {
             { x = 16.0,  y = -0.5 },
         },
         gems = { { x = 0.0, y = 3.0 }, { x = 9.0, y = 5.6 } },
-        springs = { { x = 15.0, y = -1.5 } },
+        springs = { { x = 15.0, y = -0.6 } },
         spikes = {
-            { x = -15.0, y = -2.1, w = 0.8, h = 0.35 },
-            { x = 3.0,   y = -0.4, w = 0.8, h = 0.35 },
-            { x = 14.0,  y = -2.1, w = 0.8, h = 0.35 },
+            { x = -15.0, y = -1.35, w = 0.8, h = 0.35 },
+            { x = 3.0,   y = -0.4, w = 0.8, h = 0.35 },   -- 空中悬浮尖刺（低位跨越障碍）
+            { x = 14.0,  y = -1.35, w = 0.8, h = 0.35 },
         },
         enemies = {
-            { x = -14.0, y = -2.0, kind = "slime", range = 2.0 },
-            { x = -6.0,  y = 3.0,  kind = "fly",   range = 5.0 },
-            { x = 6.0,   y = 3.4,  kind = "fly",   range = 4.0 },
-            { x = 15.0,  y = -2.0, kind = "slime", range = 2.0 },
+            { x = -14.0, y = -0.45, kind = "slime", range = 2.0 },
+            { x = -6.0,  y = 3.0,   kind = "fly",   range = 5.0 },
+            { x = 6.0,   y = 3.4,   kind = "fly",   range = 4.0 },
+            { x = 15.0,  y = -0.45, kind = "slime", range = 2.0 },
         },
     },
 }
@@ -301,7 +308,7 @@ local function BuildLevel(level)
     local bh = (by1 - by0) + 12.0
     table.insert(level_entities.decor, spawn_solid(cx, cy, bw, bh, -4, 0.49, 0.78, 1.0))   -- 天空（浅蓝）
     table.insert(level_entities.decor, spawn_solid(cx, (by0 - 1.0) * 0.5, bw, -1.0 - by0, -3, 0.30, 0.20, 0.12))   -- 地下土壤
-    table.insert(level_entities.decor, spawn_solid(cx, 0.5, bw, 2.5, -2, 0.42, 0.72, 0.22))   -- 远景山丘
+    table.insert(level_entities.decor, spawn_solid(cx, 0.0, bw, 3.0, -2, 0.42, 0.72, 0.22))   -- 远景山丘（向下覆盖到草地顶面，避免露出天空缝）
 
     -- 静态平台：中心地面用 dirt 铺底 + grass_mid 顶面；空中平台用 grass_mid
     for _, p in ipairs(level.platforms) do
@@ -465,8 +472,9 @@ local function RespawnLevel()
     state.total_coins = n
     BuildLevel(level)
     ResetPlayer()
-    -- 关卡重建后玩家是新实体：重新绑定相机跟随与边界
+    -- 关卡重建后玩家是新实体：重新绑定相机跟随与边界（并直接摆到出生点）
     if state.cam then
+        dse.ecs.set_transform_position(state.cam, player.x, player.y, 0.0)
         dse.ecs.set_camera_follow(state.cam, level_entities.player, 0.10, 0.0, 0.0, 0.0, 0.0)
         dse.ecs.camera_set_bounds(state.cam, level.bounds[1], level.bounds[2], level.bounds[3], level.bounds[4])
     end
@@ -596,7 +604,8 @@ local function UpdateInteractions()
     for _, en in ipairs(level_entities.enemies) do
         if en.dead then goto continue_en end
         if aabb(player.x, player.y, PW, PH, en.x, en.y, en.hw, en.hh) then
-            local stomp = player.vy < 0.0 and (player.y - PH) < (en.y + 0.1)
+            -- 踩头判定：玩家脚底需接近敌人顶面（下落中）才算踩；横向贴脸算撞伤
+            local stomp = player.vy < 0.0 and (player.y - PH) > (en.y + en.hh - 0.45)
             if stomp then
                 en.dead = true
                 player.vy = ENEMY_STOMP_BOUNCE
@@ -805,7 +814,7 @@ function Awake()
     state.hud.coins   = make_label("Coins 0/0",    -560.0, 320.0, 1.0, 0.85, 0.3, 18.0, 24.0)
     state.hud.lives   = make_label("Lives 3",      -200.0, 320.0, 1.0, 0.4, 0.4, 18.0, 24.0)
     state.hud.level   = make_label("Level 1",       60.0, 320.0, 0.9, 0.9, 1.0, 18.0, 24.0)
-    state.hud.time    = make_label("Time 0",       520.0, 320.0, 1.0, 1.0, 1.0, 18.0, 24.0)
+    state.hud.time    = make_label("Time 0",       440.0, 320.0, 1.0, 1.0, 1.0, 18.0, 24.0)
     state.hud.status  = make_label("",               0.0,  60.0, 1.0, 1.0, 0.4, 30.0, 40.0)
     state.hud.tip     = make_label("",               0.0, -330.0, 0.8, 0.8, 0.8, 16.0, 22.0)
 
@@ -818,7 +827,8 @@ function Awake()
     BuildLevel(level)
     ResetPlayer()
 
-    -- 相机跟随 + 边界
+    -- 相机跟随 + 边界（相机先摆到出生点，避免开局从 (0,0) 滑行过去）
+    dse.ecs.set_transform_position(cam, player.x, player.y, 0.0)
     dse.ecs.set_camera_follow(cam, level_entities.player, 0.10, 0.0, 0.0, 0.0, 0.0)
     dse.ecs.camera_set_bounds(cam, level.bounds[1], level.bounds[2], level.bounds[3], level.bounds[4])
 
