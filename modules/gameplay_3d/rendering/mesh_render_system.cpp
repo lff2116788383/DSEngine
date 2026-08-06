@@ -58,6 +58,8 @@ entt::entity ResolveSkeletonEntity(World& world, entt::entity self,
 struct RawMeshData {
     std::vector<float> vertices;
     std::vector<uint32_t> indices;
+    std::vector<float> uvs;      ///< 2 floats per vertex (TEXCOORD_0)
+    std::vector<float> normals;  ///< 3 floats per vertex (NORMAL)
 };
 
 struct MeshFrustumPlane {
@@ -399,6 +401,303 @@ bool ParseGltfMesh(AssetManager& asset_manager, const std::string& gltf_path, co
             out_mesh.indices.push_back(static_cast<uint32_t>(i));
         }
     }
+    // Extract UVs (TEXCOORD_0) — needed for texture mapping on .gltf meshes
+    if (attrs.HasMember("TEXCOORD_0") && attrs["TEXCOORD_0"].IsInt()) {
+        int uv_acc = attrs["TEXCOORD_0"].GetInt();
+        if (uv_acc >= 0 && uv_acc < static_cast<int>(doc["accessors"].Size())) {
+            const auto& ua = doc["accessors"][uv_acc];
+            if (ua.IsObject() && ua.HasMember("bufferView") && ua.HasMember("count")) {
+                int uv_vi = ua["bufferView"].GetInt();
+                int uv_cnt = ua["count"].GetInt();
+                if (uv_vi >= 0 && uv_vi < static_cast<int>(doc["bufferViews"].Size()) && uv_cnt == pos_count) {
+                    const auto& uv_v = doc["bufferViews"][uv_vi];
+                    int uv_bi = uv_v["buffer"].GetInt();
+                    if (uv_bi >= 0 && uv_bi < static_cast<int>(buffers.size())) {
+                        std::size_t uv_vo = uv_v.HasMember("byteOffset") ? static_cast<std::size_t>(uv_v["byteOffset"].GetUint()) : 0;
+                        std::size_t uv_ao = ua.HasMember("byteOffset") ? static_cast<std::size_t>(ua["byteOffset"].GetUint()) : 0;
+                        std::size_t uv_st = uv_v.HasMember("byteStride") ? static_cast<std::size_t>(uv_v["byteStride"].GetUint()) : sizeof(float) * 2;
+                        const auto& uv_buf = buffers[static_cast<std::size_t>(uv_bi)];
+                        std::size_t uv_base = uv_vo + uv_ao;
+                        out_mesh.uvs.reserve(static_cast<std::size_t>(uv_cnt) * 2);
+                        for (int i = 0; i < uv_cnt; ++i) {
+                            std::size_t off = uv_base + static_cast<std::size_t>(i) * uv_st;
+                            if (off + sizeof(float) * 2 > uv_buf.size()) break;
+                            float u, v;
+                            std::memcpy(&u, uv_buf.data() + off, sizeof(float));
+                            std::memcpy(&v, uv_buf.data() + off + sizeof(float), sizeof(float));
+                            out_mesh.uvs.push_back(u);
+                            out_mesh.uvs.push_back(v);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Extract Normals (NORMAL) — needed for PBR lighting on .gltf meshes
+    if (attrs.HasMember("NORMAL") && attrs["NORMAL"].IsInt()) {
+        int nrm_acc = attrs["NORMAL"].GetInt();
+        if (nrm_acc >= 0 && nrm_acc < static_cast<int>(doc["accessors"].Size())) {
+            const auto& na = doc["accessors"][nrm_acc];
+            if (na.IsObject() && na.HasMember("bufferView") && na.HasMember("count")) {
+                int nrm_vi = na["bufferView"].GetInt();
+                int nrm_cnt = na["count"].GetInt();
+                if (nrm_vi >= 0 && nrm_vi < static_cast<int>(doc["bufferViews"].Size()) && nrm_cnt == pos_count) {
+                    const auto& nrm_v = doc["bufferViews"][nrm_vi];
+                    int nrm_bi = nrm_v["buffer"].GetInt();
+                    if (nrm_bi >= 0 && nrm_bi < static_cast<int>(buffers.size())) {
+                        std::size_t nrm_vo = nrm_v.HasMember("byteOffset") ? static_cast<std::size_t>(nrm_v["byteOffset"].GetUint()) : 0;
+                        std::size_t nrm_ao = na.HasMember("byteOffset") ? static_cast<std::size_t>(na["byteOffset"].GetUint()) : 0;
+                        std::size_t nrm_st = nrm_v.HasMember("byteStride") ? static_cast<std::size_t>(nrm_v["byteStride"].GetUint()) : sizeof(float) * 3;
+                        const auto& nrm_buf = buffers[static_cast<std::size_t>(nrm_bi)];
+                        std::size_t nrm_base = nrm_vo + nrm_ao;
+                        out_mesh.normals.reserve(static_cast<std::size_t>(nrm_cnt) * 3);
+                        for (int i = 0; i < nrm_cnt; ++i) {
+                            std::size_t off = nrm_base + static_cast<std::size_t>(i) * nrm_st;
+                            if (off + sizeof(float) * 3 > nrm_buf.size()) break;
+                            float nx, ny, nz;
+                            std::memcpy(&nx, nrm_buf.data() + off, sizeof(float));
+                            std::memcpy(&ny, nrm_buf.data() + off + sizeof(float), sizeof(float));
+                            std::memcpy(&nz, nrm_buf.data() + off + sizeof(float) * 2, sizeof(float));
+                            out_mesh.normals.push_back(nx);
+                            out_mesh.normals.push_back(ny);
+                            out_mesh.normals.push_back(nz);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return !out_mesh.vertices.empty() && !out_mesh.indices.empty();
+}
+
+bool ParseGlbMesh(AssetManager& asset_manager, const std::string& glb_path,
+                  RawMeshData& out_mesh) {
+    // GLB binary glTF container: 12-byte header + JSON chunk + BIN chunk.
+    // Enables runtime loading of .glb model files (Unity/Blender export format)
+    //  without requiring AssetBuilder pre-conversion to .dmesh.
+    std::vector<uint8_t> file_data;
+    if (!asset_manager.LoadFileToMemory(glb_path, file_data) || file_data.size() < 12) {
+        return false;
+    }
+    const uint32_t* header = reinterpret_cast<const uint32_t*>(file_data.data());
+    if (header[0] != 0x46546C67u) return false;  // magic "glTF"
+    if (header[1] != 2u) return false;            // version 2
+
+    std::string json_text;
+    std::vector<uint8_t> bin_data;
+    std::size_t offset = 12;
+    while (offset + 8 <= file_data.size()) {
+        const uint32_t* chunk_hdr = reinterpret_cast<const uint32_t*>(file_data.data() + offset);
+        uint32_t chunk_len = chunk_hdr[0];
+        uint32_t chunk_type = chunk_hdr[1];
+        if (offset + 8 + chunk_len > file_data.size()) break;
+        if (chunk_type == 0x4E4F534Au) {  // "JSON"
+            json_text.assign(reinterpret_cast<const char*>(file_data.data() + offset + 8), chunk_len);
+        } else if (chunk_type == 0x004E4942u) {  // "BIN\0"
+            bin_data.assign(file_data.data() + offset + 8, file_data.data() + offset + 8 + chunk_len);
+        }
+        offset += 8 + chunk_len;
+        offset = (offset + 3u) & ~3u;  // 4-byte alignment
+    }
+    if (json_text.empty()) return false;
+
+    rapidjson::Document doc;
+    doc.Parse(json_text.c_str(), json_text.size());
+    if (doc.HasParseError() || !doc.IsObject()) return false;
+    if (!doc.HasMember("meshes") || !doc["meshes"].IsArray() || doc["meshes"].Empty()) return false;
+    if (!doc.HasMember("buffers") || !doc["buffers"].IsArray()) return false;
+    if (!doc.HasMember("bufferViews") || !doc["bufferViews"].IsArray()) return false;
+    if (!doc.HasMember("accessors") || !doc["accessors"].IsArray()) return false;
+
+    // Set up buffers: GLB embeds buffer 0 in the BIN chunk (no URI).
+    // Additional buffers (if any) reference external files via URI.
+    std::vector<std::vector<uint8_t>> buffers(doc["buffers"].Size());
+    for (rapidjson::SizeType i = 0; i < doc["buffers"].Size(); ++i) {
+        const auto& buffer = doc["buffers"][i];
+        if (!buffer.IsObject()) return false;
+        if (i == 0 && (!buffer.HasMember("uri") || !buffer["uri"].IsString())) {
+            buffers[i] = bin_data;
+        } else if (buffer.HasMember("uri") && buffer["uri"].IsString()) {
+            if (!LoadGltfBuffer(asset_manager, glb_path, buffer["uri"].GetString(), buffers[i])) {
+                return false;
+            }
+        } else if (i == 0) {
+            buffers[i] = bin_data;
+        } else {
+            return false;
+        }
+    }
+
+    // Iterate all meshes x primitives, merge into a single vertex/index array.
+    // Many GLB exports (e.g. Unity) split a character into multiple primitives
+    // (body, armor, weapons); merging ensures the full model renders.
+    for (rapidjson::SizeType mi = 0; mi < doc["meshes"].Size(); ++mi) {
+        const auto& mesh = doc["meshes"][mi];
+        if (!mesh.IsObject() || !mesh.HasMember("primitives") || !mesh["primitives"].IsArray()) continue;
+        for (rapidjson::SizeType pi = 0; pi < mesh["primitives"].Size(); ++pi) {
+            const auto& prim = mesh["primitives"][pi];
+            if (!prim.IsObject() || !prim.HasMember("attributes") || !prim["attributes"].IsObject()) continue;
+            const auto& attrs = prim["attributes"];
+            // Skip Draco-compressed primitives (not supported at runtime)
+            if (prim.HasMember("extensions") && prim["extensions"].IsObject() &&
+                prim["extensions"].HasMember("KHR_draco_mesh_compression")) {
+                continue;
+            }
+            if (!attrs.HasMember("POSITION") || !attrs["POSITION"].IsInt()) continue;
+            int pos_acc = attrs["POSITION"].GetInt();
+            if (pos_acc < 0 || pos_acc >= static_cast<int>(doc["accessors"].Size())) continue;
+            const auto& pa = doc["accessors"][pos_acc];
+            if (!pa.IsObject() || !pa.HasMember("bufferView") || !pa.HasMember("count")) continue;
+            int pos_vi = pa["bufferView"].GetInt();
+            int pos_cnt = pa["count"].GetInt();
+            if (pos_vi < 0 || pos_vi >= static_cast<int>(doc["bufferViews"].Size()) || pos_cnt <= 0) continue;
+            const auto& pv = doc["bufferViews"][pos_vi];
+            int pos_bi = pv["buffer"].GetInt();
+            if (pos_bi < 0 || pos_bi >= static_cast<int>(buffers.size())) continue;
+            std::size_t pos_vo = pv.HasMember("byteOffset") ? static_cast<std::size_t>(pv["byteOffset"].GetUint()) : 0;
+            std::size_t pos_ao = pa.HasMember("byteOffset") ? static_cast<std::size_t>(pa["byteOffset"].GetUint()) : 0;
+            std::size_t pos_st = pv.HasMember("byteStride") ? static_cast<std::size_t>(pv["byteStride"].GetUint()) : sizeof(float) * 3;
+            const auto& pos_buf = buffers[static_cast<std::size_t>(pos_bi)];
+            std::size_t pos_base = pos_vo + pos_ao;
+
+            std::size_t prev_vtx = out_mesh.vertices.size() / 3;
+            for (int i = 0; i < pos_cnt; ++i) {
+                std::size_t off = pos_base + static_cast<std::size_t>(i) * pos_st;
+                if (off + sizeof(float) * 3 > pos_buf.size()) break;
+                float vx, vy, vz;
+                std::memcpy(&vx, pos_buf.data() + off, sizeof(float));
+                std::memcpy(&vy, pos_buf.data() + off + sizeof(float), sizeof(float));
+                std::memcpy(&vz, pos_buf.data() + off + sizeof(float) * 2, sizeof(float));
+                out_mesh.vertices.push_back(vx);
+                out_mesh.vertices.push_back(vy);
+                out_mesh.vertices.push_back(vz);
+            }
+            uint32_t cur_vtx_count = static_cast<uint32_t>(out_mesh.vertices.size() / 3) - static_cast<uint32_t>(prev_vtx);
+
+            // Indices
+            if (prim.HasMember("indices") && prim["indices"].IsInt()) {
+                int idx_acc = prim["indices"].GetInt();
+                if (idx_acc >= 0 && idx_acc < static_cast<int>(doc["accessors"].Size())) {
+                    const auto& ia = doc["accessors"][idx_acc];
+                    if (ia.IsObject() && ia.HasMember("bufferView") && ia.HasMember("count") && ia.HasMember("componentType")) {
+                        int idx_vi = ia["bufferView"].GetInt();
+                        int idx_cnt = ia["count"].GetInt();
+                        int comp_type = ia["componentType"].GetInt();
+                        if (idx_vi >= 0 && idx_vi < static_cast<int>(doc["bufferViews"].Size()) && idx_cnt > 0) {
+                            const auto& iv = doc["bufferViews"][idx_vi];
+                            int idx_bi = iv["buffer"].GetInt();
+                            if (idx_bi >= 0 && idx_bi < static_cast<int>(buffers.size())) {
+                                std::size_t idx_vo = iv.HasMember("byteOffset") ? static_cast<std::size_t>(iv["byteOffset"].GetUint()) : 0;
+                                std::size_t idx_ao = ia.HasMember("byteOffset") ? static_cast<std::size_t>(ia["byteOffset"].GetUint()) : 0;
+                                std::size_t comp_size = comp_type == 5125 ? 4u : (comp_type == 5123 ? 2u : (comp_type == 5121 ? 1u : 0u));
+                                if (comp_size > 0) {
+                                    std::size_t idx_st = iv.HasMember("byteStride") ? static_cast<std::size_t>(iv["byteStride"].GetUint()) : comp_size;
+                                    const auto& idx_buf = buffers[static_cast<std::size_t>(idx_bi)];
+                                    std::size_t idx_base = idx_vo + idx_ao;
+                                    for (int i = 0; i < idx_cnt; ++i) {
+                                        std::size_t off = idx_base + static_cast<std::size_t>(i) * idx_st;
+                                        if (off + comp_size > idx_buf.size()) break;
+                                        uint32_t val = 0;
+                                        if (comp_type == 5125) {
+                                            std::memcpy(&val, idx_buf.data() + off, 4);
+                                        } else if (comp_type == 5123) {
+                                            std::uint16_t v16 = 0;
+                                            std::memcpy(&v16, idx_buf.data() + off, 2);
+                                            val = v16;
+                                        } else {
+                                            val = idx_buf[off];
+                                        }
+                                        out_mesh.indices.push_back(val + static_cast<uint32_t>(prev_vtx));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                for (uint32_t i = 0; i < cur_vtx_count; ++i) {
+                    out_mesh.indices.push_back(static_cast<uint32_t>(prev_vtx) + i);
+                }
+            }
+
+            // UVs (TEXCOORD_0)
+            if (attrs.HasMember("TEXCOORD_0") && attrs["TEXCOORD_0"].IsInt()) {
+                int uv_acc = attrs["TEXCOORD_0"].GetInt();
+                if (uv_acc >= 0 && uv_acc < static_cast<int>(doc["accessors"].Size())) {
+                    const auto& ua = doc["accessors"][uv_acc];
+                    if (ua.IsObject() && ua.HasMember("bufferView") && ua.HasMember("count")) {
+                        int uv_vi = ua["bufferView"].GetInt();
+                        int uv_cnt = ua["count"].GetInt();
+                        if (uv_vi >= 0 && uv_vi < static_cast<int>(doc["bufferViews"].Size()) && uv_cnt == pos_cnt) {
+                            const auto& uv_v = doc["bufferViews"][uv_vi];
+                            int uv_bi = uv_v["buffer"].GetInt();
+                            if (uv_bi >= 0 && uv_bi < static_cast<int>(buffers.size())) {
+                                std::size_t uv_vo = uv_v.HasMember("byteOffset") ? static_cast<std::size_t>(uv_v["byteOffset"].GetUint()) : 0;
+                                std::size_t uv_ao = ua.HasMember("byteOffset") ? static_cast<std::size_t>(ua["byteOffset"].GetUint()) : 0;
+                                std::size_t uv_st = uv_v.HasMember("byteStride") ? static_cast<std::size_t>(uv_v["byteStride"].GetUint()) : sizeof(float) * 2;
+                                const auto& uv_buf = buffers[static_cast<std::size_t>(uv_bi)];
+                                std::size_t uv_base = uv_vo + uv_ao;
+                                for (int i = 0; i < uv_cnt; ++i) {
+                                    std::size_t off = uv_base + static_cast<std::size_t>(i) * uv_st;
+                                    if (off + sizeof(float) * 2 > uv_buf.size()) { out_mesh.uvs.push_back(0.0f); out_mesh.uvs.push_back(0.0f); continue; }
+                                    float u, v;
+                                    std::memcpy(&u, uv_buf.data() + off, sizeof(float));
+                                    std::memcpy(&v, uv_buf.data() + off + sizeof(float), sizeof(float));
+                                    out_mesh.uvs.push_back(u);
+                                    out_mesh.uvs.push_back(v);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Pad UVs if missing for this primitive (keep parity with vertex count)
+            while (out_mesh.uvs.size() < out_mesh.vertices.size() / 3 * 2) {
+                out_mesh.uvs.push_back(0.0f);
+                out_mesh.uvs.push_back(0.0f);
+            }
+
+            // Normals (NORMAL)
+            if (attrs.HasMember("NORMAL") && attrs["NORMAL"].IsInt()) {
+                int nrm_acc = attrs["NORMAL"].GetInt();
+                if (nrm_acc >= 0 && nrm_acc < static_cast<int>(doc["accessors"].Size())) {
+                    const auto& na = doc["accessors"][nrm_acc];
+                    if (na.IsObject() && na.HasMember("bufferView") && na.HasMember("count")) {
+                        int nrm_vi = na["bufferView"].GetInt();
+                        int nrm_cnt = na["count"].GetInt();
+                        if (nrm_vi >= 0 && nrm_vi < static_cast<int>(doc["bufferViews"].Size()) && nrm_cnt == pos_cnt) {
+                            const auto& nrm_v = doc["bufferViews"][nrm_vi];
+                            int nrm_bi = nrm_v["buffer"].GetInt();
+                            if (nrm_bi >= 0 && nrm_bi < static_cast<int>(buffers.size())) {
+                                std::size_t nrm_vo = nrm_v.HasMember("byteOffset") ? static_cast<std::size_t>(nrm_v["byteOffset"].GetUint()) : 0;
+                                std::size_t nrm_ao = na.HasMember("byteOffset") ? static_cast<std::size_t>(na["byteOffset"].GetUint()) : 0;
+                                std::size_t nrm_st = nrm_v.HasMember("byteStride") ? static_cast<std::size_t>(nrm_v["byteStride"].GetUint()) : sizeof(float) * 3;
+                                const auto& nrm_buf = buffers[static_cast<std::size_t>(nrm_bi)];
+                                std::size_t nrm_base = nrm_vo + nrm_ao;
+                                for (int i = 0; i < nrm_cnt; ++i) {
+                                    std::size_t off = nrm_base + static_cast<std::size_t>(i) * nrm_st;
+                                    if (off + sizeof(float) * 3 > nrm_buf.size()) { out_mesh.normals.push_back(0.0f); out_mesh.normals.push_back(0.0f); out_mesh.normals.push_back(1.0f); continue; }
+                                    float nx, ny, nz;
+                                    std::memcpy(&nx, nrm_buf.data() + off, sizeof(float));
+                                    std::memcpy(&ny, nrm_buf.data() + off + sizeof(float), sizeof(float));
+                                    std::memcpy(&nz, nrm_buf.data() + off + sizeof(float) * 2, sizeof(float));
+                                    out_mesh.normals.push_back(nx);
+                                    out_mesh.normals.push_back(ny);
+                                    out_mesh.normals.push_back(nz);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Pad normals if missing
+            while (out_mesh.normals.size() < out_mesh.vertices.size() / 3 * 3) {
+                out_mesh.normals.push_back(0.0f);
+                out_mesh.normals.push_back(0.0f);
+                out_mesh.normals.push_back(1.0f);
+            }
+        }
+    }
     return !out_mesh.vertices.empty() && !out_mesh.indices.empty();
 }
 
@@ -492,6 +791,9 @@ bool LoadMeshByPath(AssetManager& asset_manager, const std::string& mesh_path, R
             return false;
         }
         return ParseGltfMesh(asset_manager, mesh_path, text, out_mesh);
+    }
+    if (extension == ".glb") {
+        return ParseGlbMesh(asset_manager, mesh_path, out_mesh);
     }
     if (extension == ".fbx") {
         if (!LoadTextFile(asset_manager, mesh_path, text)) {
@@ -640,6 +942,8 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
     if (it != cache.end()) {
         mesh_renderer.temp_vertices = it->second.vertices;
         mesh_renderer.temp_indices = it->second.indices;
+        mesh_renderer.temp_uvs = it->second.uvs;
+        mesh_renderer.temp_normals = it->second.normals;
         update_bounding_box(mesh_renderer.temp_vertices, 3);
         return;
     }
@@ -648,6 +952,8 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
         cache.emplace(mesh_renderer.mesh_path, mesh);
         mesh_renderer.temp_vertices = mesh.vertices;
         mesh_renderer.temp_indices = mesh.indices;
+        mesh_renderer.temp_uvs = mesh.uvs;
+        mesh_renderer.temp_normals = mesh.normals;
         update_bounding_box(mesh_renderer.temp_vertices, 3);
     }
 }

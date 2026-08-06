@@ -113,6 +113,38 @@ bool ScaffoldPlatformerTemplate(const fs::path& root, std::string& error) {
     return WriteTextFile(root / "scripts" / "main.lua", body, error);
 }
 
+// 3D 俯视角动作模板：从 repo 的 templates/topdown_3d 拷贝素材（三国题材逆向资源）
+// 到项目 assets/，并写入完整游戏脚本（武将移动/攻击、怪物AI、HUD、掉落、BGM/SFX）。
+bool ScaffoldTopDownTemplate(const fs::path& root, std::string& error) {
+    std::error_code ec;
+    const std::string engine_root = FindEngineRoot(fs::current_path(ec).string());
+    if (engine_root.empty()) {
+        error = "无法定位引擎根目录（未找到 CMakePresets.json），无法复制俯视角模板素材";
+        return false;
+    }
+    const fs::path tpl = fs::path(engine_root) / "templates" / "topdown_3d";
+    const fs::path tpl_assets = tpl / "assets";
+    if (!fs::exists(tpl_assets, ec) || !fs::is_directory(tpl_assets, ec)) {
+        error = "俯视角模板素材缺失: " + tpl_assets.string();
+        return false;
+    }
+
+    // 1) 拷贝素材（覆盖空占位目录）
+    fs::copy(tpl_assets, root / "assets",
+             fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+        error = "复制俯视角模板素材失败: " + ec.message();
+        return false;
+    }
+
+    // 2) 写入完整游戏脚本
+    std::string body;
+    if (!ReadTextFile(tpl / "scripts" / "main.lua", body, error)) {
+        return false;
+    }
+    return WriteTextFile(root / "scripts" / "main.lua", body, error);
+}
+
 std::string BuildProjectDescriptor(const std::string& name,
                                    ProjectTemplate tmpl,
                                    const std::string& engine_version) {
@@ -792,6 +824,11 @@ ScaffoldResult ScaffoldProject(const std::string& project_root,
         if (tmpl == ProjectTemplate::Platformer2D) {
             // 品类模板：拷贝 CC0 素材 + 写入完整游戏脚本（替换纯色占位版）
             if (!ScaffoldPlatformerTemplate(root, result.error)) {
+                return result;
+            }
+        } else if (tmpl == ProjectTemplate::TopDownRPG) {
+            // 3D 俯视角动作品类模板：拷贝逆向素材 + 写入完整游戏脚本
+            if (!ScaffoldTopDownTemplate(root, result.error)) {
                 return result;
             }
         } else if (!WriteTextFile(root / "scripts" / "main.lua", BuildMainLua(name, tmpl), result.error)) {
