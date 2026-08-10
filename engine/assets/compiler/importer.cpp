@@ -320,11 +320,14 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("POSITION")];
                 const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                const float* positions = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-                
+                // interleaved 顶点布局必须有 byteStride 步进, 否则 position/normal/uv 错位
+                const size_t stride = static_cast<size_t>(accessor.ByteStride(bufferView));
+                const uint8_t* base = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
                 raw_submesh.positions.reserve(accessor.count);
                 for (size_t i = 0; i < accessor.count; ++i) {
-                    raw_submesh.positions.push_back(glm::vec3(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]));
+                    const float* p = reinterpret_cast<const float*>(base + i * stride);
+                    raw_submesh.positions.push_back(glm::vec3(p[0], p[1], p[2]));
                 }
             }
             
@@ -333,11 +336,13 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("NORMAL")];
                 const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                const float* normals = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-                
+                const size_t stride = static_cast<size_t>(accessor.ByteStride(bufferView));
+                const uint8_t* base = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
                 raw_submesh.normals.reserve(accessor.count);
                 for (size_t i = 0; i < accessor.count; ++i) {
-                    raw_submesh.normals.push_back(glm::vec3(normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]));
+                    const float* p = reinterpret_cast<const float*>(base + i * stride);
+                    raw_submesh.normals.push_back(glm::vec3(p[0], p[1], p[2]));
                 }
             }
 
@@ -346,11 +351,13 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("TANGENT")];
                 const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                const float* tangents = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-                
+                const size_t stride = static_cast<size_t>(accessor.ByteStride(bufferView));
+                const uint8_t* base = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
                 raw_submesh.tangents.reserve(accessor.count);
                 for (size_t i = 0; i < accessor.count; ++i) {
-                    raw_submesh.tangents.push_back(glm::vec4(tangents[i * 4 + 0], tangents[i * 4 + 1], tangents[i * 4 + 2], tangents[i * 4 + 3]));
+                    const float* p = reinterpret_cast<const float*>(base + i * stride);
+                    raw_submesh.tangents.push_back(glm::vec4(p[0], p[1], p[2], p[3]));
                 }
             }
             
@@ -359,11 +366,13 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
                 const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                const float* texcoords = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-                
+                const size_t stride = static_cast<size_t>(accessor.ByteStride(bufferView));
+                const uint8_t* base = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
                 raw_submesh.texcoords.reserve(accessor.count);
                 for (size_t i = 0; i < accessor.count; ++i) {
-                    raw_submesh.texcoords.push_back(glm::vec2(texcoords[i * 2 + 0], texcoords[i * 2 + 1]));
+                    const float* p = reinterpret_cast<const float*>(base + i * stride);
+                    raw_submesh.texcoords.push_back(glm::vec2(p[0], p[1]));
                 }
             }
             
@@ -372,11 +381,13 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("WEIGHTS_0")];
                 const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                const float* weights = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-                
+                const size_t stride = static_cast<size_t>(accessor.ByteStride(bufferView));
+                const uint8_t* base = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
                 raw_submesh.joint_weights.reserve(accessor.count);
                 for (size_t i = 0; i < accessor.count; ++i) {
-                    raw_submesh.joint_weights.push_back(glm::vec4(weights[i * 4 + 0], weights[i * 4 + 1], weights[i * 4 + 2], weights[i * 4 + 3]));
+                    const float* p = reinterpret_cast<const float*>(base + i * stride);
+                    raw_submesh.joint_weights.push_back(glm::vec4(p[0], p[1], p[2], p[3]));
                 }
             }
             
@@ -385,17 +396,19 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("JOINTS_0")];
                 const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                
+                const size_t stride = static_cast<size_t>(accessor.ByteStride(bufferView));
+                const uint8_t* base = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
                 raw_submesh.joint_indices.reserve(accessor.count);
                 if (accessor.componentType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE) {
-                    const uint8_t* joints = reinterpret_cast<const uint8_t*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
                     for (size_t i = 0; i < accessor.count; ++i) {
-                        raw_submesh.joint_indices.push_back(glm::ivec4(joints[i * 4 + 0], joints[i * 4 + 1], joints[i * 4 + 2], joints[i * 4 + 3]));
+                        const uint8_t* j = base + i * stride;
+                        raw_submesh.joint_indices.push_back(glm::ivec4(j[0], j[1], j[2], j[3]));
                     }
                 } else if (accessor.componentType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT) {
-                    const uint16_t* joints = reinterpret_cast<const uint16_t*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
                     for (size_t i = 0; i < accessor.count; ++i) {
-                        raw_submesh.joint_indices.push_back(glm::ivec4(joints[i * 4 + 0], joints[i * 4 + 1], joints[i * 4 + 2], joints[i * 4 + 3]));
+                        const uint16_t* j = reinterpret_cast<const uint16_t*>(base + i * stride);
+                        raw_submesh.joint_indices.push_back(glm::ivec4(j[0], j[1], j[2], j[3]));
                     }
                 }
             }
@@ -405,17 +418,17 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
                 const tinygltf::Accessor& accessor = model.accessors[primitive.indices];
                 const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                
+                const size_t stride = static_cast<size_t>(accessor.ByteStride(bufferView));
+                const uint8_t* base = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
                 raw_submesh.indices.reserve(accessor.count);
                 if (accessor.componentType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT) {
-                    const uint16_t* indices = reinterpret_cast<const uint16_t*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
                     for (size_t i = 0; i < accessor.count; ++i) {
-                        raw_submesh.indices.push_back(indices[i]);
+                        raw_submesh.indices.push_back(*reinterpret_cast<const uint16_t*>(base + i * stride));
                     }
                 } else if (accessor.componentType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT) {
-                    const uint32_t* indices = reinterpret_cast<const uint32_t*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
                     for (size_t i = 0; i < accessor.count; ++i) {
-                        raw_submesh.indices.push_back(indices[i]);
+                        raw_submesh.indices.push_back(*reinterpret_cast<const uint32_t*>(base + i * stride));
                     }
                 }
             } else {

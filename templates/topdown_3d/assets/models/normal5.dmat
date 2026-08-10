@@ -1,0 +1,22 @@
+{
+  "materials": [
+    {
+      "name": "DefaultMaterial",
+      "dssl_template": "pbr_default",
+      "base_color": [1, 1, 1, 1],
+      "metallic": 1,
+      "roughness": 1,
+      "emissive": [0, 0, 0],
+      "normal_scale": 1,
+      "occlusion_strength": 1,
+      "alpha_cutoff": 0.5,
+      "double_sided": false,
+      "alpha_test": false,
+      "base_color_texture": "",
+      "normal_texture": "",
+      "metallic_roughness_texture": "",
+      "emissive_texture": "",
+      "occlusion_texture": ""
+    }
+  ]
+}
