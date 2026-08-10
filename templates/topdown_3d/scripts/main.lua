@@ -35,6 +35,8 @@ local SkillSystem = require("skill_system")
 local AISystem = require("ai_system")
 local UISystem = require("ui_system")
 local PetSystem = require("pet_system")
+-- 存档系统 (Phase 3, C# Crypto/DataSave/ConvertSaveData)
+local SaveSystem = require("save")
 
 -- 解构为局部变量, 保持原调用点不变
 local CAM = CamMove.CAM
@@ -4009,6 +4011,8 @@ end
 -- 关卡流程
 -- ============================================================================
 local function AdvanceStage()
+  -- 通关结算: 持久化当前进度/资产 (C# ConvertSaveData.ConvertData)
+  SaveSystem.save_all()
   G.stage_index = G.stage_index + 1
   if G.stage_index >= 30 then
     G.mode = "win"
@@ -4044,6 +4048,8 @@ local function RestartGame()
   BuildStage()
   G.mode = "play"
   if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
+  -- 重新开始: 覆盖为新档 (C# ConvertSaveData.ConvertData)
+  SaveSystem.save_all()
 end
 
 -- ============================================================================
@@ -4188,15 +4194,20 @@ function Awake()
   -- 初始化宠物系统
   PetSystem.init()
 
-  -- 初始化玩家
-  ChangeCharacter(0)
+  -- 读取存档 (恢复金币/玉石/技能/武器/关卡进度; 无存档则为新游戏)
+  local loaded = SaveSystem.load_all()
+  if not loaded then
+    G.stage_index = 0
+  end
+
+  -- 初始化玩家 (沿用存档的武器与等级)
+  ChangeCharacter(Player.weapon_kind or 0)
   ResetPower()
   Player.maxhp = 95 + Player.level * 5
   Player.hp = Player.maxhp
   Player.sp = Player.maxsp
 
-  -- 构建关卡
-  G.stage_index = 0
+  -- 构建关卡 (从存档进度继续)
   BuildStage()
 
   if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
