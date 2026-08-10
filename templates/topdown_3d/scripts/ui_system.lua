@@ -19,6 +19,11 @@ local M = {}
 -- dse.ui.set_visible 只接受 number, 这里包装布尔转换
 local function ui_set_visible(e, v) dse.ui.set_visible(e, v and 1 or 0) end
 
+-- dse.ui.is_pressed 返回 Lua number(0/1) 而非 boolean; 必须显式比较 (if 0 then 恒真)
+local function ui_pressed(e)
+  return e and dse.ui.is_pressed(e) == 1
+end
+
 -- ── 内部状态 ────────────────────────────────────────────────────────────
 local ui = {}         -- 所有 UI 实体句柄
 local gauges = {}     -- 血条等 gauge 对象
@@ -621,7 +626,7 @@ function M.update(dt)
   M._update_skill_icons()
 
   -- ── 暂停按钮检测 ────────────────────────────────────────────────────
-  if dse.ui.is_pressed(ui.pause_btn) and not paused then
+  if ui_pressed(ui.pause_btn) and not paused then
     M.pause_on()
   end
 
@@ -778,27 +783,27 @@ function M._update_pause_menu(dt)
     end
 
     -- FOV +/- 按钮
-    if dse.ui.is_pressed(pause_menu.fov_minus) then
+    if ui_pressed(pause_menu.fov_minus) then
       M._cam_fov = math.max(0, (M._cam_fov or 0) - 1)
       dse.ui.set_label_text(pause_menu.fov_value, string.format("x %d", M._cam_fov))
       if M.on_fov_change then M.on_fov_change(M._cam_fov) end
-    elseif dse.ui.is_pressed(pause_menu.fov_plus) then
+    elseif ui_pressed(pause_menu.fov_plus) then
       M._cam_fov = math.min(5, (M._cam_fov or 0) + 1)
       dse.ui.set_label_text(pause_menu.fov_value, string.format("x %d", M._cam_fov))
       if M.on_fov_change then M.on_fov_change(M._cam_fov) end
     end
 
     -- 返回按钮
-    if dse.ui.is_pressed(pause_menu.back_btn) then
+    if ui_pressed(pause_menu.back_btn) then
       M._option_off()
     end
   else
     -- 暂停菜单按钮
-    if dse.ui.is_pressed(pause_menu.resume_btn) then
+    if ui_pressed(pause_menu.resume_btn) then
       M.pause_off()
-    elseif dse.ui.is_pressed(pause_menu.option_btn) then
+    elseif ui_pressed(pause_menu.option_btn) then
       M._option_on()
-    elseif dse.ui.is_pressed(pause_menu.quit_btn) then
+    elseif ui_pressed(pause_menu.quit_btn) then
       M.pause_off()
       if M.on_quit then M.on_quit() end
     end
@@ -849,7 +854,7 @@ function M._update_chance(dt)
     string.format("(Have: %d)", G.jade or 0))
 
   -- 按钮检测
-  if dse.ui.is_pressed(chance_ui.revive_btn) then
+  if ui_pressed(chance_ui.revive_btn) then
     if (G.jade or 0) >= (M._require_jade or 1) then
       -- 复活成功
       G.jade = (G.jade or 0) - (M._require_jade or 1)
@@ -857,7 +862,7 @@ function M._update_chance(dt)
       M.hide_chance()
       if M.on_revive then M.on_revive() end
     end
-  elseif dse.ui.is_pressed(chance_ui.quit_btn) then
+  elseif ui_pressed(chance_ui.quit_btn) then
     M.hide_chance()
     if M.on_chance_fail then M.on_chance_fail() end
   end
@@ -1376,4 +1381,16 @@ end
 -- 模块导出
 -- ============================================================================
 M.paused = false
+
+-- ── UI 工具导出 (供 menu_system 等游戏外 UI 复用) ─────────────────────────
+M.make_quad = make_quad
+M.make_text = make_text
+M.make_button = make_button
+M.ui_set_visible = ui_set_visible
+M.kill_ui = kill_ui
+M.create_gauge = create_gauge
+M.set_gauge_fill = set_gauge_fill
+M.set_gauge_visible = set_gauge_visible
+M.set_gauge_color = set_gauge_color
+
 return M

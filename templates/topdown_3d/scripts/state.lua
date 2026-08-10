@@ -85,6 +85,10 @@ local G = {
   spawn_interval = 1.0,
   max_enemies = 15,
   enemies_alive = 0,
+  -- 存档/进度 (Phase 3)
+  stage_clear = {},         -- 每关最佳星级 [stage] = 0-3 (C# n15)
+  max_stage_index = 0,      -- 已解锁的最大关卡 (C# n06)
+  current_stage = 0,        -- 地图中当前选中的关卡 (C# sel_stage_index)
 }
 
 -- ============================================================================

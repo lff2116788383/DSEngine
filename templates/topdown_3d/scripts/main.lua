@@ -37,6 +37,8 @@ local UISystem = require("ui_system")
 local PetSystem = require("pet_system")
 -- 存档系统 (Phase 3, C# Crypto/DataSave/ConvertSaveData)
 local SaveSystem = require("save")
+-- 游戏外 UI (Phase 3, C# UI_intro/UI_map/UI_skill)
+local MenuSystem = require("menu_system")
 
 -- 解构为局部变量, 保持原调用点不变
 local CAM = CamMove.CAM
@@ -4010,23 +4012,27 @@ end
 -- ============================================================================
 -- 关卡流程
 -- ============================================================================
-local function AdvanceStage()
-  -- 通关结算: 持久化当前进度/资产 (C# ConvertSaveData.ConvertData)
+-- 通关结算: 记录星级/奖励/解锁, 返回地图 (C# UI_map + UI_result)
+local function OnStageCleared()
+  local stars, getcoin, getexp =
+    MenuSystem.record_stage_clear(G.stage_index, Player.maxhp > 0 and Player.hp / Player.maxhp or 1.0)
+  GainExp(getexp)
   SaveSystem.save_all()
-  G.stage_index = G.stage_index + 1
-  if G.stage_index >= 30 then
+  if G.stage_index + 1 >= 90 then
+    -- 全部通关 (C# UI_map: max_stage_index >= 90 → Ending)
     G.mode = "win"
     if S.bgm_victory then dse.audio.play_bgm(S.bgm_victory, 0.6, false) end
-    return
+  else
+    UISystem.clear()
+    MenuSystem.show_map()
+    G.mode = "map"
   end
-  BuildStage()
-  G.mode = "play"
-  local bgm = {S.bgm_stage1, S.bgm_stage2, S.bgm_stage3}
-  local bgm_idx = (G.stage_index % 3) + 1
-  if bgm[bgm_idx] then dse.audio.play_bgm(bgm[bgm_idx], 0.6, true) end
 end
 
+-- 开始新游戏 (C# UI_intro.InitStat + jumpSence): 清空存档从第 0 关开始
 local function RestartGame()
+  MenuSystem.clear_all()
+  UISystem.build()
   G.stage_index = 0
   G.lives = 3
   G.score = 0
@@ -4036,6 +4042,8 @@ local function RestartGame()
   G.combo = 0
   G.combo_max = 0
   G.totalkill = 0
+  G.stage_clear = {}
+  G.max_stage_index = 0
   Player.level = 1
   Player.exp = 0
   Player.maxhp = 100
@@ -4043,13 +4051,33 @@ local function RestartGame()
   Player.maxsp = 100
   Player.sp = 100
   Player.weapon_kind = 0
+  Player.skill_grades = {}
   ChangeCharacter(0)
+  ResetPower()
   PetSystem.clear()
   BuildStage()
   G.mode = "play"
   if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
-  -- 重新开始: 覆盖为新档 (C# ConvertSaveData.ConvertData)
+  -- 开始新游戏: 覆盖为新档 (C# ConvertSaveData.ConvertData)
   SaveSystem.save_all()
+end
+
+-- 从地图进入指定关卡 (C# UI_map 选关 → Loading)
+local function StartStage(stage_idx)
+  MenuSystem.clear_all()
+  UISystem.build()
+  G.stage_index = stage_idx
+  ResetPower()
+  Player.maxhp = 95 + Player.level * 5
+  Player.hp = Player.maxhp
+  Player.sp = Player.maxsp
+  Player.life = true
+  PetSystem.clear()
+  BuildStage()
+  G.mode = "play"
+  local bgm = {S.bgm_stage1, S.bgm_stage2, S.bgm_stage3}
+  local bgm_idx = (G.stage_index % 3) + 1
+  if bgm[bgm_idx] then dse.audio.play_bgm(bgm[bgm_idx], 0.6, true) end
 end
 
 -- ============================================================================
@@ -4087,19 +4115,39 @@ function Awake()
   -- UI 回调注入
   UISystem.on_pause = function() if S.click then dse.audio.play_sfx(S.click, 0.5, 0) end end
   UISystem.on_resume = function() if S.click then dse.audio.play_sfx(S.click, 0.5, 0) end end
-  UISystem.on_quit = function() G.mode = "game_over" end
-  UISystem.on_restart = function() RestartGame() end
-  UISystem.on_stage_continue = function() AdvanceStage() end
+  -- 暂停菜单退出 → 回主菜单 (C# UI_intro)
+  UISystem.on_quit = function()
+    UISystem.clear()
+    MenuSystem.show_intro()
+    G.mode = "menu"
+    if S.bgm_intro then dse.audio.play_bgm(S.bgm_intro, 0.6, true) end
+  end
+  -- 结算界面 R 键 (game_over → 回地图)
+  UISystem.on_restart = function()
+    UISystem.clear()
+    MenuSystem.show_map()
+    G.mode = "map"
+  end
+  UISystem.on_stage_continue = function() OnStageCleared() end
   UISystem.on_revive = function()
     Player.hp = Player.maxhp
     Player.life = true
     G.mode = "play"
     Player.invuln = 3.0
   end
-  UISystem.on_chance_fail = function() G.mode = "game_over" end
+  -- 放弃复活/超时 → 回地图
+  UISystem.on_chance_fail = function()
+    UISystem.clear()
+    MenuSystem.show_map()
+    G.mode = "map"
+    if S.bgm_intro then dse.audio.play_bgm(S.bgm_intro, 0.6, true) end
+  end
   UISystem.on_time_up = function()
-    G.mode = "game_over"
-    if S.bgm_fail then dse.audio.play_bgm(S.bgm_fail, 0.6, false) end
+    UISystem.clear()
+    MenuSystem.show_map()
+    G.mode = "map"
+    if S.bgm_fail then dse.audio.play_sfx(S.bgm_fail, 0.6, 0) end
+    if S.bgm_intro then dse.audio.play_bgm(S.bgm_intro, 0.6, true) end
   end
   UISystem.on_sp_charge = function(amount)
     Player.sp = math.min(Player.maxsp, Player.sp + amount)
@@ -4207,10 +4255,20 @@ function Awake()
   Player.hp = Player.maxhp
   Player.sp = Player.maxsp
 
-  -- 构建关卡 (从存档进度继续)
-  BuildStage()
+  -- ── 游戏外 UI 回调注入 (主菜单/地图/技能商店) ──────────────────────
+  MenuSystem.on_new_game = function() RestartGame() end
+  MenuSystem.on_start_stage = function(idx) StartStage(idx) end
+  MenuSystem.on_quit = function()
+    -- 退出游戏 (引擎无强制退出 API, 置模式由 DSE_MAX_FRAMES/窗口关闭兜底)
+    G.mode = "quit"
+    if S.click then dse.audio.play_sfx(S.click, 0.5, 0) end
+  end
 
-  if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
+  -- 进入主菜单 (C# UI_intro)
+  UISystem.clear()
+  MenuSystem.show_intro()
+  G.mode = "menu"
+  if S.bgm_intro then dse.audio.play_bgm(S.bgm_intro, 0.6, true) end
 
   print("[topdown_3d] Game initialized — full port from C# source")
 end
@@ -4252,6 +4310,16 @@ function Update(dt)
     return
   end
 
+  -- 游戏外界面 (主菜单/世界地图/技能商店)
+  if G.mode == "menu" or G.mode == "map" or G.mode == "shop" then
+    G.time_scale = 1.0  -- 菜单模式不受暂停 timeScale 影响
+    MenuSystem.update(dt)
+    UpdateCamera(dt)
+    UpdateEffects(dt)
+    EfSystem.update(dt)
+    return
+  end
+
   if G.mode == "play" then
     UpdatePlayer(dt)
     UpdateEnemies(dt)
@@ -4274,12 +4342,23 @@ function Update(dt)
     UISystem.update(dt)
     if G.level_complete_timer > 2.0 then
       G.level_complete_timer = 0
-      AdvanceStage()
+      OnStageCleared()
     end
   else
     -- game_over / win
     if app.get_key_down(KEY_R) then
-      RestartGame()
+      if G.mode == "win" then
+        -- 通关后回主菜单
+        UISystem.clear()
+        MenuSystem.show_intro()
+        G.mode = "menu"
+      else
+        -- 死亡后回地图
+        UISystem.clear()
+        MenuSystem.show_map()
+        G.mode = "map"
+      end
+      if S.bgm_intro then dse.audio.play_bgm(S.bgm_intro, 0.6, true) end
     end
     UpdateEffects(dt)
     EfSystem.update(dt)

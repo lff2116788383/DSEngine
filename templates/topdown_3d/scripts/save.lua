@@ -68,6 +68,30 @@ local function parse_grades(s)
   return grades
 end
 
+-- 序列化关卡星级表 (稀疏表 [stage] = stars) -> "stage:star,stage:star"
+local function serialize_stage_clear(clear)
+  local parts = {}
+  for idx, stars in pairs(clear or {}) do
+    if type(idx) == "number" and type(stars) == "number" and stars > 0 then
+      table.insert(parts, string.format("%d:%d", idx, stars))
+    end
+  end
+  table.sort(parts)
+  return table.concat(parts, ",")
+end
+
+-- 反序列化关卡星级表
+local function parse_stage_clear(s)
+  local clear = {}
+  if s and s ~= "" then
+    for part in s:gmatch("[^,]+") do
+      local idx, stars = part:match("^(%d+):(%d+)$")
+      if idx then clear[tonumber(idx)] = tonumber(stars) end
+    end
+  end
+  return clear
+end
+
 -- 保存全部存档键 (对应 C# ConvertSaveData.ConvertData)
 function save_all()
   local lines = {
@@ -80,6 +104,8 @@ function save_all()
     "weapon_kind=" .. (Player.weapon_kind or 0),
     "stage_index=" .. (G.stage_index or 0),
     "skill_grades=" .. serialize_grades(Player.skill_grades),
+    "stage_clear=" .. serialize_stage_clear(G.stage_clear),
+    "max_stage_index=" .. (G.max_stage_index or 0),
   }
   local payload = table.concat(lines, "\n")
   local f, err = io.open(save_path(), "wb")
@@ -126,6 +152,9 @@ function load_all()
   Player.exp = tonumber(data.player_exp or 0) or 0
   Player.weapon_kind = tonumber(data.weapon_kind or 0) or 0
   Player.skill_grades = parse_grades(data.skill_grades)
+  G.stage_clear = parse_stage_clear(data.stage_clear)
+  G.max_stage_index = tonumber(data.max_stage_index or 0) or 0
+  if G.max_stage_index < G.stage_index then G.max_stage_index = G.stage_index end
 
   print("[save] 已读取 -> " .. save_path())
   return true
