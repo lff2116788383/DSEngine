@@ -275,8 +275,10 @@ local function update_magicmissile(b, dt)
   b.x = b.x + fx * b.homing_spd * dt
   b.z = b.z + fz * b.homing_spd * dt
   if b.timer > b.close_time then
-    b.scale_x = b.scale_x - 0.5 * dt * 1.5
-    b.scale_z = b.scale_z - 0.5 * dt * 1.5
+    -- C# magicmissile: (0.5,1,1)*1.5dt → x 0.75/s, y 1.5/s, z 1.5/s
+    b.scale_x = b.scale_x - 0.75 * dt
+    b.scale_y = b.scale_y - 1.5 * dt
+    b.scale_z = b.scale_z - 1.5 * dt
     if b.scale_z < 0.02 then
       b.active = false
     end
@@ -551,11 +553,16 @@ local function update_hammer(b, dt)
   end
 end
 
--- Bullet_spear: 矛 (前进+缩小)
+-- Bullet_spear: 矛 (C# OnEnable 一次性位移 forward*tune + 固定速度 0.2)
 local function update_spear(b, dt)
   local fx, fz = yaw_to_dir(b.yaw)
-  b.x = b.x + fx * (0.2 + b.tune) * dt
-  b.z = b.z + fz * (0.2 + b.tune) * dt
+  if not b._tune_applied then
+    b._tune_applied = true
+    b.x = b.x + fx * b.tune
+    b.z = b.z + fz * b.tune
+  end
+  b.x = b.x + fx * 0.2 * dt
+  b.z = b.z + fz * 0.2 * dt
   b.scale_x = b.scale_x - 0.6 * dt
   if b.scale_x < 0 then
     b.active = false
@@ -578,6 +585,9 @@ local function update_spear_dash(b, dt)
     b.z = b.z + fz * 1.5 * dt
     b.scale_z = b.scale_z + 30 * dt
     if b.scale_z > 3 then
+      -- C# spear_Dash: scale.z>3 → localScale=(2,2,4)
+      b.scale_x = 2
+      b.scale_y = 2
       b.scale_z = 4
       b.phase = 2
     end

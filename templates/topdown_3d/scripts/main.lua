@@ -83,6 +83,7 @@ local KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN = 263, 262, 265, 264
 local KEY_J, KEY_K, KEY_L, KEY_O, KEY_P, KEY_R = 74, 75, 76, 79, 80, 82
 local KEY_U, KEY_I, KEY_Q, KEY_E, KEY_F = 85, 73, 81, 69, 70
 local KEY_SPACE = 32
+local KEY_ESCAPE = 256
 local KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6 = 49, 50, 51, 52, 53, 54
 
 -- ── 资产路径 ──────────────────────────────────────────────────────────
@@ -537,6 +538,8 @@ local function AttackOn(mon_x, mon_z)
     Player.knockback_x = -dx * 30
     Player.knockback_z = -dz * 30
     Player.knockback_timer = 0.05
+    -- C# 弓 3/4/5 段为升龙攻击
+    Player.attack_rising = (ca >= 32)
 
   elseif ca >= 40 and ca < 45 then
     -- 法杖 5 段连击 — 拳/弹
@@ -550,6 +553,8 @@ local function AttackOn(mon_x, mon_z)
     -- 发射法术弹
     Player._bullet_delay = atk_dur[ca - 39] * 0.5
     Player._bullet_ready = true
+    -- C# 法杖 2/4 段为升龙攻击
+    Player.attack_rising = (ca == 41 or ca == 43)
 
   elseif ca >= 50 and ca < 55 then
     -- 法器 5 段连击 — 魔法
@@ -573,6 +578,8 @@ local function AttackOn(mon_x, mon_z)
       -- 火焰飞溅
       Player._firesplash = true
     end
+    -- C# 法器 2/4/5 段为升龙攻击
+    Player.attack_rising = (ca == 51 or ca == 53 or ca == 54)
   end
 
   Player.combotime = 1.0
@@ -621,9 +628,9 @@ end
 local function PlayerDodge()
   if Player.chamovestat < -1 or Player.chamovestat > 50 then return end
   if Player.attacking > 0 then return end
-  if Player.sp < 10 then return end
+  if Player.sp < 4 then return end  -- C# weaponweight*2 = 4
 
-  Spcharge(-10)
+  Spcharge(-4)
   Player.chamovestat = -1
   Player.dodge_timer = 0.5
   Player.visual_state = "dodge"
@@ -814,8 +821,8 @@ local function GetItem(kind, level)
     Spcharge(10)
     spawn_damage_text(Player.x, 2.5, Player.z, "+SP", 0.3, 0.8, 1.0, 18)
   elseif kind == 2 then
-    -- HP 恢复
-    local heal = math.floor((100 + Player.level) * 0.1)
+    -- HP 恢复 (C# GetItem: (100 + (level-1)) * 0.1)
+    local heal = math.floor((100 + (Player.level - 1)) * 0.1)
     Player.hp = math.min(Player.hp + heal, Player.maxhp)
     spawn_damage_text(Player.x, 2.5, Player.z, "+" .. heal .. " HP", 0.3, 1.0, 0.3, 18)
   elseif kind == 3 then
@@ -3611,20 +3618,7 @@ local function BuildStage()
   G.enemykill = 0
   G.enemies_alive = 0
 
-  -- 生成第一波怪物
-  local initial_count = math.min(mainmon, 5)
-  for i = 1, initial_count do
-    local angle = (i / initial_count) * math.pi * 2
-    local ex = math.cos(angle) * 8
-    local ez = math.sin(angle) * 8
-    local ekind = math.random(basemon1, basemon2)
-    local en = CreateEnemy(ekind, ex, ez)
-    if en then
-      EnemySetLevel(en, G.stage_index, 0, false, 625)
-      en.behaviour_delay = 1.0 + math.random() * 2.0
-      table.insert(Entities.enemies, en)
-    end
-  end
+  -- 首批怪物由 UpdateSpawn regen==0 生成 (C# Spawn.Update 首批 3 只, 此处不再预刷避免重复)
 
   -- Boss
   if stg.boss1 >= 0 then
@@ -3721,7 +3715,7 @@ local function UpdateBossSummon(dt)
       else ekind = mainmon end
       local en = CreateEnemy(ekind, sx, sz)
       if en then
-        EnemySetLevel(en, G.stage_index + 5, 0, true, 625)
+        EnemySetLevel(en, G.stage_index, 0, true, 625)
         en.behaviour_delay = 0.5
         table.insert(Entities.enemies, en)
         spawn_hit_effect(sx, 0.5, sz, 5, "fire")
@@ -3893,120 +3887,7 @@ end
 -- ============================================================================
 -- UI 系统 (UI_Ingame 完整移植)
 -- ============================================================================
-local HUD = {}
-
-local function BuildHUD()
-  local function make_label(text, ox, oy, r, g, b, gw, gh)
-    local e = dse.ecs.create_entity()
-    dse.ecs.add_transform(e, 0, 0, 0, 1, 1, 1)
-    local font_tex = G._font_tex or 0
-    dse.ui.add_label(e, text, font_tex, r, g, b, 1.0, gw, gh, 1.0, 16, 6, 32, ox, oy)
-    return e
-  end
-
-  HUD.hp       = make_label("HP 100/100",   -560, 320, 1.0, 0.3, 0.3, 18, 24)
-  HUD.sp       = make_label("SP 100/100",   -560, 280, 0.3, 0.5, 1.0, 18, 24)
-  HUD.exp      = make_label("LV 1 Exp 0",   -560, 240, 0.3, 1.0, 0.3, 16, 20)
-  HUD.combo    = make_label("Combo 0",      -200, 320, 1.0, 0.85, 0.3, 18, 24)
-  HUD.stage    = make_label("Stage 1",        60, 320, 0.9, 0.9, 1.0, 18, 24)
-  HUD.weapon   = make_label("Weapon: 刀",    380, 320, 1.0, 1.0, 1.0, 16, 20)
-  HUD.skill    = make_label("Skill READY",   380, 280, 0.6, 0.8, 1.0, 16, 20)
-  HUD.coin     = make_label("Coin 0",        380, 250, 1.0, 0.85, 0.2, 16, 20)
-  HUD.soul     = make_label("Soul 1",        380, 220, 0.8, 0.3, 1.0, 16, 20)
-  HUD.status   = make_label("",                0,  60, 1.0, 1.0, 0.4, 30, 40)
-  HUD.tip      = make_label("",                0, -330, 0.7, 0.7, 0.7, 14, 18)
-  HUD.boss_hp  = make_label("",                0, 280, 1.0, 0.3, 0.3, 24, 32)
-  HUD.kill     = make_label("Kill 0",       -200, 280, 0.8, 0.8, 0.8, 16, 20)
-  HUD.progress = make_label("",             -200, 240, 0.6, 1.0, 0.6, 14, 18)
-end
-
-local function UpdateHUD()
-  if HUD.hp then
-    dse.ui.set_label_text(HUD.hp, string.format("HP %d/%d", math.max(0, Player.hp), Player.maxhp))
-  end
-  if HUD.sp then
-    dse.ui.set_label_text(HUD.sp, string.format("SP %d/%d", math.floor(Player.sp), Player.maxsp))
-  end
-  if HUD.exp then
-    dse.ui.set_label_text(HUD.exp, string.format("LV %d  Exp %d/%d", Player.level, math.floor(Player.exp), Player.level * 100))
-  end
-  if HUD.combo then
-    if G.combo > 0 then
-      dse.ui.set_label_text(HUD.combo, string.format("Combo %d", G.combo))
-    else
-      dse.ui.set_label_text(HUD.combo, "")
-    end
-  end
-  if HUD.stage then
-    dse.ui.set_label_text(HUD.stage, string.format("Stage %d", G.stage_index + 1))
-  end
-  if HUD.weapon then
-    local wname = DB.DB_Weapon[Player.weapon_kind] and DB.DB_Weapon[Player.weapon_kind].name or "?"
-    local prefix = Player.general and ("武将: " .. (DB.DB_General[Player.general_kind] and DB.DB_General[Player.general_kind].name or "?")) or ("武器: " .. wname)
-    dse.ui.set_label_text(HUD.weapon, prefix)
-  end
-  if HUD.skill then
-    local skill, set, grade = GetCurrentSkill()
-    if skill then
-      local sname = DB.SkillNames[skill.name] or ("技能" .. tostring(set))
-      local cd = Player.skill_cd[set] or 0
-      if Player.casting then
-        dse.ui.set_label_text(HUD.skill, string.format("施法中: %s...", sname))
-      elseif cd > 0 then
-        dse.ui.set_label_text(HUD.skill, string.format("%s Lv%d CD %.1f", sname, grade + 1, cd))
-      else
-        local cost = 20 + grade * 10
-        if skill.soulprice and skill.soulprice > 0 then
-          dse.ui.set_label_text(HUD.skill, string.format("%s Lv%d [魂%d] [K]", sname, grade + 1, skill.soulprice))
-        else
-          dse.ui.set_label_text(HUD.skill, string.format("%s Lv%d [SP%d] [K]", sname, grade + 1, cost))
-        end
-      end
-    else
-      dse.ui.set_label_text(HUD.skill, "No Skill")
-    end
-  end
-  if HUD.coin then
-    dse.ui.set_label_text(HUD.coin, string.format("Coin %d", G.coin))
-  end
-  if HUD.soul then
-    dse.ui.set_label_text(HUD.soul, string.format("Soul %d", G.soul))
-  end
-  if HUD.kill then
-    dse.ui.set_label_text(HUD.kill, string.format("Kill %d", G.totalkill))
-  end
-  if HUD.progress then
-    local stg = GetStageData()
-    local total = stg and stg.stagenum * 5 or 15
-    if Entities.boss and not Entities.boss.dead then
-      dse.ui.set_label_text(HUD.progress, "BOSS BATTLE")
-    else
-      dse.ui.set_label_text(HUD.progress, string.format("进度 %d/%d", G.enemykill, total))
-    end
-  end
-  if HUD.status then
-    local msg = ""
-    if G.mode == "level_complete" then
-      msg = "STAGE CLEAR! -> Next"
-    elseif G.mode == "game_over" then
-      msg = "GAME OVER - Press R to restart"
-    elseif G.mode == "win" then
-      msg = "YOU WIN! Press R to play again"
-    end
-    dse.ui.set_label_text(HUD.status, msg)
-  end
-  if HUD.tip then
-    dse.ui.set_label_text(HUD.tip, "WASD move  J atk  K skill  Q skill+  L dodge  O block  P grab  U weapon  I general")
-  end
-  if HUD.boss_hp then
-    if Entities.boss and not Entities.boss.dead then
-      local name = DB.BossNames[Entities.boss.bosskind] or "Boss"
-      dse.ui.set_label_text(HUD.boss_hp, string.format("%s  HP %d/%d", name, math.max(0, Entities.boss.hp), Entities.boss.maxhp))
-    else
-      dse.ui.set_label_text(HUD.boss_hp, "")
-    end
-  end
-end
+-- 纯文本 HUD 已废弃：由 ui_system.lua 完整 HUD（gauge 条 + 文本）取代
 
 -- ============================================================================
 -- 攻击碰撞检测 (代替 OnTriggerEnter)
@@ -4164,8 +4045,7 @@ function Awake()
   dse.ecs.add_transform(ambient, 0, 15, 0, 1, 1, 1)
   dse.ecs.add_point_light_3d(ambient, 0.4, 0.4, 0.5, 0.5, 30.0)
 
-  -- HUD (旧文本 HUD + 新视觉 UI 系统)
-  BuildHUD()
+  -- HUD (ui_system 完整 HUD: gauge 条 + 文本)
   UISystem.build()
 
   -- UI 回调注入
@@ -4310,6 +4190,12 @@ function Update(dt)
     end
   end
 
+  -- ESC 暂停切换 (C# UI_Ingame_GUI PauseOn/PauseOff, 仅战斗中)
+  if (G.mode == "play" or (G.boss_intro_timer and G.boss_intro_timer > 0))
+     and app.get_key_down(KEY_ESCAPE) then
+    UISystem.toggle_pause()
+  end
+
   -- Cutin01 特写更新 (使用原始帧时间)
   if Cutin01.Cutin.active then
     UpdateCutin(raw_dt)
@@ -4320,7 +4206,8 @@ function Update(dt)
     G.boss_intro_timer = G.boss_intro_timer - dt
     UpdateCamera(dt)
     UpdateEffects(dt)
-    UpdateHUD()
+    EfSystem.update(dt)
+    UISystem.update(dt)
     return
   end
 
@@ -4336,12 +4223,14 @@ function Update(dt)
     UpdateSpawn(dt)
     UpdateCamera(dt)
     UpdateEffects(dt)
-    UpdateHUD()
+    EfSystem.update(dt)
+    UISystem.update(dt)
   elseif G.mode == "level_complete" then
     G.level_complete_timer = G.level_complete_timer + dt
     UpdateEffects(dt)
+    EfSystem.update(dt)
     UpdateCamera(dt)
-    UpdateHUD()
+    UISystem.update(dt)
     if G.level_complete_timer > 2.0 then
       G.level_complete_timer = 0
       AdvanceStage()
@@ -4352,7 +4241,8 @@ function Update(dt)
       RestartGame()
     end
     UpdateEffects(dt)
+    EfSystem.update(dt)
     UpdateCamera(dt)
-    UpdateHUD()
+    UISystem.update(dt)
   end
 end

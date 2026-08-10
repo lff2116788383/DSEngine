@@ -900,6 +900,15 @@ function M.pause_off()
   if M.on_resume then M.on_resume() end
 end
 
+-- ESC 键切换暂停 (C# UI_Ingame_GUI 暂停开关)
+function M.toggle_pause()
+  if paused then
+    M.pause_off()
+  else
+    M.pause_on()
+  end
+end
+
 -- 开启选项面板
 function M._option_on()
   option_mode = true

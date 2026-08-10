@@ -568,16 +568,16 @@ local function update_sk_meteo(s, dt)
   end
 end
 
--- Sk_machinegun: 机枪
+-- Sk_machinegun: 机枪 (C# 首射 0.8s)
 local function update_sk_machinegun(s, dt)
   s.hit_timer = (s.hit_timer or 0) + dt
-  if s.timer > 0.6 and s.timer < 4.0 and s.hit_timer >= 0.2 then
+  if s.timer > 0.8 and s.timer < 4.0 and s.hit_timer >= 0.2 then
     s.hit_timer = 0
     check_hit_enemies(s, 2.0)
   end
   if s.timer > 4.5 then s.active = false
   elseif s.timer > 4.0 then s.shooton = false
-  elseif s.timer > 0.6 and not s.shooton then s.shooton = true end
+  elseif s.timer > 0.8 and not s.shooton then s.shooton = true end
 end
 
 -- Sk_chainbreak: 锁链爆裂
@@ -604,10 +604,10 @@ local function update_sk_groundbreak(s, dt)
   if s.timer > 2.0 then s.active = false end
 end
 
--- Sk_flybug: 飞虫群
+-- Sk_flybug: 飞虫群 (C# 首射 0.5s 延迟, 每 0.3s, 3s 停止, 6s 消失)
 local function update_sk_flybug(s, dt)
   s.hit_timer = (s.hit_timer or 0) + dt
-  if s.timer < 3.0 and s.hit_timer >= 0.3 then
+  if s.timer > 0.5 and s.timer < 3.0 and s.hit_timer >= 0.3 then
     s.hit_timer = 0
     check_hit_enemies(s, 1.0)
   end
@@ -1140,7 +1140,8 @@ local function launch_skill(index)
     Player.repeat_atk = skillatk
     repeatskill(29, 6, 0.1)
   elseif index == 30 then
-    spawn_skill({ type = "general_meteo", x = Player.x + 4.2 - fx * 5.5, y = 4.2, z = Player.z - fz * 5.5,
+    -- C# general_meteo: pos + up*4.2 - forward*5.5 (up 只作用 y 轴)
+    spawn_skill({ type = "general_meteo", x = Player.x - fx * 5.5, y = 4.2, z = Player.z - fz * 5.5,
       yaw = Player.yaw, damage = skillatk, life = 5.0, r = 0.9, g = 0.5, b = 0.2 })
   elseif index == 31 then
     Player.repeat_atk = skillatk
