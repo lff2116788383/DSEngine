@@ -370,11 +370,12 @@ local function Spcharge(amount)
   Player.sp = clamp(Player.sp + amount, 0, Player.maxsp)
 end
 
--- 无敌 (Invincibility)
+-- 无敌 (Invincibility, C# 同时置 hitrate=200 提高敌人命中率)
 local function Invincibility(t)
   Player.isinvincibility = true
   Player.target_invincibility = t
   Player.delay_invincibility = 0
+  Player.hitrate = 200
 end
 
 -- 攻击力提升 (AttakUp)
@@ -691,6 +692,10 @@ local function PlayerGrab()
 
   if nearest_en then
     Spcharge(-50)
+    -- C# Grab: Heal(cha_maxhp * 0.1) 抓取回复
+    local heal = math.floor(Player.maxhp * 0.1)
+    Player.hp = math.min(Player.hp + heal, Player.maxhp)
+    spawn_damage_text(Player.x, 2.5, Player.z, "+" .. heal .. " HP", 0.3, 1.0, 0.3, 18)
     Player.chamovestat = 112
     Player.grab_timer = 1.6
     Player.visual_state = "grab"
@@ -1415,12 +1420,28 @@ local function UpdatePlayer(dt)
       Player.chamovestat = 2 -- run
       Player.visual_state = "run"
 
+      -- C# 冲刺态: 连续跑 3s → chamovestat=3 + 残影 (Cha_Control ef_blur)
+      Player.longdash = (Player.longdash or 0) + dt
+      if Player.longdash >= 3.0 then
+        Player.chamovestat = 3
+        Player.visual_state = "sprint"
+        Player._blur_timer = (Player._blur_timer or 0) + dt
+        if Player._blur_timer >= 0.15 then
+          Player._blur_timer = 0
+          if EfSystem.spawn_blur then
+            EfSystem.spawn_blur(Player.x, Player.y + 1.2, Player.z, {})
+          end
+        end
+      end
+
       -- 脚步声
       if math.random() < dt * 3 then
         if S.footstep then dse.audio.play_sfx(S.footstep, 0.3, 0) end
       end
     else
       Player.chamovestat = 0 -- idle
+      Player.longdash = 0
+      Player._blur_timer = 0
       if Player.attacking <= 0 and Player.dodge_timer <= 0 and Player.knockback_timer <= 0 then
         Player.visual_state = "idle"
       end
@@ -1436,9 +1457,15 @@ local function UpdatePlayer(dt)
       SkillSystem.player_skill()
     end
 
-    -- 闪避
+    -- 闪避 (C# 双击闪避: dubbleclick < 0.3s 内第二次按 L)
     if app.get_key_down(KEY_L) then
-      PlayerDodge()
+      local now = G.time
+      if Player._dodge_click_t and now - Player._dodge_click_t < 0.3 then
+        PlayerDodge()
+        Player._dodge_click_t = nil
+      else
+        Player._dodge_click_t = now
+      end
     end
 
     -- 格挡 (按住)
@@ -1546,6 +1573,9 @@ local function UpdatePlayer(dt)
       sx, sy, sz = 1.3, 1.3, 1.3
     elseif Player.visual_state == "dash_attack" then
       sx, sz = 1.4, 1.4
+    elseif Player.visual_state == "sprint" then
+      -- 冲刺姿态: 前冲
+      sx, sz = 1.25, 1.15
     elseif Player.visual_state == "dodge" or Player.visual_state == "evade" then
       -- 闪避时压扁
       sy = 0.5
