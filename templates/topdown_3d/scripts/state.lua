@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- state.lua — 共享游戏状态
 -- 供 main.lua 与各功能模块 (cam_move / monster_efs / weapon_damage / cutin01)
 -- require 共享, 避免模块间循环依赖。表为可变引用, 原地清空而非整表替换。
@@ -28,6 +28,18 @@ local function resolve_path(path)
     if file_exists(p) then return p end
   end
   return path
+end
+
+-- 模型基准缩放 (见 model_scale.lua): 由 AssetBuilder 转换 dmesh 后按原始尺寸计算,
+-- 乘到实体 scale 上使模型放大到目标世界尺寸 (角色高约 1.7 世界单位)
+local MODEL_SCALE = require("model_scale")
+local function mesh_key(mesh)
+  local m = tostring(mesh or "")
+  local base = m:match("([^/\\]+)%.[A-Za-z0-9]+$")
+  return base or m
+end
+local function base_scale(mesh)
+  return MODEL_SCALE[mesh_key(mesh)] or 1
 end
 
 -- ============================================================================
@@ -224,6 +236,8 @@ local M = {
   sign = sign,
   kill_entity = kill_entity,
   resolve_path = resolve_path,
+  base_scale = base_scale,
+  mesh_key = mesh_key,
   reset_entities = reset_entities,
 }
 

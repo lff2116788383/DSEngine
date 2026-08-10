@@ -73,7 +73,7 @@ local function spawn(cfg)
   b.color_g  = cfg.g or 1
   b.color_b  = cfg.b or 1
   b.color_a  = cfg.a or 1
-  b.model    = cfg.model or "assets/models/ball.glb"
+  b.model    = cfg.model or "assets/models/ball.dmesh"
 
   -- 类型特定字段 (按需)
   b.speed       = cfg.speed or 0        -- 直线速度
@@ -117,8 +117,12 @@ end
 local function ensure_entity(b)
   if b.e then return end
   b.e = dse.ecs.create_entity()
+  -- 模型基准缩放烘焙进 scale (model_scale.lua), 仅创建时乘一次, 后续 sync 沿用
+  local bs = S.base_scale(b.model or "assets/models/ball.dmesh")
+  b.scale_x, b.scale_y, b.scale_z = b.scale_x * bs, b.scale_y * bs, b.scale_z * bs
+  b.origin_sx, b.origin_sy, b.origin_sz = b.origin_sx * bs, b.origin_sy * bs, b.origin_sz * bs
   dse.ecs.add_transform(b.e, b.x, b.y, b.z, b.scale_x, b.scale_y, b.scale_z)
-  local model = b.model or "assets/models/ball.glb"
+  local model = b.model or "assets/models/ball.dmesh"
   pcall(dse.ecs.mesh_renderer_add, b.e, model)
   dse.ecs.set_mesh_shader_variant(b.e, "MESH_LIT")
   dse.ecs.set_mesh_color(b.e, b.color_r, b.color_g, b.color_b, b.color_a)

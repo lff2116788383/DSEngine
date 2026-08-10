@@ -219,16 +219,18 @@ function Eagle.OnEnable()
   -- 创建 ECS 实体
   if not Eagle.e then
     Eagle.e = dse.ecs.create_entity()
-    dse.ecs.add_transform(Eagle.e, Eagle.x, Eagle.y, Eagle.z, 0.3, 0.3, 0.3)
-    pcall(dse.ecs.mesh_renderer_add, Eagle.e, "assets/models/ball.glb")
+    local bs = S.base_scale("assets/models/ball.dmesh")
+    dse.ecs.add_transform(Eagle.e, Eagle.x, Eagle.y, Eagle.z, 0.3 * bs, 0.3 * bs, 0.3 * bs)
+    pcall(dse.ecs.mesh_renderer_add, Eagle.e, "assets/models/ball.dmesh")
     dse.ecs.set_mesh_shader_variant(Eagle.e, "MESH_LIT")
     dse.ecs.set_mesh_color(Eagle.e, 0.8, 0.8, 1.0, 1.0)
   end
   -- 创建阴影
   if not Eagle.shadow_e then
     Eagle.shadow_e = dse.ecs.create_entity()
-    dse.ecs.add_transform(Eagle.shadow_e, Eagle.x, 0.002, Eagle.z, 0.3, 0.02, 0.3)
-    pcall(dse.ecs.mesh_renderer_add, Eagle.shadow_e, "assets/models/ball.glb")
+    local bs = S.base_scale("assets/models/ball.dmesh")
+    dse.ecs.add_transform(Eagle.shadow_e, Eagle.x, 0.002, Eagle.z, 0.3 * bs, 0.02, 0.3 * bs)
+    pcall(dse.ecs.mesh_renderer_add, Eagle.shadow_e, "assets/models/ball.dmesh")
     dse.ecs.set_mesh_shader_variant(Eagle.shadow_e, "MESH_LIT")
     dse.ecs.set_mesh_color(Eagle.shadow_e, 0, 0, 0, 0.3)
   end
@@ -489,15 +491,17 @@ function Horse.SkillOn()
   -- 创建 ECS 实体
   if not Horse.e then
     Horse.e = dse.ecs.create_entity()
-    dse.ecs.add_transform(Horse.e, Horse.x, Horse.y, Horse.z, 1.0, 1.0, 1.0)
-    pcall(dse.ecs.mesh_renderer_add, Horse.e, "assets/models/horse.glb")
+    local bs = S.base_scale("assets/models/horse.dmesh")
+    dse.ecs.add_transform(Horse.e, Horse.x, Horse.y, Horse.z, bs, bs, bs)
+    pcall(dse.ecs.mesh_renderer_add, Horse.e, "assets/models/horse.dmesh")
     dse.ecs.set_mesh_shader_variant(Horse.e, "MESH_LIT")
     dse.ecs.set_mesh_color(Horse.e, 0.8, 0.6, 0.2, 1.0)
   end
   if not Horse.shadow_e then
     Horse.shadow_e = dse.ecs.create_entity()
-    dse.ecs.add_transform(Horse.shadow_e, Horse.x, 0.002, Horse.z, 1.0, 0.02, 1.0)
-    pcall(dse.ecs.mesh_renderer_add, Horse.shadow_e, "assets/models/ball.glb")
+    local bs = S.base_scale("assets/models/ball.dmesh")
+    dse.ecs.add_transform(Horse.shadow_e, Horse.x, 0.002, Horse.z, bs, 0.02, bs)
+    pcall(dse.ecs.mesh_renderer_add, Horse.shadow_e, "assets/models/ball.dmesh")
     dse.ecs.set_mesh_shader_variant(Horse.shadow_e, "MESH_LIT")
     dse.ecs.set_mesh_color(Horse.shadow_e, 0, 0, 0, 0.3)
   end
@@ -696,8 +700,9 @@ local function angel_fire()
     e = nil,
   }
   arrow.e = dse.ecs.create_entity()
-  dse.ecs.add_transform(arrow.e, arrow.x, arrow.y, arrow.z, 0.15, 0.15, 0.15)
-  pcall(dse.ecs.mesh_renderer_add, arrow.e, "assets/models/ball.glb")
+  local bs = S.base_scale("assets/models/ball.dmesh")
+  dse.ecs.add_transform(arrow.e, arrow.x, arrow.y, arrow.z, 0.15 * bs, 0.15 * bs, 0.15 * bs)
+  pcall(dse.ecs.mesh_renderer_add, arrow.e, "assets/models/ball.dmesh")
   dse.ecs.set_mesh_shader_variant(arrow.e, "MESH_LIT")
   local colors = {
     [0]={1,0.3,0.3}, {0.3,0.6,1}, {1,1,0.3}, {0.3,0.8,0.3},
@@ -862,8 +867,9 @@ function Ride.Attack(is_right)
     end
     -- 创建 ECS 实体
     swing.e = dse.ecs.create_entity()
-    dse.ecs.add_transform(swing.e, swing.x, swing.y, swing.z, 1.0, 1.0, 1.0)
-    pcall(dse.ecs.mesh_renderer_add, swing.e, "assets/models/ball.glb")
+    local bs = S.base_scale("assets/models/ball.dmesh")
+    dse.ecs.add_transform(swing.e, swing.x, swing.y, swing.z, bs, bs, bs)
+    pcall(dse.ecs.mesh_renderer_add, swing.e, "assets/models/ball.dmesh")
     dse.ecs.set_mesh_shader_variant(swing.e, "MESH_LIT")
     dse.ecs.set_mesh_color(swing.e, 0.9, 0.9, 0.6, 0.8)
     table.insert(Ride.swings, swing)
@@ -953,8 +959,9 @@ function Ride.SpawnEnemy(x, z)
   en.rnd_z = rand_range(-0.4, 0.6)
 
   en.e = dse.ecs.create_entity()
-  dse.ecs.add_transform(en.e, en.x, en.y, en.z, 0.8, 0.8, 0.8)
-  pcall(dse.ecs.mesh_renderer_add, en.e, "assets/models/mon_0.glb")
+  local bs = S.base_scale("assets/models/mon_0.dmesh")
+  dse.ecs.add_transform(en.e, en.x, en.y, en.z, 0.8 * bs, 0.8 * bs, 0.8 * bs)
+  pcall(dse.ecs.mesh_renderer_add, en.e, "assets/models/mon_0.dmesh")
   dse.ecs.set_mesh_shader_variant(en.e, "MESH_LIT")
   dse.ecs.set_mesh_color(en.e, 0.8, 0.4, 0.3, 1.0)
 
@@ -975,8 +982,9 @@ function Ride.SpawnEnemy2(x, z)
     bullet_e = nil,
   }
   en.e = dse.ecs.create_entity()
-  dse.ecs.add_transform(en.e, en.x, en.y, en.z, 1.0, 1.0, 1.0)
-  pcall(dse.ecs.mesh_renderer_add, en.e, "assets/models/mon_1.glb")
+  local bs = S.base_scale("assets/models/mon_1.dmesh")
+  dse.ecs.add_transform(en.e, en.x, en.y, en.z, bs, bs, bs)
+  pcall(dse.ecs.mesh_renderer_add, en.e, "assets/models/mon_1.dmesh")
   dse.ecs.set_mesh_shader_variant(en.e, "MESH_LIT")
   dse.ecs.set_mesh_color(en.e, 0.6, 0.5, 0.3, 1.0)
 
@@ -1066,8 +1074,9 @@ local function update_ride_enemy2(en, dt)
       e = nil,
     }
     arrow.e = dse.ecs.create_entity()
-    dse.ecs.add_transform(arrow.e, arrow.x, arrow.y, arrow.z, 0.1, 0.1, 0.1)
-    pcall(dse.ecs.mesh_renderer_add, arrow.e, "assets/models/ball.glb")
+    local bs = S.base_scale("assets/models/ball.dmesh")
+    dse.ecs.add_transform(arrow.e, arrow.x, arrow.y, arrow.z, 0.1 * bs, 0.1 * bs, 0.1 * bs)
+    pcall(dse.ecs.mesh_renderer_add, arrow.e, "assets/models/ball.dmesh")
     dse.ecs.set_mesh_shader_variant(arrow.e, "MESH_LIT")
     dse.ecs.set_mesh_color(arrow.e, 0.6, 0.3, 0.1, 1.0)
     table.insert(Ride.arrows, arrow)

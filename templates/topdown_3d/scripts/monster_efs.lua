@@ -78,8 +78,9 @@ end
 local ShadowPool = { items = {} }
 local function CreateShadowEntity()
   local e = dse.ecs.create_entity()
-  dse.ecs.add_transform(e, 0, 0.03, 0, 1, 1, 1)
-  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/shadow.glb"))
+  local bs = State.base_scale("assets/models/shadow.dmesh")
+  dse.ecs.add_transform(e, 0, 0.03, 0, bs, bs, bs)
+  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/shadow.dmesh"))
   dse.ecs.set_mesh_shader_variant(e, "MESH_UNLIT")
   dse.ecs.set_mesh_color(e, 0.0, 0.0, 0.0, 0.4)
   return e
@@ -116,8 +117,9 @@ local function GetItemBoxEntity()
     end
   end
   local te = dse.ecs.create_entity()
-  dse.ecs.add_transform(te, 0, 0.5, 0, 0.4, 0.4, 0.4)
-  dse.ecs.mesh_renderer_add(te, State.resolve_path("assets/models/giftbox.glb"))
+  local bs = State.base_scale("assets/models/giftbox.dmesh")
+  dse.ecs.add_transform(te, 0, 0.5, 0, 0.4 * bs, 0.4 * bs, 0.4 * bs)
+  dse.ecs.mesh_renderer_add(te, State.resolve_path("assets/models/giftbox.dmesh"))
   dse.ecs.set_mesh_shader_variant(te, "MESH_LIT")
   if State.TEX and State.TEX.giftbox then
     dse.ecs.set_mesh_texture(te, "albedo", State.TEX.giftbox)
@@ -285,8 +287,9 @@ end
 -- ============================================================================
 local function spawn_weapon_drop(x, z, yaw)
   local e = dse.ecs.create_entity()
-  dse.ecs.add_transform(e, x, 0.3, z, 1.2, 1.2, 1.2)
-  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_s01.glb"))
+  local bs = State.base_scale("assets/models/blade_s01.dmesh")
+  dse.ecs.add_transform(e, x, 0.3, z, 1.2 * bs, 1.2 * bs, 1.2 * bs)
+  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_s01.dmesh"))
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
   table.insert(Entities.drops, {
     e = e, x = x, z = z, y = 0.3,

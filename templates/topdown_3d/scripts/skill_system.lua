@@ -75,9 +75,12 @@ end
 local function ensure_entity(s, model)
   if s.e then return end
   s.e = dse.ecs.create_entity()
-  dse.ecs.add_transform(s.e, s.x or 0, s.y or 0, s.z or 0,
-    s.scale_x or 1, s.scale_y or 1, s.scale_z or 1)
-  pcall(dse.ecs.mesh_renderer_add, s.e, model or "assets/models/ball.glb")
+  -- 模型基准缩放烘焙进 scale (model_scale.lua), 仅创建时乘一次, 后续 sync 沿用
+  local bs = S.base_scale(model or "assets/models/ball.dmesh")
+  s.scale_x, s.scale_y, s.scale_z = (s.scale_x or 1) * bs, (s.scale_y or 1) * bs, (s.scale_z or 1) * bs
+  s.origin_sx, s.origin_sy, s.origin_sz = s.scale_x, s.scale_y, s.scale_z
+  dse.ecs.add_transform(s.e, s.x or 0, s.y or 0, s.z or 0, s.scale_x, s.scale_y, s.scale_z)
+  pcall(dse.ecs.mesh_renderer_add, s.e, model or "assets/models/ball.dmesh")
   dse.ecs.set_mesh_shader_variant(s.e, "MESH_LIT")
   if s.color_r then
     dse.ecs.set_mesh_color(s.e, s.color_r, s.color_g or 1, s.color_b or 1, s.color_a or 1)

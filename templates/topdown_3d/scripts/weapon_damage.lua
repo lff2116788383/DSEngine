@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- weapon_damage.lua — Boss 武器系统 (WeaponDamage.cs + AI_Boss01 武器生成)
 -- clone_weapon 生命周期: colliderofftime / destroytime / impactDestroy
 -- 距离检测代替 OnTriggerEnter, 对玩家伤害经 main.lua 注入 (打破循环 require)
@@ -21,8 +21,9 @@ end
 -- ============================================================================
 local function BossWeaponCreate(boss, atk_index)
   local e = dse.ecs.create_entity()
-  dse.ecs.add_transform(e, 0, 0, 0, 1, 1, 1)
-  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_n01.glb"))
+  local bs = State.base_scale("assets/models/blade_n01.dmesh")
+  dse.ecs.add_transform(e, 0, 0, 0, bs, bs, bs)
+  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_n01.dmesh"))
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
   dse.ecs.set_mesh_visible(e, false)
   local w = {
@@ -97,8 +98,9 @@ end
 -- ============================================================================
 local function BossSecondWeaponCreate(boss)
   local e = dse.ecs.create_entity()
-  dse.ecs.add_transform(e, 0, 0, 0, 1.3, 1.3, 1.3)
-  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_s01.glb"))
+  local bs = State.base_scale("assets/models/blade_s01.dmesh")
+  dse.ecs.add_transform(e, 0, 0, 0, 1.3 * bs, 1.3 * bs, 1.3 * bs)
+  dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_s01.dmesh"))
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
   dse.ecs.set_mesh_visible(e, false)
   boss.ef_secondweapon = {

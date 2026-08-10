@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- main.lua — 完整移植自 Unity 逆向 C# 源码
 -- 忠实复刻: Cha_Control / AI_Enemy01 / AI_Boss01 / Spawn / UI_Ingame
 --           Cam_Move / Cha_Skill / Combat / Effects
@@ -21,6 +21,8 @@ local State = require("state")
 local G, Player, Entities = State.G, State.Player, State.Entities
 local atan2, clamp, dist2d, lerp, sign = State.atan2, State.clamp, State.dist2d, State.lerp, State.sign
 local kill_entity = State.kill_entity
+-- 模型基准缩放表 (AssetBuilder 转换 dmesh 后按原始尺寸生成)
+local MODEL_SCALE = require("model_scale")
 
 -- 功能模块 (按 C# 源码文件对应拆分)
 local CamMove = require("cam_move")
@@ -158,49 +160,49 @@ end
 
 -- ── 武将模型映射 (原版 cha01_01~17) ──────────────────────────────────
 local CHA_MODELS = {
-  "assets/models/cha01_01.glb", "assets/models/cha01_02.glb",
-  "assets/models/cha01_03.glb", "assets/models/cha01_04.glb",
-  "assets/models/cha01_05.glb", "assets/models/cha01_06.glb",
-  "assets/models/cha01_07.glb", "assets/models/cha01_08.glb",
-  "assets/models/cha01_09.glb", "assets/models/cha01_10.glb",
-  "assets/models/cha01_11.glb", "assets/models/cha01_12.glb",
-  "assets/models/cha01_13.glb", "assets/models/cha01_14.glb",
-  "assets/models/cha01_15.glb", "assets/models/cha01_16.glb",
-  "assets/models/cha01_17.glb",
+  "assets/models/cha01_01.dmesh", "assets/models/cha01_02.dmesh",
+  "assets/models/cha01_03.dmesh", "assets/models/cha01_04.dmesh",
+  "assets/models/cha01_05.dmesh", "assets/models/cha01_06.dmesh",
+  "assets/models/cha01_07.dmesh", "assets/models/cha01_08.dmesh",
+  "assets/models/cha01_09.dmesh", "assets/models/cha01_10.dmesh",
+  "assets/models/cha01_11.dmesh", "assets/models/cha01_12.dmesh",
+  "assets/models/cha01_13.dmesh", "assets/models/cha01_14.dmesh",
+  "assets/models/cha01_15.dmesh", "assets/models/cha01_16.dmesh",
+  "assets/models/cha01_17.dmesh",
 }
 -- 普通怪物 (DB_Monster 0-15 → mon_0~15)
 local MON_MODELS = {
-  "assets/models/mon_0.glb", "assets/models/mon_1.glb",
-  "assets/models/mon_2.glb", "assets/models/mon_3.glb",
-  "assets/models/mon_4.glb", "assets/models/mon_5.glb",
-  "assets/models/mon_6.glb", "assets/models/mon_7.glb",
-  "assets/models/mon_8.glb", "assets/models/mon_9.glb",
-  "assets/models/mon_10.glb", "assets/models/mon_11.glb",
-  "assets/models/mon_12.glb", "assets/models/mon_13.glb",
-  "assets/models/mon_14.glb", "assets/models/mon_15.glb",
+  "assets/models/mon_0.dmesh", "assets/models/mon_1.dmesh",
+  "assets/models/mon_2.dmesh", "assets/models/mon_3.dmesh",
+  "assets/models/mon_4.dmesh", "assets/models/mon_5.dmesh",
+  "assets/models/mon_6.dmesh", "assets/models/mon_7.dmesh",
+  "assets/models/mon_8.dmesh", "assets/models/mon_9.dmesh",
+  "assets/models/mon_10.dmesh", "assets/models/mon_11.dmesh",
+  "assets/models/mon_12.dmesh", "assets/models/mon_13.dmesh",
+  "assets/models/mon_14.dmesh", "assets/models/mon_15.dmesh",
 }
 -- Boss (DB_Boss 0-11 → mon_16~25 + mon0285 + mon2)
 local BOSS_MODELS = {
-  "assets/models/mon_16.glb", "assets/models/mon_17.glb",
-  "assets/models/mon_18.glb", "assets/models/mon_19.glb",
-  "assets/models/mon_20.glb", "assets/models/mon_21.glb",
-  "assets/models/mon_22.glb", "assets/models/mon_23.glb",
-  "assets/models/mon_24.glb", "assets/models/mon_25.glb",
-  "assets/models/mon0285.glb", "assets/models/mon2.glb",
+  "assets/models/mon_16.dmesh", "assets/models/mon_17.dmesh",
+  "assets/models/mon_18.dmesh", "assets/models/mon_19.dmesh",
+  "assets/models/mon_20.dmesh", "assets/models/mon_21.dmesh",
+  "assets/models/mon_22.dmesh", "assets/models/mon_23.dmesh",
+  "assets/models/mon_24.dmesh", "assets/models/mon_25.dmesh",
+  "assets/models/mon0285.dmesh", "assets/models/mon2.dmesh",
 }
 local MAP_MODELS = {
-  "assets/models/map01.glb", "assets/models/map02.glb",
-  "assets/models/map03.glb", "assets/models/map4.glb",
-  "assets/models/map05.glb",
+  "assets/models/map01.dmesh", "assets/models/map02.dmesh",
+  "assets/models/map03.dmesh", "assets/models/map4.dmesh",
+  "assets/models/map05.dmesh",
 }
 local STRUCT_MODELS = {
-  barrack = "assets/models/barrack.glb",
-  tower   = "assets/models/tower.glb",
-  barricade = "assets/models/barricade.glb",
-  basecamp = "assets/models/basecamp.glb",
-  tank    = "assets/models/tank.glb",
-  cart    = "assets/models/cart.glb",
-  horse   = "assets/models/horse.glb",
+  barrack = "assets/models/barrack.dmesh",
+  tower   = "assets/models/tower.dmesh",
+  barricade = "assets/models/barricade.dmesh",
+  basecamp = "assets/models/basecamp.dmesh",
+  tank    = "assets/models/tank.dmesh",
+  cart    = "assets/models/cart.dmesh",
+  horse   = "assets/models/horse.dmesh",
 }
 
 -- ── 原版贴图 (Texture2D/*.png) ────────────────────────────────────────
@@ -269,14 +271,25 @@ end
 -- ============================================================================
 -- 实体创建辅助
 -- ============================================================================
+-- 从模型路径提取模型名 (去掉目录与扩展名) 用于查 MODEL_SCALE 表
+local function mesh_key(mesh)
+  local m = tostring(mesh or "")
+  local base = m:match("([^/\\]+)%.[A-Za-z0-9]+$")
+  return base or m
+end
+-- 模型基准缩放 (按原始尺寸放大到目标尺寸, 见 model_scale.lua)
+local function base_scale(mesh)
+  return MODEL_SCALE[mesh_key(mesh)] or 1
+end
 local function spawn_model(mesh, x, y, z, sx, sy, sz, tex)
+  local bs = base_scale(mesh)
   local e = dse.ecs.create_entity()
-  dse.ecs.add_transform(e, x, y, z, sx or 1, sy or 1, sz or 1)
+  dse.ecs.add_transform(e, x, y, z, (sx or 1) * bs, (sy or 1) * bs, (sz or 1) * bs)
   dse.ecs.mesh_renderer_add(e, mesh)
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
   dse.ecs.set_mesh_material(e, 0.0, 0.7, 1.0, 0, 0, 0, 1.0, true, false)
   if tex then dse.ecs.set_mesh_texture(e, "albedo", tex) end
-  return e
+  return e, bs
 end
 
 local function spawn_ground_plane(scale, r, g, b)
@@ -1294,7 +1307,7 @@ local function UpdatePlayer(dt)
       BulletSystem.spawn({
         type = "arrow", x = Player.x, y = 0.24, z = Player.z, yaw = Player.yaw,
         speed = 15, damage = Player.atk, attack_type = "arrow",
-        life = 2.0, model = "assets/models/ball.glb",
+        life = 2.0, model = "assets/models/ball.dmesh",
       })
       if S.slash then dse.audio.play_sfx(S.slash, 0.6, 0) end
     end

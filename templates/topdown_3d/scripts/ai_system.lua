@@ -87,9 +87,10 @@ local function spawn_general(kind)
 
   -- 创建 ECS 实体
   general.e = dse.ecs.create_entity()
+  local bs = S.base_scale("assets/models/ball.dmesh")
   dse.ecs.add_transform(general.e, general.x, general.y, general.z,
-    general.scale, general.scale, general.scale)
-  pcall(dse.ecs.mesh_renderer_add, general.e, "assets/models/ball.glb")
+    general.scale * bs, general.scale * bs, general.scale * bs)
+  pcall(dse.ecs.mesh_renderer_add, general.e, "assets/models/ball.dmesh")
   dse.ecs.set_mesh_shader_variant(general.e, "MESH_LIT")
   dse.ecs.set_mesh_color(general.e, 0.8, 0.6, 0.3, 1.0)
 
@@ -445,8 +446,9 @@ local function spawn_angel(index)
 
   -- 创建 ECS 实体
   angel.e = dse.ecs.create_entity()
-  dse.ecs.add_transform(angel.e, angel.x, angel.y, angel.z, 0.5, 0.5, 0.5)
-  pcall(dse.ecs.mesh_renderer_add, angel.e, "assets/models/ball.glb")
+  local bs = S.base_scale("assets/models/ball.dmesh")
+  dse.ecs.add_transform(angel.e, angel.x, angel.y, angel.z, 0.5 * bs, 0.5 * bs, 0.5 * bs)
+  pcall(dse.ecs.mesh_renderer_add, angel.e, "assets/models/ball.dmesh")
   dse.ecs.set_mesh_shader_variant(angel.e, "MESH_LIT")
   dse.ecs.set_mesh_color(angel.e, 0.6, 0.8, 1.0, 0.8)
 
