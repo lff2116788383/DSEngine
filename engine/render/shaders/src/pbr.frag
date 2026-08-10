@@ -104,7 +104,7 @@ void main() {
 
     if (!u_lighting_enabled) {
 
-        vec3 result = texColor.rgb * vColor.rgb * u_material_albedo;
+        vec3 result = texColor.rgb * u_material_albedo;
 
         if (u_has_emissive_map) {
 
@@ -182,7 +182,7 @@ void main() {
 
         float cel = band1 * 0.7 + band2 * 0.3;
 
-        vec3 baseColor = texColor.rgb * vColor.rgb * u_material_albedo;
+        vec3 baseColor = texColor.rgb * u_material_albedo;
 
         vec3 shadowColor = baseColor * u_toon_shadow_color;
 
@@ -232,7 +232,7 @@ void main() {
 
 
 
-        vec3 baseColor = texColor.rgb * vColor.rgb * u_material_albedo;
+        vec3 baseColor = texColor.rgb * u_material_albedo;
 
 
 
@@ -354,7 +354,7 @@ void main() {
 
 
 
-        vec3 baseColor = texColor.rgb * vColor.rgb * u_material_albedo;
+        vec3 baseColor = texColor.rgb * u_material_albedo;
 
         vec3 shadowColor = baseColor * vec3(u_toon_shadow_color);
 
@@ -404,7 +404,7 @@ void main() {
 
         vec3 material_color = diffuse + specular + emissive_val;
 
-        vec3 color_st = material_color * texColor.rgb * vColor.rgb;
+        vec3 color_st = material_color * texColor.rgb;
 
         float shadow = ShadowCalculation(vFragPos, vFragPosViewSpace, N, L);
 
@@ -418,7 +418,7 @@ void main() {
 
 
 
-    vec3 surface_albedo = pow(texColor.rgb * vColor.rgb * u_material_albedo, vec3(2.2));
+    vec3 surface_albedo = pow(texColor.rgb * u_material_albedo, vec3(2.2));
 
     float metallic = clamp(u_material_metallic, 0.0, 1.0);
 

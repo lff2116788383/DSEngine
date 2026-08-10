@@ -1330,7 +1330,11 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         item.emissive_map_handle = resolved_texture_slots.emissive;
         item.occlusion_map_handle = resolved_texture_slots.occlusion;
         item.color = resolved_base_color;
-        item.material_albedo = glm::vec3(resolved_base_color);
+        // 颜色已通过顶点色 vColor（item.color → VBO）传递；ComponentFallback 下
+        // material_albedo 设白，避免与 vColor 双乘导致非 1.0 颜色被平方压暗。
+        item.material_albedo = prefer_material_instance
+            ? glm::vec3(resolved_base_color)
+            : glm::vec3(1.0f);
         item.material_metallic = resolved_scalars.metallic;
         item.material_roughness = resolved_scalars.roughness;
         item.material_ao = resolved_scalars.ao;
