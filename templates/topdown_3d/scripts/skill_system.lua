@@ -983,7 +983,9 @@ end
 local function launch_skill(index)
   local skillatk = Player.skillatk
   local basedamage = Player.basedamage
-  local dmg = skillatk * basedamage * 0.01
+  -- 技能强化武器属性 (C# Weapon_Special case 6: skillboost)
+  local boost = Player.skillboost or 1.0
+  local dmg = skillatk * basedamage * 0.01 * boost
   local fx, fz = pforward()
   local rx, rz = pright()
 

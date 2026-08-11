@@ -745,6 +745,62 @@ local function PlayerGrab()
   end
 end
 
+-- 蓄力冲击本体 (C# Eximpact: swingex2 两段伤害 + 前冲击退)
+local function PlayerPowerImpact()
+  Player.attacking = 0.3
+  Player.visual_state = "eximpact"
+  Player.visual_duration = 0.3
+  local dmg = math.floor(Player.atk * 2.0)
+  local dx, dz = math.sin(math.rad(Player.yaw)), -math.cos(math.rad(Player.yaw))
+  -- 前冲 (C# AddForce(forward*30))
+  Player.x = Player.x + dx * 0.6
+  Player.z = Player.z + dz * 0.6
+  for _, en in ipairs(Entities.enemies) do
+    if not en.dead then
+      local d = dist2d(Player.x, Player.z, en.x, en.z)
+      if d <= 4.5 then
+        local adx, adz = en.x - Player.x, en.z - Player.z
+        local ang = math.deg(atan2(adx, -adz))
+        local diff = ((ang - Player.yaw + 180) % 360) - 180
+        if math.abs(diff) < 110 then
+          EnemyDamaged(en, dmg, Player.x, Player.z, "normal")
+          en.knockback_x = dx * 6
+          en.knockback_z = dz * 6
+          en.knockback_timer = 0.3
+        end
+      end
+    end
+  end
+  spawn_swing_ef(Player.x, 0.06, Player.z, Player.yaw, 5.0, 0.6)
+  CameraHitcam()
+  if S.boom then dse.audio.play_sfx(S.boom, 0.8, 0) end
+end
+
+-- 升龙追击 (C# riseattack: QTE2 触发, 击飞 + 俯视镜头)
+local function PlayerRiseAttack()
+  Player.attacking = 0.5
+  Player.visual_state = "riseattack"
+  Player.visual_duration = 0.5
+  Player.chamovestat = 103
+  local dmg = math.floor(Player.atk * 2.2)
+  for _, en in ipairs(Entities.enemies) do
+    if not en.dead then
+      local d = dist2d(Player.x, Player.z, en.x, en.z)
+      if d <= 4.0 then
+        EnemyDamaged(en, dmg, Player.x, Player.z, "rising")
+        en.risedrop = true
+        en.f_risefactor = 6.0
+      end
+    end
+  end
+  spawn_swing_ef(Player.x, 0.06, Player.z, Player.yaw, 4.0, 0.5)
+  CameraTopview()
+  if S.slash1 then dse.audio.play_sfx(S.slash1, 0.7, 0) end
+end
+
+-- 前向声明 (CallGeneral/GeneralOff 定义在下方, PlayerDamaged 需要调用)
+local CallGeneral, GeneralOff
+
 -- 追击攻击 (C# attackex1: 蓄力 Eximpact 后 QTE 成功触发, 前方大范围伤害)
 local function PlayerAttackEx1()
   Player.attacking = 0.4
@@ -768,6 +824,9 @@ local function PlayerAttackEx1()
   spawn_swing_ef(Player.x, 0.06, Player.z, Player.yaw, 4.0, 0.5)
   CameraHitcam()
   if S.boom then dse.audio.play_sfx(S.boom, 0.7, 0) end
+  -- 追击后开二段 QTE (C# attackex1_impact → riseattack)
+  Player.qte2_timer = 0.0001
+  Player.qte2_active = false
 end
 
 -- 受伤 (Damaged)
@@ -804,6 +863,10 @@ local function PlayerDamaged(damage, from_x, from_z)
       -- 成功格挡
       if S.block then dse.audio.play_sfx(S.block, 0.8, 0) end
       spawn_damage_text(Player.x, 2.5, Player.z, "格挡!", 0.5, 0.8, 1.0, 20)
+      -- 格挡特效 (C# Blocked → ef_block)
+      if EfSystem.spawn_block then
+        EfSystem.spawn_block(Player.x, Player.y + 0.6, Player.z, {})
+      end
       Player.knockback_x = -dx * 80
       Player.knockback_z = -dz * 80
       Player.knockback_timer = 0.1
@@ -831,6 +894,16 @@ local function PlayerDamaged(damage, from_x, from_z)
   CameraHitcam()
 
   if Player.hp <= 0 then
+    if Player.general then
+      -- 武将形态致命伤 → 武将死亡, 退回人形态 (C# Damaged: GeneralOnOff(dead))
+      Player.hp = Player.maxhp
+      Player.sp = Player.maxsp
+      Player.invuln = 2.0
+      GeneralOff()
+      if S.hup2 then dse.audio.play_sfx(S.hup2, 0.8, 0) end
+      spawn_damage_text(Player.x, 2.5, Player.z, "武将倒下!", 1.0, 0.4, 0.4, 20)
+      return
+    end
     Player.hp = 0
     Player.life = false
     Player.visual_state = "dead"
@@ -909,338 +982,8 @@ local function GetCurrentSkill()
   return skill, set, grade
 end
 
--- 技能发射 (LaunchSkill) — 每个技能集的独立效果
-local function LaunchSkill(index, skillatk, basedamage)
-  local dmg = skillatk * basedamage * 0.01 + Player.atk
-  local dx, dz = math.sin(math.rad(Player.yaw)), -math.cos(math.rad(Player.yaw))
-
-  if index == 0 then
-    -- 剑舞 (sword wind) — 前方扇形伤害
-    spawn_swing_ef(Player.x, 0.06, Player.z, Player.yaw, 3.0, 0.4)
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 6.0 then
-          local adx, adz = en.x - Player.x, en.z - Player.z
-          local angle = math.deg(atan2(adx, -adz))
-          local diff = ((angle - Player.yaw + 180) % 360) - 180
-          if math.abs(diff) < 80 then
-            EnemyDamaged(en, dmg, Player.x, Player.z, "normal")
-          end
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 7.0 then BossDamaged(Entities.boss, dmg, Player.x, Player.z, "normal") end
-    end
-
-  elseif index == 1 then
-    -- 旋风斩 (wheel wind) — 跳劈 + 范围伤害
-    Player.y = 2.0  -- 跳起
-    spawn_swing_ef(Player.x, 0.1, Player.z, Player.yaw, 4.0, 0.5, "skill")
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 8.0 then
-          EnemyDamaged(en, dmg * 1.2, Player.x, Player.z, "strong")
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 9.0 then BossDamaged(Entities.boss, dmg * 1.2, Player.x, Player.z, "strong") end
-    end
-    CameraHitcam2(2.0)
-
-  elseif index == 2 then
-    -- 火焰斩 (fire slash) — 前方火焰柱
-    for i = 0, 5 do
-      local fx = Player.x + dx * i * 0.8
-      local fz = Player.z + dz * i * 0.8
-      spawn_hit_effect(fx, 0.5, fz, 8, "fire")
-      spawn_swing_ef(fx, 0.06, fz, Player.yaw, 1.5, 0.3, "fire")
-    end
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 5.0 then
-          local adx, adz = en.x - Player.x, en.z - Player.z
-          local dot = adx * dx + adz * dz
-          if dot > 0 then
-            EnemyDamaged(en, dmg, Player.x, Player.z, "fire")
-          end
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 6.0 then BossDamaged(Entities.boss, dmg, Player.x, Player.z, "fire") end
-    end
-
-  elseif index == 3 then
-    -- 召唤猎鹰 (eagle summon) — 宠物 (C# Cha_Skill.PetSkillOn → Cha_Control.Fly)
-    PetSystem.pet_skill_on(1)
-
-  elseif index == 4 then
-    -- 冰冻斩 (ice slash) — 前方冰冻
-    for i = 0, 4 do
-      local fx = Player.x + dx * i * 0.7
-      local fz = Player.z + dz * i * 0.7
-      spawn_hit_effect(fx, 0.3, fz, 6, "ice")
-    end
-    spawn_swing_ef(Player.x, 0.06, Player.z, Player.yaw, 2.5, 0.4, "ice")
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 5.0 then
-          local adx, adz = en.x - Player.x, en.z - Player.z
-          local dot = adx * dx + adz * dz
-          if dot > 0 then
-            EnemyDamaged(en, dmg, Player.x, Player.z, "ice")
-          end
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 6.0 then BossDamaged(Entities.boss, dmg, Player.x, Player.z, "ice") end
-    end
-
-  elseif index == 5 then
-    -- 雷电斩 (lightning slash) — 链式闪电
-    spawn_swing_ef(Player.x, 0.06, Player.z, Player.yaw, 3.0, 0.3, "electric")
-    local hit_count = 0
-    local last_x, last_z = Player.x, Player.z
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead and hit_count < 5 then
-        local d = dist2d(last_x, last_z, en.x, en.z)
-        if d <= 6.0 then
-          EnemyDamaged(en, dmg, last_x, last_z, "electric")
-          spawn_hit_effect(en.x, 1.0, en.z, 5, "electric")
-          last_x, last_z = en.x, en.z
-          hit_count = hit_count + 1
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 7.0 then BossDamaged(Entities.boss, dmg, Player.x, Player.z, "electric") end
-    end
-
-  elseif index == 6 then
-    -- 毒击 (poison strike) — 毒雾范围
-    for _ = 1, 15 do
-      local angle = math.random() * math.pi * 2
-      local r = math.random() * 4.0
-      spawn_hit_effect(Player.x + math.cos(angle) * r, 0.3, Player.z + math.sin(angle) * r, 1, "poison")
-    end
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 4.0 then
-          EnemyDamaged(en, dmg * 0.5, Player.x, Player.z, "poison")
-          -- 额外持续伤害
-          en.poison = true
-          en.poison_delay = 5.0
-          en.old_delay = math.floor(en.poison_delay)
-          en.poison_damage = math.floor(Player.atk * 0.6)
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 5.0 then
-        BossDamaged(Entities.boss, dmg * 0.5, Player.x, Player.z, "poison")
-        Entities.boss.poison = true
-        Entities.boss.poison_delay = 5.0
-        Entities.boss.old_delay = math.floor(Entities.boss.poison_delay)
-        Entities.boss.poison_damage = math.floor(Player.atk * 0.6)
-      end
-    end
-
-  elseif index == 7 then
-    -- 召唤战马 (horse summon) — 骑乘 (C# Cha_Skill.PetSkillOn → Cha_Control.CallHorse)
-    PetSystem.pet_skill_on(0)
-
-  elseif index == 8 then
-    -- 蓄力斩 (charge smash) — 超级剑气
-    Invincibility(2.0)
-    Player.visual_state = "charge"
-    Player.visual_duration = 1.0
-    -- 前方大范围剑气
-    for i = 0, 10 do
-      local fx = Player.x + dx * i * 0.5
-      local fz = Player.z + dz * i * 0.5
-      spawn_swing_ef(fx, 0.1, fz, Player.yaw, 2.0, 0.3 + i * 0.05, "skill")
-    end
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 8.0 then
-          local adx, adz = en.x - Player.x, en.z - Player.z
-          local dot = adx * dx + adz * dz
-          if dot > -0.3 then
-            EnemyDamaged(en, dmg * 2.0, Player.x, Player.z, "rising")
-          end
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 9.0 then BossDamaged(Entities.boss, dmg * 2.0, Player.x, Player.z, "skill") end
-    end
-    CameraHitcam2(3.0)
-
-  elseif index == 9 then
-    -- 武将召唤 (general summon) — 巨手从天而降
-    Invincibility(3.0)
-    for _ = 1, 30 do
-      local angle = math.random() * math.pi * 2
-      local r = math.random() * 10.0
-      spawn_hit_effect(Player.x + math.cos(angle) * r, 2.0 + math.random() * 3, Player.z + math.sin(angle) * r, 1, "skill")
-    end
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 10.0 then
-          EnemyDamaged(en, dmg * 1.5, Player.x, Player.z, "strong")
-          en.knockback_x = (en.x - Player.x) * 100
-          en.knockback_z = (en.z - Player.z) * 100
-          en.knockback_timer = 0.3
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 11.0 then BossDamaged(Entities.boss, dmg * 1.5, Player.x, Player.z, "strong") end
-    end
-    CameraHitcam2(4.0)
-
-  elseif index == 10 then
-    -- 极限斩 (extreme slash) — 超级大范围斩击
-    Invincibility(2.0)
-    for _ = 1, 40 do
-      local angle = math.random() * math.pi * 2
-      local r = math.random() * 12.0
-      spawn_hit_effect(Player.x + math.cos(angle) * r, 1.0, Player.z + math.sin(angle) * r, 1, "skill")
-    end
-    spawn_swing_ef(Player.x, 0.1, Player.z, Player.yaw, 6.0, 0.8, "skill")
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 12.0 then
-          EnemyDamaged(en, dmg * 2.5, Player.x, Player.z, "strong")
-          en.knockback_x = (en.x - Player.x) * 150
-          en.knockback_z = (en.z - Player.z) * 150
-          en.knockback_timer = 0.4
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 13.0 then BossDamaged(Entities.boss, dmg * 2.5, Player.x, Player.z, "strong") end
-    end
-    CameraHitcam2(5.0)
-
-  elseif index == 11 then
-    -- 时间减速 (time slow) — 全场减速 + 范围伤害
-    Invincibility(5.0)
-    G.time_scale = 0.2
-    G.time_scale_timer = 5.0
-    for _ = 1, 25 do
-      local angle = math.random() * math.pi * 2
-      local r = math.random() * 8.0
-      spawn_hit_effect(Player.x + math.cos(angle) * r, 1.0, Player.z + math.sin(angle) * r, 1, "skill")
-    end
-    for _, en in ipairs(Entities.enemies) do
-      if not en.dead then
-        local d = dist2d(Player.x, Player.z, en.x, en.z)
-        if d <= 8.0 then
-          EnemyDamaged(en, dmg, Player.x, Player.z, "skill")
-        end
-      end
-    end
-    if Entities.boss and not Entities.boss.dead then
-      local d = dist2d(Player.x, Player.z, Entities.boss.x, Entities.boss.z)
-      if d <= 9.0 then BossDamaged(Entities.boss, dmg, Player.x, Player.z, "skill") end
-    end
-    spawn_damage_text(Player.x, 3.5, Player.z, "时间减速!", 0.5, 0.5, 1.0, 28)
-  end
-
-  -- 通用：经验/连击
-  G.combo = G.combo + 2
-  G.combo_timer = 2.0
-end
-
--- 施法开始 (SkillOn)
-local function SkillOn(index, grade, is_general)
-  local skill
-  if is_general then
-    -- 武将技能
-    skill = DB.DB_Skill[index] and DB.DB_Skill[index][grade or 0]
-    if not skill then return end
-    Player.skillatk = skill.attackpoint
-    Player.motionkind = skill.kind
-    Player.skill_index = index + 21  -- 武将技能索引偏移
-  else
-    skill = DB.DB_Skill[index] and DB.DB_Skill[index][grade or 0]
-    if not skill then return end
-    Player.skillatk = skill.attackpoint
-    Player.motionkind = skill.kind
-    Player.skill_index = index
-  end
-
-  Player.casting = true
-  Player.casting_delay = 0.3  -- 施法延迟
-  Player.chamovestat = 180
-  Player.visual_state = "cast" .. Player.motionkind
-  Player.visual_duration = 0.6
-
-  -- 施法特效
-  spawn_hit_effect(Player.x, 0.5, Player.z, 10, "skill")
-  if S.skill then dse.audio.play_sfx(S.skill, 0.9, 0) end
-  if S.timewoosh then dse.audio.play_sfx(S.timewoosh, 0.7, 0) end
-
-  -- 时间减速 (施法时)
-  G.time_scale = 0.3
-  G.time_scale_timer = 0.5
-
-  -- 方向箭头 (程序化)
-  spawn_damage_text(Player.x, 2.0, Player.z, "<<", 1.0, 1.0, 0.4, 16)
-end
-
--- 技能施放
-local function PlayerSkill()
-  if Player.casting then return end
-  if Player.chamovestat < -1 or Player.chamovestat > 50 then return end
-
-  local skill, set, grade = GetCurrentSkill()
-  if not skill then return end
-
-  -- 冷却检查
-  if Player.skill_cd[set] and Player.skill_cd[set] > 0 then return end
-
-  -- SP 消耗
-  local sp_cost = 20 + grade * 10
-  if skill.soulprice and skill.soulprice > 0 then
-    -- 灵魂消耗
-    if G.soul < skill.soulprice then return end
-    G.soul = G.soul - skill.soulprice
-    sp_cost = 0
-  end
-  if Player.sp < sp_cost then return end
-  Spcharge(-sp_cost)
-
-  -- 设置冷却
-  Player.skill_cd[set] = skill.cooltime
-
-  -- 开始施法
-  SkillOn(set, grade, false)
-end
-
 -- 召唤武将
-local function CallGeneral()
+CallGeneral = function()
   if Player.general then return end
   if Player.sp < 100 then return end
   if not DB.DB_General[0] then return end
@@ -1269,12 +1012,17 @@ local function CallGeneral()
   Player.visual_state = "change_out"
   Player.visual_duration = 0.5
 
+  -- 武将 AI 随从 (C# AI_General.cs): 独立实体跟随玩家, 自动攻击附近敌人
+  if AISystem.spawn_general then
+    AISystem.spawn_general(g.kind or 0)
+  end
+
   spawn_damage_text(Player.x, 3.0, Player.z, "召唤武将: " .. g.name, 1.0, 0.8, 0.2, 24)
   if S.skill then dse.audio.play_sfx(S.skill, 1.0, 0) end
 end
 
 -- 武将结束
-local function GeneralOff()
+GeneralOff = function()
   if not Player.general then return end
   Player.general = false
   Player.maxhp = 95 + Player.level * 5
@@ -1283,6 +1031,8 @@ local function GeneralOff()
   Player.chamovestat = 100
   Player.visual_state = "change_in"
   Player.visual_duration = 0.5
+  -- 解散武将 AI 随从
+  if AISystem.despawn_general then AISystem.despawn_general() end
 end
 
 -- ============================================================================
@@ -1304,6 +1054,15 @@ local function UpdatePlayer(dt)
   if Player.visual_timer > 0 then Player.visual_timer = Player.visual_timer - dt end
   if Player.knockback_timer > 0 then Player.knockback_timer = Player.knockback_timer - dt end
   if Player.control_lock > 0 then Player.control_lock = Player.control_lock - dt end
+
+  -- 武将 AI 死亡 → 延迟退回人形态 (C# AI_General.Dead → GeneralOff)
+  if Player._general_off_timer and Player._general_off_timer > 0 then
+    Player._general_off_timer = Player._general_off_timer - dt
+    if Player._general_off_timer <= 0 then
+      Player._general_off_timer = 0
+      GeneralOff()
+    end
+  end
 
   -- 技能冷却
   for k, v in pairs(Player.skill_cd) do
@@ -1536,6 +1295,23 @@ local function UpdatePlayer(dt)
       end
     end
 
+    -- 二段 QTE (C# riseattack: attackex1 后 0.5-0.7s 窗口内按键升龙)
+    if Player.qte2_timer > 0 then
+      Player.qte2_timer = Player.qte2_timer + dt
+      if Player.qte2_timer >= 0.5 and Player.qte2_timer <= 0.7 then
+        Player.qte2_active = true
+      end
+      if Player.qte2_timer > 0.7 then
+        Player.qte2_timer = 0
+        Player.qte2_active = false
+      end
+      if Player.qte2_active and app.get_key_down(KEY_J) then
+        Player.qte2_timer = 0
+        Player.qte2_active = false
+        PlayerRiseAttack()
+      end
+    end
+
     -- 技能输入 (委托给 SkillSystem)
     if app.get_key_down(KEY_K) then
       SkillSystem.player_skill()
@@ -1568,8 +1344,21 @@ local function UpdatePlayer(dt)
       ChangeCharacter(next_weapon)
       -- 随机赋予武器特殊属性
       Player.special_kind = math.random(-2, 6)
-      if Player.special_kind >= 0 then
-        local sp_name = DB.DB_WeaponSpecial[Player.special_kind] and DB.DB_WeaponSpecial[Player.special_kind].name or ""
+      Player.special_amount = math.random(1, 5)  -- C# special_amount (武器强化等级/10)
+      Player.guard_break = 0
+      Player.skillboost = 1.0
+      local sk = Player.special_kind
+      if sk == 4 then
+        -- 破甲: guard_break = special_amount * 20 (C# Weapon_Special case 4)
+        Player.guard_break = Player.special_amount * 20
+      elseif sk == 6 then
+        -- 技能强化: skillboost 倍率 (C# case 6)
+        if Player.special_amount == 4 then Player.skillboost = 1.5
+        elseif Player.special_amount == 3 then Player.skillboost = 1.1
+        else Player.skillboost = 1.07 end
+      end
+      if sk >= 0 then
+        local sp_name = DB.DB_WeaponSpecial[sk] and DB.DB_WeaponSpecial[sk].name or ""
         spawn_damage_text(Player.x, 3.0, Player.z, "武器: " .. DB.DB_Weapon[next_weapon].name .. " [" .. sp_name .. "]", 0.8, 0.8, 1.0, 20)
       else
         spawn_damage_text(Player.x, 3.0, Player.z, "武器: " .. DB.DB_Weapon[next_weapon].name, 0.8, 0.8, 1.0, 20)
@@ -1891,6 +1680,10 @@ local function EnemyDead(en, dead_kind)
     })
   end
   if S.mon_die then dse.audio.play_sfx(S.mon_die, 0.7, 0) end
+  -- 死亡分裂特效 (C# Monster_efs.EnemyDead → c_ef_split)
+  if EfSystem.spawn_split1 then
+    EfSystem.spawn_split1(en.x, en.y or 0, en.z)
+  end
   en.death_timer = (dead_kind == 1) and 2.0 or 0.8
   G.enemykill = G.enemykill + 1
   G.totalkill = G.totalkill + 1
@@ -2241,6 +2034,7 @@ local function UpdateObjective(dt)
       -- 护送到达 → 通关
       G.mode = "level_complete"
       G.level_complete_timer = 0
+      UISystem.show_result("clear", { kills = G.totalkill, max_combo = G.combo_max, time = G.time })
     end
   end
 end
@@ -2580,8 +2374,16 @@ local function UpdateEnemies(dt)
         if not en.attack_impact then
           en.attack_impact = true
           if en.target_is_player or not Entities.objective then
-            local actual_dmg = math.max(1, en.power - Player.defence)
-            PlayerDamaged(en.power, en.x, en.z)
+            -- 武将 AI 随从存在且存活时优先承受伤害 (C# AI_General 独立血条)
+            local ga = AISystem.get_general and AISystem.get_general()
+            if ga and ga.life and not ga.disable then
+              if AISystem.general_damaged then
+                AISystem.general_damaged(en.power, en.attackdir_x or 0, en.attackdir_z or 0)
+              end
+            else
+              local actual_dmg = math.max(1, en.power - Player.defence)
+              PlayerDamaged(en.power, en.x, en.z)
+            end
           else
             -- 特殊关: 攻击目标 (运粮车/大本营)
             DamageObjective(en.power)
@@ -4076,6 +3878,7 @@ local function UpdateSpawn(dt)
         if G.wave >= G.finalstage then
           G.mode = "level_complete"
           G.level_complete_timer = 0
+          UISystem.show_result("clear", { kills = G.totalkill, max_combo = G.combo_max, time = G.time })
         else
           -- 进入下一波
           G.spawn_regen = 0
@@ -4196,6 +3999,8 @@ end
 -- ============================================================================
 -- 通关结算: 记录星级/奖励/解锁, 返回地图 (C# UI_map + UI_result)
 local function OnStageCleared()
+  if G._stage_cleared then return end
+  G._stage_cleared = true
   local stars, getcoin, getexp =
     MenuSystem.record_stage_clear(G.stage_index, Player.maxhp > 0 and Player.hp / Player.maxhp or 1.0)
   GainExp(getexp)
@@ -4203,6 +4008,7 @@ local function OnStageCleared()
   if G.stage_index + 1 >= 90 then
     -- 全部通关 (C# UI_map: max_stage_index >= 90 → Ending)
     G.mode = "win"
+    UISystem.show_result("win", { kills = G.totalkill, max_combo = G.combo_max, time = G.time })
     if S.bgm_victory then dse.audio.play_bgm(S.bgm_victory, 0.6, false) end
   else
     UISystem.clear()
@@ -4366,15 +4172,14 @@ function Awake()
     Player.target_invincibility = 5.0
   end
   UISystem.on_power_release = function()
-    -- 蓄力释放: 触发 Eximpact
+    -- 蓄力释放: Eximpact 本体伤害 (C# swingex2) + 开追击 QTE
     Player.attack_rising = true
-    Player.attacking = 0.01
-    Player.visual_state = "exattack"
-    Player.visual_duration = 0.6
     Player.excharging = false
-    -- 追击 QTE 窗口 (C# attackex1: Eximpact 后 0.5-0.7s 按键追击)
+    PlayerPowerImpact()
     Player.qte_timer = 0.0001
     Player.qte_active = false
+    Player.qte2_timer = 0
+    Player.qte2_active = false
   end
   UISystem.on_fov_change = function(fov)
     if G.cam then
@@ -4416,6 +4221,7 @@ function Awake()
   PetSystem.on_ride_finish = function()
     G.mode = "level_complete"
     G.level_complete_timer = 0
+    UISystem.show_result("clear", { kills = G.totalkill, max_combo = G.combo_max, time = G.time })
   end
   -- 战马骑乘触发
   PetSystem.on_horse_ride = function()

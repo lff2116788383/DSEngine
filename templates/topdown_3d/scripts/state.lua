@@ -151,6 +151,9 @@ local Player = {
   -- 追击 QTE (C# attackex1: Eximpact 后 0.5-0.7s 窗口)
   qte_timer = 0,             -- Eximpact 后计时
   qte_active = false,        -- QTE 窗口是否开启
+  -- 二段 QTE (C# riseattack: attackex1 后 0.5-0.7s 窗口)
+  qte2_timer = 0,            -- attackex1 后计时
+  qte2_active = false,       -- 二段 QTE 窗口是否开启
   -- 宠物
   pet_ing = false,
   currentPet = -1,        -- -1=无 0=马 1=鹰
