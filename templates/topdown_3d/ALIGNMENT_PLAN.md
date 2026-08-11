@@ -1,6 +1,6 @@
 # topdown_3d 模板对齐 Unity 逆向源码 — 方案文档
 
-> 状态：待审阅
+> 状态：实施中（Phase 0-2 ✅ / Phase 3 ✅ / Phase 4 特殊关+剧情 ✅，见 NEXT_SESSION_TASKS.md）
 > 范围：`templates/topdown_3d/scripts/`（14 个 Lua 模块）对齐
 > `Desktop/desktop/逆向/asset_output/Scripts/Assembly-CSharp/`（约 250 个 C# 文件）
 > 版本：v1（初稿）

@@ -42,30 +42,25 @@
 
 ## 三、剩余任务（按优先级）
 
-### Task A：Phase 3 存档系统（高）
-- C# 参考：`Crypto.cs`（AES 加密 Save/Load_int_key）、`DataSave.cs`、`PlayerPrefsX.cs`、`ConvertSaveData.cs`、`TimeControl.cs`。
-- 目标：金币/玉石/技能等级/武器库存/关卡进度可持久化。DSEngine 是否有存档 API 需先查（`dse.assets` / `dse.app` 绑定）；若无，用 `io.open` 写本地文件 + 轻量异或/Base64 混淆（不必 1:1 复刻 AES）。
-- 新建 `scripts/save.lua`，导出 `save_all() / load_all()`，在 main.lua 的 `RestartGame`/`AdvanceStage` 和 `Awake` 里接入。
-- 存哪些键：`G.coin / G.jade / G.soul / Player.level / Player.exp / Player.skill_grades / Player.weapon_kind / G.stage_index`。
+> 状态更新：Task A/B/C/D/E 已完成（见提交记录），Task F 收尾调试进行中。
 
-### Task B：Phase 3 游戏外 UI（高，工作量最大）
-- C# 参考：`UI_intro.cs`（主菜单）、`UI_map.cs`（90 关地图）、`UI_skill.cs`（技能商店）、`UI_status.cs`（角色状态）、`UI_result.cs`（结算，衔接已接线的 Txt_result/Txt_star）、`UI_general.cs`（武将管理）、`UI_archive.cs`（图鉴）、`UI_forge.cs`（锻造）。
-- 复用 ui_system.lua 的 `make_quad/make_text/make_button` 工具（模块内 local，需导出或复制）。
-- 建议顺序：主菜单（开始/继续）→ 世界地图（90 关，解锁=已通关关+1）→ 战斗 → 结算（星级/奖励/回地图）→ 技能商店。
-- 战斗 HUD 已由 ui_system.lua 承担（已接线），勿重复。
+### Task A：Phase 3 存档系统（高）✅ 已完成
+- 提交 78484fb1：`scripts/save.lua`（异或+hex 混淆本地文件存档），main.lua Awake/AdvanceStage/RestartGame 接入。
 
-### Task C：Phase 4 特殊关卡玩法（中高）
-- C# 参考：`Map_Compose.cs`（关卡组装）、`Cart.cs`（运粮车）、`Tank.cs`/`Tank_Destroy.cs`（攻城）、`Tower.cs`/`Tower_base.cs`（守城）、`DunGate.cs`（Boss 门）、`Dun_Snake.cs`/`Snake_base.cs`、`Chosun.cs`、`Bamboo.cs`、`Flower_cannon.cs`、`Poisonball.cs`、`Wind_axe.cs`。
-- 对应 main.lua 的 `play_kind` 分支：目前只有普通战斗关（Spawn.cs 的 play_kind 6/7 守城/攻城玩法缺失）。
+### Task B：Phase 3 游戏外 UI（高）✅ 已完成
+- 提交 fcfa2ac9：`scripts/menu_system.lua`（主菜单/90 关地图/技能商店），main.lua mode 流改造（menu/map/shop），结算回地图。
+- 修复引擎 API 坑：`dse.ui.is_pressed/is_hovered` 返回 Lua number(0/1)，`if 0 then` 恒真，所有调用改为显式 `== 1` 比较（ui_system.lua + menu_system.lua）。
 
-### Task D：Phase 4 剧情 + 语言（中）
-- 剧情：`DB_Scenario.cs`（91×14，129KB 数据）+ `scenario.cs`（演出控制）+ `Story_trans.cs` + `Language_Scenario.cs`（812 条文本）。数据量大，直接搬表 + 简化演出。
-- 语言：`Language.cs`(486)/`Language_Name.cs`(106)/`Language_Costume.cs`(121)/`Language_Archive.cs`(157)，当前 Lua 硬编码中文，若保持单语可降级。
+### Task C：Phase 4 特殊关卡玩法（中高）✅ 已完成
+- 提交 3e653f69：play_kind 6（运粮车护送，%10==1 且非 Boss 关）/ play_kind 7（守城，%10==4 且非 Boss 关）；敌人目标切换（EnemyTargetPos/DamageObjective）。
+- 说明：原版关卡映射存在于 Unity 场景配置（Icon_Stage._play 无数据表），已按节奏自定义。
 
-### Task E：Phase 2 后移项（低）
-- 蓄力攻击 Exstart/Eximpact（ui_system 已有蓄力条 + main.lua `on_power_release` 已接，只缺触发输入：长按/双击 J）。
-- 追击 QTE（attackex1，0.5-0.7s 窗口）、上升攻击 riseattack。
-- 7 种抓取动画按怪物 kind/sizekind 选择（当前单流程已可用 + 回血已补）。
+### Task D：Phase 4 剧情 + 语言（中）✅ 已完成（语言单语降级）
+- 提交 3e653f69：`scenario_data.lua`（DB_Scenario 91 关 811 镜头 + Language_Scenario 语言1 中文 812 条）+ `scenario_system.lua` 简化演出，首次进关播剧情。
+- 语言表（Language.cs 等）：Lua 端保持中文单语，不搬移多语言表（按方案"单语可降级"）。
+
+### Task E：Phase 2 后移项（低）✅ 已完成
+- 提交 3e653f69：长按 J 蓄力（Exstart/Eximpact）、蓄力后追击 QTE（attackex1 0.5-0.7s 窗口）、抓取按 sizekind 分级（大型不可抓）。
 
 ### Task F：最后统一调试（收尾）
 - 完整跑 main.lua，逐个修复：Lua 运行错误 → 画面/HUD → 操作手感 → 数据正确性。
