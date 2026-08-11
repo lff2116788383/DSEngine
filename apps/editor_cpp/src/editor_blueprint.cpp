@@ -899,6 +899,43 @@ void DrawNodeCanvas() {
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
+    // ── 辅助: pin 查找 / 屏幕坐标 (与绘制公式一致) ──────────────────────
+    auto find_pin_owner = [&](int pin_id) -> BpNode* {
+        for (auto& n : graph.nodes) {
+            for (auto& p : n.inputs)  if (p.id == pin_id) return &n;
+            for (auto& p : n.outputs) if (p.id == pin_id) return &n;
+        }
+        return nullptr;
+    };
+    auto find_pin = [&](int pin_id) -> BpPin* {
+        for (auto& n : graph.nodes) {
+            for (auto& p : n.inputs)  if (p.id == pin_id) return &p;
+            for (auto& p : n.outputs) if (p.id == pin_id) return &p;
+        }
+        return nullptr;
+    };
+    auto pin_screen_pos = [&](const BpNode& n, int pin_id, bool is_output) -> ImVec2 {
+        if (is_output) {
+            for (size_t pi = 0; pi < n.outputs.size(); ++pi)
+                if (n.outputs[pi].id == pin_id)
+                    return ImVec2(canvas_pos.x + s_state.scroll_offset.x + n.position.x + n.size.x,
+                                  canvas_pos.y + s_state.scroll_offset.y + n.position.y + 30 + pi * 20);
+        } else {
+            for (size_t pi = 0; pi < n.inputs.size(); ++pi)
+                if (n.inputs[pi].id == pin_id)
+                    return ImVec2(canvas_pos.x + s_state.scroll_offset.x + n.position.x,
+                                  canvas_pos.y + s_state.scroll_offset.y + n.position.y + 30 + pi * 20);
+        }
+        return {0, 0};
+    };
+    auto pin_type_compatible = [](BpPinType a, BpPinType b) {
+        if (a == BpPinType::Any || b == BpPinType::Any) return true;
+        if (a == BpPinType::Wildcard || b == BpPinType::Wildcard) return true;
+        return a == b;
+    };
+    bool canvas_hovered = ImGui::IsMouseHoveringRect(canvas_pos,
+        ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y));
+
     // Background grid
     draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y),
         IM_COL32(30, 30, 30, 255));
@@ -934,7 +971,26 @@ void DrawNodeCanvas() {
         if (p1.x != 0 || p1.y != 0) {
             ImVec2 cp1(p1.x + 50, p1.y);
             ImVec2 cp2(p2.x - 50, p2.y);
-            draw_list->AddBezierCubic(p1, cp1, cp2, p2, IM_COL32(200, 200, 200, 200), 2.0f);
+            bool is_sel = (link.id == s_state.selected_link);
+            draw_list->AddBezierCubic(p1, cp1, cp2, p2,
+                is_sel ? IM_COL32(255, 200, 50, 255) : IM_COL32(200, 200, 200, 200),
+                is_sel ? 3.5f : 2.0f);
+        }
+    }
+
+    // Draw link being created (from start pin to mouse)
+    if (s_state.creating_link && s_state.link_start_pin >= 0) {
+        BpNode* from_node = find_pin_owner(s_state.link_start_pin);
+        BpPin* from_pin = find_pin(s_state.link_start_pin);
+        if (from_node && from_pin) {
+            bool is_out = (from_pin->kind == BpPinKind::Output);
+            ImVec2 p1 = pin_screen_pos(*from_node, s_state.link_start_pin, is_out);
+            ImVec2 p2 = ImGui::GetMousePos();
+            ImU32 col = BpPinColor(from_pin->type);
+            if (is_out)
+                draw_list->AddBezierCubic(p1, ImVec2(p1.x + 50, p1.y), ImVec2(p2.x - 50, p2.y), p2, col, 2.0f);
+            else
+                draw_list->AddBezierCubic(p2, ImVec2(p2.x + 50, p2.y), ImVec2(p1.x - 50, p1.y), p1, col, 2.0f);
         }
     }
 
@@ -965,18 +1021,85 @@ void DrawNodeCanvas() {
             draw_list->AddCircleFilled(ImVec2(node_pos.x - 8, node_pos.y + 12), 5, IM_COL32(255, 40, 40, 255));
         }
 
-        // Input pins
+        // Input pins (with link creation hit test)
         for (size_t pi = 0; pi < node.inputs.size(); ++pi) {
             ImVec2 pin_pos(node_pos.x, node_pos.y + 30 + pi * 20);
             draw_list->AddCircleFilled(pin_pos, 5, BpPinColor(node.inputs[pi].type));
             draw_list->AddText(ImVec2(pin_pos.x + 8, pin_pos.y - 7), IM_COL32(200, 200, 200, 255), node.inputs[pi].name.c_str());
+
+            ImVec2 hit_min(pin_pos.x - 8, pin_pos.y - 8);
+            ImVec2 hit_max(pin_pos.x + 8, pin_pos.y + 8);
+            if (canvas_hovered && ImGui::IsMouseHoveringRect(hit_min, hit_max)) {
+                if (ImGui::IsMouseClicked(0)) {
+                    s_state.creating_link = true;
+                    s_state.link_start_pin = node.inputs[pi].id;
+                }
+                if (ImGui::IsMouseReleased(0) && s_state.creating_link && s_state.link_start_pin != node.inputs[pi].id) {
+                    BpPin* start = find_pin(s_state.link_start_pin);
+                    if (start && start->kind == BpPinKind::Output &&
+                        pin_type_compatible(start->type, node.inputs[pi].type)) {
+                        bool dup = false;
+                        for (const auto& l : graph.links)
+                            if (l.from_pin == s_state.link_start_pin && l.to_pin == node.inputs[pi].id) { dup = true; break; }
+                        if (!dup) {
+                            BpLink lnk;
+                            lnk.id = AllocNodeId(graph);
+                            lnk.from_pin = s_state.link_start_pin;
+                            lnk.to_pin = node.inputs[pi].id;
+                            graph.links.push_back(lnk);
+                            s_state.dirty = true;
+                            BpPushUndoState("Create Link");
+                        }
+                    }
+                    s_state.creating_link = false;
+                    s_state.link_start_pin = -1;
+                }
+            }
         }
-        // Output pins
+        // Output pins (with link creation hit test)
         for (size_t pi = 0; pi < node.outputs.size(); ++pi) {
             ImVec2 pin_pos(node_pos.x + node.size.x, node_pos.y + 30 + pi * 20);
             draw_list->AddCircleFilled(pin_pos, 5, BpPinColor(node.outputs[pi].type));
             float text_w = ImGui::CalcTextSize(node.outputs[pi].name.c_str()).x;
             draw_list->AddText(ImVec2(pin_pos.x - text_w - 8, pin_pos.y - 7), IM_COL32(200, 200, 200, 255), node.outputs[pi].name.c_str());
+
+            ImVec2 hit_min(pin_pos.x - 8, pin_pos.y - 8);
+            ImVec2 hit_max(pin_pos.x + 8, pin_pos.y + 8);
+            if (canvas_hovered && ImGui::IsMouseHoveringRect(hit_min, hit_max)) {
+                if (ImGui::IsMouseClicked(0)) {
+                    s_state.creating_link = true;
+                    s_state.link_start_pin = node.outputs[pi].id;
+                }
+                if (ImGui::IsMouseReleased(0) && s_state.creating_link && s_state.link_start_pin != node.outputs[pi].id) {
+                    BpPin* start = find_pin(s_state.link_start_pin);
+                    if (start && start->kind == BpPinKind::Input &&
+                        pin_type_compatible(node.outputs[pi].type, start->type)) {
+                        bool dup = false;
+                        for (const auto& l : graph.links)
+                            if (l.from_pin == node.outputs[pi].id && l.to_pin == s_state.link_start_pin) { dup = true; break; }
+                        if (!dup) {
+                            BpLink lnk;
+                            lnk.id = AllocNodeId(graph);
+                            lnk.from_pin = node.outputs[pi].id;
+                            lnk.to_pin = s_state.link_start_pin;
+                            graph.links.push_back(lnk);
+                            s_state.dirty = true;
+                            BpPushUndoState("Create Link");
+                        }
+                    }
+                    s_state.creating_link = false;
+                    s_state.link_start_pin = -1;
+                }
+            }
+        }
+
+        // Node selection & drag start (skip when starting a link on a pin)
+        if (canvas_hovered && ImGui::IsMouseHoveringRect(node_pos, node_end) &&
+            ImGui::IsMouseClicked(0) && !s_state.creating_link) {
+            s_state.selected_node = node.id;
+            s_state.dragging_node = node.id;
+            s_state.drag_offset = ImVec2(ImGui::GetMousePos().x - node_pos.x,
+                                         ImGui::GetMousePos().y - node_pos.y);
         }
 
         // Update node size based on pin count
@@ -984,9 +1107,88 @@ void DrawNodeCanvas() {
         if (node.size.y < min_h) node.size.y = static_cast<float>(min_h);
     }
 
+    // Node dragging
+    if (s_state.dragging_node >= 0) {
+        auto it = std::find_if(graph.nodes.begin(), graph.nodes.end(),
+            [&](const BpNode& n) { return n.id == s_state.dragging_node; });
+        if (it != graph.nodes.end()) {
+            if (ImGui::IsMouseDragging(0) && !s_state.creating_link) {
+                it->position.x = ImGui::GetMousePos().x - canvas_pos.x - s_state.scroll_offset.x - s_state.drag_offset.x;
+                it->position.y = ImGui::GetMousePos().y - canvas_pos.y - s_state.scroll_offset.y - s_state.drag_offset.y;
+                s_state.dirty = true;
+            }
+            if (ImGui::IsMouseReleased(0)) {
+                s_state.dragging_node = -1;
+                BpPushUndoState("Move Node");
+            }
+        } else {
+            s_state.dragging_node = -1;
+        }
+    }
+
+    // Cancel link creation when released on empty canvas
+    if (s_state.creating_link && ImGui::IsMouseReleased(0)) {
+        s_state.creating_link = false;
+        s_state.link_start_pin = -1;
+    }
+
+    // Link selection (click near midpoint of a bezier)
+    if (canvas_hovered && ImGui::IsMouseClicked(0) && s_state.dragging_node < 0 && !s_state.creating_link) {
+        ImVec2 mp = ImGui::GetMousePos();
+        s_state.selected_link = -1;
+        for (const auto& link : graph.links) {
+            BpNode* fn = find_pin_owner(link.from_pin);
+            BpNode* tn = find_pin_owner(link.to_pin);
+            if (!fn || !tn) continue;
+            ImVec2 p1 = pin_screen_pos(*fn, link.from_pin, true);
+            ImVec2 p2 = pin_screen_pos(*tn, link.to_pin, false);
+            ImVec2 mid((p1.x + p2.x) * 0.5f, (p1.y + p2.y) * 0.5f);
+            float dx = mp.x - mid.x, dy = mp.y - mid.y;
+            if (dx * dx + dy * dy < 12.0f * 12.0f) {
+                s_state.selected_link = link.id;
+                s_state.selected_node = -1;
+                break;
+            }
+        }
+    }
+
+    // Delete key: delete selected node or link
+    if (canvas_hovered && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        if (s_state.selected_link >= 0) {
+            graph.links.erase(std::remove_if(graph.links.begin(), graph.links.end(),
+                [&](const BpLink& l) { return l.id == s_state.selected_link; }), graph.links.end());
+            s_state.selected_link = -1;
+            s_state.dirty = true;
+            BpPushUndoState("Delete Link");
+        } else if (s_state.selected_node >= 0) {
+            int nid = s_state.selected_node;
+            // Collect pins of the node being deleted
+            std::vector<int> dead_pins;
+            for (const auto& n : graph.nodes) {
+                if (n.id != nid) continue;
+                for (const auto& p : n.inputs)  dead_pins.push_back(p.id);
+                for (const auto& p : n.outputs) dead_pins.push_back(p.id);
+            }
+            graph.links.erase(std::remove_if(graph.links.begin(), graph.links.end(),
+                [&](const BpLink& l) {
+                    for (int pid : dead_pins)
+                        if (l.from_pin == pid || l.to_pin == pid) return true;
+                    return false;
+                }), graph.links.end());
+            graph.nodes.erase(std::remove_if(graph.nodes.begin(), graph.nodes.end(),
+                [&](const BpNode& n) { return n.id == nid; }), graph.nodes.end());
+            s_state.selected_node = -1;
+            s_state.dirty = true;
+            BpPushUndoState("Delete Node");
+        }
+    }
+
     // Interaction: right-click to create node
     ImGui::SetCursorScreenPos(canvas_pos);
-    ImGui::InvisibleButton("##bp_canvas", canvas_size);
+    ImGui::InvisibleButton("##bp_canvas", canvas_size,
+                            ImGuiButtonFlags_MouseButtonLeft |
+                            ImGuiButtonFlags_MouseButtonRight |
+                            ImGuiButtonFlags_MouseButtonMiddle);
     if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(1)) {
         s_state.show_create_menu = true;
         s_state.create_menu_pos = ImVec2(ImGui::GetMousePos().x - canvas_pos.x - s_state.scroll_offset.x,

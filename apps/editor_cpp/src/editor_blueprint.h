@@ -235,6 +235,10 @@ struct BlueprintEditorState {
     bool creating_link = false;
     int link_start_pin = -1;
 
+    // Node dragging
+    int dragging_node = -1;
+    ImVec2 drag_offset{0, 0};
+
     // Context menu
     bool show_create_menu = false;
     ImVec2 create_menu_pos{0, 0};
