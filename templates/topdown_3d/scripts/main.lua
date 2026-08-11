@@ -39,6 +39,8 @@ local PetSystem = require("pet_system")
 local SaveSystem = require("save")
 -- 游戏外 UI (Phase 3, C# UI_intro/UI_map/UI_skill)
 local MenuSystem = require("menu_system")
+-- 剧情演出 (Phase 4, C# scenario.cs + DB_Scenario)
+local ScenarioSystem = require("scenario_system")
 
 -- 解构为局部变量, 保持原调用点不变
 local CAM = CamMove.CAM
@@ -347,6 +349,11 @@ local function ClearLevel()
   for _, d in ipairs(Entities.drops) do kill_entity(d.e) end
   kill_entity(Entities.ground)
   kill_entity(G.player_e)
+  -- 特殊关目标 (运粮车/大本营)
+  if Entities.objective and Entities.objective.e then
+    kill_entity(Entities.objective.e)
+  end
+  Entities.objective = nil
   -- 原地清空实体表 (各模块持有同一引用, 不能整表替换)
   State.reset_entities()
   G.player_e = nil
@@ -695,6 +702,13 @@ local function PlayerGrab()
   end
 
   if nearest_en then
+    -- 抓取动画按怪物 kind/sizekind 选择 (C# 7 种抓取; 大型不可抓)
+    local mdata = DB.DB_Monster[nearest_en.enemykind]
+    local sizekind = (mdata and mdata.sizekind) or 10
+    if sizekind >= 24 then
+      spawn_damage_text(Player.x, 2.5, Player.z, "目标太大", 0.7, 0.7, 0.7, 14)
+      return
+    end
     Spcharge(-50)
     -- C# Grab: Heal(cha_maxhp * 0.1) 抓取回复
     local heal = math.floor(Player.maxhp * 0.1)
@@ -702,9 +716,17 @@ local function PlayerGrab()
     spawn_damage_text(Player.x, 2.5, Player.z, "+" .. heal .. " HP", 0.3, 1.0, 0.3, 18)
     Player.chamovestat = 112
     Player.grab_timer = 1.6
-    Player.visual_state = "grab"
+    -- grabstyle: 1=小型甩出 2=中型举摔 3=人型投掷 (C# grabstyle 按 sizekind/kind)
+    local grabstyle = 1
+    if sizekind <= 10 then
+      grabstyle = (mdata and mdata.kind == 1) and 1 or 3
+    else
+      grabstyle = 2
+    end
+    Player.visual_state = (grabstyle == 2) and "grab_lift" or "grab"
     Player.visual_duration = 1.6
     nearest_en.grabed = true
+    nearest_en.grabstyle = grabstyle
     nearest_en.grab_phase = 1
     nearest_en.monmovestat = -2
     nearest_en.visual_state = "grabbed"
@@ -721,6 +743,31 @@ local function PlayerGrab()
 
     -- 抓取伤害 (由 UpdateEnemies 中的抓取阶段处理)
   end
+end
+
+-- 追击攻击 (C# attackex1: 蓄力 Eximpact 后 QTE 成功触发, 前方大范围伤害)
+local function PlayerAttackEx1()
+  Player.attacking = 0.4
+  Player.visual_state = "attackex1"
+  Player.visual_duration = 0.4
+  Player.chamovestat = 101
+  local dx, dz = math.sin(math.rad(Player.yaw)), -math.cos(math.rad(Player.yaw))
+  for _, en in ipairs(Entities.enemies) do
+    if not en.dead then
+      local d = dist2d(Player.x, Player.z, en.x, en.z)
+      if d <= 5.0 then
+        local adx, adz = en.x - Player.x, en.z - Player.z
+        local ang = math.deg(atan2(adx, -adz))
+        local diff = ((ang - Player.yaw + 180) % 360) - 180
+        if math.abs(diff) < 100 then
+          EnemyDamaged(en, math.floor(Player.atk * 1.5), Player.x, Player.z, "rising")
+        end
+      end
+    end
+  end
+  spawn_swing_ef(Player.x, 0.06, Player.z, Player.yaw, 4.0, 0.5)
+  CameraHitcam()
+  if S.boom then dse.audio.play_sfx(S.boom, 0.7, 0) end
 end
 
 -- 受伤 (Damaged)
@@ -1453,7 +1500,40 @@ local function UpdatePlayer(dt)
 
     -- 攻击输入
     if app.get_key_down(KEY_J) then
+      Player.ex_press_time = G.time
       PlayerAttackInput()
+    end
+
+    -- 蓄力攻击 (C# Exstart: 长按 J 0.3s → PowerCharge; 松开 ResetPower)
+    if not Player.excharging and app.get_key(KEY_J)
+       and Player.ex_press_time and G.time - Player.ex_press_time > 0.3
+       and Player.attacking <= 0 and Player.dodge_timer <= 0
+       and Player.grab_timer <= 0 and Player.skill_timer <= 0
+       and not Player.casting then
+      Player.excharging = true
+      UISystem.power_charge()
+      if S.skill then dse.audio.play_sfx(S.skill, 0.6, 0) end
+    end
+    if Player.excharging and app.get_key_up(KEY_J) then
+      Player.excharging = false
+      UISystem.reset_power()
+    end
+
+    -- 追击 QTE (C# attackex1: Eximpact 后 0.5-0.7s 窗口内按键追击)
+    if Player.qte_timer > 0 then
+      Player.qte_timer = Player.qte_timer + dt
+      if Player.qte_timer >= 0.5 and Player.qte_timer <= 0.7 then
+        Player.qte_active = true
+      end
+      if Player.qte_timer > 0.7 then
+        Player.qte_timer = 0
+        Player.qte_active = false
+      end
+      if Player.qte_active and app.get_key_down(KEY_J) then
+        Player.qte_timer = 0
+        Player.qte_active = false
+        PlayerAttackEx1()
+      end
     end
 
     -- 技能输入 (委托给 SkillSystem)
@@ -1762,7 +1842,11 @@ local function EnemySetLevel(en, level, playkind, issummon, restrictArea)
   en.hp = en.maxhp
   en.haveExp = en.haveExp + en.level * 0.1
   en.playkind = playkind or 0
-  if en.playkind == 6 then en.target_fix = true end
+  -- 特殊关 (运粮车/守城): 敌人攻击目标而非玩家 (C# target_fix)
+  if en.playkind == 6 or en.playkind == 7 then
+    en.target_fix = true
+    en.target_is_player = false
+  end
   if issummon then
     en.spawn_ing = true
     en.spawn_timer = (en.kind == 2) and 1.5 or 0.4
@@ -2081,14 +2165,103 @@ local function EnemyDamaged(en, damage, from_x, from_z, attack_type, mass)
   end
 end
 
+-- 特殊关卡类型 (C# play_kind; 关卡映射存在于 Unity 场景配置, 此处按节奏自定义):
+--   0=普通战斗  5=Boss(由 DB_Stage.bosscount 决定)  6=运粮车护送  7=守城
+local function GetPlayKind(stage_idx)
+  local stg = DB.DB_Stage[stage_idx % 90]
+  if not stg or (stg.bosscount or 0) > 0 then return 0 end
+  local m = stage_idx % 10
+  if m == 1 then return 6 end
+  if m == 4 then return 7 end
+  return 0
+end
+
+-- 特殊关目标实体: 运粮车(6) / 大本营(7)
+local function BuildObjective()
+  Entities.objective = nil
+  if G.play_kind == 6 then
+    -- 运粮车: 从后方护送前进, 到达终点通关 (C# Cart.cs)
+    local e = spawn_model(model_path(STRUCT_MODELS.cart), 0, 0.2, -8, 1, 1, 1, TEX.cart)
+    Entities.objective = {
+      e = e, kind = "cart",
+      x = 0, z = -8, y = 0.2,
+      hp = 400, maxhp = 400,
+      speed = 0.14, goal_z = 24,
+    }
+  elseif G.play_kind == 7 then
+    -- 大本营: 敌人向它推进, 被毁失败 (C# Tower.cs + Tank.cs)
+    local e = spawn_model(model_path(STRUCT_MODELS.basecamp), 0, 0.2, 18, 1, 1, 1, TEX.basecamp)
+    Entities.objective = {
+      e = e, kind = "basecamp",
+      x = 0, z = 18, y = 0.2,
+      hp = 800, maxhp = 800,
+    }
+    -- 前方两座防御塔 (视觉)
+    for i = 1, 2 do
+      local tx = (i == 1) and -2.5 or 2.5
+      local te = spawn_model(model_path(STRUCT_MODELS.tower), tx, 0, 10, 1, 1, 1, TEX.tower)
+      table.insert(Entities.structures, { e = te, x = tx, z = 10, type = "tower" })
+    end
+  end
+end
+
+-- 特殊关目标受伤 (敌人攻击目标而非玩家)
+local function DamageObjective(dmg)
+  local obj = Entities.objective
+  if not obj then return end
+  obj.hp = obj.hp - (dmg or 1)
+  print(string.format("[test] objective %s hit %d hp=%.0f", obj.kind, dmg or 1, obj.hp))
+  spawn_damage_text(obj.x, obj.y + 3.2, obj.z, "-" .. math.floor(dmg or 1), 1.0, 0.2, 0.2, 18)
+  if obj.e then
+    dse.ecs.set_mesh_color(obj.e, 1.0, 0.6, 0.6, 1.0)
+    obj._flash = 0.2
+  end
+  if obj.hp <= 0 then
+    -- 目标被毁 → 失败 (C# Cart/Tower 被摧毁)
+    if S.boom then dse.audio.play_sfx(S.boom, 0.8, 0) end
+    spawn_hit_effect(obj.x, 1.0, obj.z, 12, "explode")
+    G.mode = "game_over"
+    if S.bgm_fail then dse.audio.play_bgm(S.bgm_fail, 0.6, false) end
+    UISystem.show_chance()
+  end
+end
+
+-- 特殊关目标更新 (运粮车前进)
+local function UpdateObjective(dt)
+  local obj = Entities.objective
+  if not obj then return end
+  if obj._flash and obj._flash > 0 then
+    obj._flash = obj._flash - dt
+    if obj._flash <= 0 and obj.e then dse.ecs.set_mesh_color(obj.e, 1.0, 1.0, 1.0, 1.0) end
+  end
+  if obj.kind == "cart" and G.mode == "play" then
+    obj.z = obj.z + obj.speed * dt
+    if obj.e then dse.ecs.set_transform_position(obj.e, obj.x, obj.y, obj.z) end
+    if obj.z >= obj.goal_z then
+      -- 护送到达 → 通关
+      G.mode = "level_complete"
+      G.level_complete_timer = 0
+    end
+  end
+end
+
+-- 敌人目标位置: 特殊关 (运粮车/大本营) 时非玩家目标优先 (C# target_fix)
+local function EnemyTargetPos(en)
+  if en.target_is_player or not Entities.objective then
+    return Player.x, Player.z
+  end
+  return Entities.objective.x, Entities.objective.z
+end
+
 -- 敌人方向设定 (SetDir — C# InvokeRepeating 0.5s)
 local function EnemySetDir(en)
   if not en.life or en.spawn_ing then return end
   local chamovestat = Player.chamovestat
+  local tx, tz = EnemyTargetPos(en)
   local attackrange
   if en.att_status == 4 then
-    en.direction_x = en.x - Player.x
-    en.direction_z = en.z - Player.z
+    en.direction_x = en.x - tx
+    en.direction_z = en.z - tz
     local mag = math.sqrt(en.direction_x * en.direction_x + en.direction_z * en.direction_z)
     if mag > 0.001 then en.direction_x = en.direction_x / mag; en.direction_z = en.direction_z / mag end
     attackrange = 2.0
@@ -2101,9 +2274,9 @@ local function EnemySetDir(en)
     en.direction_z = 0
     attackrange = 2.0
   else
-    attackrange = dist2d(en.x, en.z, Player.x, Player.z)
-    en.direction_x = Player.x - en.x
-    en.direction_z = Player.z - en.z
+    attackrange = dist2d(en.x, en.z, tx, tz)
+    en.direction_x = tx - en.x
+    en.direction_z = tz - en.z
     local mag = math.sqrt(en.direction_x * en.direction_x + en.direction_z * en.direction_z)
     if mag > 0.001 then en.direction_x = en.direction_x / mag; en.direction_z = en.direction_z / mag end
   end
@@ -2137,7 +2310,7 @@ local function EnemySetDir(en)
       en.behaviour_delay = 1.0
     end
   else
-    local visible = math.abs(en.x - Player.x) < 20 and math.abs(en.z - Player.z) < 20
+    local visible = math.abs(en.x - tx) < 20 and math.abs(en.z - tz) < 20
     if visible then
       if en.behaviour ~= -1 then
         if en.behaviour >= 3 then
@@ -2406,8 +2579,13 @@ local function UpdateEnemies(dt)
       elseif en.monmovestat == 12 then
         if not en.attack_impact then
           en.attack_impact = true
-          local actual_dmg = math.max(1, en.power - Player.defence)
-          PlayerDamaged(en.power, en.x, en.z)
+          if en.target_is_player or not Entities.objective then
+            local actual_dmg = math.max(1, en.power - Player.defence)
+            PlayerDamaged(en.power, en.x, en.z)
+          else
+            -- 特殊关: 攻击目标 (运粮车/大本营)
+            DamageObjective(en.power)
+          end
           if en.dash > 0 then
             en.x = en.x + en.direction_x * en.dash * 0.01 * dt
             en.z = en.z + en.direction_z * en.dash * 0.01 * dt
@@ -3604,6 +3782,10 @@ local function BuildStage()
   local stg = GetStageData()
   if not stg then return end
 
+  -- 特殊关卡类型 + 目标实体 (C# Spawn.play_kind 6/7)
+  G.play_kind = GetPlayKind(G.stage_index)
+  BuildObjective()
+
   -- 地面
   local map_idx = math.floor(G.stage_index / 10) % 5
   local map_model = MAP_MODELS[map_idx + 1] or MAP_MODELS[1]
@@ -3749,7 +3931,7 @@ local function UpdateBossSummon(dt)
       else ekind = mainmon end
       local en = CreateEnemy(ekind, sx, sz)
       if en then
-        EnemySetLevel(en, G.stage_index, 0, true, 625)
+        EnemySetLevel(en, G.stage_index, G.play_kind, true, 625)
         en.behaviour_delay = 0.5
         table.insert(Entities.enemies, en)
         spawn_hit_effect(sx, 0.5, sz, 5, "fire")
@@ -3793,7 +3975,7 @@ local function UpdateSpawn(dt)
           local sp = SetRndPoint()
           local en = CreateEnemy(ekind, sp.x, sp.z)
           if en then
-            EnemySetLevel(en, G.stage_index, 0, false, 625)
+            EnemySetLevel(en, G.stage_index, G.play_kind, false, 625)
             en.behaviour_delay = 0.5
             table.insert(Entities.enemies, en)
             G.spawn_total = G.spawn_total - 1
@@ -3820,7 +4002,7 @@ local function UpdateSpawn(dt)
       local sp = SetRndPoint()
       local en = CreateEnemy(enemyset[i], sp.x, sp.z)
       if en then
-        EnemySetLevel(en, G.stage_index, 0, false, 625)
+        EnemySetLevel(en, G.stage_index, G.play_kind, false, 625)
         en.behaviour_delay = 0.5
         table.insert(Entities.enemies, en)
         G.spawn_total = G.spawn_total - 1
@@ -3847,7 +4029,7 @@ local function UpdateSpawn(dt)
           local sp = SetRndPoint()
           local en = CreateEnemy(ekind, sp.x, sp.z)
           if en then
-            EnemySetLevel(en, G.stage_index, 0, false, 625)
+            EnemySetLevel(en, G.stage_index, G.play_kind, false, 625)
             en.behaviour_delay = 0.5
             table.insert(Entities.enemies, en)
             G.spawn_total = G.spawn_total - 1
@@ -4055,15 +4237,28 @@ local function RestartGame()
   ChangeCharacter(0)
   ResetPower()
   PetSystem.clear()
-  BuildStage()
-  G.mode = "play"
-  if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
   -- 开始新游戏: 覆盖为新档 (C# ConvertSaveData.ConvertData)
   SaveSystem.save_all()
+  -- 新游戏先播第 0 关剧情 (C# UI_intro → Story)
+  if ScenarioSystem.has_scene(0) then
+    UISystem.clear()
+    ScenarioSystem.on_finish = function()
+      UISystem.build()
+      BuildStage()
+      G.mode = "play"
+      if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
+    end
+    ScenarioSystem.start(0)
+    G.mode = "story"
+  else
+    BuildStage()
+    G.mode = "play"
+    if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
+  end
 end
 
 -- 从地图进入指定关卡 (C# UI_map 选关 → Loading)
-local function StartStage(stage_idx)
+local function StartStageInternal(stage_idx)
   MenuSystem.clear_all()
   UISystem.build()
   G.stage_index = stage_idx
@@ -4078,6 +4273,20 @@ local function StartStage(stage_idx)
   local bgm = {S.bgm_stage1, S.bgm_stage2, S.bgm_stage3}
   local bgm_idx = (G.stage_index % 3) + 1
   if bgm[bgm_idx] then dse.audio.play_bgm(bgm[bgm_idx], 0.6, true) end
+end
+
+-- 从地图进入关卡: 首次进入先播剧情 (C# UI_map → Story 场景)
+local function StartStage(stage_idx)
+  local cleared = (G.stage_clear and G.stage_clear[stage_idx]) or 0
+  if cleared <= 0 and ScenarioSystem.has_scene(stage_idx) then
+    ScenarioSystem.on_finish = function()
+      StartStageInternal(stage_idx)
+    end
+    ScenarioSystem.start(stage_idx)
+    G.mode = "story"
+  else
+    StartStageInternal(stage_idx)
+  end
 end
 
 -- ============================================================================
@@ -4162,6 +4371,10 @@ function Awake()
     Player.attacking = 0.01
     Player.visual_state = "exattack"
     Player.visual_duration = 0.6
+    Player.excharging = false
+    -- 追击 QTE 窗口 (C# attackex1: Eximpact 后 0.5-0.7s 按键追击)
+    Player.qte_timer = 0.0001
+    Player.qte_active = false
   end
   UISystem.on_fov_change = function(fov)
     if G.cam then
@@ -4310,6 +4523,13 @@ function Update(dt)
     return
   end
 
+  -- 剧情演出 (Phase 4)
+  if G.mode == "story" then
+    ScenarioSystem.update(dt)
+    UpdateCamera(dt)
+    return
+  end
+
   -- 游戏外界面 (主菜单/世界地图/技能商店)
   if G.mode == "menu" or G.mode == "map" or G.mode == "shop" then
     G.time_scale = 1.0  -- 菜单模式不受暂停 timeScale 影响
@@ -4330,6 +4550,7 @@ function Update(dt)
     PetSystem.update(dt)
     UpdateCombat(dt)
     UpdateSpawn(dt)
+    UpdateObjective(dt)
     UpdateCamera(dt)
     UpdateEffects(dt)
     EfSystem.update(dt)

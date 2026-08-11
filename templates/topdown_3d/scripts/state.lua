@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- state.lua — 共享游戏状态
 -- 供 main.lua 与各功能模块 (cam_move / monster_efs / weapon_damage / cutin01)
 -- require 共享, 避免模块间循环依赖。表为可变引用, 原地清空而非整表替换。
@@ -49,6 +49,7 @@ local G = {
   mode = "play",         -- play / level_complete / game_over / win / boss_intro
   stage_index = 0,       -- 当前关卡索引 (0-89)
   stage_kind = 0,        -- 0=普通 1=骑乘 2=无限
+  play_kind = 0,         -- 0=普通 5=Boss 6=运粮车 7=守城 (C# Spawn.play_kind)
   wave = 1,              -- 当前波数
   finalstage = 3,        -- 最终波数
   time = 0,
@@ -144,6 +145,12 @@ local Player = {
   visual_timer = 0,
   visual_duration = 0,
   hit_flash = 0,
+  -- 蓄力攻击 (C# Exstart/Eximpact)
+  excharging = false,        -- 是否蓄力中 (长按 J)
+  ex_press_time = 0,         -- J 按下时间点 (C# pressdelay)
+  -- 追击 QTE (C# attackex1: Eximpact 后 0.5-0.7s 窗口)
+  qte_timer = 0,             -- Eximpact 后计时
+  qte_active = false,        -- QTE 窗口是否开启
   -- 宠物
   pet_ing = false,
   currentPet = -1,        -- -1=无 0=马 1=鹰
