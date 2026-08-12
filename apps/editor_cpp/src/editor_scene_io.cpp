@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <cstdint>
 #include <vector>
+#include <unordered_map>
 
 #include <glm/gtc/type_ptr.hpp>
 #include <rapidjson/document.h>
@@ -17,8 +18,12 @@
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/audio.h"
 #include "engine/ecs/transform.h"
+#include "engine/ecs/tilemap.h"
+#include "engine/ecs/physics_2d.h"
+#include "engine/ecs/camera.h"
 
 #include "editor_shared_components.h"
+#include "editor_prefab_marker.h"
 #include <iostream>
 
 namespace {
@@ -88,7 +93,7 @@ void ReadVec4(const rapidjson::Value& parent, const char* name, glm::vec4& out) 
 // ============================================================
 
 static constexpr uint32_t kSceneBinMagic   = 0x42435344u; // 'DSCB'
-static constexpr uint32_t kSceneBinVersion = 4u;
+static constexpr uint32_t kSceneBinVersion = 5u;
 
 enum CompFlags : uint64_t {
     CF_NAME             = 1ull << 0,
@@ -119,6 +124,15 @@ enum CompFlags : uint64_t {
     CF_MESH_COLLIDER3D  = 1ull << 25,
     CF_AUDIO_SOURCE     = 1ull << 26,
     CF_AUDIO_LISTENER   = 1ull << 27,
+    CF_PARENT           = 1ull << 28,
+    CF_TILEMAP          = 1ull << 29,
+    CF_BOX_COLLIDER2D   = 1ull << 30,
+    CF_CIRCLE_COLLIDER2D= 1ull << 31,
+    CF_POLYGON_COLLIDER2D=1ull << 32,
+    CF_JOINT2D          = 1ull << 33,
+    CF_CAMERA2D         = 1ull << 34,
+    CF_CAMERA_FOLLOW    = 1ull << 35,
+    CF_PREFAB_MARKER    = 1ull << 36,
 };
 
 template<typename T>
@@ -194,6 +208,15 @@ static void SaveSceneBinary(entt::registry& registry,
         if (registry.all_of<dse::MeshCollider3DComponent>(entity))             flags |= CF_MESH_COLLIDER3D;
         if (registry.all_of<AudioSourceComponent>(entity))                     flags |= CF_AUDIO_SOURCE;
         if (registry.all_of<AudioListenerComponent>(entity))                   flags |= CF_AUDIO_LISTENER;
+        if (registry.all_of<ParentComponent>(entity))                          flags |= CF_PARENT;
+        if (registry.all_of<TilemapComponent>(entity))                         flags |= CF_TILEMAP;
+        if (registry.all_of<BoxCollider2DComponent>(entity))                   flags |= CF_BOX_COLLIDER2D;
+        if (registry.all_of<CircleCollider2DComponent>(entity))                flags |= CF_CIRCLE_COLLIDER2D;
+        if (registry.all_of<PolygonCollider2DComponent>(entity))               flags |= CF_POLYGON_COLLIDER2D;
+        if (registry.all_of<Joint2DComponent>(entity))                         flags |= CF_JOINT2D;
+        if (registry.all_of<CameraComponent>(entity))                          flags |= CF_CAMERA2D;
+        if (registry.all_of<CameraFollowComponent>(entity))                    flags |= CF_CAMERA_FOLLOW;
+        if (registry.all_of<dse::editor::PrefabMarkerComponent>(entity))       flags |= CF_PREFAB_MARKER;
         WPod(f, static_cast<uint32_t>(entity));
         WPod(f, flags);
         if (flags & CF_NAME)             WStr(f, registry.get<dse::editor::EditorNameComponent>(entity).name);
@@ -379,6 +402,60 @@ static void SaveSceneBinary(entt::registry& registry,
         if (flags & CF_AUDIO_LISTENER) {
             auto& a = registry.get<AudioListenerComponent>(entity);
             WPod(f, a.enabled); WPod(f, a.listener_index);
+        }
+        if (flags & CF_PARENT) {
+            auto& p = registry.get<ParentComponent>(entity);
+            WPod(f, static_cast<uint32_t>(p.parent));
+        }
+        if (flags & CF_TILEMAP) {
+            auto& t = registry.get<TilemapComponent>(entity);
+            WPod(f, t.width); WPod(f, t.height); WPod(f, t.tile_size);
+            WPod(f, t.tileset_cols); WPod(f, t.tileset_rows);
+            WPod(f, t.sorting_layer); WPod(f, t.order_in_layer_base);
+            WPod(f, t.generate_colliders); WPod(f, t.collider_tile_min);
+            uint32_t tc = static_cast<uint32_t>(t.tiles.size()); WPod(f, tc);
+            for (int cell : t.tiles) WPod(f, cell);
+        }
+        if (flags & CF_BOX_COLLIDER2D) {
+            auto& c = registry.get<BoxCollider2DComponent>(entity);
+            WPod(f, c.size); WPod(f, c.offset); WPod(f, c.density);
+            WPod(f, c.friction); WPod(f, c.restitution); WPod(f, c.is_trigger);
+        }
+        if (flags & CF_CIRCLE_COLLIDER2D) {
+            auto& c = registry.get<CircleCollider2DComponent>(entity);
+            WPod(f, c.radius); WPod(f, c.offset); WPod(f, c.density);
+            WPod(f, c.friction); WPod(f, c.restitution); WPod(f, c.is_trigger);
+        }
+        if (flags & CF_POLYGON_COLLIDER2D) {
+            auto& c = registry.get<PolygonCollider2DComponent>(entity);
+            uint32_t vc = static_cast<uint32_t>(c.vertices.size()); WPod(f, vc);
+            for (const auto& p : c.vertices) WPod(f, p);
+            WPod(f, c.offset); WPod(f, c.density);
+            WPod(f, c.friction); WPod(f, c.restitution); WPod(f, c.is_trigger);
+        }
+        if (flags & CF_JOINT2D) {
+            auto& c = registry.get<Joint2DComponent>(entity);
+            WPod(f, static_cast<int>(c.type));
+            WPod(f, static_cast<uint32_t>(c.entity_a));
+            WPod(f, static_cast<uint32_t>(c.entity_b));
+            WPod(f, c.anchor_a); WPod(f, c.anchor_b);
+            WPod(f, c.collide_connected);
+        }
+        if (flags & CF_CAMERA2D) {
+            auto& c = registry.get<CameraComponent>(entity);
+            WPod(f, c.orthographic); WPod(f, c.enabled); WPod(f, c.priority);
+            WPod(f, c.orthographic_size); WPod(f, c.fov); WPod(f, c.aspect_ratio);
+            WPod(f, c.near_clip); WPod(f, c.far_clip);
+        }
+        if (flags & CF_CAMERA_FOLLOW) {
+            auto& c = registry.get<CameraFollowComponent>(entity);
+            WPod(f, static_cast<uint32_t>(c.target));
+            WPod(f, c.offset); WPod(f, c.dead_zone); WPod(f, c.damping);
+            WPod(f, c.follow_x); WPod(f, c.follow_y); WPod(f, c.enabled);
+        }
+        if (flags & CF_PREFAB_MARKER) {
+            auto& m = registry.get<dse::editor::PrefabMarkerComponent>(entity);
+            WStr(f, m.source_path);
         }
     }
 }
@@ -610,6 +687,72 @@ static bool LoadSceneBinary(entt::registry& registry,
         if (flags & CF_AUDIO_LISTENER) {
             auto& a = registry.emplace<AudioListenerComponent>(entity);
             if (!RPod(f, a.enabled)||!RPod(f, a.listener_index)) return false;
+        }
+        if (flags & CF_PARENT) {
+            uint32_t pid = 0;
+            if (!RPod(f, pid)) return false;
+            // 实体按序遍历创建, id 与保存时一致, 可直接恢复引用
+            registry.emplace<ParentComponent>(entity, static_cast<Entity>(pid));
+        }
+        if (flags & CF_TILEMAP) {
+            auto& t = registry.emplace<TilemapComponent>(entity);
+            if (!RPod(f, t.width)||!RPod(f, t.height)||!RPod(f, t.tile_size)) return false;
+            if (!RPod(f, t.tileset_cols)||!RPod(f, t.tileset_rows)) return false;
+            if (!RPod(f, t.sorting_layer)||!RPod(f, t.order_in_layer_base)) return false;
+            if (!RPod(f, t.generate_colliders)||!RPod(f, t.collider_tile_min)) return false;
+            uint32_t tc = 0; if (!RPod(f, tc)) return false;
+            if (tc > 1u << 24) return false;
+            t.tiles.resize(tc);
+            for (uint32_t ti = 0; ti < tc; ++ti) if (!RPod(f, t.tiles[ti])) return false;
+            t.dirty = true;
+        }
+        if (flags & CF_BOX_COLLIDER2D) {
+            auto& c = registry.emplace<BoxCollider2DComponent>(entity);
+            if (!RPod(f, c.size)||!RPod(f, c.offset)||!RPod(f, c.density)) return false;
+            if (!RPod(f, c.friction)||!RPod(f, c.restitution)||!RPod(f, c.is_trigger)) return false;
+        }
+        if (flags & CF_CIRCLE_COLLIDER2D) {
+            auto& c = registry.emplace<CircleCollider2DComponent>(entity);
+            if (!RPod(f, c.radius)||!RPod(f, c.offset)||!RPod(f, c.density)) return false;
+            if (!RPod(f, c.friction)||!RPod(f, c.restitution)||!RPod(f, c.is_trigger)) return false;
+        }
+        if (flags & CF_POLYGON_COLLIDER2D) {
+            auto& c = registry.emplace<PolygonCollider2DComponent>(entity);
+            uint32_t vc = 0; if (!RPod(f, vc)) return false;
+            if (vc > 4096) return false;
+            c.vertices.resize(vc);
+            for (uint32_t vi = 0; vi < vc; ++vi) if (!RPod(f, c.vertices[vi])) return false;
+            if (!RPod(f, c.offset)||!RPod(f, c.density)) return false;
+            if (!RPod(f, c.friction)||!RPod(f, c.restitution)||!RPod(f, c.is_trigger)) return false;
+        }
+        if (flags & CF_JOINT2D) {
+            auto& c = registry.emplace<Joint2DComponent>(entity);
+            int jt = 0; uint32_t ea = 0, eb = 0;
+            if (!RPod(f, jt)) return false;
+            c.type = static_cast<Joint2DType>(jt);
+            if (!RPod(f, ea)||!RPod(f, eb)) return false;
+            c.entity_a = static_cast<Entity>(ea);
+            c.entity_b = static_cast<Entity>(eb);
+            if (!RPod(f, c.anchor_a)||!RPod(f, c.anchor_b)) return false;
+            if (!RPod(f, c.collide_connected)) return false;
+        }
+        if (flags & CF_CAMERA2D) {
+            auto& c = registry.emplace<CameraComponent>(entity);
+            if (!RPod(f, c.orthographic)||!RPod(f, c.enabled)||!RPod(f, c.priority)) return false;
+            if (!RPod(f, c.orthographic_size)||!RPod(f, c.fov)||!RPod(f, c.aspect_ratio)) return false;
+            if (!RPod(f, c.near_clip)||!RPod(f, c.far_clip)) return false;
+        }
+        if (flags & CF_CAMERA_FOLLOW) {
+            auto& c = registry.emplace<CameraFollowComponent>(entity);
+            uint32_t tgt = 0;
+            if (!RPod(f, tgt)) return false;
+            c.target = static_cast<Entity>(tgt);
+            if (!RPod(f, c.offset)||!RPod(f, c.dead_zone)||!RPod(f, c.damping)) return false;
+            if (!RPod(f, c.follow_x)||!RPod(f, c.follow_y)||!RPod(f, c.enabled)) return false;
+        }
+        if (flags & CF_PREFAB_MARKER) {
+            auto& m = registry.emplace<dse::editor::PrefabMarkerComponent>(entity);
+            if (!RStr(f, m.source_path)) return false;
         }
     }
     return true;
@@ -1936,6 +2079,263 @@ static void LoadAudioListenerJsonComponent(
     if (o.HasMember("listener_index") && o["listener_index"].IsUint()) a.listener_index = o["listener_index"].GetUint();
 }
 
+// ── TilemapComponent (瓦片地图) ─────────────────────────────────────────────
+
+static void SaveTilemapJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& t = registry.get<TilemapComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("width", t.width, allocator);
+    o.AddMember("height", t.height, allocator);
+    o.AddMember("tile_size", t.tile_size, allocator);
+    o.AddMember("tileset_cols", t.tileset_cols, allocator);
+    o.AddMember("tileset_rows", t.tileset_rows, allocator);
+    o.AddMember("sorting_layer", t.sorting_layer, allocator);
+    o.AddMember("order_in_layer_base", t.order_in_layer_base, allocator);
+    o.AddMember("generate_colliders", t.generate_colliders, allocator);
+    o.AddMember("collider_tile_min", t.collider_tile_min, allocator);
+    rapidjson::Value tiles(rapidjson::kArrayType);
+    for (int cell : t.tiles) tiles.PushBack(cell, allocator);
+    o.AddMember("tiles", tiles, allocator);
+    ent_obj.AddMember("tilemap", o, allocator);
+}
+
+static void LoadTilemapJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("tilemap") || !v["tilemap"].IsObject()) return;
+    const auto& o = v["tilemap"];
+    auto& t = registry.emplace<TilemapComponent>(entity);
+    if (o.HasMember("width") && o["width"].IsInt()) t.width = o["width"].GetInt();
+    if (o.HasMember("height") && o["height"].IsInt()) t.height = o["height"].GetInt();
+    if (o.HasMember("tile_size") && o["tile_size"].IsNumber()) t.tile_size = o["tile_size"].GetFloat();
+    if (o.HasMember("tileset_cols") && o["tileset_cols"].IsInt()) t.tileset_cols = o["tileset_cols"].GetInt();
+    if (o.HasMember("tileset_rows") && o["tileset_rows"].IsInt()) t.tileset_rows = o["tileset_rows"].GetInt();
+    if (o.HasMember("sorting_layer") && o["sorting_layer"].IsInt()) t.sorting_layer = o["sorting_layer"].GetInt();
+    if (o.HasMember("order_in_layer_base") && o["order_in_layer_base"].IsInt()) t.order_in_layer_base = o["order_in_layer_base"].GetInt();
+    if (o.HasMember("generate_colliders") && o["generate_colliders"].IsBool()) t.generate_colliders = o["generate_colliders"].GetBool();
+    if (o.HasMember("collider_tile_min") && o["collider_tile_min"].IsInt()) t.collider_tile_min = o["collider_tile_min"].GetInt();
+    if (o.HasMember("tiles") && o["tiles"].IsArray()) {
+        t.tiles.clear();
+        for (auto& cell : o["tiles"].GetArray()) t.tiles.push_back(cell.GetInt());
+    }
+    t.dirty = true;
+}
+
+// ── 2D 物理碰撞体 / 关节 ────────────────────────────────────────────────────
+
+static void SaveBoxCollider2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<BoxCollider2DComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    WriteVec2(o, "size", c.size, allocator);
+    WriteVec2(o, "offset", c.offset, allocator);
+    o.AddMember("density", c.density, allocator);
+    o.AddMember("friction", c.friction, allocator);
+    o.AddMember("restitution", c.restitution, allocator);
+    o.AddMember("is_trigger", c.is_trigger, allocator);
+    ent_obj.AddMember("box_collider2d", o, allocator);
+}
+
+static void LoadBoxCollider2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("box_collider2d") || !v["box_collider2d"].IsObject()) return;
+    const auto& o = v["box_collider2d"];
+    auto& c = registry.emplace<BoxCollider2DComponent>(entity);
+    ReadVec2(o, "size", c.size);
+    ReadVec2(o, "offset", c.offset);
+    if (o.HasMember("density") && o["density"].IsNumber()) c.density = o["density"].GetFloat();
+    if (o.HasMember("friction") && o["friction"].IsNumber()) c.friction = o["friction"].GetFloat();
+    if (o.HasMember("restitution") && o["restitution"].IsNumber()) c.restitution = o["restitution"].GetFloat();
+    if (o.HasMember("is_trigger") && o["is_trigger"].IsBool()) c.is_trigger = o["is_trigger"].GetBool();
+}
+
+static void SaveCircleCollider2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<CircleCollider2DComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("radius", c.radius, allocator);
+    WriteVec2(o, "offset", c.offset, allocator);
+    o.AddMember("density", c.density, allocator);
+    o.AddMember("friction", c.friction, allocator);
+    o.AddMember("restitution", c.restitution, allocator);
+    o.AddMember("is_trigger", c.is_trigger, allocator);
+    ent_obj.AddMember("circle_collider2d", o, allocator);
+}
+
+static void LoadCircleCollider2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("circle_collider2d") || !v["circle_collider2d"].IsObject()) return;
+    const auto& o = v["circle_collider2d"];
+    auto& c = registry.emplace<CircleCollider2DComponent>(entity);
+    if (o.HasMember("radius") && o["radius"].IsNumber()) c.radius = o["radius"].GetFloat();
+    ReadVec2(o, "offset", c.offset);
+    if (o.HasMember("density") && o["density"].IsNumber()) c.density = o["density"].GetFloat();
+    if (o.HasMember("friction") && o["friction"].IsNumber()) c.friction = o["friction"].GetFloat();
+    if (o.HasMember("restitution") && o["restitution"].IsNumber()) c.restitution = o["restitution"].GetFloat();
+    if (o.HasMember("is_trigger") && o["is_trigger"].IsBool()) c.is_trigger = o["is_trigger"].GetBool();
+}
+
+static void SavePolygonCollider2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<PolygonCollider2DComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    rapidjson::Value verts(rapidjson::kArrayType);
+    for (const auto& p : c.vertices) {
+        rapidjson::Value v2(rapidjson::kArrayType);
+        v2.PushBack(p.x, allocator).PushBack(p.y, allocator);
+        verts.PushBack(v2, allocator);
+    }
+    o.AddMember("vertices", verts, allocator);
+    WriteVec2(o, "offset", c.offset, allocator);
+    o.AddMember("density", c.density, allocator);
+    o.AddMember("friction", c.friction, allocator);
+    o.AddMember("restitution", c.restitution, allocator);
+    o.AddMember("is_trigger", c.is_trigger, allocator);
+    ent_obj.AddMember("polygon_collider2d", o, allocator);
+}
+
+static void LoadPolygonCollider2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("polygon_collider2d") || !v["polygon_collider2d"].IsObject()) return;
+    const auto& o = v["polygon_collider2d"];
+    auto& c = registry.emplace<PolygonCollider2DComponent>(entity);
+    if (o.HasMember("vertices") && o["vertices"].IsArray()) {
+        c.vertices.clear();
+        for (auto& vert : o["vertices"].GetArray()) {
+            if (vert.IsArray() && vert.Size() >= 2 && vert[0].IsNumber() && vert[1].IsNumber())
+                c.vertices.emplace_back(vert[0].GetFloat(), vert[1].GetFloat());
+        }
+    }
+    ReadVec2(o, "offset", c.offset);
+    if (o.HasMember("density") && o["density"].IsNumber()) c.density = o["density"].GetFloat();
+    if (o.HasMember("friction") && o["friction"].IsNumber()) c.friction = o["friction"].GetFloat();
+    if (o.HasMember("restitution") && o["restitution"].IsNumber()) c.restitution = o["restitution"].GetFloat();
+    if (o.HasMember("is_trigger") && o["is_trigger"].IsBool()) c.is_trigger = o["is_trigger"].GetBool();
+}
+
+static void SaveJoint2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<Joint2DComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("type", static_cast<int>(c.type), allocator);
+    o.AddMember("entity_a", c.entity_a != entt::null ? static_cast<uint32_t>(c.entity_a) : 0, allocator);
+    o.AddMember("entity_b", c.entity_b != entt::null ? static_cast<uint32_t>(c.entity_b) : 0, allocator);
+    WriteVec2(o, "anchor_a", c.anchor_a, allocator);
+    WriteVec2(o, "anchor_b", c.anchor_b, allocator);
+    o.AddMember("collide_connected", c.collide_connected, allocator);
+    ent_obj.AddMember("joint2d", o, allocator);
+}
+
+static void LoadJoint2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("joint2d") || !v["joint2d"].IsObject()) return;
+    const auto& o = v["joint2d"];
+    auto& c = registry.emplace<Joint2DComponent>(entity);
+    if (o.HasMember("type") && o["type"].IsInt()) c.type = static_cast<Joint2DType>(o["type"].GetInt());
+    if (o.HasMember("entity_a") && o["entity_a"].IsUint()) c.entity_a = static_cast<Entity>(o["entity_a"].GetUint());
+    if (o.HasMember("entity_b") && o["entity_b"].IsUint()) c.entity_b = static_cast<Entity>(o["entity_b"].GetUint());
+    ReadVec2(o, "anchor_a", c.anchor_a);
+    ReadVec2(o, "anchor_b", c.anchor_b);
+    if (o.HasMember("collide_connected") && o["collide_connected"].IsBool()) c.collide_connected = o["collide_connected"].GetBool();
+}
+
+// ── 2D 相机 (CameraComponent / CameraFollowComponent) ───────────────────────
+
+static void SaveCamera2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<CameraComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("orthographic", c.orthographic, allocator);
+    o.AddMember("enabled", c.enabled, allocator);
+    o.AddMember("priority", c.priority, allocator);
+    o.AddMember("orthographic_size", c.orthographic_size, allocator);
+    o.AddMember("fov", c.fov, allocator);
+    o.AddMember("aspect_ratio", c.aspect_ratio, allocator);
+    o.AddMember("near_clip", c.near_clip, allocator);
+    o.AddMember("far_clip", c.far_clip, allocator);
+    ent_obj.AddMember("camera2d", o, allocator);
+}
+
+static void LoadCamera2DJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("camera2d") || !v["camera2d"].IsObject()) return;
+    const auto& o = v["camera2d"];
+    auto& c = registry.emplace<CameraComponent>(entity);
+    if (o.HasMember("orthographic") && o["orthographic"].IsBool()) c.orthographic = o["orthographic"].GetBool();
+    if (o.HasMember("enabled") && o["enabled"].IsBool()) c.enabled = o["enabled"].GetBool();
+    if (o.HasMember("priority") && o["priority"].IsInt()) c.priority = o["priority"].GetInt();
+    if (o.HasMember("orthographic_size") && o["orthographic_size"].IsNumber()) c.orthographic_size = o["orthographic_size"].GetFloat();
+    if (o.HasMember("fov") && o["fov"].IsNumber()) c.fov = o["fov"].GetFloat();
+    if (o.HasMember("aspect_ratio") && o["aspect_ratio"].IsNumber()) c.aspect_ratio = o["aspect_ratio"].GetFloat();
+    if (o.HasMember("near_clip") && o["near_clip"].IsNumber()) c.near_clip = o["near_clip"].GetFloat();
+    if (o.HasMember("far_clip") && o["far_clip"].IsNumber()) c.far_clip = o["far_clip"].GetFloat();
+}
+
+static void SaveCameraFollowJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& c = registry.get<CameraFollowComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("target", c.target != entt::null ? static_cast<uint32_t>(c.target) : 0, allocator);
+    WriteVec3(o, "offset", c.offset, allocator);
+    WriteVec2(o, "dead_zone", c.dead_zone, allocator);
+    o.AddMember("damping", c.damping, allocator);
+    o.AddMember("follow_x", c.follow_x, allocator);
+    o.AddMember("follow_y", c.follow_y, allocator);
+    o.AddMember("enabled", c.enabled, allocator);
+    ent_obj.AddMember("camera_follow", o, allocator);
+}
+
+static void LoadCameraFollowJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("camera_follow") || !v["camera_follow"].IsObject()) return;
+    const auto& o = v["camera_follow"];
+    auto& c = registry.emplace<CameraFollowComponent>(entity);
+    if (o.HasMember("target") && o["target"].IsUint()) c.target = static_cast<Entity>(o["target"].GetUint());
+    ReadVec3(o, "offset", c.offset);
+    ReadVec2(o, "dead_zone", c.dead_zone);
+    if (o.HasMember("damping") && o["damping"].IsNumber()) c.damping = o["damping"].GetFloat();
+    if (o.HasMember("follow_x") && o["follow_x"].IsBool()) c.follow_x = o["follow_x"].GetBool();
+    if (o.HasMember("follow_y") && o["follow_y"].IsBool()) c.follow_y = o["follow_y"].GetBool();
+    if (o.HasMember("enabled") && o["enabled"].IsBool()) c.enabled = o["enabled"].GetBool();
+}
+
+// ── PrefabMarkerComponent (预制体实例标记) ──────────────────────────────────
+
+static void SavePrefabMarkerJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        rapidjson::Value& ent_obj, SceneAllocator& allocator) {
+    auto& m = registry.get<PrefabMarkerComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    rapidjson::Value path;
+    path.SetString(m.source_path.c_str(), allocator);
+    o.AddMember("source_path", path, allocator);
+    ent_obj.AddMember("prefab_marker", o, allocator);
+}
+
+static void LoadPrefabMarkerJsonComponent(
+        entt::registry& registry, entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("prefab_marker") || !v["prefab_marker"].IsObject()) return;
+    const auto& o = v["prefab_marker"];
+    auto& m = registry.emplace<PrefabMarkerComponent>(entity);
+    if (o.HasMember("source_path") && o["source_path"].IsString())
+        m.source_path = o["source_path"].GetString();
+}
+
 const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
     static const std::vector<ComponentJsonIOEntry> entries = {
         {&SaveEditorNameJsonComponent, &LoadEditorNameJsonComponent,
@@ -1996,6 +2396,22 @@ const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
          [](auto& r, auto e) { return r.all_of<AudioSourceComponent>(e); }},
         {&SaveAudioListenerJsonComponent, &LoadAudioListenerJsonComponent,
          [](auto& r, auto e) { return r.all_of<AudioListenerComponent>(e); }},
+        {&SaveTilemapJsonComponent, &LoadTilemapJsonComponent,
+         [](auto& r, auto e) { return r.all_of<TilemapComponent>(e); }},
+        {&SaveBoxCollider2DJsonComponent, &LoadBoxCollider2DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<BoxCollider2DComponent>(e); }},
+        {&SaveCircleCollider2DJsonComponent, &LoadCircleCollider2DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<CircleCollider2DComponent>(e); }},
+        {&SavePolygonCollider2DJsonComponent, &LoadPolygonCollider2DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<PolygonCollider2DComponent>(e); }},
+        {&SaveJoint2DJsonComponent, &LoadJoint2DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<Joint2DComponent>(e); }},
+        {&SaveCamera2DJsonComponent, &LoadCamera2DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<CameraComponent>(e); }},
+        {&SaveCameraFollowJsonComponent, &LoadCameraFollowJsonComponent,
+         [](auto& r, auto e) { return r.all_of<CameraFollowComponent>(e); }},
+        {&SavePrefabMarkerJsonComponent, &LoadPrefabMarkerJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::editor::PrefabMarkerComponent>(e); }},
     };
     return entries;
 }
@@ -2013,6 +2429,14 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
         if (!registry.valid(entity)) continue;
         rapidjson::Value ent_obj(rapidjson::kObjectType);
         ent_obj.AddMember("id", static_cast<uint32_t>(entity), allocator);
+
+        // 父节点引用 (实体 id 在加载时通过映射恢复)
+        if (registry.all_of<ParentComponent>(entity)) {
+            const auto& parent = registry.get<ParentComponent>(entity);
+            if (parent.parent != entt::null) {
+                ent_obj.AddMember("parent_id", static_cast<uint32_t>(parent.parent), allocator);
+            }
+        }
 
         for (const auto& io_entry : GetComponentJsonIORegistry()) {
             if (io_entry.save && io_entry.has && io_entry.has(registry, entity)) {
@@ -2075,12 +2499,31 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
     if (!doc.IsArray()) return;
 
     registry.clear();
+    // 第一遍：创建实体并建立 old_id -> entity 映射 (parent 引用需要)
+    std::unordered_map<uint32_t, entt::entity> id_map;
+    id_map.reserve(doc.Size());
     for (auto& v : doc.GetArray()) {
         auto entity = registry.create();
+        if (v.HasMember("id") && v["id"].IsUint()) {
+            id_map[v["id"].GetUint()] = entity;
+        }
+    }
 
+    // 第二遍：加载组件
+    int index = 0;
+    for (auto& v : doc.GetArray()) {
+        auto entity = id_map[v.HasMember("id") && v["id"].IsUint() ? v["id"].GetUint() : static_cast<uint32_t>(index)];
+        ++index;
         for (const auto& io_entry : GetComponentJsonIORegistry()) {
             if (io_entry.load) {
                 io_entry.load(registry, entity, v);
+            }
+        }
+        // 设置父节点 (实体 id 映射)
+        if (v.HasMember("parent_id") && v["parent_id"].IsUint()) {
+            auto it = id_map.find(v["parent_id"].GetUint());
+            if (it != id_map.end()) {
+                registry.emplace_or_replace<ParentComponent>(entity, ParentComponent{it->second});
             }
         }
     }
