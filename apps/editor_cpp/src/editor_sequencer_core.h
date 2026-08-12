@@ -39,6 +39,7 @@ struct SequencerKeyframe {
     float value = 0.0f;
     float in_tangent = 0.0f;
     float out_tangent = 0.0f;
+    bool selected = false;   ///< UI 选择状态（不参与序列化）
 };
 
 struct SequencerClip {
@@ -94,6 +95,11 @@ struct SequencerState {
     int drag_clip_track = -1;
     int drag_clip_index = -1;
     float drag_offset = 0.0f;
+    bool trimming_clip = false;   ///< 正在 trim（vs 移动）clip
+    bool trim_left_edge = false;  ///< trim 的是左(起始)还是右(结束)边缘
+    int selected_kf_track = -1;   ///< 选中的关键帧所在轨道
+    int selected_kf_index = -1;   ///< 选中的关键帧在轨道内下标
+    bool dragging_keyframe = false;
 };
 
 // ─── Color helper (equivalent to IM_COL32 without imgui dependency) ──────

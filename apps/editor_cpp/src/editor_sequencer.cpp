@@ -355,12 +355,19 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
         }
 
         // Draw keyframes on the track
-        for (auto& kf : track.keyframes) {
+        for (int ki = 0; ki < static_cast<int>(track.keyframes.size()); ki++) {
+            auto& kf = track.keyframes[ki];
             float kf_x = track_area_x + (kf.time - state.view_start) * time_to_px;
             if (kf_x < track_area_x || kf_x > track_area_x + track_area_w) continue;
             float kf_y = track_y + track_h * 0.5f;
-            dl->AddRectFilled(ImVec2(kf_x - 3, kf_y - 3), ImVec2(kf_x + 3, kf_y + 3),
-                              IM_COL32(255, 200, 50, 255), 0.0f);
+            bool kf_sel = kf.selected || (state.selected_kf_track == ti && state.selected_kf_index == ki);
+            dl->AddRectFilled(ImVec2(kf_x - 4, kf_y - 4), ImVec2(kf_x + 4, kf_y + 4),
+                              kf_sel ? IM_COL32(255, 255, 120, 255) : IM_COL32(255, 200, 50, 255),
+                              0.0f);
+            if (kf_sel) {
+                dl->AddRect(ImVec2(kf_x - 6, kf_y - 6), ImVec2(kf_x + 6, kf_y + 6),
+                            IM_COL32(255, 255, 255, 200));
+            }
         }
 
         y_offset += track_h;
@@ -385,7 +392,7 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
     // ─── Interaction: drag playhead ──────────────────────────────────────
     if (area_hovered && ImGui::IsMouseClicked(0)) {
         ImVec2 mp = ImGui::GetMousePos();
-        if (mp.y < timeline_pos.y + header_h + 5) {
+        if (mp.y < timeline_pos.y + header_h) {
             state.dragging_playhead = true;
         }
         // Track selection
@@ -398,11 +405,167 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
             ty += state.tracks[ti].height;
         }
     }
+
+    // ─── Clip / Keyframe hit-testing (click) ─────────────────────────────
+    if (area_hovered && ImGui::IsMouseClicked(0)) {
+        ImVec2 mp = ImGui::GetMousePos();
+        bool hit = false;
+
+        // Keyframes first (drawn on top of clips, need precision)
+        if (mp.x >= track_area_x) {
+            float ty = timeline_pos.y + header_h;
+            for (int ti = 0; ti < static_cast<int>(state.tracks.size()) && !hit; ti++) {
+                auto& track = state.tracks[ti];
+                if (mp.y >= ty && mp.y < ty + track.height) {
+                    for (int ki = 0; ki < static_cast<int>(track.keyframes.size()); ki++) {
+                        float kf_x = track_area_x + (track.keyframes[ki].time - state.view_start) * time_to_px;
+                        if (std::abs(mp.x - kf_x) <= 6.0f) {
+                            for (auto& t : state.tracks)
+                                for (auto& k : t.keyframes) k.selected = false;
+                            track.keyframes[ki].selected = true;
+                            state.selected_kf_track = ti;
+                            state.selected_kf_index = ki;
+                            state.selected_clip = -1;
+                            for (auto& c : track.clips) c.selected = false;
+                            state.dragging_keyframe = true;
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+                ty += track.height;
+            }
+        }
+
+        // Clips: trim edges first, then body (topmost clip wins)
+        if (!hit && mp.x >= track_area_x) {
+            float ty = timeline_pos.y + header_h;
+            for (int ti = 0; ti < static_cast<int>(state.tracks.size()) && !hit; ti++) {
+                auto& track = state.tracks[ti];
+                if (mp.y >= ty + 2 && mp.y < ty + track.height - 2) {
+                    for (int ci = static_cast<int>(track.clips.size()) - 1; ci >= 0 && !hit; ci--) {
+                        auto& clip = track.clips[ci];
+                        float cx0 = track_area_x + (clip.start_time - state.view_start) * time_to_px;
+                        float cx1 = track_area_x + (clip.end_time - state.view_start) * time_to_px;
+                        // Left trim handle (only when the raw edge is visible)
+                        if (std::abs(mp.x - cx0) <= 5.0f && cx0 >= track_area_x) {
+                            state.trimming_clip = true;
+                            state.trim_left_edge = true;
+                            state.drag_clip_track = ti;
+                            state.drag_clip_index = ci;
+                            hit = true;
+                        } else if (std::abs(mp.x - cx1) <= 5.0f && cx1 <= track_area_x + track_area_w) {
+                            state.trimming_clip = true;
+                            state.trim_left_edge = false;
+                            state.drag_clip_track = ti;
+                            state.drag_clip_index = ci;
+                            hit = true;
+                        } else if (mp.x >= cx0 && mp.x <= cx1) {
+                            // Clip body: select + begin move
+                            for (auto& c : track.clips) c.selected = false;
+                            clip.selected = true;
+                            state.selected_clip = ci;
+                            state.selected_track = ti;
+                            state.dragging_clip = true;
+                            state.drag_clip_track = ti;
+                            state.drag_clip_index = ci;
+                            state.drag_offset =
+                                (state.view_start + (mp.x - track_area_x) / time_to_px) - clip.start_time;
+                            state.selected_kf_track = -1;
+                            state.selected_kf_index = -1;
+                            hit = true;
+                        }
+                    }
+                }
+                ty += track.height;
+            }
+        }
+
+        // Click on empty track area → clear selection
+        if (!hit && mp.x >= track_area_x) {
+            for (auto& t : state.tracks) {
+                for (auto& c : t.clips) c.selected = false;
+                for (auto& k : t.keyframes) k.selected = false;
+            }
+            state.selected_clip = -1;
+            state.selected_kf_track = -1;
+            state.selected_kf_index = -1;
+        }
+    }
     if (state.dragging_playhead) {
         float mx = ImGui::GetMousePos().x;
         float t = state.view_start + (mx - track_area_x) / time_to_px;
         state.current_time = SnapTime(std::max(0.0f, std::min(t, state.duration)));
         if (ImGui::IsMouseReleased(0)) state.dragging_playhead = false;
+    }
+
+    // ─── Clip move / trim drag ───────────────────────────────────────────
+    if (state.dragging_clip) {
+        if (state.drag_clip_track >= 0 && state.drag_clip_track < static_cast<int>(state.tracks.size()) &&
+            state.drag_clip_index >= 0 &&
+            state.drag_clip_index < static_cast<int>(state.tracks[state.drag_clip_track].clips.size())) {
+            auto& track = state.tracks[state.drag_clip_track];
+            auto& clip = track.clips[state.drag_clip_index];
+            float mx = ImGui::GetMousePos().x;
+            float t = SnapTime(std::max(0.0f, state.view_start + (mx - track_area_x) / time_to_px));
+            float dur = clip.end_time - clip.start_time;
+            clip.start_time = std::max(0.0f, t - state.drag_offset);
+            clip.end_time = clip.start_time + dur;
+        } else {
+            state.dragging_clip = false;
+        }
+        if (ImGui::IsMouseReleased(0)) state.dragging_clip = false;
+    }
+    if (state.trimming_clip) {
+        if (state.drag_clip_track >= 0 && state.drag_clip_track < static_cast<int>(state.tracks.size()) &&
+            state.drag_clip_index >= 0 &&
+            state.drag_clip_index < static_cast<int>(state.tracks[state.drag_clip_track].clips.size())) {
+            auto& track = state.tracks[state.drag_clip_track];
+            auto& clip = track.clips[state.drag_clip_index];
+            float mx = ImGui::GetMousePos().x;
+            float t = SnapTime(std::max(0.0f, state.view_start + (mx - track_area_x) / time_to_px));
+            const float kMinDur = 0.1f;
+            if (state.trim_left_edge) {
+                clip.start_time = std::min(t, clip.end_time - kMinDur);
+            } else {
+                clip.end_time = std::max(t, clip.start_time + kMinDur);
+            }
+        } else {
+            state.trimming_clip = false;
+        }
+        if (ImGui::IsMouseReleased(0)) state.trimming_clip = false;
+    }
+    if (state.dragging_keyframe) {
+        if (state.selected_kf_track >= 0 && state.selected_kf_track < static_cast<int>(state.tracks.size())) {
+            auto& track = state.tracks[state.selected_kf_track];
+            if (state.selected_kf_index >= 0 &&
+                state.selected_kf_index < static_cast<int>(track.keyframes.size())) {
+                float mx = ImGui::GetMousePos().x;
+                float t = SnapTime(std::max(0.0f, state.view_start + (mx - track_area_x) / time_to_px));
+                track.keyframes[state.selected_kf_index].time = std::min(t, state.duration);
+            }
+        } else {
+            state.dragging_keyframe = false;
+        }
+        if (ImGui::IsMouseReleased(0)) state.dragging_keyframe = false;
+    }
+
+    // ─── Delete key removes selected clip / keyframe ─────────────────────
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        if (state.selected_track >= 0 && state.selected_clip >= 0) {
+            auto& track = state.tracks[state.selected_track];
+            if (state.selected_clip < static_cast<int>(track.clips.size())) {
+                track.clips.erase(track.clips.begin() + state.selected_clip);
+                state.selected_clip = -1;
+            }
+        } else if (state.selected_kf_track >= 0 && state.selected_kf_index >= 0) {
+            auto& track = state.tracks[state.selected_kf_track];
+            if (state.selected_kf_index < static_cast<int>(track.keyframes.size())) {
+                track.keyframes.erase(track.keyframes.begin() + state.selected_kf_index);
+                state.selected_kf_index = -1;
+                state.selected_kf_track = -1;
+            }
+        }
     }
 
     // Scroll view with mouse wheel
@@ -425,6 +588,16 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
 
     // Right-click context menu
     if (area_hovered && ImGui::IsMouseClicked(1)) {
+        // Right-click selects the track under the cursor
+        ImVec2 mp = ImGui::GetMousePos();
+        float ty = timeline_pos.y + header_h;
+        for (int ti = 0; ti < static_cast<int>(state.tracks.size()); ti++) {
+            if (mp.y >= ty && mp.y < ty + state.tracks[ti].height && mp.x < track_area_x) {
+                state.selected_track = ti;
+                break;
+            }
+            ty += state.tracks[ti].height;
+        }
         ImGui::OpenPopup("SeqContextMenu");
     }
     if (ImGui::BeginPopup("SeqContextMenu")) {
@@ -451,12 +624,68 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
                 track.keyframes.push_back(kf);
             }
             ImGui::Separator();
+            if (state.selected_clip >= 0 &&
+                state.selected_clip < static_cast<int>(track.clips.size())) {
+                if (ImGui::MenuItem(T("Delete Clip"))) {
+                    track.clips.erase(track.clips.begin() + state.selected_clip);
+                    state.selected_clip = -1;
+                }
+            }
+            if (state.selected_kf_track >= 0 && state.selected_kf_index >= 0 &&
+                state.selected_kf_track < static_cast<int>(state.tracks.size())) {
+                auto& kf_track = state.tracks[state.selected_kf_track];
+                if (state.selected_kf_index < static_cast<int>(kf_track.keyframes.size()) &&
+                    ImGui::MenuItem(T("Delete Keyframe"))) {
+                    kf_track.keyframes.erase(kf_track.keyframes.begin() + state.selected_kf_index);
+                    state.selected_kf_index = -1;
+                    state.selected_kf_track = -1;
+                }
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem(T("Delete Track"))) {
                 state.tracks.erase(state.tracks.begin() + state.selected_track);
                 state.selected_track = -1;
             }
         }
         ImGui::EndPopup();
+    }
+
+    // ─── Clip properties editor (below the timeline) ─────────────────────
+    if (state.selected_track >= 0 && state.selected_track < static_cast<int>(state.tracks.size()) &&
+        state.selected_clip >= 0) {
+        auto& track = state.tracks[state.selected_track];
+        if (state.selected_clip < static_cast<int>(track.clips.size())) {
+            auto& clip = track.clips[state.selected_clip];
+            ImGui::Separator();
+            ImGui::TextUnformatted(MDI_ICON_VIEW_LIST "  Clip Properties");
+            char name_buf[256];
+            snprintf(name_buf, sizeof(name_buf), "%s", clip.name.c_str());
+            ImGui::SetNextItemWidth(240);
+            if (ImGui::InputText("##clip_name", name_buf, sizeof(name_buf),
+                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
+                clip.name = name_buf;
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted("Name");
+            char asset_buf[512];
+            snprintf(asset_buf, sizeof(asset_buf), "%s", clip.asset_path.c_str());
+            ImGui::SetNextItemWidth(360);
+            if (ImGui::InputText("##clip_asset", asset_buf, sizeof(asset_buf),
+                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
+                clip.asset_path = asset_buf;
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted("Asset Path");
+            ImGui::SetNextItemWidth(160);
+            ImGui::SliderFloat("Start##clip", &clip.start_time, 0.0f,
+                               std::max(0.0f, clip.end_time - 0.1f));
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(160);
+            ImGui::SliderFloat("End##clip", &clip.end_time, clip.start_time + 0.1f, state.duration);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120);
+            ImGui::SliderFloat("Volume##clip", &clip.volume, 0.0f, 1.0f);
+        }
     }
 
     ImGui::End();
