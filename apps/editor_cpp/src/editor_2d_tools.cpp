@@ -5,9 +5,11 @@
  */
 
 #include "editor_2d_tools.h"
+#include "editor_file_dialog.h"
 #include "editor_panel_registry.h"
 #include "editor_icons.h"
 #include "editor_gpu.h"
+#include "editor_console_panel.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -353,8 +355,14 @@ void DrawSpriteSlicerPanel() {
             } else {
                 SliceAuto(st.current_sheet, st.alpha_threshold);
             }
+        } else if (st.mode == SliceMode::Manual) {
+            // Manual 模式在预览画布上拖拽逐个添加帧；此按钮清空后重新开始。
+            st.current_sheet.frames.clear();
         }
         st.preview_dirty = false;
+    }
+    if (st.mode == SliceMode::Manual && ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Manual: 在预览图上拖拽框选添加帧；点击此按钮清空全部帧");
     }
     ImGui::SameLine();
     if (ImGui::Button("Save .dsprite")) {
@@ -431,6 +439,44 @@ void DrawSpriteSlicerPanel() {
             ImVec2 p1(p0.x + fr.w * scale, p0.y + fr.h * scale);
             ImU32 col = (i == st.selected_frame) ? IM_COL32(50, 200, 255, 220) : IM_COL32(0, 255, 100, 140);
             dl->AddRect(p0, p1, col, 0.0f, 0, (i == st.selected_frame) ? 2.0f : 1.0f);
+        }
+    }
+
+    // Manual slice: drag on the preview canvas to add a frame rect.
+    if (st.mode == SliceMode::Manual && tw > 0 && th > 0 && scale > 0.0f) {
+        ImVec2 mp = ImGui::GetMousePos();
+        bool canvas_hovered = ImGui::IsWindowHovered();
+        if (canvas_hovered && ImGui::IsMouseClicked(0) && !ImGui::IsAnyItemActive()) {
+            st.manual_dragging = true;
+            st.manual_drag_x = mp.x;
+            st.manual_drag_y = mp.y;
+        }
+        if (st.manual_dragging) {
+            float rx0 = std::min(st.manual_drag_x, mp.x);
+            float ry0 = std::min(st.manual_drag_y, mp.y);
+            float rx1 = std::max(st.manual_drag_x, mp.x);
+            float ry1 = std::max(st.manual_drag_y, mp.y);
+            dl->AddRect(ImVec2(rx0, ry0), ImVec2(rx1, ry1),
+                        IM_COL32(255, 120, 50, 255), 0.0f, 0, 2.0f);
+            if (ImGui::IsMouseReleased(0)) {
+                st.manual_dragging = false;
+                int px = static_cast<int>((rx0 - canvas_pos.x) / scale);
+                int py = static_cast<int>((ry0 - canvas_pos.y) / scale);
+                int pw = static_cast<int>((rx1 - rx0) / scale);
+                int ph = static_cast<int>((ry1 - ry0) / scale);
+                if (pw >= 2 && ph >= 2) {
+                    SpriteFrame fr;
+                    fr.x = std::max(0, px);
+                    fr.y = std::max(0, py);
+                    fr.w = std::min(pw, tw - fr.x);
+                    fr.h = std::min(ph, th - fr.y);
+                    fr.name = st.current_sheet.name + "_manual_" +
+                              std::to_string(st.current_sheet.frames.size());
+                    fr.pivot = {0.5f, 0.5f};
+                    st.current_sheet.frames.push_back(fr);
+                    st.selected_frame = static_cast<int>(st.current_sheet.frames.size()) - 1;
+                }
+            }
         }
     }
 
@@ -700,6 +746,45 @@ bool SaveAnimation2D(const Animation2DAsset& asset, const std::string& path) {
     return true;
 }
 
+bool LoadAnimation2D(Animation2DAsset& asset, const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) return false;
+    std::stringstream ss;
+    ss << f.rdbuf();
+
+    rapidjson::Document doc;
+    doc.Parse(ss.str().c_str());
+    if (doc.HasParseError() || !doc.IsObject()) return false;
+
+    Animation2DAsset loaded;
+    if (doc.HasMember("name") && doc["name"].IsString()) loaded.name = doc["name"].GetString();
+    if (doc.HasMember("sprite_sheet") && doc["sprite_sheet"].IsString())
+        loaded.sprite_sheet_path = doc["sprite_sheet"].GetString();
+
+    if (doc.HasMember("clips") && doc["clips"].IsArray()) {
+        for (const auto& cj : doc["clips"].GetArray()) {
+            if (!cj.IsObject()) continue;
+            Animation2DClip clip;
+            if (cj.HasMember("name") && cj["name"].IsString()) clip.name = cj["name"].GetString();
+            if (cj.HasMember("loop") && cj["loop"].IsBool()) clip.loop = cj["loop"].GetBool();
+            if (cj.HasMember("frames") && cj["frames"].IsArray()) {
+                for (const auto& fj : cj["frames"].GetArray()) {
+                    if (!fj.IsObject()) continue;
+                    AnimFrame2D fr;
+                    if (fj.HasMember("index") && fj["index"].IsInt()) fr.frame_index = fj["index"].GetInt();
+                    if (fj.HasMember("duration") && fj["duration"].IsNumber()) fr.duration = fj["duration"].GetFloat();
+                    clip.frames.push_back(fr);
+                    clip.total_duration += fr.duration;
+                }
+            }
+            loaded.clips.push_back(std::move(clip));
+        }
+    }
+
+    asset = std::move(loaded);
+    return true;
+}
+
 void DrawAnim2DEditorPanel() {
     auto& st = s_anim2d_state;
     if (!st.open) return;
@@ -742,6 +827,53 @@ void DrawAnim2DEditorPanel() {
     }
     ImGui::SameLine();
     ImGui::SliderFloat("Speed", &st.playback_speed, 0.1f, 5.0f);
+    ImGui::SameLine();
+    if (ImGui::Button(MDI_ICON_CONTENT_SAVE " Save")) {
+        std::string path = SaveFileDialog("Save 2D Animation",
+                                          "2D Animation (*.danim2d)\0*.danim2d\0All Files\0*.*\0",
+                                          "danim2d", "anim.danim2d");
+        if (!path.empty() && SaveAnimation2D(st.current_anim, path)) {
+            dse::editor::EditorLog(LogLevel::Info, "Saved 2D animation: " + path);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(MDI_ICON_FOLDER_OPEN " Load")) {
+        std::string path = OpenFileDialog("Open 2D Animation",
+                                          "2D Animation (*.danim2d)\0*.danim2d\0All Files\0*.*\0",
+                                          "danim2d");
+        if (!path.empty() && LoadAnimation2D(st.current_anim, path)) {
+            st.selected_clip = st.current_anim.clips.empty() ? -1 : 0;
+            st.selected_frame = -1;
+            st.playing = false;
+            st.playback_time = 0.0f;
+            dse::editor::EditorLog(LogLevel::Info, "Loaded 2D animation: " + path);
+        }
+    }
+
+    // 播放推进：根据时间推进选帧高亮（无真实渲染时至少让时间轴/帧选择跟随播放）
+    if (st.playing && st.selected_clip >= 0 &&
+        st.selected_clip < static_cast<int>(st.current_anim.clips.size())) {
+        auto& clip = st.current_anim.clips[st.selected_clip];
+        st.playback_time += ImGui::GetIO().DeltaTime * st.playback_speed;
+        if (clip.total_duration > 0.0f) {
+            if (st.playback_time >= clip.total_duration) {
+                if (clip.loop) {
+                    st.playback_time = std::fmod(st.playback_time, clip.total_duration);
+                } else {
+                    st.playback_time = clip.total_duration;
+                    st.playing = false;
+                }
+            }
+            float acc = 0.0f;
+            for (int i = 0; i < static_cast<int>(clip.frames.size()); ++i) {
+                acc += clip.frames[i].duration;
+                if (st.playback_time <= acc) {
+                    st.selected_frame = i;
+                    break;
+                }
+            }
+        }
+    }
 
     // Current clip frames
     if (st.selected_clip >= 0 && st.selected_clip < static_cast<int>(st.current_anim.clips.size())) {

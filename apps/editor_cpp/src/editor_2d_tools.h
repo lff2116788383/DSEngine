@@ -66,6 +66,11 @@ struct SpriteSlicerState {
     // Real source-texture data (loaded via stb_image), not persisted in .dsprite.
     std::vector<unsigned char> pixels;   // RGBA8, row-major, texture_width*texture_height*4
     unsigned int preview_texture = 0;    // GPU handle for the preview image (0 = none)
+
+    // Manual slice interaction (runtime only): drag on preview canvas to add a frame.
+    bool manual_dragging = false;
+    float manual_drag_x = 0.0f;          // drag start (screen space)
+    float manual_drag_y = 0.0f;
 };
 
 SpriteSlicerState& GetSpriteSlicerState();

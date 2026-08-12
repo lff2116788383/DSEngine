@@ -27,6 +27,9 @@ void PrintUsage() {
         << "Mesh/animation options:\n"
         << "  --no-anim-compress   write raw v2 .danim (default: v3 quantized)\n"
         << "  --no-anim-reduce     keep all keyframes (default: error-threshold decimation)\n"
+        << "  --no-anim            do not cook .danim (even if source has animations)\n"
+        << "  --no-skel            do not cook .dskel (even if source has a skeleton)\n"
+        << "  --no-material        do not cook .dmat (even if source has materials)\n"
         << "  --decimate <ratio>   decimate mesh to target ratio (e.g. 0.5 = 50%%)\n"
         << "  --lod-levels <n>     auto-generate n LOD levels (e.g. 3 => LOD1=50%%, LOD2=25%%, LOD3=12.5%%)\n\n"
         << "Lightmap baking:\n"
@@ -320,11 +323,17 @@ int main(int argc, char** argv) {
     AnimCompressOptions anim_opts;  // quantize + reduce on by default
     float decimate_ratio = 0.0f;   // 0 = no decimation
     int lod_levels = 0;            // 0 = no LOD generation
+    bool skip_anim = false;        // --no-anim
+    bool skip_skel = false;        // --no-skel
+    bool skip_material = false;    // --no-material
     std::vector<std::string> pos_args;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--no-anim-compress") { anim_opts.quantize = false; continue; }
         if (a == "--no-anim-reduce")   { anim_opts.reduce_keyframes = false; continue; }
+        if (a == "--no-anim")          { skip_anim = true; continue; }
+        if (a == "--no-skel")          { skip_skel = true; continue; }
+        if (a == "--no-material")      { skip_material = true; continue; }
         if (a == "--decimate") {
             if (i + 1 < argc) { decimate_ratio = std::stof(argv[++i]); }
             continue;
@@ -501,14 +510,19 @@ int main(int argc, char** argv) {
             std::cerr << "[AssetBuilder] Failed to cook dmesh: " << output_dmesh_path.string() << std::endl;
             return 1;
         }
-        std::cout << "[AssetBuilder] Cooking dmat: " << dmat_path.string() << std::endl;
-        if (!cooker.CookToDmat(scene, output_dir.string(), base_name)) {
-            std::cerr << "[AssetBuilder] Warning: no material data, skipping dmat." << std::endl;
+        if (skip_material) {
+            std::cout << "[AssetBuilder] Skip dmat (--no-material)." << std::endl;
+        } else {
+            std::cout << "[AssetBuilder] Cooking dmat: " << dmat_path.string() << std::endl;
+            if (!cooker.CookToDmat(scene, output_dir.string(), base_name)) {
+                std::cerr << "[AssetBuilder] Warning: no material data, skipping dmat." << std::endl;
+            }
         }
     }
 
-    if (scene.animations.empty()) {
-        std::cout << "[AssetBuilder] Skip danim: no animation data in source." << std::endl;
+    if (scene.animations.empty() || skip_anim) {
+        if (skip_anim) std::cout << "[AssetBuilder] Skip danim (--no-anim)." << std::endl;
+        else std::cout << "[AssetBuilder] Skip danim: no animation data in source." << std::endl;
     } else {
         std::cout << "[AssetBuilder] Cooking " << scene.animations.size() << " animation(s)"
                   << (anim_opts.quantize ? " (v3 quantized" : " (v2 raw")
@@ -525,8 +539,9 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (scene.skeleton.empty()) {
-        std::cout << "[AssetBuilder] Skip dskel: no skeleton data in source." << std::endl;
+    if (scene.skeleton.empty() || skip_skel) {
+        if (skip_skel) std::cout << "[AssetBuilder] Skip dskel (--no-skel)." << std::endl;
+        else std::cout << "[AssetBuilder] Skip dskel: no skeleton data in source." << std::endl;
     } else {
         std::cout << "[AssetBuilder] Cooking dskel: " << dskel_path.string() << std::endl;
         if (!cooker.CookToDskel(scene, output_dir.string(), base_name)) {

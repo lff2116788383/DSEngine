@@ -259,6 +259,9 @@ void DoImportMesh(ImportState& state, const std::string& project_asset_dir) {
     args.push_back(out_dir.string());
     if (!state.anim_compress) args.push_back("--no-anim-compress");
     if (!state.anim_reduce)   args.push_back("--no-anim-reduce");
+    if (!state.import_animations) args.push_back("--no-anim");
+    if (!state.import_skeleton)   args.push_back("--no-skel");
+    if (!state.import_materials)  args.push_back("--no-material");
     if (state.mesh_decimate) {
         args.push_back("--decimate");
         args.push_back(std::to_string(state.mesh_decimate_ratio));

@@ -153,6 +153,23 @@ void SimulateBake(NavMeshEditorState& state, entt::registry& reg) {
     state.baked_data.triangle_count = static_cast<int>(tris.size() / 3);
     state.baked_data.poly_count = nav_sys->GetPolyCount();
 
+    // 填充三角形数据供视口 overlay 绘制。此前 triangles 从未写入，
+    // 导致 DrawNavMeshOverlay 的三角形填充永远为空。
+    state.baked_data.triangles.clear();
+    for (int i = 0; i + 2 < static_cast<int>(tris.size()); i += 3) {
+        int i0 = tris[i], i1 = tris[i + 1], i2 = tris[i + 2];
+        if (i0 < 0 || i1 < 0 || i2 < 0) continue;
+        size_t b2 = static_cast<size_t>(i2) * 3;
+        if (b2 + 2 >= verts.size()) continue;
+        NavMeshTriangle tri;
+        size_t b0 = static_cast<size_t>(i0) * 3;
+        size_t b1 = static_cast<size_t>(i1) * 3;
+        tri.v0 = glm::vec3(verts[b0], verts[b0 + 1], verts[b0 + 2]);
+        tri.v1 = glm::vec3(verts[b1], verts[b1 + 1], verts[b1 + 2]);
+        tri.v2 = glm::vec3(verts[b2], verts[b2 + 1], verts[b2 + 2]);
+        state.baked_data.triangles.push_back(tri);
+    }
+
     // Calculate bounds
     if (!verts.empty()) {
         glm::vec3 min(1e6f), max(-1e6f);
