@@ -1,5 +1,6 @@
 #include "editor_animation_timeline.h"
 #include "editor_context.h"
+#include "editor_file_dialog.h"
 #include "editor_icons.h"
 #include "editor_panel_registry.h"
 
@@ -11,11 +12,16 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
 
 #include "editor_panel_registry.h"
 
@@ -62,6 +68,7 @@ struct TimelineState {
     int selected_keyframe = -1;
     int dragging_keyframe = -1;
     float drag_start_time = 0.0f;
+    float drag_start_value = 0.0f;
 };
 
 TimelineState& GetState() {
@@ -144,6 +151,92 @@ ImU32 TrackColor(int idx) {
     return colors[idx % 6];
 }
 
+// ─── .danim timeline project serialization ──────────────────────────────
+
+std::string SerializeTimelineClip(const TimelineState& state) {
+    rapidjson::Document doc;
+    doc.SetObject();
+    auto& a = doc.GetAllocator();
+    const auto& clip = state.clip;
+    doc.AddMember("name", rapidjson::Value(clip.name.c_str(), a), a);
+    doc.AddMember("duration", clip.duration, a);
+    doc.AddMember("sample_rate", clip.sample_rate, a);
+    doc.AddMember("looping", clip.looping, a);
+
+    rapidjson::Value tracks(rapidjson::kArrayType);
+    for (const auto& tr : clip.tracks) {
+        rapidjson::Value tj(rapidjson::kObjectType);
+        tj.AddMember("name", rapidjson::Value(tr.name.c_str(), a), a);
+        tj.AddMember("expanded", tr.expanded, a);
+        tj.AddMember("visible", tr.visible, a);
+        rapidjson::Value kfs(rapidjson::kArrayType);
+        for (const auto& k : tr.keyframes) {
+            rapidjson::Value kj(rapidjson::kObjectType);
+            kj.AddMember("time", k.time, a);
+            kj.AddMember("value", k.value, a);
+            kj.AddMember("interp", static_cast<int>(k.interp), a);
+            kj.AddMember("tan_in", k.tan_in, a);
+            kj.AddMember("tan_out", k.tan_out, a);
+            kfs.PushBack(kj, a);
+        }
+        tj.AddMember("keyframes", kfs, a);
+        tracks.PushBack(tj, a);
+    }
+    doc.AddMember("tracks", tracks, a);
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+    return std::string(buf.GetString(), buf.GetSize());
+}
+
+bool DeserializeTimelineClip(const std::string& json, TimelineState& state, std::string& err) {
+    rapidjson::Document doc;
+    doc.Parse(json.c_str());
+    if (doc.HasParseError()) { err = "JSON parse error"; return false; }
+    if (!doc.IsObject()) { err = "root is not an object"; return false; }
+
+    TimelineState loaded;
+    loaded.initialized = true;
+    loaded.zoom = state.zoom;
+    loaded.scroll_x = state.scroll_x;
+    if (doc.HasMember("name") && doc["name"].IsString())
+        loaded.clip.name = doc["name"].GetString();
+    if (doc.HasMember("duration") && doc["duration"].IsNumber())
+        loaded.clip.duration = doc["duration"].GetFloat();
+    if (doc.HasMember("sample_rate") && doc["sample_rate"].IsNumber())
+        loaded.clip.sample_rate = doc["sample_rate"].GetFloat();
+    if (doc.HasMember("looping") && doc["looping"].IsBool())
+        loaded.clip.looping = doc["looping"].GetBool();
+
+    if (doc.HasMember("tracks") && doc["tracks"].IsArray()) {
+        for (const auto& tj : doc["tracks"].GetArray()) {
+            if (!tj.IsObject()) continue;
+            AnimationTrack tr;
+            if (tj.HasMember("name") && tj["name"].IsString()) tr.name = tj["name"].GetString();
+            if (tj.HasMember("expanded") && tj["expanded"].IsBool()) tr.expanded = tj["expanded"].GetBool();
+            if (tj.HasMember("visible") && tj["visible"].IsBool()) tr.visible = tj["visible"].GetBool();
+            if (tj.HasMember("keyframes") && tj["keyframes"].IsArray()) {
+                for (const auto& kj : tj["keyframes"].GetArray()) {
+                    if (!kj.IsObject()) continue;
+                    Keyframe k;
+                    if (kj.HasMember("time") && kj["time"].IsNumber()) k.time = kj["time"].GetFloat();
+                    if (kj.HasMember("value") && kj["value"].IsNumber()) k.value = kj["value"].GetFloat();
+                    if (kj.HasMember("interp") && kj["interp"].IsInt())
+                        k.interp = static_cast<KeyframeInterpolation>(kj["interp"].GetInt());
+                    if (kj.HasMember("tan_in") && kj["tan_in"].IsNumber()) k.tan_in = kj["tan_in"].GetFloat();
+                    if (kj.HasMember("tan_out") && kj["tan_out"].IsNumber()) k.tan_out = kj["tan_out"].GetFloat();
+                    tr.keyframes.push_back(k);
+                }
+            }
+            loaded.clip.tracks.push_back(std::move(tr));
+        }
+    }
+
+    state = std::move(loaded);
+    return true;
+}
+
 } // namespace
 
 void DrawAnimationTimelinePanel(EditorContext& ctx) {
@@ -197,6 +290,39 @@ void DrawAnimationTimelinePanel(EditorContext& ctx) {
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0f);
         ImGui::DragFloat("Dur", &clip.duration, 0.1f, 0.1f, 60.0f, "%.1f s");
+        ImGui::SameLine();
+        if (ImGui::Button(MDI_ICON_CONTENT_SAVE " Save")) {
+            std::string path = SaveFileDialog("Save Animation",
+                                              "Animation (*.danim)\0*.danim\0All Files\0*.*\0",
+                                              "danim", "clip.danim");
+            if (!path.empty()) {
+                std::ofstream out(path, std::ios::binary);
+                if (out.is_open()) {
+                    std::string json = SerializeTimelineClip(state);
+                    out.write(json.data(), static_cast<std::streamsize>(json.size()));
+                }
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(MDI_ICON_FOLDER_OPEN " Load")) {
+            std::string path = OpenFileDialog("Open Animation",
+                                              "Animation (*.danim)\0*.danim\0All Files\0*.*\0",
+                                              "danim");
+            if (!path.empty()) {
+                std::ifstream in(path, std::ios::binary);
+                if (in.is_open()) {
+                    std::stringstream ss;
+                    ss << in.rdbuf();
+                    std::string err;
+                    if (DeserializeTimelineClip(ss.str(), state, err)) {
+                        state.selected_track = -1;
+                        state.selected_keyframe = -1;
+                        state.dragging_keyframe = -1;
+                        state.playing = false;
+                    }
+                }
+            }
+        }
     }
 
     ImGui::Separator();
@@ -359,11 +485,12 @@ void DrawAnimationTimelinePanel(EditorContext& ctx) {
                     state.selected_keyframe = ki;
                     state.dragging_keyframe = ki;
                     state.drag_start_time = kf.time;
+                    state.drag_start_value = kf.value;
                 }
             }
         }
 
-        // Keyframe dragging
+        // Keyframe dragging (time + value)
         if (state.dragging_keyframe >= 0 && state.selected_track >= 0) {
             if (ImGui::IsMouseDragging(0)) {
                 auto& track = clip.tracks[state.selected_track];
@@ -371,10 +498,8 @@ void DrawAnimationTimelinePanel(EditorContext& ctx) {
                     auto& kf = track.keyframes[state.dragging_keyframe];
                     ImVec2 delta = ImGui::GetMouseDragDelta(0);
                     kf.time = std::clamp(state.drag_start_time + delta.x / state.zoom, 0.0f, clip.duration);
-                    // Also adjust value based on Y drag
-                    float dy = -delta.y / curve_h * val_range;
-                    kf.value = kf.value; // Value drag: we only move time for now to keep it simple
-                    (void)dy;
+                    // Value axis drag: Y delta mapped through the value range
+                    kf.value = state.drag_start_value - delta.y / curve_h * val_range;
                 }
             }
             if (ImGui::IsMouseReleased(0)) {

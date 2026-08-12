@@ -33,6 +33,7 @@ struct PanelVisibilityState {
     bool lua_console        = false;
     bool asset_browser      = false;
     bool animation_timeline = false;
+    bool animation_clip     = false;
     bool navmesh            = false;
     bool shader_graph       = false;
     bool git                = false;

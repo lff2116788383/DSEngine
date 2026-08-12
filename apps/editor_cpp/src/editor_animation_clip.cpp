@@ -70,6 +70,9 @@ struct AnimClipState {
     std::vector<AnimationCurve> curves;
     int selected_curve = -1;
     int selected_keyframe = -1;
+    int dragging_keyframe = -1;
+    float drag_start_time = 0.0f;
+    float drag_start_value = 0.0f;
 
     // Additive layers
     std::vector<AdditiveLayer> layers;
@@ -414,6 +417,7 @@ void DrawAnimationClipEditor(EditorContext& /*ctx*/) {
     if (canvas_size.x < 100) canvas_size.x = 100;
     if (canvas_size.y < 100) canvas_size.y = 100;
     ImGui::InvisibleButton("curve_canvas", canvas_size);
+    bool canvas_hovered = ImGui::IsItemHovered();
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
     // Background
@@ -466,27 +470,72 @@ void DrawAnimationClipEditor(EditorContext& /*ctx*/) {
             prev_pt = pt;
         }
 
-        // Draw keyframes
-        if (is_selected_curve) {
-            for (int ki = 0; ki < static_cast<int>(curve.keyframes.size()); ki++) {
-                auto& kf = curve.keyframes[ki];
-                float x = canvas_pos.x + kf.time * time_scale;
-                float y = origin_y - kf.value * value_scale;
-                bool kf_sel = (state.selected_keyframe == ki && state.selected_curve == ci);
-                ImU32 kf_col = kf_sel ? IM_COL32(255, 255, 255, 255) : IM_COL32(255, 200, 50, 255);
-                dl->AddRectFilled(ImVec2(x - 4, y - 4), ImVec2(x + 4, y + 4), kf_col);
+        // Draw keyframes (all visible curves; only selected curve gets tangents)
+        for (int ki = 0; ki < static_cast<int>(curve.keyframes.size()); ki++) {
+            auto& kf = curve.keyframes[ki];
+            float x = canvas_pos.x + kf.time * time_scale;
+            float y = origin_y - kf.value * value_scale;
+            bool kf_sel = (state.selected_keyframe == ki && state.selected_curve == ci);
+            ImU32 kf_col = kf_sel ? IM_COL32(255, 255, 255, 255)
+                                  : (is_selected_curve ? IM_COL32(255, 200, 50, 255)
+                                                       : ((curve.color & 0x00FFFFFF) | 0xFF000000));
+            dl->AddRectFilled(ImVec2(x - 4, y - 4), ImVec2(x + 4, y + 4), kf_col);
 
-                // Tangent handles
-                if (kf_sel) {
-                    float th = 20.0f;
-                    ImVec2 in_handle(x - th, y + kf.in_tangent * th);
-                    ImVec2 out_handle(x + th, y - kf.out_tangent * th);
-                    dl->AddLine(ImVec2(x, y), in_handle, IM_COL32(100, 180, 255, 200), 1.0f);
-                    dl->AddLine(ImVec2(x, y), out_handle, IM_COL32(255, 100, 100, 200), 1.0f);
-                    dl->AddCircleFilled(in_handle, 3, IM_COL32(100, 180, 255, 255));
-                    dl->AddCircleFilled(out_handle, 3, IM_COL32(255, 100, 100, 255));
+            // Tangent handles
+            if (kf_sel) {
+                float th = 20.0f;
+                ImVec2 in_handle(x - th, y + kf.in_tangent * th);
+                ImVec2 out_handle(x + th, y - kf.out_tangent * th);
+                dl->AddLine(ImVec2(x, y), in_handle, IM_COL32(100, 180, 255, 200), 1.0f);
+                dl->AddLine(ImVec2(x, y), out_handle, IM_COL32(255, 100, 100, 200), 1.0f);
+                dl->AddCircleFilled(in_handle, 3, IM_COL32(100, 180, 255, 255));
+                dl->AddCircleFilled(out_handle, 3, IM_COL32(255, 100, 100, 255));
+            }
+
+            // Hit test: click selects curve + keyframe, begins drag
+            if (canvas_hovered && ImGui::IsMouseClicked(0)) {
+                ImVec2 mp = ImGui::GetMousePos();
+                if (std::abs(mp.x - x) <= 8.0f && std::abs(mp.y - y) <= 8.0f) {
+                    state.selected_curve = ci;
+                    state.selected_keyframe = ki;
+                    state.dragging_keyframe = ki;
+                    state.drag_start_time = kf.time;
+                    state.drag_start_value = kf.value;
                 }
             }
+        }
+    }
+
+    // Keyframe drag (time + value) on the curve canvas
+    if (state.dragging_keyframe >= 0 && state.selected_curve >= 0) {
+        if (ImGui::IsMouseDragging(0)) {
+            auto& curve = state.curves[state.selected_curve];
+            if (state.dragging_keyframe < static_cast<int>(curve.keyframes.size())) {
+                auto& kf = curve.keyframes[state.dragging_keyframe];
+                ImVec2 delta = ImGui::GetMouseDragDelta(0);
+                kf.time = std::clamp(state.drag_start_time + delta.x / time_scale, 0.0f, state.clip_duration);
+                kf.value = state.drag_start_value - delta.y / value_scale;
+            }
+        }
+        if (ImGui::IsMouseReleased(0)) {
+            if (state.selected_curve >= 0 &&
+                state.selected_curve < static_cast<int>(state.curves.size())) {
+                auto& kfs = state.curves[state.selected_curve].keyframes;
+                std::sort(kfs.begin(), kfs.end(),
+                          [](auto& a, auto& b) { return a.time < b.time; });
+            }
+            state.dragging_keyframe = -1;
+        }
+    }
+
+    // Delete selected keyframe
+    if (state.selected_curve >= 0 && state.selected_keyframe >= 0 &&
+        state.selected_curve < static_cast<int>(state.curves.size())) {
+        auto& curve = state.curves[state.selected_curve];
+        if (ImGui::IsKeyPressed(ImGuiKey_Delete) &&
+            state.selected_keyframe < static_cast<int>(curve.keyframes.size())) {
+            curve.keyframes.erase(curve.keyframes.begin() + state.selected_keyframe);
+            state.selected_keyframe = -1;
         }
     }
 
@@ -508,7 +557,7 @@ void DrawAnimationClipEditor(EditorContext& /*ctx*/) {
             ImGui::SetCursorScreenPos(ImVec2(canvas_pos.x + canvas_size.x - 200, canvas_pos.y + 4));
             ImGui::BeginGroup();
             ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(40, 40, 50, 220));
-            ImGui::BeginChild("##kf_props", ImVec2(195, 90), ImGuiChildFlags_Borders);
+            ImGui::BeginChild("##kf_props", ImVec2(195, 122), ImGuiChildFlags_Borders);
             ImGui::SetNextItemWidth(80);
             ImGui::DragFloat("Time", &kf.time, 0.01f);
             ImGui::SetNextItemWidth(80);
@@ -517,6 +566,19 @@ void DrawAnimationClipEditor(EditorContext& /*ctx*/) {
             ImGui::DragFloat("In Tan", &kf.in_tangent, 0.01f);
             ImGui::SetNextItemWidth(80);
             ImGui::DragFloat("Out Tan", &kf.out_tangent, 0.01f);
+            if (ImGui::SmallButton("Delete")) {
+                curve.keyframes.erase(curve.keyframes.begin() + state.selected_keyframe);
+                state.selected_keyframe = -1;
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("+ Key")) {
+                CurveKeyframe nk;
+                nk.time = state.current_time;
+                nk.value = EvaluateCurve(curve, state.current_time);
+                curve.keyframes.push_back(nk);
+                std::sort(curve.keyframes.begin(), curve.keyframes.end(),
+                          [](auto& a, auto& b) { return a.time < b.time; });
+            }
             ImGui::EndChild();
             ImGui::PopStyleColor();
             ImGui::EndGroup();
@@ -557,17 +619,15 @@ void AnimClipStop() {
     s_state.current_time = 0.0f;
 }
 
-// P0-6 self-registration: secondary draw sharing animation visibility.
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
 DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
     dse::editor::PanelEntry e;
     e.id = "animation_clip";
     e.display_name = "Animation Clip";
     e.category = "Tool";
+    e.menu_icon = MDI_ICON_ANIMATION;
     e.order = 61;
-    e.draw = [](dse::editor::EditorContext& ctx) {
-        auto* owner = dse::editor::PanelRegistry::Get().Find("animation");
-        if (owner && owner->visible && *owner->visible) DrawAnimationClipEditor(ctx);
-    };
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawAnimationClipEditor(ctx); };
     reg.Register(std::move(e));
 });
 

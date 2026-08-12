@@ -1246,6 +1246,7 @@ void EditorApp::RegisterPanels() {
         {"undo_history", &panels_.undo_history},
         {"asset_browser", &panels_.asset_browser},
         {"animation_timeline", &panels_.animation_timeline},
+        {"animation_clip", &panels_.animation_clip},
         {"navmesh", &panels_.navmesh},
         {"shader_graph", &panels_.shader_graph},
         {"multi_viewport", &panels_.multi_viewport},
