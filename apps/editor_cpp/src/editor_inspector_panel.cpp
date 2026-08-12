@@ -169,11 +169,15 @@ bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f,
 }
 
 void BeginInspectorReadOnlyScope(const EditorContext& context) {
-    (void)context;
+    // 属性级只读：IsInspectorReadOnly 为 true 时禁用本段 Inspector 控件。
+    // （当前无 Inspector 锁定机制，恒返回 false；结构性只读走
+    //  IsInspectorStructuralReadOnly —— Play 模式下禁止增删组件。）
+    ImGui::BeginDisabled(IsInspectorReadOnly(context));
 }
 
 void EndInspectorReadOnlyScope(const EditorContext& context) {
     (void)context;
+    ImGui::EndDisabled();
 }
 
 void MarkSpriteRendererDirty(SpriteRendererComponent& sprite) {

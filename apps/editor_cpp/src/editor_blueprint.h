@@ -315,9 +315,6 @@ void DrawBpComments(ImDrawList* draw_list, ImVec2 canvas_pos);
 void BpAddComment(ImVec2 pos);
 void BpAddNodeGroup(const std::string& name, const std::vector<int>& node_ids);
 
-// Asset Thumbnail (#5)
-void DrawBpThumbnail(const BlueprintAsset& asset, ImVec2 pos, ImVec2 size);
-
 // Templates (#6)
 void DrawBpTemplatePanel();
 bool ApplyBpTemplate(const std::string& template_name);

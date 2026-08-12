@@ -223,6 +223,30 @@ public:
     }
 
     /**
+     * @brief 跳转撤销 N 步（用于 Undo History 面板点击历史条目）
+     * @param steps 需要撤销的命令数（>0）
+     * @return 是否全部成功
+     */
+    bool JumpToUndo(int steps) {
+        while (steps-- > 0) {
+            if (!Undo()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * @brief 跳转重做 N 步（用于 Undo History 面板点击历史条目）
+     * @param steps 需要重做的命令数（>0）
+     * @return 是否全部成功
+     */
+    bool JumpToRedo(int steps) {
+        while (steps-- > 0) {
+            if (!Redo()) return false;
+        }
+        return true;
+    }
+
+    /**
      * @brief 是否可以撤销
      */
     bool CanUndo() const { return !undo_stack_.empty(); }

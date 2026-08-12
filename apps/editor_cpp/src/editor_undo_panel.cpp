@@ -32,7 +32,10 @@ void DrawUndoHistoryPanel(bool* p_open) {
             for (int i = 0; i < static_cast<int>(undo_history.size()); ++i) {
                 bool is_top = (i == 0);
                 if (is_top) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.4f, 1.0f));
-                ImGui::Selectable(undo_history[i].c_str(), is_top);
+                // 点击条目直接跳转到该历史状态（撤销 i+1 步）
+                if (ImGui::Selectable(undo_history[i].c_str(), is_top)) {
+                    mgr.JumpToUndo(i + 1);
+                }
                 if (is_top) ImGui::PopStyleColor();
             }
         }
@@ -49,7 +52,10 @@ void DrawUndoHistoryPanel(bool* p_open) {
             for (int i = 0; i < static_cast<int>(redo_history.size()); ++i) {
                 bool is_top = (i == 0);
                 if (is_top) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f));
-                ImGui::Selectable(redo_history[i].c_str(), is_top);
+                // 点击条目直接跳转（重做 i+1 步）
+                if (ImGui::Selectable(redo_history[i].c_str(), is_top)) {
+                    mgr.JumpToRedo(i + 1);
+                }
                 if (is_top) ImGui::PopStyleColor();
             }
         }

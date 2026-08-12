@@ -12,6 +12,7 @@
 #include "editor_version_control.h"
 #include "editor_icons.h"
 #include "editor_task_service.h"
+#include "editor_project.h"
 #include "engine/vcs/git_client.h"
 #include "imgui.h"
 
@@ -74,7 +75,12 @@ void Refresh() {
 void EnsureInit() {
     if (g.initialized) return;
     g.initialized = true;
-    g.client.SetRepoDir(std::filesystem::current_path());
+    // 仓库目录跟随当前打开的项目；无项目时回退到工作目录。
+    std::filesystem::path repo_dir = std::filesystem::current_path();
+    if (dse::editor::ProjectManager::Get().HasOpenProject()) {
+        repo_dir = dse::editor::ProjectManager::Get().GetProjectRoot();
+    }
+    g.client.SetRepoDir(repo_dir);
     if (!g.client.GitAvailable()) {
         g.git_missing = true;
         SetBanner("git executable not found on PATH", true);
