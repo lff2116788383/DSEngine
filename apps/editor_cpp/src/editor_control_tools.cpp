@@ -588,9 +588,11 @@ static JsonRpcResponse HandleGizmoSetMode(
 
     if (params.HasMember("operation") && params["operation"].IsString() && g_gizmo_operation_ptr) {
         std::string op = params["operation"].GetString();
-        if (op == "translate" || op == "move")   *g_gizmo_operation_ptr = 7;   // ImGuizmo::TRANSLATE
-        else if (op == "rotate")                 *g_gizmo_operation_ptr = 120; // ImGuizmo::ROTATE
-        else if (op == "scale")                  *g_gizmo_operation_ptr = 896; // ImGuizmo::SCALE
+        // 编辑器内部协议: 0=Translate, 1=Rotate, 2=Scale (对应 viewport 的
+        // current_gizmo_operation 与设置持久化), 不是 ImGuizmo 位掩码枚举。
+        if (op == "translate" || op == "move")   *g_gizmo_operation_ptr = 0;
+        else if (op == "rotate")                 *g_gizmo_operation_ptr = 1;
+        else if (op == "scale")                  *g_gizmo_operation_ptr = 2;
         result.AddMember("operation", rapidjson::Value(op.c_str(), alloc), alloc);
     }
 

@@ -744,6 +744,8 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                     pick_view, pick_proj);
                 if (picked != entt::null) {
                     context.selected_entity = picked;
+                    // 与 Hierarchy 高亮 / Gizmo 使用的 SelectionManager 保持同步
+                    SelectionManager::Get().SetSingle(picked);
                 }
             } else {
                 // Marquee select: find all entities whose screen-space projection falls within the rect
