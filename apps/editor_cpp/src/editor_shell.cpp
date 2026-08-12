@@ -23,6 +23,7 @@
 #include "editor_scene_camera.h"
 #include "editor_scene_view_mode.h"
 #include "editor_panel_registry.h"
+#include "editor_plugin_api.h"
 #include "engine/ecs/transform.h"
 
 #include <filesystem>
@@ -510,6 +511,9 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
         // enumerated from PanelRegistry, so new panels appear here automatically
         // without editing this menu.
         PanelRegistry::Get().DrawWindowMenu();
+
+        // DLL 插件注入的菜单项（顶层项 / 子菜单 / 面板开关）
+        dse::editor::EditorPluginManager::Instance().DrawPluginMenuItems();
 
         ImGui::Separator();
         DrawLayoutMenu();

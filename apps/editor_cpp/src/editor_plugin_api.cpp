@@ -2,6 +2,7 @@
 #include "editor_panel_registry.h"
 #include "editor_context.h"
 #include "editor_console_panel.h"
+#include "editor_icons.h"
 #include "imgui.h"
 
 #ifdef _WIN32
@@ -86,6 +87,8 @@ void EditorPluginManager::DrawAllPanels(EditorContext& ctx) {
 }
 
 void EditorPluginManager::DrawPluginMenuItems() {
+    // 顶层菜单项（所有插件，无子菜单）—— 原实现外层 break 导致只有第一个
+    // 插件的顶层项被绘制，其余插件丢失；这里统一遍历。
     for (auto& p : plugins_) {
         for (auto& item : p->menu_items) {
             if (item.submenu.empty()) {
@@ -94,27 +97,26 @@ void EditorPluginManager::DrawPluginMenuItems() {
                 }
             }
         }
-        // Submenus
-        for (auto& p2 : plugins_) {
-            std::string last_submenu;
-            for (auto& item : p2->menu_items) {
-                if (item.submenu.empty()) continue;
-                if (item.submenu != last_submenu) {
-                    if (!last_submenu.empty()) ImGui::EndMenu();
-                    last_submenu = item.submenu;
-                    if (!ImGui::BeginMenu(item.submenu.c_str())) {
-                        last_submenu.clear();
-                        continue;
-                    }
-                }
-                if (ImGui::MenuItem(item.label.c_str())) {
-                    if (item.action) item.action();
+    }
+    // 子菜单：所有插件合并，同名子菜单聚合到同一个 BeginMenu 下
+    std::string last_submenu;
+    for (auto& p : plugins_) {
+        for (auto& item : p->menu_items) {
+            if (item.submenu.empty()) continue;
+            if (item.submenu != last_submenu) {
+                if (!last_submenu.empty()) ImGui::EndMenu();
+                last_submenu = item.submenu;
+                if (!ImGui::BeginMenu(item.submenu.c_str())) {
+                    last_submenu.clear();
+                    continue;
                 }
             }
-            if (!last_submenu.empty()) ImGui::EndMenu();
+            if (ImGui::MenuItem(item.label.c_str())) {
+                if (item.action) item.action();
+            }
         }
-        break; // submenu loop is done for all plugins above
     }
+    if (!last_submenu.empty()) ImGui::EndMenu();
     // Panel toggles
     if (!plugins_.empty()) {
         ImGui::Separator();
@@ -395,6 +397,10 @@ DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
     e.draw = [](dse::editor::EditorContext& ctx) {
         EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
         EditorPluginManager::Instance().DrawAllPanels(ctx);
+        // DLL 插件浏览器（加载 / 热重载 / 扫描 / 面板开关）
+        ImGui::Begin(MDI_ICON_PUZZLE "  DLL Plugins", PanelRegistry::Get().GetCurrentPanelOpen());
+        DrawPluginBrowserPanel();
+        ImGui::End();
     };
     reg.Register(std::move(e));
 });

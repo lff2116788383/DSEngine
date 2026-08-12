@@ -1089,6 +1089,9 @@ void EditorApp::Shutdown() {
     // 停止所有插件
     plugin_manager_.StopAll();
 
+    // 卸载 DLL 插件（EditorPluginManager 的 on_shutdown + 清理）
+    dse::editor::EditorPluginManager::Instance().ShutdownAll();
+
     // 停止 Control Server
     if (control_server_) {
         control_server_->Stop();
@@ -1349,6 +1352,13 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::BeginEditorShell();
     dse::editor::DrawEditorMainMenu(ctx, panels_);
+
+    // DLL 插件（EditorPluginManager）一次性初始化；热重载的进程插件走 plugin_manager_
+    static bool s_dll_plugins_inited = false;
+    if (!s_dll_plugins_inited) {
+        s_dll_plugins_inited = true;
+        dse::editor::EditorPluginManager::Instance().InitAll(ctx);
+    }
 
     if (!is_play) {
         dse::editor::DrawSceneTabBar(ctx);
