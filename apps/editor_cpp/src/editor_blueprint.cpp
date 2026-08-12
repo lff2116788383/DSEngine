@@ -9,14 +9,17 @@
 #include "engine/scripting/blueprint/blueprint_serialize.h"
 #include "editor_icons.h"
 #include "editor_locale.h"
+#include "editor_file_dialog.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -1007,7 +1010,8 @@ void DrawNodeCanvas() {
         // Title
         draw_list->AddText(ImVec2(node_pos.x + 6, node_pos.y + 4), IM_COL32(255, 255, 255, 255), node.name.c_str());
         // Border (with debugger highlighting)
-        bool is_selected = (node.id == s_state.selected_node);
+        bool is_selected = (node.id == s_state.selected_node) ||
+            (std::find(s_state.selected_nodes.begin(), s_state.selected_nodes.end(), node.id) != s_state.selected_nodes.end());
         bool is_executing = (s_state.debug.active && node.id == s_state.debug.current_node_id);
         bool has_breakpoint = s_state.debug.HasBreakpoint(node.id);
         ImU32 border_color = is_executing ? IM_COL32(50, 255, 50, 255) :
@@ -1096,7 +1100,26 @@ void DrawNodeCanvas() {
         // Node selection & drag start (skip when starting a link on a pin)
         if (canvas_hovered && ImGui::IsMouseHoveringRect(node_pos, node_end) &&
             ImGui::IsMouseClicked(0) && !s_state.creating_link) {
-            s_state.selected_node = node.id;
+            bool ctrl = ImGui::GetIO().KeyCtrl;
+            auto& sel = s_state.selected_nodes;
+            if (ctrl) {
+                // Ctrl+click 加选 / 减选
+                auto it = std::find(sel.begin(), sel.end(), node.id);
+                if (it != sel.end()) {
+                    sel.erase(it);
+                    if (s_state.selected_node == node.id)
+                        s_state.selected_node = sel.empty() ? -1 : sel[0];
+                } else {
+                    sel.push_back(node.id);
+                    s_state.selected_node = node.id;
+                }
+            } else {
+                if (std::find(sel.begin(), sel.end(), node.id) == sel.end()) {
+                    sel.clear();
+                    sel.push_back(node.id);
+                }
+                s_state.selected_node = node.id;
+            }
             s_state.dragging_node = node.id;
             s_state.drag_offset = ImVec2(ImGui::GetMousePos().x - node_pos.x,
                                          ImGui::GetMousePos().y - node_pos.y);
@@ -1107,14 +1130,27 @@ void DrawNodeCanvas() {
         if (node.size.y < min_h) node.size.y = static_cast<float>(min_h);
     }
 
-    // Node dragging
+    // Node dragging (拖单个节点；若该节点在多选中，整组一起移动)
     if (s_state.dragging_node >= 0) {
         auto it = std::find_if(graph.nodes.begin(), graph.nodes.end(),
             [&](const BpNode& n) { return n.id == s_state.dragging_node; });
         if (it != graph.nodes.end()) {
             if (ImGui::IsMouseDragging(0) && !s_state.creating_link) {
-                it->position.x = ImGui::GetMousePos().x - canvas_pos.x - s_state.scroll_offset.x - s_state.drag_offset.x;
-                it->position.y = ImGui::GetMousePos().y - canvas_pos.y - s_state.scroll_offset.y - s_state.drag_offset.y;
+                float nx = ImGui::GetMousePos().x - canvas_pos.x - s_state.scroll_offset.x - s_state.drag_offset.x;
+                float ny = ImGui::GetMousePos().y - canvas_pos.y - s_state.scroll_offset.y - s_state.drag_offset.y;
+                float dx = nx - it->position.x;
+                float dy = ny - it->position.y;
+                // 拖动源节点自身
+                it->position.x = nx;
+                it->position.y = ny;
+                // 同组其余选中节点跟随
+                for (auto& n : graph.nodes) {
+                    if (n.id == s_state.dragging_node) continue;
+                    if (std::find(s_state.selected_nodes.begin(), s_state.selected_nodes.end(), n.id) != s_state.selected_nodes.end()) {
+                        n.position.x += dx;
+                        n.position.y += dy;
+                    }
+                }
                 s_state.dirty = true;
             }
             if (ImGui::IsMouseReleased(0)) {
@@ -1202,15 +1238,322 @@ void DrawNodeCanvas() {
         s_state.scroll_offset.y += ImGui::GetIO().MouseDelta.y;
     }
 
+    // Zoom with scroll wheel (fixed point at mouse)
+    if (ImGui::IsItemHovered() && std::abs(ImGui::GetIO().MouseWheel) > 0.01f) {
+        float old_zoom = s_state.zoom;
+        s_state.zoom += ImGui::GetIO().MouseWheel * 0.1f;
+        s_state.zoom = std::max(0.3f, std::min(s_state.zoom, 3.0f));
+        float factor = s_state.zoom / old_zoom;
+        ImVec2 mp = ImGui::GetMousePos();
+        s_state.scroll_offset.x = mp.x - canvas_pos.x - (mp.x - canvas_pos.x - s_state.scroll_offset.x) * factor;
+        s_state.scroll_offset.y = mp.y - canvas_pos.y - (mp.y - canvas_pos.y - s_state.scroll_offset.y) * factor;
+    }
+
+    // Box selection: drag empty canvas with left mouse (skip when creating link)
+    bool canvas_item_hovered = ImGui::IsItemHovered();
+    if (canvas_item_hovered && ImGui::IsMouseClicked(0) && s_state.dragging_node < 0 &&
+        !s_state.creating_link && s_state.selected_link < 0) {
+        // Only start box-select when click hits empty canvas (not a node/pin).
+        // Node/pin clicks set dragging_node/creating_link, so reaching here with
+        // neither means empty space.
+        ImVec2 mp = ImGui::GetMousePos();
+        ImVec2 canvas_mp(mp.x - canvas_pos.x - s_state.scroll_offset.x,
+                         mp.y - canvas_pos.y - s_state.scroll_offset.y);
+        s_state.box_selecting = true;
+        s_state.box_select_start = canvas_mp;
+        if (!ImGui::GetIO().KeyCtrl) {
+            s_state.selected_nodes.clear();
+            s_state.selected_node = -1;
+        }
+    }
+    if (s_state.box_selecting && ImGui::IsMouseReleased(0)) {
+        s_state.box_selecting = false;
+        ImVec2 mp = ImGui::GetMousePos();
+        ImVec2 canvas_mp(mp.x - canvas_pos.x - s_state.scroll_offset.x,
+                         mp.y - canvas_pos.y - s_state.scroll_offset.y);
+        float minx = std::min(s_state.box_select_start.x, canvas_mp.x);
+        float miny = std::min(s_state.box_select_start.y, canvas_mp.y);
+        float maxx = std::max(s_state.box_select_start.x, canvas_mp.x);
+        float maxy = std::max(s_state.box_select_start.y, canvas_mp.y);
+        auto& sel = s_state.selected_nodes;
+        for (const auto& n : graph.nodes) {
+            if (n.position.x <= maxx && n.position.x + n.size.x >= minx &&
+                n.position.y <= maxy && n.position.y + n.size.y >= miny) {
+                if (std::find(sel.begin(), sel.end(), n.id) == sel.end()) sel.push_back(n.id);
+            }
+        }
+        if (!s_state.selected_nodes.empty()) s_state.selected_node = s_state.selected_nodes[0];
+    }
+
+    // Draw box selection rectangle
+    if (s_state.box_selecting) {
+        ImVec2 mp = ImGui::GetMousePos();
+        ImVec2 a(canvas_pos.x + s_state.scroll_offset.x + s_state.box_select_start.x,
+                 canvas_pos.y + s_state.scroll_offset.y + s_state.box_select_start.y);
+        draw_list->AddRectFilled(a, mp, IM_COL32(80, 120, 200, 60));
+        draw_list->AddRect(a, mp, IM_COL32(120, 160, 240, 200), 0, 0, 1.5f);
+    }
+
+    // Keyboard shortcuts: copy / paste / duplicate selected nodes
+    if (canvas_item_hovered || s_state.selected_node >= 0 || !s_state.selected_nodes.empty()) {
+        if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !ImGui::GetIO().KeyShift) {
+            // Copy
+            s_state.clipboard_nodes.clear();
+            s_state.clipboard_links.clear();
+            s_state.clipboard_next_id = 1;
+            std::vector<int> copy_ids;
+            for (const auto& id : s_state.selected_nodes) copy_ids.push_back(id);
+            if (copy_ids.empty() && s_state.selected_node >= 0) copy_ids.push_back(s_state.selected_node);
+            if (!copy_ids.empty()) {
+                std::unordered_map<int,int> pin_map;
+                for (const auto& n : graph.nodes) {
+                    if (std::find(copy_ids.begin(), copy_ids.end(), n.id) == copy_ids.end()) continue;
+                    BpNode c = n;
+                    // 记录旧 pin id → 新 id 映射
+                    c.id = s_state.clipboard_next_id++;
+                    c.inputs.clear(); c.outputs.clear();
+                    for (const auto& p : n.inputs) {
+                        BpPin np = p; np.id = s_state.clipboard_next_id++; np.kind = BpPinKind::Input;
+                        pin_map[p.id] = np.id; c.inputs.push_back(np);
+                    }
+                    for (const auto& p : n.outputs) {
+                        BpPin np = p; np.id = s_state.clipboard_next_id++; np.kind = BpPinKind::Output;
+                        pin_map[p.id] = np.id; c.outputs.push_back(np);
+                    }
+                    s_state.clipboard_nodes.push_back(std::move(c));
+                }
+                for (const auto& l : graph.links) {
+                    if (pin_map.count(l.from_pin) && pin_map.count(l.to_pin)) {
+                        BpLink cl = l;
+                        cl.from_pin = pin_map[l.from_pin];
+                        cl.to_pin = pin_map[l.to_pin];
+                        s_state.clipboard_links.push_back(cl);
+                    }
+                }
+            }
+        }
+        if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) {
+            // Paste at mouse position
+            if (!s_state.clipboard_nodes.empty()) {
+                BpPushUndoState("Paste Nodes");
+                std::unordered_map<int,int> pin_map;
+                ImVec2 mouse = ImGui::GetMousePos();
+                float base_x = mouse.x - canvas_pos.x - s_state.scroll_offset.x;
+                float base_y = mouse.y - canvas_pos.y - s_state.scroll_offset.y;
+                s_state.selected_nodes.clear();
+                for (const auto& c : s_state.clipboard_nodes) {
+                    BpNode n = c;
+                    n.id = AllocNodeId(graph);
+                    // 偏移使其靠近粘贴位置（以剪贴板第一个节点为基准）
+                    n.position.x = base_x + (c.position.x - s_state.clipboard_nodes[0].position.x);
+                    n.position.y = base_y + (c.position.y - s_state.clipboard_nodes[0].position.y);
+                    n.inputs.clear(); n.outputs.clear();
+                    for (const auto& p : c.inputs) {
+                        BpPin np = p; np.id = AllocNodeId(graph); np.kind = BpPinKind::Input;
+                        pin_map[p.id] = np.id; n.inputs.push_back(np);
+                    }
+                    for (const auto& p : c.outputs) {
+                        BpPin np = p; np.id = AllocNodeId(graph); np.kind = BpPinKind::Output;
+                        pin_map[p.id] = np.id; n.outputs.push_back(np);
+                    }
+                    graph.nodes.push_back(n);
+                    s_state.selected_nodes.push_back(n.id);
+                }
+                for (const auto& cl : s_state.clipboard_links) {
+                    if (pin_map.count(cl.from_pin) && pin_map.count(cl.to_pin)) {
+                        BpLink nl = cl;
+                        nl.id = AllocNodeId(graph);
+                        nl.from_pin = pin_map[cl.from_pin];
+                        nl.to_pin = pin_map[cl.to_pin];
+                        graph.links.push_back(nl);
+                    }
+                }
+                if (!s_state.selected_nodes.empty()) s_state.selected_node = s_state.selected_nodes[0];
+                s_state.dirty = true;
+            }
+        }
+        if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) {
+            // Duplicate selected (Ctrl+D) — 等价复制+偏移
+            if (!s_state.selected_nodes.empty() || s_state.selected_node >= 0) {
+                std::unordered_map<int,int> pin_map;
+                std::vector<int> src_ids;
+                for (const auto& id : s_state.selected_nodes) src_ids.push_back(id);
+                if (src_ids.empty() && s_state.selected_node >= 0) src_ids.push_back(s_state.selected_node);
+                BpPushUndoState("Duplicate Nodes");
+                std::vector<int> new_ids;
+                for (const auto& n : graph.nodes) {
+                    if (std::find(src_ids.begin(), src_ids.end(), n.id) == src_ids.end()) continue;
+                    BpNode c = n;
+                    c.id = AllocNodeId(graph);
+                    c.position.x += 30; c.position.y += 30;
+                    c.inputs.clear(); c.outputs.clear();
+                    for (const auto& p : n.inputs) {
+                        BpPin np = p; np.id = AllocNodeId(graph); np.kind = BpPinKind::Input;
+                        pin_map[p.id] = np.id; c.inputs.push_back(np);
+                    }
+                    for (const auto& p : n.outputs) {
+                        BpPin np = p; np.id = AllocNodeId(graph); np.kind = BpPinKind::Output;
+                        pin_map[p.id] = np.id; c.outputs.push_back(np);
+                    }
+                    graph.nodes.push_back(c);
+                    new_ids.push_back(c.id);
+                }
+                for (const auto& l : graph.links) {
+                    if (pin_map.count(l.from_pin) && pin_map.count(l.to_pin)) {
+                        BpLink nl = l;
+                        nl.id = AllocNodeId(graph);
+                        nl.from_pin = pin_map[l.from_pin];
+                        nl.to_pin = pin_map[l.to_pin];
+                        graph.links.push_back(nl);
+                    }
+                }
+                s_state.selected_nodes = new_ids;
+                if (!new_ids.empty()) s_state.selected_node = new_ids[0];
+                s_state.dirty = true;
+            }
+        }
+    }
+
+    // Multi-select with Ctrl+click handled in node loop below (IsMouseClicked on node).
+    // Align selected nodes (right-click menu below)
+
+    // ── Comment box interaction: select / drag / double-click edit / delete ──
+    if (canvas_item_hovered) {
+        // Select + drag (title bar drag; resize not implemented to keep it simple)
+        bool comment_hit = false;
+        for (int i = static_cast<int>(s_state.comments.size()) - 1; i >= 0; --i) {
+            auto& comment = s_state.comments[i];
+            ImVec2 cpos(canvas_pos.x + s_state.scroll_offset.x + comment.position.x,
+                        canvas_pos.y + s_state.scroll_offset.y + comment.position.y);
+            ImVec2 cend(cpos.x + comment.size.x, cpos.y + comment.size.y);
+            ImRect title_rect(cpos, ImVec2(cend.x, cpos.y + 22));
+            ImRect body_rect(cpos, cend);
+            if (ImGui::IsMouseHoveringRect(cpos, cend)) {
+                comment_hit = true;
+                if (ImGui::IsMouseClicked(0)) {
+                    s_state.selected_comment = i;
+                    s_state.selected_node = -1;
+                    s_state.selected_link = -1;
+                    // 双击标题栏进入编辑
+                    if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsMouseHoveringRect(title_rect.Min, title_rect.Max)) {
+                        s_state.editing_comment = true;
+                        snprintf(s_state.comment_edit_buf, sizeof(s_state.comment_edit_buf), "%s", comment.text.c_str());
+                    }
+                    if (ImGui::IsMouseHoveringRect(title_rect.Min, title_rect.Max)) {
+                        s_state.dragging_comment = true;
+                        s_state.dragging_comment_idx = i;
+                        s_state.comment_drag_offset = ImVec2(ImGui::GetMousePos().x - cpos.x,
+                                                             ImGui::GetMousePos().y - cpos.y);
+                    }
+                }
+                // 右键删除
+                if (ImGui::IsMouseClicked(1) && ImGui::IsMouseHoveringRect(title_rect.Min, title_rect.Max)) {
+                    s_state.selected_comment = i;
+                }
+            }
+        }
+        // 拖动更新
+        if (s_state.dragging_comment && s_state.dragging_comment_idx >= 0) {
+            int idx = s_state.dragging_comment_idx;
+            if (idx < static_cast<int>(s_state.comments.size())) {
+                auto& comment = s_state.comments[idx];
+                if (ImGui::IsMouseDragging(0)) {
+                    comment.position.x = ImGui::GetMousePos().x - canvas_pos.x - s_state.scroll_offset.x - s_state.comment_drag_offset.x;
+                    comment.position.y = ImGui::GetMousePos().y - canvas_pos.y - s_state.scroll_offset.y - s_state.comment_drag_offset.y;
+                    s_state.dirty = true;
+                }
+                if (ImGui::IsMouseReleased(0)) {
+                    s_state.dragging_comment = false;
+                    s_state.dragging_comment_idx = -1;
+                    BpPushUndoState("Move Comment");
+                }
+            } else {
+                s_state.dragging_comment = false;
+                s_state.dragging_comment_idx = -1;
+            }
+        }
+        // 空白处点击取消注释选中
+        if (ImGui::IsMouseClicked(0) && !comment_hit && s_state.dragging_node < 0 &&
+            !s_state.creating_link && !s_state.box_selecting && s_state.selected_comment >= 0) {
+            s_state.selected_comment = -1;
+        }
+    }
+
+    // 双击编辑中的注释：在画布顶层渲染输入框（使用 BeginPopup 技巧不可靠，直接叠加窗口）
+    if (s_state.editing_comment && s_state.selected_comment >= 0 &&
+        s_state.selected_comment < static_cast<int>(s_state.comments.size())) {
+        ImGui::SetNextWindowPos(ImVec2(canvas_pos.x + s_state.scroll_offset.x + s_state.comments[s_state.selected_comment].position.x + 4,
+                                       canvas_pos.y + s_state.scroll_offset.y + s_state.comments[s_state.selected_comment].position.y + 24));
+        ImGui::SetNextWindowSize(ImVec2(280, 0));
+        ImGui::Begin("##bp_comment_edit", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking);
+        ImGui::SetKeyboardFocusHere();
+        if (ImGui::InputText("##comment_text", s_state.comment_edit_buf, sizeof(s_state.comment_edit_buf),
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+            s_state.comments[s_state.selected_comment].text = s_state.comment_edit_buf;
+            s_state.editing_comment = false;
+            s_state.dirty = true;
+            BpPushUndoState("Edit Comment");
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) s_state.editing_comment = false;
+        if (ImGui::IsMouseClicked(0)) {
+            ImVec2 edit_win_pos = ImGui::GetWindowPos();
+            ImVec2 edit_win_size = ImGui::GetWindowSize();
+            if (!ImGui::IsMouseHoveringRect(edit_win_pos,
+                    ImVec2(edit_win_pos.x + edit_win_size.x, edit_win_pos.y + edit_win_size.y))) {
+                s_state.editing_comment = false;
+            }
+        }
+        ImGui::End();
+    }
+
     // Create node context menu (enhanced with search #3 and Add Comment #4)
     if (ImGui::BeginPopup("bp_create_menu")) {
         // Add Comment / Add Group options at top
         if (ImGui::MenuItem(MDI_ICON_COMMENT_TEXT_OUTLINE " Add Comment")) {
             BpAddComment(s_state.create_menu_pos);
         }
+        if (s_state.selected_comment >= 0 &&
+            s_state.selected_comment < static_cast<int>(s_state.comments.size())) {
+            if (ImGui::MenuItem(MDI_ICON_DELETE " Delete Comment")) {
+                BpPushUndoState("Delete Comment");
+                s_state.comments.erase(s_state.comments.begin() + s_state.selected_comment);
+                s_state.selected_comment = -1;
+                s_state.dirty = true;
+            }
+        }
         if (s_state.selected_node >= 0) {
             if (ImGui::MenuItem(MDI_ICON_GROUP " Group Selected")) {
-                BpAddNodeGroup("Group", {s_state.selected_node});
+                BpAddNodeGroup("Group", s_state.selected_nodes.empty()
+                    ? std::vector<int>{s_state.selected_node} : s_state.selected_nodes);
+            }
+            // 对齐 (仅多选时可用)
+            if (s_state.selected_nodes.size() >= 2) {
+                ImGui::Separator();
+                if (ImGui::MenuItem("Align Left")) {
+                    float minx = 1e9f;
+                    for (const auto& n : graph.nodes)
+                        if (std::find(s_state.selected_nodes.begin(), s_state.selected_nodes.end(), n.id) != s_state.selected_nodes.end())
+                            minx = std::min(minx, n.position.x);
+                    for (auto& n : graph.nodes)
+                        if (std::find(s_state.selected_nodes.begin(), s_state.selected_nodes.end(), n.id) != s_state.selected_nodes.end())
+                            n.position.x = minx;
+                    s_state.dirty = true;
+                    BpPushUndoState("Align Left");
+                }
+                if (ImGui::MenuItem("Align Top")) {
+                    float miny = 1e9f;
+                    for (const auto& n : graph.nodes)
+                        if (std::find(s_state.selected_nodes.begin(), s_state.selected_nodes.end(), n.id) != s_state.selected_nodes.end())
+                            miny = std::min(miny, n.position.y);
+                    for (auto& n : graph.nodes)
+                        if (std::find(s_state.selected_nodes.begin(), s_state.selected_nodes.end(), n.id) != s_state.selected_nodes.end())
+                            n.position.y = miny;
+                    s_state.dirty = true;
+                    BpPushUndoState("Align Top");
+                }
             }
         }
         // Toggle breakpoint on selected node
@@ -1258,6 +1601,69 @@ void DrawBlueprintEditor(EditorContext& /*ctx*/) {
     }
 
     // Toolbar
+    if (ImGui::Button(T("New"))) {
+        // 新建空白蓝图 (丢弃当前编辑内容, 无确认以保持轻量; 顶部有 Save 按钮)
+        s_state.asset = BlueprintAsset{};
+        s_state.asset.name = "NewBlueprint";
+        s_state.asset.graphs.push_back(BpFunctionGraph{});
+        s_state.asset.graphs[0].name = "EventGraph";
+        s_state.asset.graphs[0].next_id = 1;
+        s_state.active_graph_index = 0;
+        s_state.selected_node = -1;
+        s_state.selected_link = -1;
+        s_state.selected_variable = -1;
+        s_state.generated_lua.clear();
+        s_state.compilation_errors.clear();
+        s_state.dirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(T("Open"))) {
+        std::string path = dse::editor::OpenFileDialog("Open Blueprint",
+            "Blueprint Files (*.dbp)\0*.dbp\0All Files (*.*)\0*.*\0", "dbp");
+        if (!path.empty()) {
+            BlueprintAsset loaded;
+            if (LoadBlueprintAsset(loaded, path)) {
+                s_state.asset = std::move(loaded);
+                if (s_state.asset.graphs.empty()) {
+                    s_state.asset.graphs.push_back(BpFunctionGraph{});
+                    s_state.asset.graphs[0].name = "EventGraph";
+                    s_state.asset.graphs[0].next_id = 1;
+                }
+                s_state.active_graph_index = 0;
+                s_state.selected_node = -1;
+                s_state.selected_link = -1;
+                s_state.dirty = false;
+                s_state.generated_lua = CompileToLua(s_state.asset);
+                s_state.compilation_errors.clear();
+                if (!s_state.asset.graphs.empty()) {
+                    auto result = ValidateGraph(s_state.asset.graphs[s_state.active_graph_index]);
+                    if (!result.valid) {
+                        for (const auto& e : result.errors) s_state.compilation_errors += e + "\n";
+                    }
+                }
+            } else {
+                s_state.compilation_errors = "Failed to load blueprint: " + path;
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(T("Save"))) {
+        std::string path = s_state.asset.file_path;
+        if (path.empty()) {
+            path = dse::editor::SaveFileDialog("Save Blueprint",
+                "Blueprint Files (*.dbp)\0*.dbp\0All Files (*.*)\0*.*\0", "dbp",
+                s_state.asset.name.empty() ? "blueprint" : s_state.asset.name.c_str());
+        }
+        if (!path.empty()) {
+            if (SaveBlueprintAsset(s_state.asset, path)) {
+                s_state.asset.file_path = path;
+                s_state.dirty = false;
+            } else {
+                s_state.compilation_errors = "Failed to save blueprint: " + path;
+            }
+        }
+    }
+    ImGui::SameLine();
     if (ImGui::Button(T("Compile"))) {
         s_state.generated_lua = CompileToLua(s_state.asset);
         s_state.compilation_errors.clear();

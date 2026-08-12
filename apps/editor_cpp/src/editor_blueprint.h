@@ -231,6 +231,23 @@ struct BlueprintEditorState {
     int selected_link = -1;
     int selected_variable = -1;
 
+    // Multi-selection (框选 / Ctrl 加选)
+    std::vector<int> selected_nodes;
+    bool box_selecting = false;       // 正在框选
+    ImVec2 box_select_start{0, 0};    // 框选起点 (画布坐标)
+
+    // Copy/paste clipboard (节点+内部连线)
+    std::vector<BpNode> clipboard_nodes;
+    std::vector<BpLink> clipboard_links;
+    int clipboard_next_id = 1;        // 粘贴时分配新 id 的起点
+
+    // Comment interaction
+    bool dragging_comment = false;
+    int dragging_comment_idx = -1;
+    ImVec2 comment_drag_offset{0, 0};
+    bool editing_comment = false;     // 双击编辑文本中
+    char comment_edit_buf[256] = "";
+
     // Link creation
     bool creating_link = false;
     int link_start_pin = -1;

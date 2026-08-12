@@ -24,18 +24,52 @@ std::string WideToUtf8(const std::wstring& wide) {
 
 } // namespace
 
-std::string OpenSceneFileDialog() {
+std::string OpenFileDialog(const char* title, const char* filter, const char* def_ext,
+                           const char* initial_dir) {
     OPENFILENAMEW ofn = {};
     wchar_t file_buf[MAX_PATH] = {};
+    std::wstring wdir; // 必须存活到 GetOpenFileNameW 调用结束
+    if (initial_dir && *initial_dir) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, initial_dir, -1, nullptr, 0);
+        if (wlen > 0) {
+            wdir.assign(wlen, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, initial_dir, -1, wdir.data(), wlen);
+            ofn.lpstrInitialDir = wdir.c_str();
+        }
+    }
 
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = nullptr;
-    ofn.lpstrFilter = L"Scene Files (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+    std::wstring wfilter;
+    if (filter && *filter) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, filter, -1, nullptr, 0);
+        if (wlen > 0) {
+            wfilter.resize(wlen);
+            MultiByteToWideChar(CP_UTF8, 0, filter, -1, wfilter.data(), wlen);
+        }
+    }
+    std::wstring wtitle;
+    if (title && *title) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, title, -1, nullptr, 0);
+        if (wlen > 0) {
+            wtitle.resize(wlen);
+            MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle.data(), wlen);
+        }
+    }
+    std::wstring wdefext;
+    if (def_ext && *def_ext) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, def_ext, -1, nullptr, 0);
+        if (wlen > 0) {
+            wdefext.resize(wlen);
+            MultiByteToWideChar(CP_UTF8, 0, def_ext, -1, wdefext.data(), wlen);
+        }
+    }
+    ofn.lpstrFilter = wfilter.empty() ? nullptr : wfilter.c_str();
     ofn.lpstrFile = file_buf;
     ofn.nMaxFile = MAX_PATH;
-    ofn.lpstrTitle = L"Open Scene";
+    ofn.lpstrTitle = wtitle.empty() ? nullptr : wtitle.c_str();
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-    ofn.lpstrDefExt = L"json";
+    ofn.lpstrDefExt = wdefext.empty() ? nullptr : wdefext.c_str();
 
     if (GetOpenFileNameW(&ofn)) {
         return WideToUtf8(file_buf);
@@ -43,24 +77,72 @@ std::string OpenSceneFileDialog() {
     return {};
 }
 
-std::string SaveSceneFileDialog() {
+std::string SaveFileDialog(const char* title, const char* filter, const char* def_ext,
+                           const char* default_name, const char* initial_dir) {
     OPENFILENAMEW ofn = {};
     wchar_t file_buf[MAX_PATH] = {};
-    wcscpy_s(file_buf, L"scene.json");
+    if (default_name && *default_name) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, default_name, -1, nullptr, 0);
+        if (wlen > 0 && wlen <= MAX_PATH) {
+            MultiByteToWideChar(CP_UTF8, 0, default_name, -1, file_buf, wlen);
+        }
+    }
+    std::wstring wdir; // 必须存活到 GetSaveFileNameW 调用结束
+    if (initial_dir && *initial_dir) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, initial_dir, -1, nullptr, 0);
+        if (wlen > 0) {
+            wdir.assign(wlen, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, initial_dir, -1, wdir.data(), wlen);
+            ofn.lpstrInitialDir = wdir.c_str();
+        }
+    }
 
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = nullptr;
-    ofn.lpstrFilter = L"Scene Files (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+    std::wstring wfilter;
+    if (filter && *filter) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, filter, -1, nullptr, 0);
+        if (wlen > 0) {
+            wfilter.resize(wlen);
+            MultiByteToWideChar(CP_UTF8, 0, filter, -1, wfilter.data(), wlen);
+        }
+    }
+    std::wstring wtitle;
+    if (title && *title) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, title, -1, nullptr, 0);
+        if (wlen > 0) {
+            wtitle.resize(wlen);
+            MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle.data(), wlen);
+        }
+    }
+    std::wstring wdefext;
+    if (def_ext && *def_ext) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, def_ext, -1, nullptr, 0);
+        if (wlen > 0) {
+            wdefext.resize(wlen);
+            MultiByteToWideChar(CP_UTF8, 0, def_ext, -1, wdefext.data(), wlen);
+        }
+    }
+    ofn.lpstrFilter = wfilter.empty() ? nullptr : wfilter.c_str();
     ofn.lpstrFile = file_buf;
     ofn.nMaxFile = MAX_PATH;
-    ofn.lpstrTitle = L"Save Scene As";
+    ofn.lpstrTitle = wtitle.empty() ? nullptr : wtitle.c_str();
     ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
-    ofn.lpstrDefExt = L"json";
+    ofn.lpstrDefExt = wdefext.empty() ? nullptr : wdefext.c_str();
 
     if (GetSaveFileNameW(&ofn)) {
         return WideToUtf8(file_buf);
     }
     return {};
+}
+
+std::string OpenSceneFileDialog() {
+    return OpenFileDialog("Open Scene", "Scene Files (*.json)\0*.json\0All Files (*.*)\0*.*\0", "json");
+}
+
+std::string SaveSceneFileDialog() {
+    return SaveFileDialog("Save Scene As", "Scene Files (*.json)\0*.json\0All Files (*.*)\0*.*\0",
+                          "json", "scene.json");
 }
 
 std::string BrowseFolderDialog(const char* title) {
@@ -102,6 +184,8 @@ std::string BrowseFolderDialog(const char* title) {
 namespace dse::editor {
 std::string OpenSceneFileDialog() { return {}; }
 std::string SaveSceneFileDialog() { return {}; }
+std::string OpenFileDialog(const char*, const char*, const char*, const char*) { return {}; }
+std::string SaveFileDialog(const char*, const char*, const char*, const char*, const char*) { return {}; }
 std::string BrowseFolderDialog(const char*) { return {}; }
 } // namespace dse::editor
 #endif
