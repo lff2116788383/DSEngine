@@ -39,8 +39,9 @@ std::string ZipDirectory(const std::string& dir_path);
 /// Call after platform == Web is selected.
 void DrawWebPublishSection(PublishState& state, bool busy);
 
-/// Start the Web build + optional publish workflow.
-void StartWebBuildAndPublish(PublishState& state, const std::string& output_dir,
-                             const std::string& game_title);
+/// 构建完成（zip 已就绪）后的发布入口：若 enable_upload 已开启且编译了
+/// DSE_PUBLISH_ENABLED（libcurl），异步上传 zip；否则保持本地离线导出。
+/// 由 DoBuild 的 Web 分支在 zip 完成后调用。
+void UploadWebPublishZip(PublishState& state, const std::string& zip_path);
 
 } // namespace dse::editor

@@ -42,13 +42,11 @@ struct BuildState {
     char output_dir[512] = {};
     char game_title[128] = "My Game";
     bool pack_all_data = true;         // true = pack entire data/, false = scene-referenced only
-    bool include_scene = true;
     BuildPlatform platform = BuildPlatform::Windows;
     BuildConfig config = BuildConfig::Release;
-    bool compress_pak = true;
     bool encrypt = false;              // 加密为 game.bun（AES-128-CTR）而非明文 game.dpak
     char encrypt_key[65] = {};         // >=16 字符的 AES 密钥
-    char icon_path[512] = {};
+    char icon_path[512] = {};          // splash 图（png/jpg/bmp/tga），并非 .ico 窗口图标
 
     // Android 导出选项（platform == Android 时生效）
     char android_package_id[128] = "com.dsengine.mygame";
@@ -342,6 +340,16 @@ void DoBuild(BuildState& state) {
         return;
     }
 
+    // Linux：Windows 主机没有 ELF 工具链/运行时，无法直接产出 Linux 二进制。
+    // 明确拒绝并给出指引，避免静默落入下方 Windows 的 exe 复制路径（对 Linux 无意义）。
+    if (state.platform == BuildPlatform::Linux) {
+        AppendLog(state, "ERROR: Linux build is not supported from the Windows editor.");
+        AppendLog(state, "  Use WSL / a Linux machine: cmake --preset wsl-debug && cmake --build --preset wsl-debug");
+        AppendLog(state, "  or the CI 'build-linux' job (see .github/workflows/ci.yml).");
+        FinishBuild(state, false);
+        return;
+    }
+
     // Web platform: run the REAL emscripten build (shared with the CLI via
     // dse::project::RunWebBuild), collect artifacts, then zip for publish.
     if (state.platform == BuildPlatform::Web) {
@@ -406,6 +414,9 @@ void DoBuild(BuildState& state) {
         state.publish_state.local_zip_path = zip_path;
         state.publish_state.publish_success = true;
         state.publish_state.publish_done = true;
+
+        // 若开启了在线发布（DSE_PUBLISH_ENABLED 编译），异步上传；否则保持本地 zip
+        dse::editor::UploadWebPublishZip(state.publish_state, zip_path);
 
         auto zip_sz = fs::file_size(zip_path, ec);
         if (!ec) {
@@ -769,8 +780,6 @@ void DrawBuildGameDialog() {
         }
 
         ImGui::Checkbox("Pack all data/", &state.pack_all_data);
-        ImGui::SameLine();
-        ImGui::Checkbox("Compress", &state.compress_pak);
 
         // 加密：勾选后产出加密 game.bun（端到端，运行时用同一 key 解密挂载）
         ImGui::Checkbox("Encrypt (AES-128 -> game.bun)", &state.encrypt);
@@ -817,14 +826,14 @@ void DrawBuildGameDialog() {
             }
         }
 
-        // Icon (Windows only)
+        // Splash image (Windows only; png/jpg/bmp/tga，作为启动 splash 而非 .ico 图标)
         if (state.platform == BuildPlatform::Windows) {
-            ImGui::Text("Icon (.ico):");
+            ImGui::Text("Splash Img:");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(340);
             ImGui::InputText("##icon", state.icon_path, sizeof(state.icon_path));
             ImGui::SameLine();
-            ImGui::TextDisabled("(optional)");
+            ImGui::TextDisabled("(png/jpg, optional)");
         }
 
         // Web publish section

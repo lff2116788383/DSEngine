@@ -180,72 +180,48 @@ static UploadResult DoUpload(const std::string& zip_path,
 #endif // DSE_PUBLISH_ENABLED
 
 // ────────────────────────────────────────────────────────────────────────────
-// Web Build + Publish workflow
+// Publish entry (called by DoBuild after the Web zip is ready)
 // ────────────────────────────────────────────────────────────────────────────
 
-void StartWebBuildAndPublish(PublishState& state, const std::string& output_dir,
-                             const std::string& game_title) {
+void UploadWebPublishZip(PublishState& state, const std::string& zip_path) {
+    // 默认构建（无 libcurl / DSE_PUBLISH_ENABLED）下不显示上传选项，zip 保留为本地离线导出。
+#ifdef DSE_PUBLISH_ENABLED
+    if (!state.enable_upload || state.upload_url[0] == '\0' || state.api_key[0] == '\0') {
+        return;
+    }
+
     state.publish_done = false;
     state.publish_success = false;
     state.publish_error.clear();
     state.publish_url.clear();
-    state.local_zip_path.clear();
     state.upload_progress = 0.0f;
-    state.status_text = "Compressing Web build output...";
+    state.status_text = "Uploading to server...";
 
-    state.build_future = std::async(std::launch::async, [&state, output_dir, game_title]() {
-        // 1. Compress the Web build output directory
-        std::string zip_path = ZipDirectory(output_dir);
-        if (zip_path.empty()) {
-            state.publish_error = "Failed to compress build output";
-            state.publish_done = true;
-            return;
-        }
+    state.build_future = std::async(std::launch::async, [&state, zip_path]() {
+        auto result = DoUpload(zip_path, state.upload_url,
+                               state.game_id, state.api_key,
+                               state.upload_progress);
 
-        // Verify zip contains index.html
-        {
-            std::error_code ec;
-            bool has_index = fs::exists(fs::path(output_dir) / "index.html", ec);
-            if (!has_index) {
-                state.publish_error = "Build output missing index.html - Web build may have failed";
-                state.publish_done = true;
-                return;
+        // Clean up zip after upload
+        std::error_code ec;
+        fs::remove(zip_path, ec);
+
+        if (result.success) {
+            state.publish_url = result.url;
+            state.publish_success = true;
+            if (state.auto_copy_url) {
+                state.pending_clipboard = result.url;
             }
+            state.status_text = "Upload complete!";
+        } else {
+            state.publish_error = result.error;
+            state.status_text = "Upload failed";
         }
-
-#ifdef DSE_PUBLISH_ENABLED
-        // 2. Online mode: upload to server
-        if (state.enable_upload && state.upload_url[0] != '\0' && state.api_key[0] != '\0') {
-            state.status_text = "Uploading to server...";
-
-            auto result = DoUpload(zip_path, state.upload_url,
-                                   state.game_id, state.api_key,
-                                   state.upload_progress);
-
-            // Clean up zip after upload
-            std::error_code ec;
-            fs::remove(zip_path, ec);
-
-            if (result.success) {
-                state.publish_url = result.url;
-                state.publish_success = true;
-                if (state.auto_copy_url) {
-                    state.pending_clipboard = result.url;
-                }
-            } else {
-                state.publish_error = result.error;
-            }
-
-            state.publish_done = true;
-            return;
-        }
-#endif
-        // 3. Offline mode: keep the zip locally
-        state.local_zip_path = zip_path;
-        state.publish_success = true;
-        state.status_text = "Export complete!";
         state.publish_done = true;
     });
+#else
+    (void)state; (void)zip_path;
+#endif
 }
 
 // ────────────────────────────────────────────────────────────────────────────
