@@ -347,8 +347,58 @@ bool HandleTilemapViewportPaint(entt::registry& registry,
     auto& tm = registry.get<TilemapComponent>(state.active_tilemap);
     auto& tf = registry.get<TransformComponent>(state.active_tilemap);
 
+    bool is_line = (state.active_tool == TilemapBrushTool::Line);
+    bool is_rect = (state.active_tool == TilemapBrushTool::Rectangle);
+
     // Handle stroke end -> push undo
-    if (!mouse_down && state.painting) {
+    if (!mouse_down && (state.painting || state.drag_started)) {
+        // Line/Rect 属于"按下记录起点、释放时绘制"，必须在 stroke-end 分支内完成，
+        // 否则下方 `!mouse_down` 提前 return 会令释放绘制永远不可达。
+        if (state.drag_started && (is_line || is_rect)) {
+            ImVec2 mouse = ImGui::GetMousePos();
+            glm::vec3 world_mouse = ScreenToWorld(glm::vec2(mouse.x, mouse.y), view, proj,
+                                                   window_pos, panel_size, tf.position.z);
+            int cx, cy;
+            bool changed = false;
+            if (WorldToTilemapCell(world_mouse, tm, tf, cx, cy)) {
+                int paint_id = state.selected_tile_id;
+                if (is_line) {
+                    auto pts = BresenhamLine(state.drag_start_cx, state.drag_start_cy, cx, cy);
+                    for (auto& [lx, ly] : pts) {
+                        if (lx >= 0 && lx < tm.width && ly >= 0 && ly < tm.height) {
+                            tm.tiles[ly * tm.width + lx] = paint_id;
+                            AutoTileResolveNeighbours(tm, lx, ly, state.auto_tile_rule);
+                            changed = true;
+                        }
+                    }
+                } else { // Rectangle
+                    int x0 = (std::min)(state.drag_start_cx, cx);
+                    int x1 = (std::max)(state.drag_start_cx, cx);
+                    int y0 = (std::min)(state.drag_start_cy, cy);
+                    int y1 = (std::max)(state.drag_start_cy, cy);
+                    for (int ry = y0; ry <= y1; ry++) {
+                        for (int rx = x0; rx <= x1; rx++) {
+                            if (rx >= 0 && rx < tm.width && ry >= 0 && ry < tm.height) {
+                                tm.tiles[ry * tm.width + rx] = paint_id;
+                                changed = true;
+                            }
+                        }
+                    }
+                    // Auto-tile resolve for entire rect + border
+                    if (state.auto_tile_rule.enabled) {
+                        for (int ry = y0 - 1; ry <= y1 + 1; ry++) {
+                            for (int rx = x0 - 1; rx <= x1 + 1; rx++) {
+                                if (rx >= 0 && rx < tm.width && ry >= 0 && ry < tm.height) {
+                                    AutoTileResolve(tm, rx, ry, state.auto_tile_rule);
+                                }
+                            }
+                        }
+                    }
+                }
+                if (changed) tm.dirty = true;
+            }
+            state.drag_started = false;
+        }
         state.painting = false;
         if (state.tiles_snapshot != tm.tiles) {
             std::vector<int> old_tiles = state.tiles_snapshot;
@@ -397,53 +447,12 @@ bool HandleTilemapViewportPaint(entt::registry& registry,
     int half_brush = state.brush_size / 2;
     bool changed = false;
 
-    bool is_line = (state.active_tool == TilemapBrushTool::Line);
-    bool is_rect = (state.active_tool == TilemapBrushTool::Rectangle);
-
     if (is_line || is_rect) {
-        // Drag-based tools: record start on click, apply on release
+        // Drag-based tools: record start on click, apply on release (in stroke-end)
         if (mouse_clicked) {
             state.drag_started = true;
             state.drag_start_cx = cx;
             state.drag_start_cy = cy;
-        }
-        if (state.drag_started && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-            state.drag_started = false;
-            int paint_id = state.selected_tile_id;
-            if (is_line) {
-                auto pts = BresenhamLine(state.drag_start_cx, state.drag_start_cy, cx, cy);
-                for (auto& [lx, ly] : pts) {
-                    if (lx >= 0 && lx < tm.width && ly >= 0 && ly < tm.height) {
-                        tm.tiles[ly * tm.width + lx] = paint_id;
-                        AutoTileResolveNeighbours(tm, lx, ly, state.auto_tile_rule);
-                        changed = true;
-                    }
-                }
-            } else { // Rectangle
-                int x0 = (std::min)(state.drag_start_cx, cx);
-                int x1 = (std::max)(state.drag_start_cx, cx);
-                int y0 = (std::min)(state.drag_start_cy, cy);
-                int y1 = (std::max)(state.drag_start_cy, cy);
-                for (int ry = y0; ry <= y1; ry++) {
-                    for (int rx = x0; rx <= x1; rx++) {
-                        if (rx >= 0 && rx < tm.width && ry >= 0 && ry < tm.height) {
-                            tm.tiles[ry * tm.width + rx] = paint_id;
-                            changed = true;
-                        }
-                    }
-                }
-                // Auto-tile resolve for entire rect + border
-                if (state.auto_tile_rule.enabled) {
-                    for (int ry = y0 - 1; ry <= y1 + 1; ry++) {
-                        for (int rx = x0 - 1; rx <= x1 + 1; rx++) {
-                            if (rx >= 0 && rx < tm.width && ry >= 0 && ry < tm.height) {
-                                AutoTileResolve(tm, rx, ry, state.auto_tile_rule);
-                            }
-                        }
-                    }
-                }
-            }
-            if (changed) tm.dirty = true;
         }
         return true;
     }

@@ -16,6 +16,7 @@
 #include "editor_asset_importer.h"
 #include "editor_tilemap_panel.h"
 #include "editor_terrain_panel.h"
+#include "editor_terrain_tools.h"
 #include "editor_vegetation_panel.h"
 #include "editor_audio_panel.h"
 #include "editor_panel_registry.h"
@@ -979,6 +980,10 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                 ov_view, ov_proj);
             DrawVegetationBrushOverlay(
                 context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+            DrawTerrainToolsOverlay(context,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);

@@ -8,7 +8,11 @@
 
 #include "editor_terrain_tools.h"
 #include "editor_context.h"
+#include "editor_terrain_panel_core.h"
+#include "editor_shared_components.h"
 
+#include "engine/ecs/components_3d.h"
+#include "engine/ecs/transform.h"
 #include "engine/terrain/world_editor_tools.h"
 #include "engine/terrain/spline_system.h"
 #include "imgui.h"
@@ -302,18 +306,105 @@ void DrawTerrainToolsOverlay(EditorContext& ctx,
                               const glm::vec2& panel_size,
                               const glm::mat4& view,
                               const glm::mat4& proj) {
-    (void)ctx; (void)window_pos; (void)panel_size; (void)view; (void)proj;
+    (void)ctx;
+
+    // 仅当 terrain_tools 可见(即 terrain_editor 打开)时才启用视口交互,
+    // 避免与 Terrain Editor 的 brush overlay 冲突
+    auto* owner = PanelRegistry::Get().Find("terrain_editor");
+    if (!owner || !owner->visible || !*owner->visible) return;
+    auto* self = PanelRegistry::Get().Find("terrain_tools");
+    if (!self) return;
 
     if (!s_state.initialized || !s_state.tools) return;
 
-    // Get brush preview AABB for current params
-    auto preview = s_state.tools->GetBrushPreview(s_state.brush_params);
-    (void)preview;
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mouse = io.MousePos;
+    // 仅当鼠标在视口区域内才处理拾取
+    if (mouse.x < window_pos.x || mouse.y < window_pos.y ||
+        mouse.x > window_pos.x + panel_size.x || mouse.y > window_pos.y + panel_size.y) {
+        return;
+    }
 
-    // Real implementation would project preview AABB to screen coords
-    // and draw a circle/rectangle gizmo at the brush location.
-    // This requires integration with the editor's viewport hit-testing
-    // (raycast from mouse → terrain intersection → set brush_params.center).
+    // 鼠标射线 → 地形 Y=0 平面交点, 作为笔刷中心
+    glm::vec3 center = ScreenToWorldOnTerrain(
+        glm::vec2(mouse.x, mouse.y), view, proj, window_pos, panel_size, 0.0f);
+    s_state.brush_params.center = center;
+    s_state.foliage_params.center = center;
+
+    // ── 交互: 按当前 Tab 应用 ──────────────────────────────────────────────
+    switch (s_state.active_tab) {
+        case TerrainToolsState::Tab::Terrain:
+            if (io.MouseDown[0]) {
+                // 委托到场景地形: 找第一个有效 TerrainComponent 作为目标
+                bool applied = false;
+                ctx.registry.view<dse::TerrainComponent, TransformComponent>().each(
+                    [&](entt::entity ent, dse::TerrainComponent& terrain, TransformComponent& tf) {
+                        if (applied) return;
+                        applied = true;
+                        TerrainEditorState st;
+                        st.brush_mode = (s_state.brush_op == terrain::TerrainBrushOp::RaiseHeight) ? TerrainBrushMode::Raise
+                                        : (s_state.brush_op == terrain::TerrainBrushOp::LowerHeight) ? TerrainBrushMode::Lower
+                                        : (s_state.brush_op == terrain::TerrainBrushOp::SmoothHeight) ? TerrainBrushMode::Smooth
+                                        : TerrainBrushMode::Flatten;
+                        st.brush_radius = s_state.brush_params.radius;
+                        st.brush_strength = s_state.brush_params.strength;
+                        st.brush_falloff = s_state.brush_params.falloff;
+                        st.flatten_target_height = s_state.brush_params.target_height;
+                        ApplyBrush(terrain, tf, center, st, io.DeltaTime);
+                    });
+            }
+            break;
+        case TerrainToolsState::Tab::Foliage:
+            if (io.MouseDown[0]) {
+                if (s_state.foliage_params.mode == terrain::FoliagePlaceMode::Erase) {
+                    s_state.last_foliage_placed = s_state.tools->EraseFoliage(
+                        s_state.foliage_params.center, s_state.foliage_params.radius);
+                } else {
+                    s_state.last_foliage_placed = s_state.tools->PlaceFoliage(s_state.foliage_params);
+                }
+            }
+            break;
+        case TerrainToolsState::Tab::Road:
+            // 道路绘制中: 左键点击添加控制点
+            if (s_state.road_drawing && io.MouseClicked[0]) {
+                s_state.tools->AddRoadPoint(s_state.road_session, center);
+            }
+            break;
+        default:
+            break;
+    }
+
+    // ── 笔刷预览圆 (屏幕空间投影) ──────────────────────────────────────────
+    float radius = 0.0f;
+    if (s_state.active_tab == TerrainToolsState::Tab::Foliage) {
+        radius = s_state.foliage_params.radius;
+    } else if (s_state.active_tab == TerrainToolsState::Tab::Terrain) {
+        radius = s_state.brush_params.radius;
+    } else {
+        return; // Road/Partition 无笔刷圆
+    }
+    if (radius <= 0.0f) return;
+
+    // 将世界空间中心与半径投影到屏幕
+    glm::vec4 clip_c = proj * view * glm::vec4(center, 1.0f);
+    if (clip_c.w <= 0.0f) return;
+    glm::vec2 c_ndc(clip_c.x / clip_c.w, clip_c.y / clip_c.w);
+    glm::vec2 c_screen(window_pos.x + (c_ndc.x + 1.0f) * 0.5f * panel_size.x,
+                       window_pos.y + (1.0f - c_ndc.y) * 0.5f * panel_size.y);
+
+    glm::vec4 clip_r = proj * view * glm::vec4(center + glm::vec3(radius, 0.0f, 0.0f), 1.0f);
+    if (clip_r.w <= 0.0f) return;
+    glm::vec2 r_ndc(clip_r.x / clip_r.w, clip_r.y / clip_r.w);
+    glm::vec2 r_screen(window_pos.x + (r_ndc.x + 1.0f) * 0.5f * panel_size.x,
+                       window_pos.y + (1.0f - r_ndc.y) * 0.5f * panel_size.y);
+    float screen_radius = glm::length(r_screen - c_screen);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImU32 color = (s_state.active_tab == TerrainToolsState::Tab::Foliage &&
+                   s_state.foliage_params.mode == terrain::FoliagePlaceMode::Erase)
+        ? IM_COL32(200, 80, 80, 160) : IM_COL32(120, 200, 120, 160);
+    dl->AddCircle(ImVec2(c_screen.x, c_screen.y), screen_radius, color, 48, 2.0f);
+    dl->AddCircleFilled(ImVec2(c_screen.x, c_screen.y), 3.0f, color);
 }
 
 // P0-6 self-registration: secondary draw sharing terrain_editor visibility.
