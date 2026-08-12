@@ -645,7 +645,13 @@ void DrawHierarchyPanel(EditorContext& context) {
             if (context.registry.all_of<EditorNameComponent>(context.selected_entity)) {
                 prefab_name = context.registry.get<EditorNameComponent>(context.selected_entity).name;
             }
-            std::filesystem::path prefab_dir = std::filesystem::current_path() / "samples" / "lua" / "data" / "prefabs";
+            // 保存路径跟随当前打开的项目；无项目时回退到内置 prefabs 目录
+            std::filesystem::path prefab_dir;
+            if (context.project_manager && context.project_manager->HasOpenProject()) {
+                prefab_dir = context.project_manager->GetProjectRoot() / "prefabs";
+            } else {
+                prefab_dir = std::filesystem::current_path() / "samples" / "lua" / "data" / "prefabs";
+            }
             std::filesystem::create_directories(prefab_dir);
             std::string prefab_path = (prefab_dir / (prefab_name + ".dprefab")).string();
             if (SaveEntityAsPrefab(context.registry, context.selected_entity, prefab_path)) {
