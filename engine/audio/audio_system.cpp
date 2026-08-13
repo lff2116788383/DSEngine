@@ -12,8 +12,13 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <stdexcept>
 #include <glm/gtc/quaternion.hpp>
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio/miniaudio.h>
@@ -44,6 +49,8 @@ namespace gameplay2d {
 struct CustomVFSFile {
     std::vector<uint8_t> data;
     size_t cursor = 0;
+    bool writable = false;   ///< 是否以写模式打开
+    std::string disk_path;   ///< 写模式对应的落盘路径（Close 时提交）
 };
 
 namespace {
@@ -58,14 +65,34 @@ AssetManager& RequireAssetManager(AssetManager* asset_manager) {
 static AssetManager* g_audio_asset_manager = nullptr;
 
 static ma_result CustomVFS_Open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
-    if ((openMode & MA_OPEN_MODE_READ) == 0) return MA_ERROR;
     (void)pVFS;
+    auto* f = new CustomVFSFile();
+
+    if ((openMode & MA_OPEN_MODE_WRITE) != 0) {
+        // 写模式：可写标记 + 记录落盘路径。若同时带读标记且文件已存在，先读入以便覆盖。
+        f->writable = true;
+        f->disk_path = pFilePath ? pFilePath : "";
+        if ((openMode & MA_OPEN_MODE_READ) != 0) {
+            std::vector<uint8_t> existing;
+            if (RequireAssetManager(g_audio_asset_manager).LoadFileToMemory(pFilePath, existing)) {
+                f->data = std::move(existing);
+            }
+        }
+        f->cursor = 0;
+        *pFile = (ma_vfs_file)f;
+        return MA_SUCCESS;
+    }
+
+    if ((openMode & MA_OPEN_MODE_READ) == 0) {
+        delete f;
+        return MA_ERROR;
+    }
     std::vector<uint8_t> data;
     if (!RequireAssetManager(g_audio_asset_manager).LoadFileToMemory(pFilePath, data)) {
         std::cerr << "[Audio][VFS] not found: " << (pFilePath ? pFilePath : "(null)") << std::endl;
+        delete f;
         return MA_DOES_NOT_EXIST;
     }
-    auto* f = new CustomVFSFile();
     f->data = std::move(data);
     f->cursor = 0;
     *pFile = (ma_vfs_file)f;
@@ -74,15 +101,31 @@ static ma_result CustomVFS_Open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 o
 
 static ma_result CustomVFS_OpenW(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
     (void)pVFS;
-    (void)pFilePath;
-    (void)openMode;
-    (void)pFile;
-    return MA_NOT_IMPLEMENTED;
+    if (!pFilePath) return MA_INVALID_ARGS;
+#if defined(_WIN32)
+    // 宽字符路径 → UTF-8，复用 CustomVFS_Open（支持读写两种模式）
+    int len = WideCharToMultiByte(CP_UTF8, 0, pFilePath, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return MA_INVALID_ARGS;
+    std::string utf8(static_cast<size_t>(len) - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, pFilePath, -1, utf8.data(), len, nullptr, nullptr);
+    return CustomVFS_Open(pVFS, utf8.c_str(), openMode, pFile);
+#else
+    // 非 Windows 平台宽字符即 UTF-8/ASCII 直用
+    return CustomVFS_Open(pVFS, reinterpret_cast<const char*>(pFilePath), openMode, pFile);
+#endif
 }
 
 static ma_result CustomVFS_Close(ma_vfs* pVFS, ma_vfs_file file) {
     (void)pVFS;
     auto* f = static_cast<CustomVFSFile*>(file);
+    // 写模式：miniaudio 的 VFS 无显式 flush 回调，Close 即提交点，把缓冲落盘。
+    if (f->writable && !f->disk_path.empty() && !f->data.empty()) {
+        std::ofstream out(f->disk_path, std::ios::binary | std::ios::trunc);
+        if (out.is_open()) {
+            out.write(reinterpret_cast<const char*>(f->data.data()),
+                      static_cast<std::streamsize>(f->data.size()));
+        }
+    }
     delete f;
     return MA_SUCCESS;
 }
@@ -102,11 +145,18 @@ static ma_result CustomVFS_Read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size
 
 static ma_result CustomVFS_Write(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten) {
     (void)pVFS;
-    (void)file;
-    (void)pSrc;
-    (void)sizeInBytes;
-    (void)pBytesWritten;
-    return MA_NOT_IMPLEMENTED;
+    auto* f = static_cast<CustomVFSFile*>(file);
+    if (!f->writable) return MA_ACCESS_DENIED;
+    if (pSrc && sizeInBytes > 0) {
+        const auto* bytes = static_cast<const uint8_t*>(pSrc);
+        if (f->cursor + sizeInBytes > f->data.size()) {
+            f->data.resize(f->cursor + sizeInBytes);
+        }
+        std::memcpy(f->data.data() + f->cursor, bytes, sizeInBytes);
+        f->cursor += sizeInBytes;
+    }
+    if (pBytesWritten) *pBytesWritten = sizeInBytes;
+    return MA_SUCCESS;
 }
 
 static ma_result CustomVFS_Seek(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin) {

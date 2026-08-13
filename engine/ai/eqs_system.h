@@ -111,6 +111,12 @@ using VisibilityFunc = std::function<bool(const glm::vec3& from, const glm::vec3
 /// 高度采样回调
 using HeightSampleFunc = std::function<float(float x, float z)>;
 
+/// 表面采样回调：把任意点吸附到可走面（NavMesh 最近点），失败返回 false
+using SurfaceSampleFunc = std::function<bool(const glm::vec3& pos, glm::vec3& out_nearest)>;
+
+/// 可达性判定回调：真实寻路（路径存在且长度在阈值内则可达）
+using ReachabilityFunc = std::function<bool(const glm::vec3& from, const glm::vec3& to)>;
+
 /// 环境查询系统
 class DSE_EXPORT EQSSystem {
 public:
@@ -163,6 +169,12 @@ public:
     /// 设置高度采样回调
     void SetHeightSampleFunc(HeightSampleFunc func) { height_func_ = std::move(func); }
 
+    /// 设置表面采样回调（NavMesh 生成器吸附候选点；Reachable 回退判定）
+    void SetSurfaceSampleFunc(SurfaceSampleFunc func) { surface_func_ = std::move(func); }
+
+    /// 设置可达性判定回调（Reachable 评分器；未设置时回退表面采样/距离近似）
+    void SetReachabilityFunc(ReachabilityFunc func) { reach_func_ = std::move(func); }
+
     /// 注册自定义评分回调
     uint32_t RegisterCustomScorer(const std::string& name, CustomScorerFunc func);
 
@@ -181,6 +193,8 @@ private:
 
     VisibilityFunc visibility_func_;
     HeightSampleFunc height_func_;
+    SurfaceSampleFunc surface_func_;
+    ReachabilityFunc reach_func_;
     std::vector<std::pair<std::string, CustomScorerFunc>> custom_scorers_;
 
     bool initialized_ = false;

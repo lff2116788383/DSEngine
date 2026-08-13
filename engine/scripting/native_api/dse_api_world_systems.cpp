@@ -12,6 +12,9 @@
 #include "engine/ai/eqs_system.h"
 #include "engine/assets/asset_distribution.h"
 #include "engine/ecs/components_3d_sky.h"
+#ifdef DSE_ENABLE_NAVMESH
+#include "engine/navigation/nav_mesh_system.h"
+#endif
 
 using namespace dse;
 using namespace dse_api_internal;
@@ -359,6 +362,22 @@ extern "C" int dse_vsm_get_clipmap_levels(void) {
 extern "C" int dse_eqs_init(void) {
     g_eqs_sys = std::make_unique<dse::ai::EQSSystem>();
     g_eqs_sys->Init();
+
+#ifdef DSE_ENABLE_NAVMESH
+    // 把 NavMesh 查询桥接为 EQS 的表面采样/可达性能力（真实寻路，替换距离近似）。
+    auto* nav = dse::core::ServiceLocator::Instance().Get<dse::navigation::NavMeshSystem>();
+    if (nav) {
+        g_eqs_sys->SetSurfaceSampleFunc(
+            [nav](const glm::vec3& pos, glm::vec3& out) -> bool {
+                return nav->FindNearestPoint(pos, out);
+            });
+        g_eqs_sys->SetReachabilityFunc(
+            [nav](const glm::vec3& from, const glm::vec3& to) -> bool {
+                std::vector<glm::vec3> path;
+                return nav->FindPath(from, to, path, 128);
+            });
+    }
+#endif
     return 1;
 }
 

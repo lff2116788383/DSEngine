@@ -192,6 +192,48 @@ std::vector<QueryCandidate> EQSSystem::GeneratePoints(const GeneratorConfig& con
             }
             break;
         }
+        case GeneratorType::NavMesh: {
+            // 网格采样后吸附到可走面：仅保留落在 NavMesh 上的候选点。
+            // 需要调用方注入表面采样回调（通常桥接 NavMeshSystem::FindNearestPoint）。
+            if (!surface_func_) break;
+            float half = config.radius;
+            int count_per_axis = static_cast<int>(2.0f * half / std::max(config.spacing, 0.1f)) + 1;
+            for (int z = 0; z < count_per_axis && static_cast<int>(candidates.size()) < config.max_points; ++z) {
+                for (int x = 0; x < count_per_axis && static_cast<int>(candidates.size()) < config.max_points; ++x) {
+                    float px = center.x - half + x * config.spacing;
+                    float pz = center.z - half + z * config.spacing;
+                    float dist = std::sqrt((px - center.x) * (px - center.x) + (pz - center.z) * (pz - center.z));
+                    if (dist > config.radius || dist < config.inner_radius) continue;
+
+                    glm::vec3 snapped;
+                    if (!surface_func_(glm::vec3(px, center.y, pz), snapped)) continue;
+                    QueryCandidate c;
+                    c.position = glm::vec3(snapped.x, snapped.y + config.height_offset, snapped.z);
+                    candidates.push_back(c);
+                }
+            }
+            break;
+        }
+        case GeneratorType::PathPoints: {
+            // 沿 direction 方向以 spacing 等距生成一串候选点（半径范围内，含两侧），
+            // 作为沿路径/巡逻线的采样点。
+            const float step = std::max(config.spacing, 0.1f);
+            const int count = std::min(config.max_points,
+                static_cast<int>(2.0f * config.radius / step) + 1);
+            const glm::vec3 dir = (glm::length(config.direction) > 0.001f)
+                ? glm::normalize(config.direction) : glm::vec3(1, 0, 0);
+            for (int i = 0; i < count; ++i) {
+                float t = -config.radius + i * step;
+                float px = center.x + dir.x * t;
+                float pz = center.z + dir.z * t;
+
+                QueryCandidate c;
+                c.position = glm::vec3(px, center.y + config.height_offset, pz);
+                if (height_func_) c.position.y = height_func_(px, pz) + config.height_offset;
+                candidates.push_back(c);
+            }
+            break;
+        }
         default:
             break;
     }
@@ -229,9 +271,18 @@ float EQSSystem::ScoreCandidate(const QueryCandidate& candidate, const ScorerCon
             break;
         }
         case ScorerType::Reachable: {
-            // Simplified: check distance as proxy for reachability
-            float dist = glm::length(candidate.position - querier_pos);
-            score = (dist < scorer.max_value) ? 1.0f : 0.0f;
+            // 真实可达性：优先注入的寻路回调；其次表面采样近似；最后距离近似（向后兼容）。
+            if (reach_func_) {
+                score = reach_func_(querier_pos, candidate.position) ? 1.0f : 0.0f;
+            } else if (surface_func_) {
+                glm::vec3 from_n, to_n;
+                bool on_from = surface_func_(querier_pos, from_n);
+                bool on_to = surface_func_(candidate.position, to_n);
+                score = (on_from && on_to) ? 1.0f : 0.0f;
+            } else {
+                float dist = glm::length(candidate.position - querier_pos);
+                score = (dist < scorer.max_value) ? 1.0f : 0.0f;
+            }
             break;
         }
         case ScorerType::Custom: {

@@ -10,6 +10,7 @@
 #include "engine/core/service_locator.h"
 #include "engine/input/input.h"
 #include "engine/render/font/font_service.h"
+#include "engine/assets/localization_manager.h"
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
@@ -149,10 +150,17 @@ void UISystem::SyncLabels(entt::registry& registry) {
         auto* rich = registry.try_get<UIRichTextComponent>(entity);
 
         if (label.use_localization && !label.localization_key.empty() && !label.numeric_mode) {
-            const std::string localized_text = LocalizationSystem::GetInstance().GetTextWithParams(
-                label.localization_key,
-                label.localization_params,
-                label.fallback_text.empty() ? label.text : label.fallback_text);
+            // 优先使用引擎级 LocalizationManager（ServiceLocator 注册；脚本/编辑器 LoadLocale 后生效），
+            // 未加载语言包时回退 gameplay2d::LocalizationSystem（编辑器/示例默认路径）。
+            const std::string fallback = label.fallback_text.empty() ? label.text : label.fallback_text;
+            std::string localized_text;
+            auto* lm = dse::core::ServiceLocator::Instance().Get<dse::assets::LocalizationManager>();
+            if (lm && !lm->GetCurrentLocale().empty() && lm->HasKey(label.localization_key)) {
+                localized_text = lm->Get(label.localization_key, label.localization_params);
+            } else {
+                localized_text = LocalizationSystem::GetInstance().GetTextWithParams(
+                    label.localization_key, label.localization_params, fallback);
+            }
             if (label.text != localized_text) {
                 label.text = localized_text;
                 label.dirty = true;

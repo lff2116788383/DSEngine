@@ -195,10 +195,50 @@ void MeshStreamingSystem::ProcessLoadQueue() {
                 ++current_active;
                 --budget;
 
-                // Simulate async load completion (in real engine, this would be async IO)
-                SimulateLoadComplete(req.mesh_id, req.target_lod);
+                // 有请求回调：交给外部做真实异步 IO，完成后经 NotifyLoadComplete 收口。
+                // 无请求回调：保持同步"立即完成"（测试 / 无资产 IO 环境降级）。
+                if (request_load_cb_) {
+                    if (!request_load_cb_(req.mesh_id, req.target_lod)) {
+                        // 外部拒绝加载 → 撤销 loading 标记
+                        lod.loading = false;
+                        active_loads_.fetch_sub(1, std::memory_order_relaxed);
+                        --current_active;
+                    }
+                } else {
+                    SimulateLoadComplete(req.mesh_id, req.target_lod);
+                }
                 break;
             }
+        }
+    }
+}
+
+void MeshStreamingSystem::NotifyLoadComplete(uint32_t mesh_id, uint32_t lod_level, bool success) {
+    std::lock_guard<std::mutex> lock(meshes_mutex_);
+    auto it = meshes_.find(mesh_id);
+    if (it == meshes_.end()) return;
+
+    for (auto& lod : it->second.lods) {
+        if (lod.level == lod_level) {
+            if (success) {
+                lod.loaded = true;
+                lod.loading = false;
+                active_loads_.fetch_sub(1, std::memory_order_relaxed);
+
+                // Switch to the newly loaded LOD if it's still desired
+                if (it->second.desired_lod == lod_level) {
+                    it->second.current_lod = lod_level;
+                    last_switch_time_[mesh_id] = accumulated_time_;
+                }
+            } else {
+                lod.loading = false;
+                active_loads_.fetch_sub(1, std::memory_order_relaxed);
+            }
+
+            if (load_callback_) {
+                load_callback_(mesh_id, lod_level, success);
+            }
+            break;
         }
     }
 }
@@ -229,7 +269,26 @@ void MeshStreamingSystem::SimulateLoadComplete(uint32_t mesh_id, uint32_t lod_le
 
 void MeshStreamingSystem::ForceLoadLOD(uint32_t mesh_id, uint32_t lod_level) {
     std::lock_guard<std::mutex> lock(meshes_mutex_);
-    SimulateLoadComplete(mesh_id, lod_level);
+    auto it = meshes_.find(mesh_id);
+    if (it == meshes_.end()) return;
+
+    for (auto& lod : it->second.lods) {
+        if (lod.level == lod_level) {
+            if (request_load_cb_) {
+                if (!lod.loading) {
+                    lod.loading = true;
+                    active_loads_.fetch_add(1, std::memory_order_relaxed);
+                    if (!request_load_cb_(mesh_id, lod_level)) {
+                        lod.loading = false;
+                        active_loads_.fetch_sub(1, std::memory_order_relaxed);
+                    }
+                }
+            } else {
+                SimulateLoadComplete(mesh_id, lod_level);
+            }
+            break;
+        }
+    }
 }
 
 void MeshStreamingSystem::ForceUnloadLOD(uint32_t mesh_id, uint32_t lod_level) {
