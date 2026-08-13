@@ -16,6 +16,10 @@ VideoPlayer::~VideoPlayer() {
     Stop();
 }
 
+void VideoPlayer::SetRhiDevice(render::RhiDevice* rhi) {
+    if (texture_) texture_->SetRhiDevice(rhi);
+}
+
 void VideoPlayer::Play(const std::string& path, const VideoPlayConfig& config) {
     Stop();
 
@@ -41,6 +45,12 @@ void VideoPlayer::Play(const std::string& path, const VideoPlayConfig& config) {
     info_ = decoder_->GetInfo();
     current_time_ = 0.0;
     next_frame_time_ = 0.0;
+
+    // 后台预解码 + PTS 时钟：视频帧由解码线程填充环形缓冲，
+    // 主线程按目标时间取帧，天然支持音画同步与预取。
+    sync_ = std::make_unique<VideoAudioSync>();
+    sync_->Start(decoder_.get(), config.prefetch_frames);
+
     state_ = VideoState::Playing;
 }
 
@@ -57,6 +67,10 @@ void VideoPlayer::Resume() {
 }
 
 void VideoPlayer::Stop() {
+    if (sync_) {
+        sync_->Stop();
+        sync_.reset();
+    }
     if (decoder_) {
         decoder_->Close();
         decoder_.reset();
@@ -77,6 +91,11 @@ void VideoPlayer::Seek(double time_sec) {
     if (decoder_->Seek(time_sec)) {
         current_time_ = time_sec;
         next_frame_time_ = time_sec;
+        // 解码线程需要从新位置重新填充环形缓冲。
+        if (sync_) {
+            sync_->Stop();
+            sync_->Start(decoder_.get(), config_.prefetch_frames);
+        }
     }
 }
 
@@ -95,7 +114,31 @@ uint32_t VideoPlayer::Update(float delta_time) {
 
     current_time_ += static_cast<double>(delta_time) * static_cast<double>(playback_rate_);
 
-    // Check if we need a new frame
+    // 后台预解码路径：解码线程填充环形缓冲，主线程按目标时间取帧（PTS 驱动）。
+    if (sync_ && sync_->IsRunning()) {
+        VideoFrame frame{};
+        if (sync_->GetFrameAtTime(current_time_, frame)) {
+            return texture_->Upload(frame);
+        }
+
+        // 无可用帧：解码线程已因 EOF 退出且缓冲已清空 → 播完。
+        if (sync_->IsEof()) {
+            if (loop_) {
+                decoder_->Seek(0.0);
+                current_time_ = 0.0;
+                next_frame_time_ = 0.0;
+                sync_->Stop();
+                sync_->Start(decoder_.get(), config_.prefetch_frames);
+                if (on_looped_) on_looped_();
+            } else {
+                state_ = VideoState::Finished;
+                if (on_finished_) on_finished_();
+            }
+        }
+        return GetCurrentTexture();
+    }
+
+    // 同步解码回退路径（无后台线程时，保持原有逐帧解码行为）
     double frame_duration = (info_.fps > 0.0) ? (1.0 / info_.fps) : (1.0 / 30.0);
 
     if (current_time_ >= next_frame_time_) {

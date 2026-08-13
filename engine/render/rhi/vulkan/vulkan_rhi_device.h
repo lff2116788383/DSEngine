@@ -69,6 +69,8 @@ public:
     TextureHandle CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
     TextureHandle CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override;
     void DeleteTexture(TextureHandle texture_handle) override;
+    void UpdateTextureSubRegion(TextureHandle texture_handle, int x, int y,
+                                int width, int height, const unsigned char* rgba8_data) override;
     ShaderHandle CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
     void DeleteShaderProgram(ShaderHandle program_handle) override;
     PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override;

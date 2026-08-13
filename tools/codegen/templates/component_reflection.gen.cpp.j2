@@ -18,7 +18,7 @@ namespace {
 #if {{ comp.conditional }}
 {% endif %}
 void Register{{ comp.name | replace("Component", "") }}() {
-{% if comp.namespace %}
+{% if comp.namespace is defined and comp.namespace %}
     using {{ comp.namespace }}::{{ comp.name }};
 {% else %}
     using ::{{ comp.name }};

@@ -16,8 +16,13 @@
 #include "engine/ecs/ui_serializer.h"
 #include "engine/ecs/ui.h"
 #include "engine/ecs/transform.h"
+#include "engine/reflect/reflect.h"
+#include "engine/reflect/component_reflection.h"
+#include "engine/reflect/component_serializer.h"
+#include "engine/render/particles/gpu_particle_system.h"
 
 #include <glm/glm.hpp>
+#include <rapidjson/document.h>
 
 using namespace dse::gameplay2d;
 
@@ -860,4 +865,291 @@ TEST(UISystemTest, VirtualScrollNoCrash) {
     reg.emplace<UIVirtualScrollComponent>(e);
     const glm::vec2 screen(1920, 1080);
     sys.Update(reg, 0.016f, screen, glm::vec2(0), false);
+}
+
+// ============================================================
+// UISerializer：新增组件解析 + Save 往返
+// ============================================================
+
+// 测试 UISerializer：UIRichText / UIJoystick / UIContentSizeFitter 三个组件解析
+TEST(UISerializerTest, RichTextJoystickContentSizeFitterParse) {
+    dse::UISerializer serializer;
+    entt::registry reg;
+    const char* json = R"({
+        "entities": [
+            {
+                "id": 1,
+                "components": {
+                    "UIRenderer": {},
+                    "UIRichText": {
+                        "text": "<color=#ff0000>Hello</color>",
+                        "enable_shadow": true,
+                        "shadow_offset": [2.0, -2.0],
+                        "enable_outline": true,
+                        "outline_width": 3.0
+                    },
+                    "UIJoystick": {
+                        "max_radius": 128.0,
+                        "follow_pointer": false,
+                        "reset_on_release": false
+                    },
+                    "UIContentSizeFitter": {
+                        "fit_width": 1,
+                        "fit_height": 2,
+                        "min_size": [10.0, 20.0],
+                        "max_size": [500.0, 600.0]
+                    }
+                }
+            }
+        ]
+    })";
+    auto entities = serializer.LoadFromJson(reg, json);
+    ASSERT_EQ(entities.size(), 1u);
+    auto e = entities[0];
+    ASSERT_TRUE(reg.all_of<UIRichTextComponent>(e));
+    auto& rt = reg.get<UIRichTextComponent>(e);
+    EXPECT_EQ(rt.text, "<color=#ff0000>Hello</color>");
+    EXPECT_TRUE(rt.enable_shadow);
+    EXPECT_FLOAT_EQ(rt.shadow_offset.x, 2.0f);
+    EXPECT_FLOAT_EQ(rt.shadow_offset.y, -2.0f);
+    EXPECT_TRUE(rt.enable_outline);
+    EXPECT_FLOAT_EQ(rt.outline_width, 3.0f);
+
+    ASSERT_TRUE(reg.all_of<UIJoystickComponent>(e));
+    auto& joy = reg.get<UIJoystickComponent>(e);
+    EXPECT_FLOAT_EQ(joy.max_radius, 128.0f);
+    EXPECT_FALSE(joy.follow_pointer);
+    EXPECT_FALSE(joy.reset_on_release);
+
+    ASSERT_TRUE(reg.all_of<UIContentSizeFitterComponent>(e));
+    auto& fitter = reg.get<UIContentSizeFitterComponent>(e);
+    EXPECT_EQ(fitter.fit_width, 1);
+    EXPECT_EQ(fitter.fit_height, 2);
+    EXPECT_FLOAT_EQ(fitter.min_size.x, 10.0f);
+    EXPECT_FLOAT_EQ(fitter.max_size.y, 600.0f);
+}
+
+// 测试 UISerializer：Label/ScrollView/TextInput/Animation 补齐字段解析
+TEST(UISerializerTest, ExtendedFieldParse) {
+    dse::UISerializer serializer;
+    entt::registry reg;
+    const char* json = R"({
+        "entities": [
+            {
+                "id": 1,
+                "components": {
+                    "UIRenderer": {},
+                    "UILabel": {
+                        "text": "HP",
+                        "use_localization": true,
+                        "localization_key": "ui.hp",
+                        "fallback_text": "HP",
+                        "line_spacing_extra": 4.0,
+                        "offset": [3.0, 5.0]
+                    },
+                    "UIScrollView": {
+                        "elasticity": 0.5,
+                        "deceleration_rate": 0.2,
+                        "show_scrollbar": false,
+                        "scrollbar_width": 12.0,
+                        "scrollbar_color": [1.0, 0.0, 0.0, 1.0]
+                    },
+                    "UITextInput": {
+                        "text": "hello",
+                        "submit_on_enter": false,
+                        "cursor_color": [1.0, 1.0, 0.0, 1.0],
+                        "cursor_blink_rate": 0.8
+                    },
+                    "UIAnimation": {
+                        "target_position": [100.0, 200.0],
+                        "target_alpha": 0.5,
+                        "animate_position": true,
+                        "playing": true,
+                        "elapsed": 0.2
+                    }
+                }
+            }
+        ]
+    })";
+    auto entities = serializer.LoadFromJson(reg, json);
+    ASSERT_EQ(entities.size(), 1u);
+    auto e = entities[0];
+
+    ASSERT_TRUE(reg.all_of<UILabelComponent>(e));
+    auto& label = reg.get<UILabelComponent>(e);
+    EXPECT_TRUE(label.use_localization);
+    EXPECT_EQ(label.localization_key, "ui.hp");
+    EXPECT_EQ(label.fallback_text, "HP");
+    EXPECT_FLOAT_EQ(label.line_spacing_extra, 4.0f);
+    EXPECT_FLOAT_EQ(label.offset.x, 3.0f);
+
+    ASSERT_TRUE(reg.all_of<UIScrollViewComponent>(e));
+    auto& sv = reg.get<UIScrollViewComponent>(e);
+    EXPECT_FLOAT_EQ(sv.elasticity, 0.5f);
+    EXPECT_FLOAT_EQ(sv.deceleration_rate, 0.2f);
+    EXPECT_FALSE(sv.show_scrollbar);
+    EXPECT_FLOAT_EQ(sv.scrollbar_width, 12.0f);
+    EXPECT_FLOAT_EQ(sv.scrollbar_color.r, 1.0f);
+
+    ASSERT_TRUE(reg.all_of<UITextInputComponent>(e));
+    auto& input = reg.get<UITextInputComponent>(e);
+    EXPECT_EQ(input.text, "hello");
+    EXPECT_FALSE(input.submit_on_enter);
+    EXPECT_FLOAT_EQ(input.cursor_color.r, 1.0f);
+    EXPECT_FLOAT_EQ(input.cursor_blink_rate, 0.8f);
+
+    ASSERT_TRUE(reg.all_of<UIAnimationComponent>(e));
+    auto& anim = reg.get<UIAnimationComponent>(e);
+    EXPECT_FLOAT_EQ(anim.target_position.x, 100.0f);
+    EXPECT_FLOAT_EQ(anim.target_alpha, 0.5f);
+    EXPECT_TRUE(anim.animate_position);
+    EXPECT_TRUE(anim.playing);
+    EXPECT_FLOAT_EQ(anim.elapsed, 0.2f);
+}
+
+// 测试 UISerializer：SaveToJson 往返（含子级层级与补齐字段）
+TEST(UISerializerTest, SaveRoundTrip) {
+    entt::registry reg;
+    auto parent = reg.create();
+    reg.emplace<UIRendererComponent>(parent);
+    auto& label = reg.emplace<UILabelComponent>(parent);
+    label.text = "Score";
+    label.use_localization = true;
+    label.localization_key = "ui.score";
+    label.line_spacing_extra = 3.0f;
+
+    auto child = reg.create();
+    reg.emplace<ParentComponent>(child).parent = parent;
+    reg.emplace<UIRendererComponent>(child);
+    auto& joy = reg.emplace<UIJoystickComponent>(child);
+    joy.max_radius = 96.0f;
+    joy.follow_pointer = false;
+    auto& fitter = reg.emplace<UIContentSizeFitterComponent>(child);
+    fitter.fit_width = 2;
+    fitter.fit_height = 0;
+    auto& rt = reg.emplace<UIRichTextComponent>(child);
+    rt.text = "<color=#00ff00>OK</color>";
+    rt.enable_outline = true;
+    rt.outline_width = 2.0f;
+
+    dse::UISerializer serializer;
+    std::string saved = serializer.SaveToJson(reg);
+    ASSERT_FALSE(saved.empty());
+    EXPECT_NE(saved.find("\"entities\""), std::string::npos);
+
+    // 载入到新 registry，验证字段与层级往返
+    entt::registry reg2;
+    auto entities = serializer.LoadFromJson(reg2, saved);
+    ASSERT_EQ(entities.size(), 2u);
+
+    // 找到 parent（有 UILabel）
+    entt::entity loaded_parent = entt::null;
+    bool parent_found = false;
+    for (auto e : entities) {
+        if (reg2.all_of<UILabelComponent>(e)) { loaded_parent = e; parent_found = true; break; }
+    }
+    ASSERT_TRUE(parent_found);
+    auto& l2 = reg2.get<UILabelComponent>(loaded_parent);
+    EXPECT_EQ(l2.text, "Score");
+    EXPECT_TRUE(l2.use_localization);
+    EXPECT_EQ(l2.localization_key, "ui.score");
+    EXPECT_FLOAT_EQ(l2.line_spacing_extra, 3.0f);
+
+    // 子实体：验证富文本/摇杆/尺寸适配与父级关系
+    entt::entity loaded_child = entt::null;
+    bool child_found = false;
+    for (auto e : entities) {
+        if (reg2.all_of<UIJoystickComponent>(e)) { loaded_child = e; child_found = true; break; }
+    }
+    ASSERT_TRUE(child_found);
+    ASSERT_TRUE(reg2.all_of<ParentComponent>(loaded_child));
+    EXPECT_EQ(reg2.get<ParentComponent>(loaded_child).parent, loaded_parent);
+    EXPECT_FLOAT_EQ(reg2.get<UIJoystickComponent>(loaded_child).max_radius, 96.0f);
+    EXPECT_FALSE(reg2.get<UIJoystickComponent>(loaded_child).follow_pointer);
+    EXPECT_EQ(reg2.get<UIContentSizeFitterComponent>(loaded_child).fit_width, 2);
+    auto& rt2 = reg2.get<UIRichTextComponent>(loaded_child);
+    EXPECT_EQ(rt2.text, "<color=#00ff00>OK</color>");
+    EXPECT_TRUE(rt2.enable_outline);
+    EXPECT_FLOAT_EQ(rt2.outline_width, 2.0f);
+}
+
+// ============================================================
+// 反射体系：GPU 粒子补全 + UI/2D/Audio/Script 注册
+// ============================================================
+
+// 测试 反射：GpuParticle 组件不再空注册，字段完整
+TEST(ReflectionComponentsTest, GpuParticleReflectionPopulated) {
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const auto* ti = dse::reflect::Reflection::Find<dse::render::GpuParticleComponent>();
+    ASSERT_NE(ti, nullptr);
+    // config（嵌套类型）、ping、emit_accumulator、initialized
+    ASSERT_GE(ti->fields.size(), 4u);
+    bool has_config = false;
+    for (const auto& f : ti->fields) {
+        if (f.name == "config") { has_config = true; break; }
+    }
+    EXPECT_TRUE(has_config);
+
+    const auto* cfg = dse::reflect::Reflection::Find<dse::render::GpuParticleEmitterConfig>();
+    ASSERT_NE(cfg, nullptr);
+    EXPECT_GT(cfg->fields.size(), 10u);
+}
+
+// 测试 反射：UI / 2D / Audio / Script 组件已注册且字段可用
+TEST(ReflectionComponentsTest, Ui2DAudioScriptRegistered) {
+    dse::reflect::EnsureCoreReflectionRegistered();
+    struct Check {
+        const char* name;
+        size_t min_fields;
+    };
+    const Check checks[] = {
+        {"UIRendererComponent", 5},
+        {"UILabelComponent", 8},
+        {"UIRichTextComponent", 4},
+        {"UIJoystickComponent", 3},
+        {"UIContentSizeFitterComponent", 2},
+        {"UIScrollViewComponent", 5},
+        {"UITextInputComponent", 8},
+        {"SpriteRendererComponent", 5},
+        {"MaterialInstanceComponent", 3},
+        {"Light2DComponent", 5},
+        {"AudioSourceComponent", 5},
+        {"AudioListenerComponent", 1},
+        {"ScriptComponent", 1},
+        {"LuaScriptComponent", 1},
+        {"CSharpScriptComponent", 1},
+    };
+    for (const auto& c : checks) {
+        const auto* ti = dse::reflect::Reflection::Find(c.name);
+        ASSERT_NE(ti, nullptr) << "未注册反射: " << c.name;
+        EXPECT_GE(ti->fields.size(), c.min_fields) << "字段不足: " << c.name;
+    }
+}
+
+// 测试 ComponentSerializer：自动注册后按名字分发可用
+TEST(ComponentSerializerTest, AutoRegisteredDispatch) {
+    dse::reflect::EnsureCoreReflectionRegistered();
+    auto& serializer = dse::reflect::ComponentSerializer::Get();
+    const auto* entry = serializer.Find("UILabelComponent");
+    ASSERT_NE(entry, nullptr);
+    EXPECT_NE(entry->type_info, nullptr);
+    EXPECT_TRUE(serializer.GetAll().size() >= 20);
+
+    // 序列化一个真实实体：UILabel 应被写出
+    entt::registry reg;
+    auto e = reg.create();
+    reg.emplace<UILabelComponent>(e).text = "hello";
+    rapidjson::Document doc(rapidjson::kObjectType);
+    auto& alloc = doc.GetAllocator();
+    serializer.SerializeAll(reg, e, doc, alloc);
+    EXPECT_TRUE(doc.HasMember("UILabelComponent"));
+    EXPECT_TRUE(doc["UILabelComponent"].HasMember("text"));
+    EXPECT_STREQ(doc["UILabelComponent"]["text"].GetString(), "hello");
+
+    // 反序列化到新实体
+    entt::registry reg2;
+    auto e2 = reg2.create();
+    serializer.DeserializeAll(reg2, e2, doc);
+    ASSERT_TRUE(reg2.all_of<UILabelComponent>(e2));
+    EXPECT_EQ(reg2.get<UILabelComponent>(e2).text, "hello");
 }

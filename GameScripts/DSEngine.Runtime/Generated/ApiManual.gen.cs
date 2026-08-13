@@ -1076,6 +1076,7 @@ public static class Vehicle {
 
 public static class Video {
     public static uint CreatePlayer() { return Native.dse_video_create_player(); }
+    public static void SetRhiDevice(nint rhiDevice) { Native.dse_video_set_rhi_device(rhiDevice); }
     public static void DestroyPlayer(uint player) { Native.dse_video_destroy_player(player); }
     public static void Play(uint player, string path, int loop, float playbackRate, int decodeAudio, int prefetchFrames, int backend) { Native.dse_video_play(player, path, loop, playbackRate, decodeAudio, prefetchFrames, backend); }
     public static void Pause(uint player) { Native.dse_video_pause(player); }

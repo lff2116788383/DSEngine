@@ -10,6 +10,7 @@
 #include "engine/render/rhi/rhi_gpu_buffer.h"
 #include "engine/render/render_scene_view.h"
 #include "engine/platform/screen.h"
+#include "engine/base/debug.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -95,7 +96,11 @@ void MeshletCullRenderPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 void MeshletCullRenderPass::EnsureShader() {
     if (shader_compiled_) return;
     shader_compiled_ = true;
-    // Shader handle is injected via ctx_.meshlet_cull_shader by FramePipeline
+    // cull shader 由 FramePipeline 初始化时注入（CreateComputeShaderEx 编译 meshlet_cull.comp）；
+    // 未注入（如后端不支持 compute/SSBO）时 GPU 剔除路径自动回退 CPU。
+    if (!ctx_.meshlet_cull_shader) {
+        DEBUG_LOG_INFO("Meshlet GPU cull unavailable (no injected shader) — using CPU fallback");
+    }
 }
 
 void MeshletCullRenderPass::EnsureBuffers(uint32_t meshlet_count) {

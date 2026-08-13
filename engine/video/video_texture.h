@@ -10,6 +10,10 @@
 #include <cstdint>
 #include <vector>
 
+namespace dse::render {
+class RhiDevice;
+}
+
 namespace dse {
 namespace video {
 
@@ -17,6 +21,10 @@ class VideoTexture {
 public:
     VideoTexture();
     ~VideoTexture();
+
+    /// 注入 RHI 设备：注入后纹理走真实 GPU 创建/上传路径；
+    /// 未注入时保持轻量 stub（仅状态跟踪，供无 GPU 环境/单测使用）。
+    void SetRhiDevice(render::RhiDevice* rhi);
 
     /// 初始化纹理资源
     void Initialize(int width, int height, PixelFormat format);
@@ -39,6 +47,8 @@ public:
 
 private:
     uint32_t texture_id_ = 0;
+    uint32_t texture_handle_ = 0;   ///< RHI 句柄底层 id（== GL texture name）
+    render::RhiDevice* rhi_ = nullptr;
     int width_ = 0;
     int height_ = 0;
     PixelFormat format_ = PixelFormat::RGBA8;

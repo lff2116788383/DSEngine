@@ -29,8 +29,12 @@ class ComponentSerializer {
 public:
     static ComponentSerializer& Get();
 
-    /// Register a component with reflection-based serialize/deserialize.
+    /// 注册一个组件（显式手动注册，优先级高于反射自动注册）。
     void Register(ComponentIO io);
+
+    /// 惰性自动注册：首次使用前遍历 Reflection 注册表，把已反射组件统一接线为
+    /// 序列化器（内部幂等，自动确保核心反射已注册）。显式 Register 的条目保留。
+    void EnsureAutoRegistered() const;
 
     /// Serialize all registered components on an entity.
     void SerializeAll(entt::registry& registry, entt::entity entity,
@@ -41,7 +45,7 @@ public:
                         const rapidjson::Value& components) const;
 
     /// Query registered entries.
-    const std::vector<ComponentIO>& GetAll() const { return entries_; }
+    const std::vector<ComponentIO>& GetAll() const;
     const ComponentIO* Find(const std::string& name) const;
 
 private:

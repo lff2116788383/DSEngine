@@ -26,6 +26,7 @@ void VideoAudioSync::Start(IVideoDecoder* decoder, int ring_size) {
     ring_tail_ = 0;
     ring_count_ = 0;
     audio_clock_.store(0.0);
+    eof_.store(false);
     running_.store(true);
 
     decode_thread_ = std::thread(&VideoAudioSync::DecodeThreadFunc, this);
@@ -40,6 +41,7 @@ void VideoAudioSync::Stop() {
             decode_thread_.join();
         }
     }
+    eof_.store(false);
     ring_buffer_.clear();
     ring_head_ = 0;
     ring_tail_ = 0;
@@ -63,6 +65,7 @@ void VideoAudioSync::DecodeThreadFunc() {
         VideoFrame frame{};
         if (!decoder_->DecodeNextFrame(frame)) {
             // EOF - stop decode thread
+            eof_.store(true);
             break;
         }
 

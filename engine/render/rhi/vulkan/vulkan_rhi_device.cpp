@@ -746,6 +746,11 @@ void VulkanRhiDevice::DeleteTexture(TextureHandle texture_handle) {
     resource_mgr_.DeleteTexture(texture_handle.raw());
 }
 
+void VulkanRhiDevice::UpdateTextureSubRegion(TextureHandle texture_handle, int x, int y,
+                                             int width, int height, const unsigned char* rgba8_data) {
+    resource_mgr_.UpdateTextureSubRegion(texture_handle.raw(), x, y, width, height, rgba8_data);
+}
+
 ShaderHandle VulkanRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
     unsigned int handle = shader_mgr_.CreateProgram(vert_src, frag_src);
     ShaderHandle shader_handle{handle};

@@ -4,6 +4,7 @@
  */
 
 #include "engine/render/virtual_texture/virtual_texture.h"
+#include "engine/render/rhi/rhi_device.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -101,6 +102,13 @@ bool VirtualTextureSystem::Init(const VirtualTextureConfig& config, render::RhiD
     page_table_.resize(pt_size * pt_size);
     std::memset(page_table_.data(), 0, page_table_.size() * sizeof(PageTableEntry));
 
+    // 创建物理页池 atlas 纹理（RGBA8，线性过滤；后续按页用 UpdateTextureSubRegion 局部上传）
+    if (rhi_) {
+        uint32_t atlas_size = PhysicalAtlasSize();
+        atlas_handle_ = rhi_->CreateTexture2D(static_cast<int>(atlas_size),
+                                              static_cast<int>(atlas_size), nullptr, true);
+    }
+
     initialized_ = true;
     return true;
 }
@@ -183,12 +191,15 @@ void VirtualTextureSystem::UploadPages() {
             // 分配物理页
             PhysicalPage* physical = cache_.Allocate(page, current_frame_);
             if (physical) {
-                // 实际 GPU 上传由外部 RHI 处理
-                // rhi_->UploadTextureSubRegion(atlas_handle,
-                //     physical->pool_x * kPageSizeWithBorder,
-                //     physical->pool_y * kPageSizeWithBorder,
-                //     kPageSizeWithBorder, kPageSizeWithBorder,
-                //     pixels.data());
+                // 局部上传该页到 atlas 的对应位置
+                if (rhi_ && atlas_handle_) {
+                    rhi_->UpdateTextureSubRegion(
+                        atlas_handle_,
+                        static_cast<int>(physical->pool_x) * static_cast<int>(kPageSizeWithBorder),
+                        static_cast<int>(physical->pool_y) * static_cast<int>(kPageSizeWithBorder),
+                        static_cast<int>(kPageSizeWithBorder), static_cast<int>(kPageSizeWithBorder),
+                        pixels.data());
+                }
                 ++uploaded;
             }
         }
@@ -243,6 +254,10 @@ void VirtualTextureSystem::RebuildPageTable() {
 }
 
 void VirtualTextureSystem::Shutdown() {
+    if (rhi_ && atlas_handle_) {
+        rhi_->DeleteTexture(atlas_handle_);
+    }
+    atlas_handle_ = {};
     cache_.Clear();
     page_table_.clear();
     load_queue_.clear();

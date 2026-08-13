@@ -630,6 +630,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_video_create_player")]
     internal static partial uint dse_video_create_player();
 
+    [LibraryImport(Lib, EntryPoint = "dse_video_set_rhi_device")]
+    internal static partial void dse_video_set_rhi_device(nint rhiDevice);
+
     [LibraryImport(Lib, EntryPoint = "dse_video_destroy_player")]
     internal static partial void dse_video_destroy_player(uint player);
 

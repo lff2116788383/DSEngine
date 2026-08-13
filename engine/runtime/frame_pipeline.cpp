@@ -107,6 +107,7 @@ std::shared_ptr<dse::physics3d::IPhysics3DSystem> CreatePhysics3DSystem() {
 #include "engine/render/shaders/generated/embed/hi_z_downsample_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hi_z_cull_comp.gen.h"
 #include "engine/render/shaders/generated/embed/gpu_cull_comp.gen.h"
+#include "engine/render/shaders/generated/embed/meshlet_cull_comp.gen.h"
 
 namespace dse::render {
     // WebGPU 手译 WGSL（CreateComputeShaderEx 第 8 参；其余后端忽略）。
@@ -513,6 +514,22 @@ bool FramePipeline::Init() {
     } else {
         render_resources_.gpu_driven_supported = false;
         DEBUG_LOG_INFO("GPU Driven Rendering: not supported, using CPU path");
+    }
+
+    // Meshlet Cluster GPU cull：独立于 GPU-driven 策略；能力满足即注入 cull shader 并启用
+    // （pass 内仍按实例数为 0 短路，GPU 路径不可用时回退 CPU）。
+    if (runtime_context_.rhi_device->SupportsCompute() &&
+        runtime_context_.rhi_device->SupportsIndirectDraw() &&
+        runtime_context_.rhi_device->SupportsSSBO()) {
+        render_pass_context_.meshlet_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
+            dse::render::generated_shaders::kmeshlet_cull_comp_glsl430,
+            dse::render::generated_shaders::kmeshlet_cull_comp_glsl450,
+            dse::render::generated_shaders::kmeshlet_cull_comp_hlsl,
+            2, 0, 1, 208, "");
+        render_pass_context_.meshlet_enabled = static_cast<bool>(render_pass_context_.meshlet_cull_shader);
+        DEBUG_LOG_INFO("Meshlet pipeline: GPU cull enabled={}, shader={}",
+                       render_pass_context_.meshlet_enabled,
+                       render_pass_context_.meshlet_cull_shader.raw());
     }
 
     PipelineStateDesc sprite_desc;

@@ -22,6 +22,11 @@
 #include "engine/ecs/components_3d_character.h"
 #include "engine/ecs/components_3d_animation.h"
 #include "engine/render/particles/gpu_particle_system.h"
+#include "engine/ecs/ui.h"
+#include "engine/ecs/sprite.h"
+#include "engine/ecs/light_2d.h"
+#include "engine/ecs/audio.h"
+#include "engine/ecs/script.h"
 
 namespace dse::reflect {
 
@@ -844,7 +849,48 @@ void RegisterMorphTarget() {
 
 void RegisterGpuParticle() {
     using dse::render::GpuParticleComponent;
+    DSE_REFLECT_ENUM(dse::render::EmitterShape)
+        .value("Point", dse::render::EmitterShape::Point)
+        .value("Sphere", dse::render::EmitterShape::Sphere)
+        .value("Cone", dse::render::EmitterShape::Cone)
+        .value("Ring", dse::render::EmitterShape::Ring)
+        .value("Box", dse::render::EmitterShape::Box)
+        ;
+
+    {
+        using dse::render::GpuParticleEmitterConfig;
+        auto c = DSE_REFLECT_TYPE(GpuParticleEmitterConfig);
+        c.field("enabled", &GpuParticleEmitterConfig::enabled);
+        c.field("max_particles", &GpuParticleEmitterConfig::max_particles).range(1, 1000000);
+        c.field("emission_rate", &GpuParticleEmitterConfig::emission_rate).range(0.0, 100000.0);
+        c.field("shape", &GpuParticleEmitterConfig::shape);
+        c.field("shape_radius", &GpuParticleEmitterConfig::shape_radius).range(0.0, 1000.0);
+        c.field("cone_angle", &GpuParticleEmitterConfig::cone_angle).range(0.0, 180.0);
+        c.field("life_min", &GpuParticleEmitterConfig::life_min).range(0.0, 3600.0);
+        c.field("life_max", &GpuParticleEmitterConfig::life_max).range(0.0, 3600.0);
+        c.field("speed_min", &GpuParticleEmitterConfig::speed_min).range(0.0, 10000.0);
+        c.field("speed_max", &GpuParticleEmitterConfig::speed_max).range(0.0, 10000.0);
+        c.field("size_start", &GpuParticleEmitterConfig::size_start).range(0.0, 100.0);
+        c.field("size_end", &GpuParticleEmitterConfig::size_end).range(0.0, 100.0);
+        c.field("color_start", &GpuParticleEmitterConfig::color_start).color();
+        c.field("color_end", &GpuParticleEmitterConfig::color_end).color();
+        c.field("gravity", &GpuParticleEmitterConfig::gravity);
+        c.field("wind", &GpuParticleEmitterConfig::wind);
+        c.field("turbulence", &GpuParticleEmitterConfig::turbulence).range(0.0, 100.0);
+        c.field("vortex_strength", &GpuParticleEmitterConfig::vortex_strength).range(0.0, 100.0);
+        c.field("collision_enabled", &GpuParticleEmitterConfig::collision_enabled);
+        c.field("collision_plane_y", &GpuParticleEmitterConfig::collision_plane_y);
+        c.field("collision_bounce", &GpuParticleEmitterConfig::collision_bounce).range(0.0, 1.0);
+        c.field("collision_friction", &GpuParticleEmitterConfig::collision_friction).range(0.0, 1.0);
+        c.field("texture_path", &GpuParticleEmitterConfig::texture_path);
+        c.field("additive_blend", &GpuParticleEmitterConfig::additive_blend);
+        c.field("sort_particles", &GpuParticleEmitterConfig::sort_particles);
+    }
     auto t = DSE_REFLECT_TYPE(GpuParticleComponent);
+    t.field("config", &GpuParticleComponent::config);
+    t.field("ping", &GpuParticleComponent::ping);
+    t.field("emit_accumulator", &GpuParticleComponent::emit_accumulator);
+    t.field("initialized", &GpuParticleComponent::initialized);
 }
 
 void RegisterHLODMember() {
@@ -852,6 +898,438 @@ void RegisterHLODMember() {
     auto t = DSE_REFLECT_TYPE(HLODMemberComponent);
     t.field("cluster_index", &HLODMemberComponent::cluster_index);
     t.field("hidden_by_hlod", &HLODMemberComponent::hidden_by_hlod);
+}
+
+void RegisterUIRenderer() {
+    using ::UIRendererComponent;
+    auto t = DSE_REFLECT_TYPE(UIRendererComponent);
+    t.field("color", &UIRendererComponent::color).color();
+    t.field("uv", &UIRendererComponent::uv);
+    t.field("order", &UIRendererComponent::order);
+    t.field("visible", &UIRendererComponent::visible);
+    t.field("scale", &UIRendererComponent::scale).range(0.0, 100.0);
+    t.field("hover_scale", &UIRendererComponent::hover_scale).range(0.0, 10.0);
+    t.field("pressed_scale", &UIRendererComponent::pressed_scale).range(0.0, 10.0);
+    t.field("scale_lerp_speed", &UIRendererComponent::scale_lerp_speed).range(0.0, 100.0);
+    t.field("position", &UIRendererComponent::position);
+    t.field("size", &UIRendererComponent::size);
+    t.field("anchor_min", &UIRendererComponent::anchor_min);
+    t.field("anchor_max", &UIRendererComponent::anchor_max);
+    t.field("pivot", &UIRendererComponent::pivot);
+    t.field("interactable", &UIRendererComponent::interactable);
+    t.field("nine_slice_enabled", &UIRendererComponent::nine_slice_enabled);
+    t.field("nine_slice_border", &UIRendererComponent::nine_slice_border);
+    t.field("nine_slice_src_size", &UIRendererComponent::nine_slice_src_size);
+    t.field("use_sdf_shader", &UIRendererComponent::use_sdf_shader);
+    t.field("sdf_threshold", &UIRendererComponent::sdf_threshold).range(0.0, 1.0);
+    t.field("sdf_smoothing", &UIRendererComponent::sdf_smoothing).range(0.0, 1.0);
+    t.field("sdf_outline_width", &UIRendererComponent::sdf_outline_width).range(0.0, 10.0);
+    t.field("sdf_shadow_softness", &UIRendererComponent::sdf_shadow_softness).range(0.0, 10.0);
+}
+
+void RegisterUIButton() {
+    using ::UIButtonComponent;
+    auto t = DSE_REFLECT_TYPE(UIButtonComponent);
+    t.field("normal_color", &UIButtonComponent::normal_color).color();
+    t.field("hover_color", &UIButtonComponent::hover_color).color();
+    t.field("pressed_color", &UIButtonComponent::pressed_color).color();
+}
+
+void RegisterUILabel() {
+    using ::UILabelComponent;
+    auto t = DSE_REFLECT_TYPE(UILabelComponent);
+    t.field("text", &UILabelComponent::text);
+    t.field("use_localization", &UILabelComponent::use_localization);
+    t.field("localization_key", &UILabelComponent::localization_key);
+    t.field("fallback_text", &UILabelComponent::fallback_text);
+    t.field("numeric_mode", &UILabelComponent::numeric_mode);
+    t.field("glyph_size", &UILabelComponent::glyph_size);
+    t.field("offset", &UILabelComponent::offset);
+    t.field("spacing", &UILabelComponent::spacing);
+    t.field("atlas_cols", &UILabelComponent::atlas_cols);
+    t.field("atlas_rows", &UILabelComponent::atlas_rows);
+    t.field("ascii_start", &UILabelComponent::ascii_start);
+    t.field("color", &UILabelComponent::color).color();
+    t.field("font_id", &UILabelComponent::font_id);
+    t.field("font_size", &UILabelComponent::font_size).range(4.0, 512.0);
+    t.field("use_sdf", &UILabelComponent::use_sdf);
+    t.field("max_width", &UILabelComponent::max_width).range(0.0, 10000.0);
+    t.field("text_align", &UILabelComponent::text_align);
+    t.field("overflow_mode", &UILabelComponent::overflow_mode);
+    t.field("max_lines", &UILabelComponent::max_lines);
+    t.field("line_spacing_extra", &UILabelComponent::line_spacing_extra);
+}
+
+void RegisterUIPanel() {
+    using ::UIPanelComponent;
+    auto t = DSE_REFLECT_TYPE(UIPanelComponent);
+    t.field("blocks_input", &UIPanelComponent::blocks_input);
+}
+
+void RegisterUIMask() {
+    using ::UIMaskComponent;
+    auto t = DSE_REFLECT_TYPE(UIMaskComponent);
+    t.field("enabled", &UIMaskComponent::enabled);
+    t.field("size", &UIMaskComponent::size);
+    t.field("offset", &UIMaskComponent::offset);
+    t.field("block_outside_input", &UIMaskComponent::block_outside_input);
+}
+
+void RegisterUIAnchor() {
+    using ::UIAnchorComponent;
+    auto t = DSE_REFLECT_TYPE(UIAnchorComponent);
+    t.field("anchor", &UIAnchorComponent::anchor);
+    t.field("offset", &UIAnchorComponent::offset);
+}
+
+void RegisterUIGridLayout() {
+    using ::UIGridLayoutComponent;
+    auto t = DSE_REFLECT_TYPE(UIGridLayoutComponent);
+    t.field("columns", &UIGridLayoutComponent::columns);
+    t.field("rows", &UIGridLayoutComponent::rows);
+    t.field("cell_size", &UIGridLayoutComponent::cell_size);
+    t.field("spacing", &UIGridLayoutComponent::spacing);
+    t.field("alignment", &UIGridLayoutComponent::alignment);
+}
+
+void RegisterUIBoxLayout() {
+    using ::UIBoxLayoutComponent;
+    auto t = DSE_REFLECT_TYPE(UIBoxLayoutComponent);
+    t.field("vertical", &UIBoxLayoutComponent::vertical);
+    t.field("spacing", &UIBoxLayoutComponent::spacing);
+    t.field("padding", &UIBoxLayoutComponent::padding);
+    t.field("align_main", &UIBoxLayoutComponent::align_main);
+    t.field("align_cross", &UIBoxLayoutComponent::align_cross);
+    t.field("reverse", &UIBoxLayoutComponent::reverse);
+}
+
+void RegisterUICanvasScaler() {
+    using ::UICanvasScalerComponent;
+    auto t = DSE_REFLECT_TYPE(UICanvasScalerComponent);
+    t.field("reference_resolution", &UICanvasScalerComponent::reference_resolution);
+    t.field("scale_factor", &UICanvasScalerComponent::scale_factor);
+    t.field("match_width_or_height", &UICanvasScalerComponent::match_width_or_height);
+    t.field("match", &UICanvasScalerComponent::match).range(0.0, 1.0);
+    t.field("pixel_snap", &UICanvasScalerComponent::pixel_snap);
+}
+
+void RegisterUIScrollView() {
+    using ::UIScrollViewComponent;
+    auto t = DSE_REFLECT_TYPE(UIScrollViewComponent);
+    t.field("content_size", &UIScrollViewComponent::content_size);
+    t.field("viewport_size", &UIScrollViewComponent::viewport_size);
+    t.field("scroll_offset", &UIScrollViewComponent::scroll_offset);
+    t.field("horizontal", &UIScrollViewComponent::horizontal);
+    t.field("vertical", &UIScrollViewComponent::vertical);
+    t.field("elastic", &UIScrollViewComponent::elastic);
+    t.field("elasticity", &UIScrollViewComponent::elasticity).range(0.0, 1.0);
+    t.field("inertia", &UIScrollViewComponent::inertia);
+    t.field("deceleration_rate", &UIScrollViewComponent::deceleration_rate).range(0.0, 1.0);
+    t.field("show_scrollbar", &UIScrollViewComponent::show_scrollbar);
+    t.field("scrollbar_width", &UIScrollViewComponent::scrollbar_width);
+    t.field("scrollbar_color", &UIScrollViewComponent::scrollbar_color).color();
+}
+
+void RegisterUISlider() {
+    using ::UISliderComponent;
+    auto t = DSE_REFLECT_TYPE(UISliderComponent);
+    t.field("value", &UISliderComponent::value);
+    t.field("min_value", &UISliderComponent::min_value);
+    t.field("max_value", &UISliderComponent::max_value);
+    t.field("whole_numbers", &UISliderComponent::whole_numbers);
+    t.field("vertical", &UISliderComponent::vertical);
+    t.field("track_color", &UISliderComponent::track_color).color();
+    t.field("fill_color", &UISliderComponent::fill_color).color();
+    t.field("handle_color", &UISliderComponent::handle_color).color();
+    t.field("handle_size", &UISliderComponent::handle_size);
+}
+
+void RegisterUIToggle() {
+    using ::UIToggleComponent;
+    auto t = DSE_REFLECT_TYPE(UIToggleComponent);
+    t.field("is_on", &UIToggleComponent::is_on);
+    t.field("group", &UIToggleComponent::group);
+    t.field("on_color", &UIToggleComponent::on_color).color();
+    t.field("off_color", &UIToggleComponent::off_color).color();
+    t.field("transition_duration", &UIToggleComponent::transition_duration);
+}
+
+void RegisterUIProgressBar() {
+    using ::UIProgressBarComponent;
+    auto t = DSE_REFLECT_TYPE(UIProgressBarComponent);
+    t.field("value", &UIProgressBarComponent::value);
+    t.field("max_value", &UIProgressBarComponent::max_value);
+    t.field("right_to_left", &UIProgressBarComponent::right_to_left);
+    t.field("vertical", &UIProgressBarComponent::vertical);
+    t.field("background_color", &UIProgressBarComponent::background_color).color();
+    t.field("fill_color", &UIProgressBarComponent::fill_color).color();
+}
+
+void RegisterUITextInput() {
+    using ::UITextInputComponent;
+    auto t = DSE_REFLECT_TYPE(UITextInputComponent);
+    t.field("text", &UITextInputComponent::text);
+    t.field("placeholder", &UITextInputComponent::placeholder);
+    t.field("cursor_position", &UITextInputComponent::cursor_position);
+    t.field("selection_start", &UITextInputComponent::selection_start);
+    t.field("selection_end", &UITextInputComponent::selection_end);
+    t.field("max_length", &UITextInputComponent::max_length);
+    t.field("is_focused", &UITextInputComponent::is_focused);
+    t.field("is_password", &UITextInputComponent::is_password);
+    t.field("multiline", &UITextInputComponent::multiline);
+    t.field("read_only", &UITextInputComponent::read_only);
+    t.field("submit_on_enter", &UITextInputComponent::submit_on_enter);
+    t.field("text_color", &UITextInputComponent::text_color).color();
+    t.field("placeholder_color", &UITextInputComponent::placeholder_color).color();
+    t.field("cursor_color", &UITextInputComponent::cursor_color).color();
+    t.field("selection_color", &UITextInputComponent::selection_color).color();
+    t.field("cursor_blink_rate", &UITextInputComponent::cursor_blink_rate);
+}
+
+void RegisterUIDropdown() {
+    using ::UIDropdownComponent;
+    auto t = DSE_REFLECT_TYPE(UIDropdownComponent);
+    t.field("selected_index", &UIDropdownComponent::selected_index);
+    t.field("item_height", &UIDropdownComponent::item_height);
+    t.field("max_visible_items", &UIDropdownComponent::max_visible_items);
+    t.field("normal_color", &UIDropdownComponent::normal_color).color();
+    t.field("hover_color", &UIDropdownComponent::hover_color).color();
+    t.field("selected_color", &UIDropdownComponent::selected_color).color();
+    t.field("text_color", &UIDropdownComponent::text_color).color();
+}
+
+void RegisterUIFilledImage() {
+    using ::UIFilledImageComponent;
+    DSE_REFLECT_ENUM(UIFillMethod)
+        .value("Horizontal", UIFillMethod::Horizontal)
+        .value("Vertical", UIFillMethod::Vertical)
+        .value("Radial360", UIFillMethod::Radial360)
+        .value("Radial180", UIFillMethod::Radial180)
+        .value("Radial90", UIFillMethod::Radial90)
+        ;
+    DSE_REFLECT_ENUM(UIFillOrigin)
+        .value("Left", UIFillOrigin::Left)
+        .value("Right", UIFillOrigin::Right)
+        .value("Bottom", UIFillOrigin::Bottom)
+        .value("Top", UIFillOrigin::Top)
+        .value("Center", UIFillOrigin::Center)
+        ;
+
+    auto t = DSE_REFLECT_TYPE(UIFilledImageComponent);
+    t.field("fill_amount", &UIFilledImageComponent::fill_amount).range(0.0, 1.0);
+    t.field("fill_method", &UIFilledImageComponent::fill_method);
+    t.field("fill_origin", &UIFilledImageComponent::fill_origin);
+    t.field("clockwise", &UIFilledImageComponent::clockwise);
+}
+
+void RegisterUIFocusNavigable() {
+    using ::UIFocusNavigableComponent;
+    auto t = DSE_REFLECT_TYPE(UIFocusNavigableComponent);
+    t.field("tab_index", &UIFocusNavigableComponent::tab_index);
+    t.field("is_focused", &UIFocusNavigableComponent::is_focused);
+    t.field("focus_tint", &UIFocusNavigableComponent::focus_tint).color();
+}
+
+void RegisterUIEventPropagation() {
+    using ::UIEventPropagationComponent;
+    auto t = DSE_REFLECT_TYPE(UIEventPropagationComponent);
+    t.field("bubbles_click", &UIEventPropagationComponent::bubbles_click);
+    t.field("bubbles_hover", &UIEventPropagationComponent::bubbles_hover);
+}
+
+void RegisterUIVisualEffect() {
+    using ::UIVisualEffectComponent;
+    DSE_REFLECT_ENUM(UIGradientDirection)
+        .value("Horizontal", UIGradientDirection::Horizontal)
+        .value("Vertical", UIGradientDirection::Vertical)
+        .value("Diagonal", UIGradientDirection::Diagonal)
+        ;
+
+    auto t = DSE_REFLECT_TYPE(UIVisualEffectComponent);
+    t.field("corner_radius", &UIVisualEffectComponent::corner_radius);
+    t.field("gradient_color_start", &UIVisualEffectComponent::gradient_color_start).color();
+    t.field("gradient_color_end", &UIVisualEffectComponent::gradient_color_end).color();
+    t.field("gradient_direction", &UIVisualEffectComponent::gradient_direction);
+    t.field("blur_radius", &UIVisualEffectComponent::blur_radius);
+    t.field("blur_intensity", &UIVisualEffectComponent::blur_intensity).range(0.0, 1.0);
+}
+
+void RegisterUIAnimation() {
+    using ::UIAnimationComponent;
+    auto t = DSE_REFLECT_TYPE(UIAnimationComponent);
+    t.field("target_position", &UIAnimationComponent::target_position);
+    t.field("target_scale", &UIAnimationComponent::target_scale);
+    t.field("target_alpha", &UIAnimationComponent::target_alpha).range(0.0, 1.0);
+    t.field("target_color", &UIAnimationComponent::target_color).color();
+    t.field("animate_position", &UIAnimationComponent::animate_position);
+    t.field("animate_scale", &UIAnimationComponent::animate_scale);
+    t.field("animate_alpha", &UIAnimationComponent::animate_alpha);
+    t.field("animate_color", &UIAnimationComponent::animate_color);
+    t.field("duration", &UIAnimationComponent::duration);
+    t.field("delay", &UIAnimationComponent::delay);
+    t.field("loop", &UIAnimationComponent::loop);
+    t.field("ping_pong", &UIAnimationComponent::ping_pong);
+    t.field("playing", &UIAnimationComponent::playing);
+    t.field("easing", &UIAnimationComponent::easing);
+}
+
+void RegisterUIRichText() {
+    using ::UIRichTextComponent;
+    auto t = DSE_REFLECT_TYPE(UIRichTextComponent);
+    t.field("text", &UIRichTextComponent::text);
+    t.field("default_color", &UIRichTextComponent::default_color).color();
+    t.field("enable_shadow", &UIRichTextComponent::enable_shadow);
+    t.field("shadow_offset", &UIRichTextComponent::shadow_offset);
+    t.field("shadow_color", &UIRichTextComponent::shadow_color).color();
+    t.field("enable_outline", &UIRichTextComponent::enable_outline);
+    t.field("outline_color", &UIRichTextComponent::outline_color).color();
+    t.field("outline_width", &UIRichTextComponent::outline_width);
+}
+
+void RegisterUIJoystick() {
+    using ::UIJoystickComponent;
+    auto t = DSE_REFLECT_TYPE(UIJoystickComponent);
+    t.field("direction", &UIJoystickComponent::direction);
+    t.field("max_radius", &UIJoystickComponent::max_radius);
+    t.field("follow_pointer", &UIJoystickComponent::follow_pointer);
+    t.field("reset_on_release", &UIJoystickComponent::reset_on_release);
+    t.field("is_dragging", &UIJoystickComponent::is_dragging);
+    t.field("drag_anchor", &UIJoystickComponent::drag_anchor);
+}
+
+void RegisterUIContentSizeFitter() {
+    using ::UIContentSizeFitterComponent;
+    auto t = DSE_REFLECT_TYPE(UIContentSizeFitterComponent);
+    t.field("fit_width", &UIContentSizeFitterComponent::fit_width);
+    t.field("fit_height", &UIContentSizeFitterComponent::fit_height);
+    t.field("min_size", &UIContentSizeFitterComponent::min_size);
+    t.field("max_size", &UIContentSizeFitterComponent::max_size);
+}
+
+void RegisterSpriteRenderer() {
+    using ::SpriteRendererComponent;
+    DSE_REFLECT_ENUM(SpriteBlendMode)
+        .value("Alpha", SpriteBlendMode::Alpha)
+        .value("Additive", SpriteBlendMode::Additive)
+        .value("Multiply", SpriteBlendMode::Multiply)
+        ;
+
+    auto t = DSE_REFLECT_TYPE(SpriteRendererComponent);
+    t.field("material_instance_id", &SpriteRendererComponent::material_instance_id);
+    t.field("shader_variant", &SpriteRendererComponent::shader_variant);
+    t.field("blend_mode", &SpriteRendererComponent::blend_mode);
+    t.field("color", &SpriteRendererComponent::color).color();
+    t.field("uv", &SpriteRendererComponent::uv);
+    t.field("uv_offset", &SpriteRendererComponent::uv_offset);
+    t.field("uv_scroll_speed", &SpriteRendererComponent::uv_scroll_speed);
+    t.field("sorting_layer", &SpriteRendererComponent::sorting_layer);
+    t.field("order_in_layer", &SpriteRendererComponent::order_in_layer);
+    t.field("visible", &SpriteRendererComponent::visible);
+}
+
+void RegisterMaterialInstance() {
+    using ::MaterialInstanceComponent;
+    auto t = DSE_REFLECT_TYPE(MaterialInstanceComponent);
+    t.field("material_id", &MaterialInstanceComponent::material_id);
+    t.field("name", &MaterialInstanceComponent::name);
+    t.field("shader_variant", &MaterialInstanceComponent::shader_variant);
+    t.field("blend_mode", &MaterialInstanceComponent::blend_mode);
+    t.field("tint", &MaterialInstanceComponent::tint).color();
+    t.field("uv_rect", &MaterialInstanceComponent::uv_rect);
+}
+
+void RegisterLight2D() {
+    using ::Light2DComponent;
+    DSE_REFLECT_ENUM(Light2DType)
+        .value("Point", Light2DType::Point)
+        .value("Spot", Light2DType::Spot)
+        .value("Directional", Light2DType::Directional)
+        ;
+    DSE_REFLECT_ENUM(Shadow2DMode)
+        .value("None", Shadow2DMode::None)
+        .value("Hard", Shadow2DMode::Hard)
+        .value("Soft", Shadow2DMode::Soft)
+        ;
+
+    auto t = DSE_REFLECT_TYPE(Light2DComponent);
+    t.field("type", &Light2DComponent::type);
+    t.field("color", &Light2DComponent::color).color();
+    t.field("intensity", &Light2DComponent::intensity).range(0.0, 100.0);
+    t.field("range", &Light2DComponent::range).range(0.0, 1000.0);
+    t.field("falloff", &Light2DComponent::falloff).range(0.0, 10.0);
+    t.field("spot_angle", &Light2DComponent::spot_angle).range(0.0, 180.0);
+    t.field("spot_outer_angle", &Light2DComponent::spot_outer_angle).range(0.0, 180.0);
+    t.field("direction_angle", &Light2DComponent::direction_angle);
+    t.field("shadow_mode", &Light2DComponent::shadow_mode);
+    t.field("shadow_strength", &Light2DComponent::shadow_strength).range(0.0, 1.0);
+    t.field("shadow_ray_count", &Light2DComponent::shadow_ray_count);
+    t.field("enabled", &Light2DComponent::enabled);
+    t.field("layer_mask", &Light2DComponent::layer_mask);
+}
+
+void RegisterAmbient2D() {
+    using ::Ambient2DComponent;
+    auto t = DSE_REFLECT_TYPE(Ambient2DComponent);
+    t.field("color", &Ambient2DComponent::color).color();
+    t.field("intensity", &Ambient2DComponent::intensity).range(0.0, 10.0);
+}
+
+void RegisterNormalMap2D() {
+    using ::NormalMap2DComponent;
+    auto t = DSE_REFLECT_TYPE(NormalMap2DComponent);
+    t.field("normal_strength", &NormalMap2DComponent::normal_strength).range(0.0, 4.0);
+}
+
+void RegisterAudioSource() {
+    using ::AudioSourceComponent;
+    DSE_REFLECT_ENUM(AudioAttenuationModel)
+        .value("Inverse", AudioAttenuationModel::Inverse)
+        .value("Linear", AudioAttenuationModel::Linear)
+        .value("Exponential", AudioAttenuationModel::Exponential)
+        ;
+
+    auto t = DSE_REFLECT_TYPE(AudioSourceComponent);
+    t.field("play_on_awake", &AudioSourceComponent::play_on_awake);
+    t.field("loop", &AudioSourceComponent::loop);
+    t.field("volume", &AudioSourceComponent::volume).range(0.0, 4.0);
+    t.field("pitch", &AudioSourceComponent::pitch).range(0.0, 4.0);
+    t.field("spatial_enabled", &AudioSourceComponent::spatial_enabled);
+    t.field("min_distance", &AudioSourceComponent::min_distance);
+    t.field("max_distance", &AudioSourceComponent::max_distance);
+    t.field("rolloff", &AudioSourceComponent::rolloff).range(0.0, 10.0);
+    t.field("attenuation_model", &AudioSourceComponent::attenuation_model);
+    t.field("occlusion_enabled", &AudioSourceComponent::occlusion_enabled);
+    t.field("occlusion_factor", &AudioSourceComponent::occlusion_factor).range(0.0, 1.0);
+    t.field("bus_name", &AudioSourceComponent::bus_name);
+}
+
+void RegisterAudioListener() {
+    using ::AudioListenerComponent;
+    auto t = DSE_REFLECT_TYPE(AudioListenerComponent);
+    t.field("enabled", &AudioListenerComponent::enabled);
+    t.field("listener_index", &AudioListenerComponent::listener_index);
+}
+
+void RegisterScript() {
+    using ::ScriptComponent;
+    auto t = DSE_REFLECT_TYPE(ScriptComponent);
+    t.field("script_path", &ScriptComponent::script_path);
+    t.field("enabled", &ScriptComponent::enabled);
+}
+
+void RegisterLuaScript() {
+    using ::LuaScriptComponent;
+    auto t = DSE_REFLECT_TYPE(LuaScriptComponent);
+    t.field("script_path", &LuaScriptComponent::script_path);
+    t.field("is_initialized", &LuaScriptComponent::is_initialized);
+}
+
+void RegisterCSharpScript() {
+    using ::CSharpScriptComponent;
+    auto t = DSE_REFLECT_TYPE(CSharpScriptComponent);
+    t.field("class_name", &CSharpScriptComponent::class_name);
+    t.field("enabled", &CSharpScriptComponent::enabled);
+    t.field("is_bound", &CSharpScriptComponent::is_bound);
 }
 
 }  // namespace
@@ -921,6 +1399,39 @@ void EnsureCoreReflectionRegistered() {
     RegisterMorphTarget();
     RegisterGpuParticle();
     RegisterHLODMember();
+    RegisterUIRenderer();
+    RegisterUIButton();
+    RegisterUILabel();
+    RegisterUIPanel();
+    RegisterUIMask();
+    RegisterUIAnchor();
+    RegisterUIGridLayout();
+    RegisterUIBoxLayout();
+    RegisterUICanvasScaler();
+    RegisterUIScrollView();
+    RegisterUISlider();
+    RegisterUIToggle();
+    RegisterUIProgressBar();
+    RegisterUITextInput();
+    RegisterUIDropdown();
+    RegisterUIFilledImage();
+    RegisterUIFocusNavigable();
+    RegisterUIEventPropagation();
+    RegisterUIVisualEffect();
+    RegisterUIAnimation();
+    RegisterUIRichText();
+    RegisterUIJoystick();
+    RegisterUIContentSizeFitter();
+    RegisterSpriteRenderer();
+    RegisterMaterialInstance();
+    RegisterLight2D();
+    RegisterAmbient2D();
+    RegisterNormalMap2D();
+    RegisterAudioSource();
+    RegisterAudioListener();
+    RegisterScript();
+    RegisterLuaScript();
+    RegisterCSharpScript();
 }
 
 }  // namespace dse::reflect

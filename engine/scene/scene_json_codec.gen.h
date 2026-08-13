@@ -26,6 +26,11 @@
 #include "engine/ecs/components_3d_character.h"
 #include "engine/ecs/components_3d_animation.h"
 #include "engine/render/particles/gpu_particle_system.h"
+#include "engine/ecs/ui.h"
+#include "engine/ecs/sprite.h"
+#include "engine/ecs/light_2d.h"
+#include "engine/ecs/audio.h"
+#include "engine/ecs/script.h"
 
 #include <rapidjson/document.h>
 #include <functional>
@@ -1202,6 +1207,699 @@ inline void Deserialize_HLODMemberComponent(entt::registry& reg, entt::entity e,
     reflect::DeserializeReflected(*ti, &c, json);
 }
 
+inline bool Serialize_UIRendererComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIRendererComponent>(e)) return false;
+    const auto& c = reg.get<UIRendererComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIRendererComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIRendererComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIRendererComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIRendererComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIRendererComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIButtonComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIButtonComponent>(e)) return false;
+    const auto& c = reg.get<UIButtonComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIButtonComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIButtonComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIButtonComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIButtonComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIButtonComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UILabelComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UILabelComponent>(e)) return false;
+    const auto& c = reg.get<UILabelComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UILabelComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UILabelComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UILabelComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UILabelComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UILabelComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIPanelComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIPanelComponent>(e)) return false;
+    const auto& c = reg.get<UIPanelComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIPanelComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIPanelComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIPanelComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIPanelComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIPanelComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIMaskComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIMaskComponent>(e)) return false;
+    const auto& c = reg.get<UIMaskComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIMaskComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIMaskComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIMaskComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIMaskComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIMaskComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIAnchorComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIAnchorComponent>(e)) return false;
+    const auto& c = reg.get<UIAnchorComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIAnchorComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIAnchorComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIAnchorComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIAnchorComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIAnchorComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIGridLayoutComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIGridLayoutComponent>(e)) return false;
+    const auto& c = reg.get<UIGridLayoutComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIGridLayoutComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIGridLayoutComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIGridLayoutComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIGridLayoutComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIGridLayoutComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIBoxLayoutComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIBoxLayoutComponent>(e)) return false;
+    const auto& c = reg.get<UIBoxLayoutComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIBoxLayoutComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIBoxLayoutComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIBoxLayoutComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIBoxLayoutComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIBoxLayoutComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UICanvasScalerComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UICanvasScalerComponent>(e)) return false;
+    const auto& c = reg.get<UICanvasScalerComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UICanvasScalerComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UICanvasScalerComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UICanvasScalerComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UICanvasScalerComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UICanvasScalerComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIScrollViewComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIScrollViewComponent>(e)) return false;
+    const auto& c = reg.get<UIScrollViewComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIScrollViewComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIScrollViewComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIScrollViewComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIScrollViewComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIScrollViewComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UISliderComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UISliderComponent>(e)) return false;
+    const auto& c = reg.get<UISliderComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UISliderComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UISliderComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UISliderComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UISliderComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UISliderComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIToggleComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIToggleComponent>(e)) return false;
+    const auto& c = reg.get<UIToggleComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIToggleComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIToggleComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIToggleComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIToggleComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIToggleComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIProgressBarComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIProgressBarComponent>(e)) return false;
+    const auto& c = reg.get<UIProgressBarComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIProgressBarComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIProgressBarComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIProgressBarComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIProgressBarComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIProgressBarComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UITextInputComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UITextInputComponent>(e)) return false;
+    const auto& c = reg.get<UITextInputComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UITextInputComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UITextInputComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UITextInputComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UITextInputComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UITextInputComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIDropdownComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIDropdownComponent>(e)) return false;
+    const auto& c = reg.get<UIDropdownComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIDropdownComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIDropdownComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIDropdownComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIDropdownComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIDropdownComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIFilledImageComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIFilledImageComponent>(e)) return false;
+    const auto& c = reg.get<UIFilledImageComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIFilledImageComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIFilledImageComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIFilledImageComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIFilledImageComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIFilledImageComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIFocusNavigableComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIFocusNavigableComponent>(e)) return false;
+    const auto& c = reg.get<UIFocusNavigableComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIFocusNavigableComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIFocusNavigableComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIFocusNavigableComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIFocusNavigableComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIFocusNavigableComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIEventPropagationComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIEventPropagationComponent>(e)) return false;
+    const auto& c = reg.get<UIEventPropagationComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIEventPropagationComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIEventPropagationComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIEventPropagationComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIEventPropagationComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIEventPropagationComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIVisualEffectComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIVisualEffectComponent>(e)) return false;
+    const auto& c = reg.get<UIVisualEffectComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIVisualEffectComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIVisualEffectComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIVisualEffectComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIVisualEffectComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIVisualEffectComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIAnimationComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIAnimationComponent>(e)) return false;
+    const auto& c = reg.get<UIAnimationComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIAnimationComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIAnimationComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIAnimationComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIAnimationComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIAnimationComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIRichTextComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIRichTextComponent>(e)) return false;
+    const auto& c = reg.get<UIRichTextComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIRichTextComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIRichTextComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIRichTextComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIRichTextComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIRichTextComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIJoystickComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIJoystickComponent>(e)) return false;
+    const auto& c = reg.get<UIJoystickComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIJoystickComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIJoystickComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIJoystickComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIJoystickComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIJoystickComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_UIContentSizeFitterComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<UIContentSizeFitterComponent>(e)) return false;
+    const auto& c = reg.get<UIContentSizeFitterComponent>(e);
+    const auto* ti = reflect::Reflection::Find<UIContentSizeFitterComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("UIContentSizeFitterComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_UIContentSizeFitterComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<UIContentSizeFitterComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<UIContentSizeFitterComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_SpriteRendererComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<SpriteRendererComponent>(e)) return false;
+    const auto& c = reg.get<SpriteRendererComponent>(e);
+    const auto* ti = reflect::Reflection::Find<SpriteRendererComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("SpriteRendererComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_SpriteRendererComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<SpriteRendererComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<SpriteRendererComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_MaterialInstanceComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<MaterialInstanceComponent>(e)) return false;
+    const auto& c = reg.get<MaterialInstanceComponent>(e);
+    const auto* ti = reflect::Reflection::Find<MaterialInstanceComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("MaterialInstanceComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_MaterialInstanceComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<MaterialInstanceComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<MaterialInstanceComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_Light2DComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<Light2DComponent>(e)) return false;
+    const auto& c = reg.get<Light2DComponent>(e);
+    const auto* ti = reflect::Reflection::Find<Light2DComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("Light2DComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_Light2DComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<Light2DComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<Light2DComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_Ambient2DComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<Ambient2DComponent>(e)) return false;
+    const auto& c = reg.get<Ambient2DComponent>(e);
+    const auto* ti = reflect::Reflection::Find<Ambient2DComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("Ambient2DComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_Ambient2DComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<Ambient2DComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<Ambient2DComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_NormalMap2DComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<NormalMap2DComponent>(e)) return false;
+    const auto& c = reg.get<NormalMap2DComponent>(e);
+    const auto* ti = reflect::Reflection::Find<NormalMap2DComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("NormalMap2DComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_NormalMap2DComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<NormalMap2DComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<NormalMap2DComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_AudioSourceComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<AudioSourceComponent>(e)) return false;
+    const auto& c = reg.get<AudioSourceComponent>(e);
+    const auto* ti = reflect::Reflection::Find<AudioSourceComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("AudioSourceComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_AudioSourceComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<AudioSourceComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<AudioSourceComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_AudioListenerComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<AudioListenerComponent>(e)) return false;
+    const auto& c = reg.get<AudioListenerComponent>(e);
+    const auto* ti = reflect::Reflection::Find<AudioListenerComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("AudioListenerComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_AudioListenerComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<AudioListenerComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<AudioListenerComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_ScriptComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<ScriptComponent>(e)) return false;
+    const auto& c = reg.get<ScriptComponent>(e);
+    const auto* ti = reflect::Reflection::Find<ScriptComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("ScriptComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_ScriptComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<ScriptComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<ScriptComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_LuaScriptComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<LuaScriptComponent>(e)) return false;
+    const auto& c = reg.get<LuaScriptComponent>(e);
+    const auto* ti = reflect::Reflection::Find<LuaScriptComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("LuaScriptComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_LuaScriptComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<LuaScriptComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<LuaScriptComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_CSharpScriptComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<CSharpScriptComponent>(e)) return false;
+    const auto& c = reg.get<CSharpScriptComponent>(e);
+    const auto* ti = reflect::Reflection::Find<CSharpScriptComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("CSharpScriptComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_CSharpScriptComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<CSharpScriptComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<CSharpScriptComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
 
 inline const std::unordered_map<std::string, ComponentCodec>& GetCodecTable() {
     static const std::unordered_map<std::string, ComponentCodec> table = {
@@ -1260,6 +1958,39 @@ inline const std::unordered_map<std::string, ComponentCodec>& GetCodecTable() {
         {"MorphTargetComponent", {Serialize_MorphTargetComponent, Deserialize_MorphTargetComponent}},
         {"GpuParticleComponent", {Serialize_GpuParticleComponent, Deserialize_GpuParticleComponent}},
         {"HLODMemberComponent", {Serialize_HLODMemberComponent, Deserialize_HLODMemberComponent}},
+        {"UIRendererComponent", {Serialize_UIRendererComponent, Deserialize_UIRendererComponent}},
+        {"UIButtonComponent", {Serialize_UIButtonComponent, Deserialize_UIButtonComponent}},
+        {"UILabelComponent", {Serialize_UILabelComponent, Deserialize_UILabelComponent}},
+        {"UIPanelComponent", {Serialize_UIPanelComponent, Deserialize_UIPanelComponent}},
+        {"UIMaskComponent", {Serialize_UIMaskComponent, Deserialize_UIMaskComponent}},
+        {"UIAnchorComponent", {Serialize_UIAnchorComponent, Deserialize_UIAnchorComponent}},
+        {"UIGridLayoutComponent", {Serialize_UIGridLayoutComponent, Deserialize_UIGridLayoutComponent}},
+        {"UIBoxLayoutComponent", {Serialize_UIBoxLayoutComponent, Deserialize_UIBoxLayoutComponent}},
+        {"UICanvasScalerComponent", {Serialize_UICanvasScalerComponent, Deserialize_UICanvasScalerComponent}},
+        {"UIScrollViewComponent", {Serialize_UIScrollViewComponent, Deserialize_UIScrollViewComponent}},
+        {"UISliderComponent", {Serialize_UISliderComponent, Deserialize_UISliderComponent}},
+        {"UIToggleComponent", {Serialize_UIToggleComponent, Deserialize_UIToggleComponent}},
+        {"UIProgressBarComponent", {Serialize_UIProgressBarComponent, Deserialize_UIProgressBarComponent}},
+        {"UITextInputComponent", {Serialize_UITextInputComponent, Deserialize_UITextInputComponent}},
+        {"UIDropdownComponent", {Serialize_UIDropdownComponent, Deserialize_UIDropdownComponent}},
+        {"UIFilledImageComponent", {Serialize_UIFilledImageComponent, Deserialize_UIFilledImageComponent}},
+        {"UIFocusNavigableComponent", {Serialize_UIFocusNavigableComponent, Deserialize_UIFocusNavigableComponent}},
+        {"UIEventPropagationComponent", {Serialize_UIEventPropagationComponent, Deserialize_UIEventPropagationComponent}},
+        {"UIVisualEffectComponent", {Serialize_UIVisualEffectComponent, Deserialize_UIVisualEffectComponent}},
+        {"UIAnimationComponent", {Serialize_UIAnimationComponent, Deserialize_UIAnimationComponent}},
+        {"UIRichTextComponent", {Serialize_UIRichTextComponent, Deserialize_UIRichTextComponent}},
+        {"UIJoystickComponent", {Serialize_UIJoystickComponent, Deserialize_UIJoystickComponent}},
+        {"UIContentSizeFitterComponent", {Serialize_UIContentSizeFitterComponent, Deserialize_UIContentSizeFitterComponent}},
+        {"SpriteRendererComponent", {Serialize_SpriteRendererComponent, Deserialize_SpriteRendererComponent}},
+        {"MaterialInstanceComponent", {Serialize_MaterialInstanceComponent, Deserialize_MaterialInstanceComponent}},
+        {"Light2DComponent", {Serialize_Light2DComponent, Deserialize_Light2DComponent}},
+        {"Ambient2DComponent", {Serialize_Ambient2DComponent, Deserialize_Ambient2DComponent}},
+        {"NormalMap2DComponent", {Serialize_NormalMap2DComponent, Deserialize_NormalMap2DComponent}},
+        {"AudioSourceComponent", {Serialize_AudioSourceComponent, Deserialize_AudioSourceComponent}},
+        {"AudioListenerComponent", {Serialize_AudioListenerComponent, Deserialize_AudioListenerComponent}},
+        {"ScriptComponent", {Serialize_ScriptComponent, Deserialize_ScriptComponent}},
+        {"LuaScriptComponent", {Serialize_LuaScriptComponent, Deserialize_LuaScriptComponent}},
+        {"CSharpScriptComponent", {Serialize_CSharpScriptComponent, Deserialize_CSharpScriptComponent}},
     };
     return table;
 }

@@ -104,6 +104,9 @@ public:
 
     // --- 纹理 ---
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter);
+    /// 更新 2D 纹理子区域（RGBA8），用于虚拟纹理按页上传
+    void UpdateTextureSubRegion(unsigned int handle, int x, int y, int width, int height,
+                                const unsigned char* rgba8_data);
     unsigned int CreateComputeWriteTexture2D(int width, int height);
     unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
                                            const std::vector<CompressedMipLevel>& mips,

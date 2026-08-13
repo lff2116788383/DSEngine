@@ -588,6 +588,30 @@ void DX11RhiDevice::DeleteTexture(TextureHandle texture_handle) {
     resource_mgr_.DeleteTexture(texture_handle.raw());
 }
 
+void DX11RhiDevice::UpdateTextureSubRegion(TextureHandle texture_handle, int x, int y,
+                                           int width, int height, const unsigned char* rgba8_data) {
+    if (!texture_handle || !rgba8_data || width <= 0 || height <= 0) {
+        return;
+    }
+    const DX11Texture* tex = resource_mgr_.GetTexture(texture_handle.raw());
+    if (!tex || !tex->texture) {
+        return;
+    }
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dc) {
+        return;
+    }
+    D3D11_BOX box{};
+    box.left   = static_cast<UINT>(x);
+    box.top    = static_cast<UINT>(y);
+    box.right  = static_cast<UINT>(x + width);
+    box.bottom = static_cast<UINT>(y + height);
+    box.front  = 0;
+    box.back   = 1;
+    dc->UpdateSubresource(tex->texture.Get(), 0, &box, rgba8_data,
+                          static_cast<UINT>(width) * 4, 0);
+}
+
 ShaderHandle DX11RhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
     unsigned int handle = shader_mgr_.CreateProgram(vert_src, frag_src);
     ShaderHandle shader_handle{handle};

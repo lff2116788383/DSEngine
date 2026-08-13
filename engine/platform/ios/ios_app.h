@@ -56,6 +56,11 @@ public:
     // --- 编辑器外部窗口注入 ---
     bool AttachExternal(void* existing_window) override;
 
+    // --- 应用生命周期状态（由 DSEAppDelegate 在前后台切换时驱动） ---
+    /// 是否处于后台挂起状态（进入后台时引擎应暂停帧推进以省电）
+    bool IsSuspended() const { return suspended_; }
+    void SetSuspended(bool suspended) { suspended_ = suspended; }
+
 private:
     void* ui_window_ = nullptr;        // UIWindow* (ARC bridge)
     void* view_controller_ = nullptr;  // DSEViewController*
@@ -63,6 +68,7 @@ private:
     TouchCallback touch_cb_ = nullptr;
     bool should_close_ = false;
     bool initialized_ = false;
+    bool suspended_ = false;
 };
 
 /// iOS 平台工厂函数（替代桌面 GLFW 实现）

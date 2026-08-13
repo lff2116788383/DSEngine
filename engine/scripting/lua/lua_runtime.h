@@ -29,6 +29,7 @@ struct LuaApiContext {
     AssetManager* asset_manager = nullptr;
     void* audio_system = nullptr;  ///< dse::gameplay2d::AudioSystem* (避免头文件依赖)
     void* floating_origin = nullptr; ///< dse::FloatingOriginSystem* (避免头文件依赖)
+    void* rhi_device = nullptr;      ///< dse::render::RhiDevice* (避免头文件依赖)
     std::function<void()> quit_app;
     std::function<void(float)> set_target_fps;
     std::function<float()> get_target_fps;

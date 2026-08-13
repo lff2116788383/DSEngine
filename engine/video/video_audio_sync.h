@@ -48,11 +48,15 @@ public:
 
     bool IsRunning() const { return running_.load(); }
 
+    /// 解码线程是否已因 EOF 退出（ring 清空后即代表视频播完）
+    bool IsEof() const { return eof_.load(); }
+
 private:
     void DecodeThreadFunc();
 
     IVideoDecoder* decoder_ = nullptr;
     std::atomic<bool> running_{false};
+    std::atomic<bool> eof_{false};
     std::atomic<double> audio_clock_{0.0};
     std::thread decode_thread_;
 

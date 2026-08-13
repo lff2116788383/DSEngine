@@ -26,6 +26,7 @@
 #include <mutex>
 #include <glm/glm.hpp>
 #include "engine/core/dse_export.h"
+#include "engine/render/rhi/rhi_handle.h"
 
 namespace dse {
 
@@ -191,6 +192,7 @@ private:
 
     VirtualTextureConfig config_;
     render::RhiDevice* rhi_ = nullptr;
+    render::TextureHandle atlas_handle_{};  ///< 物理页池 atlas 纹理（RGBA8）
     VTPageCache cache_;
 
     std::vector<PageTableEntry> page_table_;

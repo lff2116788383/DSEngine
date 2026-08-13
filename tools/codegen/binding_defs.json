@@ -4776,7 +4776,57 @@
             "name": "GpuParticleComponent",
             "include": "engine/render/particles/gpu_particle_system.h",
             "namespace": "dse::render",
-            "fields": []
+            "enums": [
+                {
+                    "qualified": "dse::render::EmitterShape",
+                    "entries": [
+                        { "name": "Point", "value": "Point" },
+                        { "name": "Sphere", "value": "Sphere" },
+                        { "name": "Cone", "value": "Cone" },
+                        { "name": "Ring", "value": "Ring" },
+                        { "name": "Box", "value": "Box" }
+                    ]
+                }
+            ],
+            "nested_types": [
+                {
+                    "name": "GpuParticleEmitterConfig",
+                    "qualified": "dse::render::GpuParticleEmitterConfig",
+                    "fields": [
+                        { "name": "enabled", "type": "bool" },
+                        { "name": "max_particles", "type": "uint", "range": [1, 1000000] },
+                        { "name": "emission_rate", "type": "float", "range": [0.0, 100000.0] },
+                        { "name": "shape", "type": "enum" },
+                        { "name": "shape_radius", "type": "float", "range": [0.0, 1000.0] },
+                        { "name": "cone_angle", "type": "float", "range": [0.0, 180.0] },
+                        { "name": "life_min", "type": "float", "range": [0.0, 3600.0] },
+                        { "name": "life_max", "type": "float", "range": [0.0, 3600.0] },
+                        { "name": "speed_min", "type": "float", "range": [0.0, 10000.0] },
+                        { "name": "speed_max", "type": "float", "range": [0.0, 10000.0] },
+                        { "name": "size_start", "type": "float", "range": [0.0, 100.0] },
+                        { "name": "size_end", "type": "float", "range": [0.0, 100.0] },
+                        { "name": "color_start", "type": "vec4", "color": true },
+                        { "name": "color_end", "type": "vec4", "color": true },
+                        { "name": "gravity", "type": "vec3" },
+                        { "name": "wind", "type": "vec3" },
+                        { "name": "turbulence", "type": "float", "range": [0.0, 100.0] },
+                        { "name": "vortex_strength", "type": "float", "range": [0.0, 100.0] },
+                        { "name": "collision_enabled", "type": "bool" },
+                        { "name": "collision_plane_y", "type": "float" },
+                        { "name": "collision_bounce", "type": "float", "range": [0.0, 1.0] },
+                        { "name": "collision_friction", "type": "float", "range": [0.0, 1.0] },
+                        { "name": "texture_path", "type": "string" },
+                        { "name": "additive_blend", "type": "bool" },
+                        { "name": "sort_particles", "type": "bool" }
+                    ]
+                }
+            ],
+            "fields": [
+                { "name": "config", "type": "custom" },
+                { "name": "ping", "type": "bool" },
+                { "name": "emit_accumulator", "type": "float" },
+                { "name": "initialized", "type": "bool" }
+            ]
         },
         {
             "name": "HLODMemberComponent",
@@ -4791,6 +4841,497 @@
                     "name": "hidden_by_hlod",
                     "type": "bool"
                 }
+            ]
+        },
+        {
+            "name": "UIRendererComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "color", "type": "vec4", "color": true },
+                { "name": "uv", "type": "vec4" },
+                { "name": "order", "type": "int" },
+                { "name": "visible", "type": "bool" },
+                { "name": "scale", "type": "float", "range": [0.0, 100.0] },
+                { "name": "hover_scale", "type": "float", "range": [0.0, 10.0] },
+                { "name": "pressed_scale", "type": "float", "range": [0.0, 10.0] },
+                { "name": "scale_lerp_speed", "type": "float", "range": [0.0, 100.0] },
+                { "name": "position", "type": "vec2" },
+                { "name": "size", "type": "vec2" },
+                { "name": "anchor_min", "type": "vec2" },
+                { "name": "anchor_max", "type": "vec2" },
+                { "name": "pivot", "type": "vec2" },
+                { "name": "interactable", "type": "bool" },
+                { "name": "nine_slice_enabled", "type": "bool" },
+                { "name": "nine_slice_border", "type": "vec4" },
+                { "name": "nine_slice_src_size", "type": "vec2" },
+                { "name": "use_sdf_shader", "type": "bool" },
+                { "name": "sdf_threshold", "type": "float", "range": [0.0, 1.0] },
+                { "name": "sdf_smoothing", "type": "float", "range": [0.0, 1.0] },
+                { "name": "sdf_outline_width", "type": "float", "range": [0.0, 10.0] },
+                { "name": "sdf_shadow_softness", "type": "float", "range": [0.0, 10.0] }
+            ]
+        },
+        {
+            "name": "UIButtonComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "normal_color", "type": "vec4", "color": true },
+                { "name": "hover_color", "type": "vec4", "color": true },
+                { "name": "pressed_color", "type": "vec4", "color": true }
+            ]
+        },
+        {
+            "name": "UILabelComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "text", "type": "string" },
+                { "name": "use_localization", "type": "bool" },
+                { "name": "localization_key", "type": "string" },
+                { "name": "fallback_text", "type": "string" },
+                { "name": "numeric_mode", "type": "bool" },
+                { "name": "glyph_size", "type": "vec2" },
+                { "name": "offset", "type": "vec2" },
+                { "name": "spacing", "type": "float" },
+                { "name": "atlas_cols", "type": "int" },
+                { "name": "atlas_rows", "type": "int" },
+                { "name": "ascii_start", "type": "int" },
+                { "name": "color", "type": "vec4", "color": true },
+                { "name": "font_id", "type": "string" },
+                { "name": "font_size", "type": "float", "range": [4.0, 512.0] },
+                { "name": "use_sdf", "type": "bool" },
+                { "name": "max_width", "type": "float", "range": [0.0, 10000.0] },
+                { "name": "text_align", "type": "int" },
+                { "name": "overflow_mode", "type": "int" },
+                { "name": "max_lines", "type": "int" },
+                { "name": "line_spacing_extra", "type": "float" }
+            ]
+        },
+        {
+            "name": "UIPanelComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "blocks_input", "type": "bool" }
+            ]
+        },
+        {
+            "name": "UIMaskComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "enabled", "type": "bool" },
+                { "name": "size", "type": "vec2" },
+                { "name": "offset", "type": "vec2" },
+                { "name": "block_outside_input", "type": "bool" }
+            ]
+        },
+        {
+            "name": "UIAnchorComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "anchor", "type": "int" },
+                { "name": "offset", "type": "vec2" }
+            ]
+        },
+        {
+            "name": "UIGridLayoutComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "columns", "type": "int" },
+                { "name": "rows", "type": "int" },
+                { "name": "cell_size", "type": "vec2" },
+                { "name": "spacing", "type": "vec2" },
+                { "name": "alignment", "type": "int" }
+            ]
+        },
+        {
+            "name": "UIBoxLayoutComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "vertical", "type": "bool" },
+                { "name": "spacing", "type": "float" },
+                { "name": "padding", "type": "vec2" },
+                { "name": "align_main", "type": "int" },
+                { "name": "align_cross", "type": "int" },
+                { "name": "reverse", "type": "bool" }
+            ]
+        },
+        {
+            "name": "UICanvasScalerComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "reference_resolution", "type": "vec2" },
+                { "name": "scale_factor", "type": "float" },
+                { "name": "match_width_or_height", "type": "bool" },
+                { "name": "match", "type": "float", "range": [0.0, 1.0] },
+                { "name": "pixel_snap", "type": "bool" }
+            ]
+        },
+        {
+            "name": "UIScrollViewComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "content_size", "type": "vec2" },
+                { "name": "viewport_size", "type": "vec2" },
+                { "name": "scroll_offset", "type": "vec2" },
+                { "name": "horizontal", "type": "bool" },
+                { "name": "vertical", "type": "bool" },
+                { "name": "elastic", "type": "bool" },
+                { "name": "elasticity", "type": "float", "range": [0.0, 1.0] },
+                { "name": "inertia", "type": "bool" },
+                { "name": "deceleration_rate", "type": "float", "range": [0.0, 1.0] },
+                { "name": "show_scrollbar", "type": "bool" },
+                { "name": "scrollbar_width", "type": "float" },
+                { "name": "scrollbar_color", "type": "vec4", "color": true }
+            ]
+        },
+        {
+            "name": "UISliderComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "value", "type": "float" },
+                { "name": "min_value", "type": "float" },
+                { "name": "max_value", "type": "float" },
+                { "name": "whole_numbers", "type": "bool" },
+                { "name": "vertical", "type": "bool" },
+                { "name": "track_color", "type": "vec4", "color": true },
+                { "name": "fill_color", "type": "vec4", "color": true },
+                { "name": "handle_color", "type": "vec4", "color": true },
+                { "name": "handle_size", "type": "float" }
+            ]
+        },
+        {
+            "name": "UIToggleComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "is_on", "type": "bool" },
+                { "name": "group", "type": "int" },
+                { "name": "on_color", "type": "vec4", "color": true },
+                { "name": "off_color", "type": "vec4", "color": true },
+                { "name": "transition_duration", "type": "float" }
+            ]
+        },
+        {
+            "name": "UIProgressBarComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "value", "type": "float" },
+                { "name": "max_value", "type": "float" },
+                { "name": "right_to_left", "type": "bool" },
+                { "name": "vertical", "type": "bool" },
+                { "name": "background_color", "type": "vec4", "color": true },
+                { "name": "fill_color", "type": "vec4", "color": true }
+            ]
+        },
+        {
+            "name": "UITextInputComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "text", "type": "string" },
+                { "name": "placeholder", "type": "string" },
+                { "name": "cursor_position", "type": "int" },
+                { "name": "selection_start", "type": "int" },
+                { "name": "selection_end", "type": "int" },
+                { "name": "max_length", "type": "int" },
+                { "name": "is_focused", "type": "bool" },
+                { "name": "is_password", "type": "bool" },
+                { "name": "multiline", "type": "bool" },
+                { "name": "read_only", "type": "bool" },
+                { "name": "submit_on_enter", "type": "bool" },
+                { "name": "text_color", "type": "vec4", "color": true },
+                { "name": "placeholder_color", "type": "vec4", "color": true },
+                { "name": "cursor_color", "type": "vec4", "color": true },
+                { "name": "selection_color", "type": "vec4", "color": true },
+                { "name": "cursor_blink_rate", "type": "float" }
+            ]
+        },
+        {
+            "name": "UIDropdownComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "selected_index", "type": "int" },
+                { "name": "item_height", "type": "float" },
+                { "name": "max_visible_items", "type": "int" },
+                { "name": "normal_color", "type": "vec4", "color": true },
+                { "name": "hover_color", "type": "vec4", "color": true },
+                { "name": "selected_color", "type": "vec4", "color": true },
+                { "name": "text_color", "type": "vec4", "color": true }
+            ]
+        },
+        {
+            "name": "UIFilledImageComponent",
+            "include": "engine/ecs/ui.h",
+            "enums": [
+                {
+                    "qualified": "UIFillMethod",
+                    "entries": [
+                        { "name": "Horizontal", "value": "Horizontal" },
+                        { "name": "Vertical", "value": "Vertical" },
+                        { "name": "Radial360", "value": "Radial360" },
+                        { "name": "Radial180", "value": "Radial180" },
+                        { "name": "Radial90", "value": "Radial90" }
+                    ]
+                },
+                {
+                    "qualified": "UIFillOrigin",
+                    "entries": [
+                        { "name": "Left", "value": "Left" },
+                        { "name": "Right", "value": "Right" },
+                        { "name": "Bottom", "value": "Bottom" },
+                        { "name": "Top", "value": "Top" },
+                        { "name": "Center", "value": "Center" }
+                    ]
+                }
+            ],
+            "fields": [
+                { "name": "fill_amount", "type": "float", "range": [0.0, 1.0] },
+                { "name": "fill_method", "type": "enum" },
+                { "name": "fill_origin", "type": "enum" },
+                { "name": "clockwise", "type": "bool" }
+            ]
+        },
+        {
+            "name": "UIFocusNavigableComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "tab_index", "type": "int" },
+                { "name": "is_focused", "type": "bool" },
+                { "name": "focus_tint", "type": "vec4", "color": true }
+            ]
+        },
+        {
+            "name": "UIEventPropagationComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "bubbles_click", "type": "bool" },
+                { "name": "bubbles_hover", "type": "bool" }
+            ]
+        },
+        {
+            "name": "UIVisualEffectComponent",
+            "include": "engine/ecs/ui.h",
+            "enums": [
+                {
+                    "qualified": "UIGradientDirection",
+                    "entries": [
+                        { "name": "Horizontal", "value": "Horizontal" },
+                        { "name": "Vertical", "value": "Vertical" },
+                        { "name": "Diagonal", "value": "Diagonal" }
+                    ]
+                }
+            ],
+            "fields": [
+                { "name": "corner_radius", "type": "float" },
+                { "name": "gradient_color_start", "type": "vec4", "color": true },
+                { "name": "gradient_color_end", "type": "vec4", "color": true },
+                { "name": "gradient_direction", "type": "enum" },
+                { "name": "blur_radius", "type": "float" },
+                { "name": "blur_intensity", "type": "float", "range": [0.0, 1.0] }
+            ]
+        },
+        {
+            "name": "UIAnimationComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "target_position", "type": "vec2" },
+                { "name": "target_scale", "type": "vec2" },
+                { "name": "target_alpha", "type": "float", "range": [0.0, 1.0] },
+                { "name": "target_color", "type": "vec4", "color": true },
+                { "name": "animate_position", "type": "bool" },
+                { "name": "animate_scale", "type": "bool" },
+                { "name": "animate_alpha", "type": "bool" },
+                { "name": "animate_color", "type": "bool" },
+                { "name": "duration", "type": "float" },
+                { "name": "delay", "type": "float" },
+                { "name": "loop", "type": "bool" },
+                { "name": "ping_pong", "type": "bool" },
+                { "name": "playing", "type": "bool" },
+                { "name": "easing", "type": "int" }
+            ]
+        },
+        {
+            "name": "UIRichTextComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "text", "type": "string" },
+                { "name": "default_color", "type": "vec4", "color": true },
+                { "name": "enable_shadow", "type": "bool" },
+                { "name": "shadow_offset", "type": "vec2" },
+                { "name": "shadow_color", "type": "vec4", "color": true },
+                { "name": "enable_outline", "type": "bool" },
+                { "name": "outline_color", "type": "vec4", "color": true },
+                { "name": "outline_width", "type": "float" }
+            ]
+        },
+        {
+            "name": "UIJoystickComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "direction", "type": "vec2" },
+                { "name": "max_radius", "type": "float" },
+                { "name": "follow_pointer", "type": "bool" },
+                { "name": "reset_on_release", "type": "bool" },
+                { "name": "is_dragging", "type": "bool" },
+                { "name": "drag_anchor", "type": "vec2" }
+            ]
+        },
+        {
+            "name": "UIContentSizeFitterComponent",
+            "include": "engine/ecs/ui.h",
+            "fields": [
+                { "name": "fit_width", "type": "int" },
+                { "name": "fit_height", "type": "int" },
+                { "name": "min_size", "type": "vec2" },
+                { "name": "max_size", "type": "vec2" }
+            ]
+        },
+        {
+            "name": "SpriteRendererComponent",
+            "include": "engine/ecs/sprite.h",
+            "enums": [
+                {
+                    "qualified": "SpriteBlendMode",
+                    "entries": [
+                        { "name": "Alpha", "value": "Alpha" },
+                        { "name": "Additive", "value": "Additive" },
+                        { "name": "Multiply", "value": "Multiply" }
+                    ]
+                }
+            ],
+            "fields": [
+                { "name": "material_instance_id", "type": "uint" },
+                { "name": "shader_variant", "type": "string" },
+                { "name": "blend_mode", "type": "enum" },
+                { "name": "color", "type": "vec4", "color": true },
+                { "name": "uv", "type": "vec4" },
+                { "name": "uv_offset", "type": "vec2" },
+                { "name": "uv_scroll_speed", "type": "vec2" },
+                { "name": "sorting_layer", "type": "int" },
+                { "name": "order_in_layer", "type": "int" },
+                { "name": "visible", "type": "bool" }
+            ]
+        },
+        {
+            "name": "MaterialInstanceComponent",
+            "include": "engine/ecs/sprite.h",
+            "fields": [
+                { "name": "material_id", "type": "uint" },
+                { "name": "name", "type": "string" },
+                { "name": "shader_variant", "type": "string" },
+                { "name": "blend_mode", "type": "enum" },
+                { "name": "tint", "type": "vec4", "color": true },
+                { "name": "uv_rect", "type": "vec4" }
+            ]
+        },
+        {
+            "name": "Light2DComponent",
+            "include": "engine/ecs/light_2d.h",
+            "enums": [
+                {
+                    "qualified": "Light2DType",
+                    "entries": [
+                        { "name": "Point", "value": "Point" },
+                        { "name": "Spot", "value": "Spot" },
+                        { "name": "Directional", "value": "Directional" }
+                    ]
+                },
+                {
+                    "qualified": "Shadow2DMode",
+                    "entries": [
+                        { "name": "None", "value": "None" },
+                        { "name": "Hard", "value": "Hard" },
+                        { "name": "Soft", "value": "Soft" }
+                    ]
+                }
+            ],
+            "fields": [
+                { "name": "type", "type": "enum" },
+                { "name": "color", "type": "vec3", "color": true },
+                { "name": "intensity", "type": "float", "range": [0.0, 100.0] },
+                { "name": "range", "type": "float", "range": [0.0, 1000.0] },
+                { "name": "falloff", "type": "float", "range": [0.0, 10.0] },
+                { "name": "spot_angle", "type": "float", "range": [0.0, 180.0] },
+                { "name": "spot_outer_angle", "type": "float", "range": [0.0, 180.0] },
+                { "name": "direction_angle", "type": "float" },
+                { "name": "shadow_mode", "type": "enum" },
+                { "name": "shadow_strength", "type": "float", "range": [0.0, 1.0] },
+                { "name": "shadow_ray_count", "type": "int" },
+                { "name": "enabled", "type": "bool" },
+                { "name": "layer_mask", "type": "int" }
+            ]
+        },
+        {
+            "name": "Ambient2DComponent",
+            "include": "engine/ecs/light_2d.h",
+            "fields": [
+                { "name": "color", "type": "vec3", "color": true },
+                { "name": "intensity", "type": "float", "range": [0.0, 10.0] }
+            ]
+        },
+        {
+            "name": "NormalMap2DComponent",
+            "include": "engine/ecs/light_2d.h",
+            "fields": [
+                { "name": "normal_strength", "type": "float", "range": [0.0, 4.0] }
+            ]
+        },
+        {
+            "name": "AudioSourceComponent",
+            "include": "engine/ecs/audio.h",
+            "enums": [
+                {
+                    "qualified": "AudioAttenuationModel",
+                    "entries": [
+                        { "name": "Inverse", "value": "Inverse" },
+                        { "name": "Linear", "value": "Linear" },
+                        { "name": "Exponential", "value": "Exponential" }
+                    ]
+                }
+            ],
+            "fields": [
+                { "name": "play_on_awake", "type": "bool" },
+                { "name": "loop", "type": "bool" },
+                { "name": "volume", "type": "float", "range": [0.0, 4.0] },
+                { "name": "pitch", "type": "float", "range": [0.0, 4.0] },
+                { "name": "spatial_enabled", "type": "bool" },
+                { "name": "min_distance", "type": "float" },
+                { "name": "max_distance", "type": "float" },
+                { "name": "rolloff", "type": "float", "range": [0.0, 10.0] },
+                { "name": "attenuation_model", "type": "enum" },
+                { "name": "occlusion_enabled", "type": "bool" },
+                { "name": "occlusion_factor", "type": "float", "range": [0.0, 1.0] },
+                { "name": "bus_name", "type": "string" }
+            ]
+        },
+        {
+            "name": "AudioListenerComponent",
+            "include": "engine/ecs/audio.h",
+            "fields": [
+                { "name": "enabled", "type": "bool" },
+                { "name": "listener_index", "type": "uint" }
+            ]
+        },
+        {
+            "name": "ScriptComponent",
+            "include": "engine/ecs/script.h",
+            "fields": [
+                { "name": "script_path", "type": "string" },
+                { "name": "enabled", "type": "bool" }
+            ]
+        },
+        {
+            "name": "LuaScriptComponent",
+            "include": "engine/ecs/script.h",
+            "fields": [
+                { "name": "script_path", "type": "string" },
+                { "name": "is_initialized", "type": "bool" }
+            ]
+        },
+        {
+            "name": "CSharpScriptComponent",
+            "include": "engine/ecs/script.h",
+            "fields": [
+                { "name": "class_name", "type": "string" },
+                { "name": "enabled", "type": "bool" },
+                { "name": "is_bound", "type": "bool" }
             ]
         }
     ]

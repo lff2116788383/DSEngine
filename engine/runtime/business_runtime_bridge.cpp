@@ -52,6 +52,7 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
             context.asset_manager,
             context.audio_system,
             context.floating_origin,
+            context.rhi_device.get(),
             context.quit_app,
             context.set_target_fps,
             context.get_target_fps

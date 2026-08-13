@@ -24,10 +24,9 @@ std::unique_ptr<IVideoDecoder> CreateDecoder(DecoderBackend backend) {
 
         case DecoderBackend::Auto:
         default:
-            // Try FFmpeg first, fallback to pl_mpeg
-            if (IsFFmpegAvailable()) {
-                return std::make_unique<FFmpegDecoder>();
-            }
+            // 默认走 pl_mpeg：内置实现完整可产出 RGBA 帧。
+            // FFmpeg 路径为实验性（动态加载 + 不透明结构体限制，暂无法输出像素），
+            // 仅在显式指定 backend=ffmpeg 时启用。
             return std::make_unique<PlmpegDecoder>();
     }
 }

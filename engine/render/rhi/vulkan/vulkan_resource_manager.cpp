@@ -316,6 +316,96 @@ unsigned int VulkanResourceManager::CreateTexture2D(int width, int height, const
     return handle;
 }
 
+void VulkanResourceManager::UpdateTextureSubRegion(unsigned int handle, int x, int y,
+                                                   int width, int height,
+                                                   const unsigned char* rgba8_data) {
+    if (!device_ || !rgba8_data || width <= 0 || height <= 0) {
+        return;
+    }
+    auto it = textures_.find(handle);
+    if (it == textures_.end()) {
+        return;
+    }
+    VulkanTexture& tex = it->second;
+    if (!tex.image) {
+        return;
+    }
+
+    const VkDeviceSize data_size = static_cast<VkDeviceSize>(width) * height * 4;
+
+    // staging buffer（与 UploadTextureData 相同的宿主可见缓冲）
+    VkBuffer staging_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory staging_memory = VK_NULL_HANDLE;
+    VkBufferCreateInfo buf_info{};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = data_size;
+    buf_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(device_, &buf_info, nullptr, &staging_buffer) != VK_SUCCESS) {
+        return;
+    }
+    VkMemoryRequirements staging_reqs;
+    vkGetBufferMemoryRequirements(device_, staging_buffer, &staging_reqs);
+    VkMemoryAllocateInfo staging_alloc{};
+    staging_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    staging_alloc.allocationSize = staging_reqs.size;
+    staging_alloc.memoryTypeIndex = FindMemoryType(staging_reqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(device_, &staging_alloc, nullptr, &staging_memory) != VK_SUCCESS) {
+        vkDestroyBuffer(device_, staging_buffer, nullptr);
+        return;
+    }
+    vkBindBufferMemory(device_, staging_buffer, staging_memory, 0);
+
+    void* mapped = nullptr;
+    vkMapMemory(device_, staging_memory, 0, data_size, 0, &mapped);
+    memcpy(mapped, rgba8_data, static_cast<size_t>(data_size));
+    vkUnmapMemory(device_, staging_memory);
+
+    // 录制 transition → copy → transition 完整序列（同 UploadTextureData 的修复模式）
+    VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+    auto record_transition = [&](VkImageLayout old_layout, VkImageLayout new_layout,
+                                  VkAccessFlags src_access, VkAccessFlags dst_access,
+                                  VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage) {
+        VkImageMemoryBarrier b{};
+        b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        b.oldLayout = old_layout;
+        b.newLayout = new_layout;
+        b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.image = tex.image;
+        b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        b.srcAccessMask = src_access;
+        b.dstAccessMask = dst_access;
+        vkCmdPipelineBarrier(cmd, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &b);
+    };
+
+    record_transition(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;  // 紧密排布
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {static_cast<int32_t>(x), static_cast<int32_t>(y), 0};
+    region.imageExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+    vkCmdCopyBufferToImage(cmd, staging_buffer, tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    record_transition(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+    EndSingleTimeCommands(cmd);
+    vkDestroyBuffer(device_, staging_buffer, nullptr);
+    vkFreeMemory(device_, staging_memory, nullptr);
+}
+
 unsigned int VulkanResourceManager::CreateComputeWriteTexture2D(int width, int height) {
     unsigned int handle = AllocateTextureHandle();
     VulkanTexture tex;

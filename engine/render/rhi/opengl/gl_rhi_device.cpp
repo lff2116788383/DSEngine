@@ -626,6 +626,17 @@ void OpenGLRhiDevice::DeleteTexture(TextureHandle texture_handle) {
     resource_mgr_.ledger().textures_destroyed += 1;
 }
 
+void OpenGLRhiDevice::UpdateTextureSubRegion(TextureHandle texture_handle, int x, int y,
+                                             int width, int height, const unsigned char* rgba8_data) {
+    if (!texture_handle || !rgba8_data || width <= 0 || height <= 0) {
+        return;
+    }
+    glBindTexture(GL_TEXTURE_2D, texture_handle.raw());
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 // --- 渲染目标 ---
 
 RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {

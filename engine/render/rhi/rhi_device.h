@@ -250,6 +250,13 @@ public:
     }
     virtual TextureHandle CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual void DeleteTexture(TextureHandle texture_handle) = 0;
+    /// 更新 2D 纹理子区域（RGBA8）。用于虚拟纹理按页上传等局部更新场景。
+    /// 基类默认空实现；GL（glTexSubImage2D）/ DX11（UpdateSubresource）/
+    /// Vulkan（staging copy）后端覆写。
+    virtual void UpdateTextureSubRegion(TextureHandle texture_handle, int x, int y,
+                                        int width, int height, const unsigned char* rgba8_data) {
+        (void)texture_handle; (void)x; (void)y; (void)width; (void)height; (void)rgba8_data;
+    }
     virtual ShaderHandle CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual void DeleteShaderProgram(ShaderHandle program_handle) = 0;
     virtual PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) = 0;

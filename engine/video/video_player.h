@@ -9,9 +9,14 @@
 #include "engine/video/video_types.h"
 #include "engine/video/video_decoder.h"
 #include "engine/video/video_texture.h"
+#include "engine/video/video_audio_sync.h"
 #include <memory>
 #include <functional>
 #include <string>
+
+namespace dse::render {
+class RhiDevice;
+}
 
 namespace dse {
 namespace video {
@@ -20,6 +25,9 @@ class VideoPlayer {
 public:
     VideoPlayer();
     ~VideoPlayer();
+
+    /// 注入 RHI 设备（视频帧真实上传 GPU 纹理所需），通常由宿主在播放前设置
+    void SetRhiDevice(render::RhiDevice* rhi);
 
     /// 播放控制
     void Play(const std::string& path, const VideoPlayConfig& config = {});
@@ -51,6 +59,7 @@ public:
 private:
     std::unique_ptr<IVideoDecoder> decoder_;
     std::unique_ptr<VideoTexture> texture_;
+    std::unique_ptr<VideoAudioSync> sync_;  ///< 后台预解码 + PTS 时钟（音视频同步）
     VideoInfo info_{};
     VideoState state_ = VideoState::Stopped;
     VideoPlayConfig config_{};

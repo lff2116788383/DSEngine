@@ -67,6 +67,8 @@ struct MeshStreamingConfig {
 
 /// 加载完成回调
 using MeshLoadCallback = std::function<void(uint32_t mesh_id, uint32_t lod_level, bool success)>;
+/// 加载请求回调：返回 true 表示外部接受了加载任务（之后需调用 NotifyLoadComplete 完成）
+using MeshLoadRequestCallback = std::function<bool(uint32_t mesh_id, uint32_t lod_level)>;
 
 /**
  * @class MeshStreamingSystem
@@ -98,6 +100,14 @@ public:
 
     /// 设置加载完成回调
     void SetLoadCallback(MeshLoadCallback callback) { load_callback_ = std::move(callback); }
+
+    /// 设置加载请求回调：发起 LOD 加载时调用；外部完成真实 IO 后须调用
+    /// NotifyLoadComplete 通知系统。未设置时保持"立即完成"（同步模拟），
+    /// 便于无资产 IO 环境的测试与降级。
+    void SetRequestLoadCallback(MeshLoadRequestCallback callback) { request_load_cb_ = std::move(callback); }
+
+    /// 外部异步加载完成后通知系统（配合 SetRequestLoadCallback 使用）
+    void NotifyLoadComplete(uint32_t mesh_id, uint32_t lod_level, bool success);
 
     /// 强制加载某 mesh 的指定 LOD
     void ForceLoadLOD(uint32_t mesh_id, uint32_t lod_level);
@@ -144,6 +154,7 @@ private:
     std::vector<MeshLODRequest> load_queue_;
     std::atomic<int> active_loads_{0};
     MeshLoadCallback load_callback_;
+    MeshLoadRequestCallback request_load_cb_;  ///< 外部异步 IO 加载请求回调
 
     float accumulated_time_ = 0.0f;
     std::unordered_map<uint32_t, float> last_switch_time_; ///< mesh_id → 上次切换时间

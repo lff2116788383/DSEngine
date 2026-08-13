@@ -102,15 +102,24 @@ extern void DSETouchView_SetCallback(UIView* view, dse::platform::PlatformApp::T
 }
 
 - (void)applicationWillResignActive:(UIApplication*)application {
-    // 进入后台前暂停（可选：通知引擎暂停帧循环）
+    // 进入后台：通知引擎暂停帧推进（省电）
+    if (dse::platform::g_active_ios_app) {
+        dse::platform::g_active_ios_app->SetSuspended(true);
+    }
 }
 
 - (void)applicationDidBecomeActive:(UIApplication*)application {
-    // 从后台恢复
+    // 回到前台：恢复帧推进
+    if (dse::platform::g_active_ios_app) {
+        dse::platform::g_active_ios_app->SetSuspended(false);
+    }
 }
 
 - (void)applicationWillTerminate:(UIApplication*)application {
-    // 引擎关闭通知
+    // 应用即将终止：通知引擎正常关闭
+    if (dse::platform::g_active_ios_app) {
+        dse::platform::g_active_ios_app->RequestClose();
+    }
 }
 
 @end
@@ -120,6 +129,9 @@ extern void DSETouchView_SetCallback(UIView* view, dse::platform::PlatformApp::T
 // =============================================================================
 
 namespace dse::platform {
+
+// 当前活跃的 UIKitApp 实例（AppDelegate 生命周期回调通过它通知引擎）。
+static UIKitApp* g_active_ios_app = nullptr;
 
 UIKitApp::~UIKitApp() {
     Shutdown();
@@ -154,6 +166,7 @@ bool UIKitApp::Init(const WindowConfig& config) {
 
     should_close_ = false;
     initialized_ = true;
+    g_active_ios_app = this;
     DEBUG_LOG_INFO("[UIKitApp] Initialized on iOS");
     return true;
 }
@@ -173,6 +186,7 @@ void UIKitApp::Shutdown() {
         }
     }
 
+    if (g_active_ios_app == this) g_active_ios_app = nullptr;
     should_close_ = false;
     initialized_ = false;
     DEBUG_LOG_INFO("[UIKitApp] Shutdown complete");
@@ -183,6 +197,12 @@ bool UIKitApp::ShouldClose() const {
 }
 
 void UIKitApp::PollEvents() {
+    // 进入后台挂起时主动节流：UIKit 事件仍由 runloop 处理，但降低引擎空转功耗。
+    if (suspended_) {
+        [NSThread sleepForTimeInterval:0.05];
+        return;
+    }
+
     @autoreleasepool {
         // iOS 事件由 UIKit runloop 处理
         // 在引擎帧循环中手动处理一次 runloop iteration

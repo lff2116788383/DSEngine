@@ -459,6 +459,8 @@ DSE_CAPI int   dse_http_available(void);
 // ============================================================
 
 DSE_CAPI uint32_t dse_video_create_player(void);
+// 注入 RHI 设备指针（void* 避免头文件依赖）；播放前设置，未设置时视频纹理保持 stub
+DSE_CAPI void  dse_video_set_rhi_device(void* rhi_device);
 DSE_CAPI void  dse_video_destroy_player(uint32_t player);
 // play: backend: 0=Auto, 1=FFmpeg, 2=PlMpeg
 DSE_CAPI void  dse_video_play(uint32_t player, const char* path, int loop, float playback_rate,

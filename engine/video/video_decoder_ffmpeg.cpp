@@ -5,6 +5,10 @@
  * 运行时动态加载 libavcodec/libavformat/libswscale/libavutil/libswresample。
  * 若 FFmpeg DLL/SO 不在 PATH 或 LD_LIBRARY_PATH 中，IsFFmpegAvailable() 返回 false，
  * 播放器自动降级到 pl_mpeg。
+ *
+ * 注意：本路径为实验性。解码器以"不透明结构体指针 + 动态符号"方式调用 FFmpeg，
+ * 无法直接读取 AVFrame/AVStream 字段，因此当前无法输出像素（无尺寸/无 planes）。
+ * 默认 backend=Auto 已固定走 pl_mpeg；仅显式指定 backend=ffmpeg 时才会选中本实现。
  */
 
 #include "engine/video/video_decoder_ffmpeg.h"
@@ -300,6 +304,13 @@ bool FFmpegDecoder::Open(const std::string& path, bool decode_audio) {
 
 bool FFmpegDecoder::DecodeNextFrame(VideoFrame& out_frame) {
     if (!loaded_ || !impl_ || eof_) return false;
+
+    // 实验性限制：无法读取 AVFrame 字段，无尺寸信息时不能产出可用帧，
+    // 直接置 EOF，避免向调用方输出 0 尺寸/无像素数据。
+    if (info_.width <= 0 || info_.height <= 0) {
+        eof_ = true;
+        return false;
+    }
 
     while (true) {
         int ret = s_ffmpeg.p_av_read_frame(impl_->fmt_ctx, impl_->packet);

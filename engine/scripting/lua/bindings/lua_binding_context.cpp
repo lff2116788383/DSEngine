@@ -38,6 +38,9 @@ void ConfigureBindingContext(const LuaApiContext& context) {
         []() -> int { return g_binding_context.get_gpu_indirect_draw_count ? g_binding_context.get_gpu_indirect_draw_count() : 0; },
         []() -> int { return g_binding_context.get_gpu_total_instances ? g_binding_context.get_gpu_total_instances() : 0; },
         context.floating_origin);
+
+    // 视频播放需要真实 GPU 纹理上传，把 RHI 设备注入视频 C ABI 层。
+    dse_video_set_rhi_device(context.rhi_device);
 }
 
 void RegisterContextBindings(lua_State* L) {

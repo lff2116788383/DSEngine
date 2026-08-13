@@ -6,6 +6,7 @@
 
 #include "engine/scripting/native_api/dse_api_internal.h"
 #include "engine/video/video_player.h"
+#include "engine/render/rhi/rhi_device.h"
 
 using namespace dse;
 using namespace dse_api_internal;
@@ -13,15 +14,29 @@ using namespace dse_api_internal;
 
 static std::unordered_map<uint32_t, std::unique_ptr<dse::video::VideoPlayer>> g_video_players;
 static uint32_t g_video_next_id = 1;
+static void* g_video_rhi_device = nullptr;
 
 static dse::video::VideoPlayer* GetVideoPlayer(uint32_t id) {
     auto it = g_video_players.find(id);
     return it != g_video_players.end() ? it->second.get() : nullptr;
 }
 
+extern "C" void dse_video_set_rhi_device(void* rhi_device) {
+    g_video_rhi_device = rhi_device;
+    // 已存在的播放器同步换绑（新播放器在 create 时即注入）。
+    for (auto& [id, player] : g_video_players) {
+        (void)id;
+        if (player) player->SetRhiDevice(static_cast<dse::render::RhiDevice*>(g_video_rhi_device));
+    }
+}
+
 extern "C" uint32_t dse_video_create_player(void) {
     uint32_t id = g_video_next_id++;
-    g_video_players[id] = std::make_unique<dse::video::VideoPlayer>();
+    auto player = std::make_unique<dse::video::VideoPlayer>();
+    if (g_video_rhi_device) {
+        player->SetRhiDevice(static_cast<dse::render::RhiDevice*>(g_video_rhi_device));
+    }
+    g_video_players[id] = std::move(player);
     return id;
 }
 
