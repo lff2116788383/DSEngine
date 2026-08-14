@@ -59,6 +59,9 @@ namespace dse::render {
     class GPUSkinningSystem;
 }
 namespace dse::render::gi { class DDGISystem; }
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+namespace dse::render::vg { class VirtualGeometryRenderer; }
+#endif
 namespace dse::streaming { class StreamingManager; }
 namespace dse { class FloatingOriginSystem; }
 namespace dse::profiler {
@@ -345,6 +348,13 @@ private:
     /// 当前以粗粒度串行系统注册（2D/外部模块/3D/蓝图内部顺序依赖严格），
     /// 后续可为无冲突子系统声明 ComponentAccess 自动并行。
     dse::ecs::SystemScheduler gameplay_scheduler_;
+
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    /// Virtual Geometry 渲染器（实验特性，编译开关 DSE_ENABLE_VIRTUAL_GEOMETRY 默认 OFF）。
+    /// Init 时创建并注入 render_pass_context_.vg_renderer；实例由外部经
+    /// VirtualGeometryRenderer::RegisterMesh/SubmitInstance 驱动（B-5 接线）。
+    std::unique_ptr<dse::render::vg::VirtualGeometryRenderer> virtual_geometry_renderer_;
+#endif
 
     /// 解析 RHI 后端、创建并初始化 RHI 设备（含 D3D11/Vulkan 失败时回退到 OpenGL）。
     /// 成功返回最终生效的后端；失败返回 RhiBackend::Invalid。

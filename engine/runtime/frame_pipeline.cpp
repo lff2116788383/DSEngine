@@ -107,6 +107,9 @@ std::shared_ptr<dse::physics3d::IPhysics3DSystem> CreatePhysics3DSystem() {
 #include "engine/render/shaders/generated/embed/hi_z_downsample_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hi_z_cull_comp.gen.h"
 #include "engine/render/shaders/generated/embed/gpu_cull_comp.gen.h"
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+#include "engine/render/virtual_geometry/virtual_geometry_renderer.h"
+#endif
 #include "engine/render/shaders/generated/embed/meshlet_cull_comp.gen.h"
 
 namespace dse::render {
@@ -424,6 +427,21 @@ bool FramePipeline::Init() {
         if (s > 0.0f) Screen::set_render_scale(s);
     }
     InitResolutionDependentRTs();
+
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    // Virtual Geometry 渲染器（B-5 接线）：创建实例并注入 Pass 上下文。
+    // shader 由 VGCullPass/VGRasterPass/VGResolvePass::Setup 惰性编译（InitShaders）；
+    // 实例流（RegisterMesh/SubmitInstance/Execute）由外部驱动（当前无生产调用方，
+    // 宏默认 OFF）。
+    if (!virtual_geometry_renderer_) {
+        virtual_geometry_renderer_ = std::make_unique<dse::render::vg::VirtualGeometryRenderer>();
+        dse::render::vg::VirtualGeometryConfig vg_cfg;
+        virtual_geometry_renderer_->Init(vg_cfg,
+            static_cast<uint32_t>(Screen::render_width() > 0 ? Screen::render_width() : Screen::width()),
+            static_cast<uint32_t>(Screen::render_height() > 0 ? Screen::render_height() : Screen::height()));
+        render_pass_context_.vg_renderer = virtual_geometry_renderer_.get();
+    }
+#endif
 
     // 固定尺寸 RT（不随窗口缩放，Init 时创建一次）
     if (!render_resources_.pp_lum_temp_rt)
@@ -792,6 +810,13 @@ void FramePipeline::Shutdown() {
     render_graph_dag_.Reset();
     // 销毁瞬态 RT 跨帧缓存（RHI 仍有效时执行，避免 GPU 资源泄漏）
     render_graph_dag_.ReleaseCachedTransientResources();
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    if (virtual_geometry_renderer_) {
+        virtual_geometry_renderer_->Shutdown();
+        virtual_geometry_renderer_.reset();
+        render_pass_context_.vg_renderer = nullptr;
+    }
+#endif
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
     modules_impl_->ShutdownGameplay2D(*runtime_context_.world);
     if (builtin_gameplay3d_enabled_) {
@@ -1006,6 +1031,13 @@ void FramePipeline::OnWindowResize(int w, int h) {
     FreeResolutionDependentRTs();
     InitResolutionDependentRTs();
     SyncRenderPassContextTargets();
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    if (virtual_geometry_renderer_) {
+        virtual_geometry_renderer_->OnResize(
+            static_cast<uint32_t>(Screen::render_width() > 0 ? Screen::render_width() : w),
+            static_cast<uint32_t>(Screen::render_height() > 0 ? Screen::render_height() : h));
+    }
+#endif
     runtime_context_.rhi_device->OnWindowResized(w, h);
     DEBUG_LOG_INFO("FramePipeline::OnWindowResize: {}x{}", w, h);
 }

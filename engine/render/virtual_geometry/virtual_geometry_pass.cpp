@@ -14,6 +14,11 @@
 #include "engine/render/virtual_geometry/virtual_geometry_renderer.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_gpu_buffer.h"
+#include "engine/render/shaders/generated/embed/vg_lod_select_comp.gen.h"
+#include "engine/render/shaders/generated/embed/vg_cluster_cull_comp.gen.h"
+#include "engine/render/shaders/generated/embed/vg_sw_raster_comp.gen.h"
+#include "engine/render/shaders/generated/embed/vg_resolve_vert.gen.h"
+#include "engine/render/shaders/generated/embed/vg_resolve_frag.gen.h"
 
 namespace dse {
 namespace render {
@@ -73,6 +78,7 @@ void VGCullPass::Setup(RenderGraph& /*graph*/) {
     // Resource dependencies declared to render graph:
     //   reads:  hiz_mip_chain
     //   writes: vg_selected_clusters, vg_draw_commands, vg_raster_class
+    InitShaders(ctx_.rhi_device);
 }
 
 void VGCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
@@ -139,18 +145,18 @@ void VGCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     }
 
     // --- GPU compute dispatch (when available) ---
-    if (rhi->SupportsCompute() && ctx_.vg_cluster_cull_shader != 0) {
+    if (rhi->SupportsCompute() && ctx_.vg_cluster_cull_shader) {
         rhi->BindGpuBuffer(ctx_.vg_cluster_data_ssbo, 0, false);
         rhi->BindGpuBuffer(ctx_.vg_draw_cmd_ssbo, 1, true);
         rhi->BindGpuBuffer(ctx_.vg_raster_class_ssbo, 2, true);
 
-        const unsigned int hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
-        if (hiz_gpu_tex != 0) {
+        const TextureHandle hiz_gpu_tex = rhi->GetHiZGpuTexture(ctx_.render_targets.hiz_texture);
+        if (hiz_gpu_tex) {
             rhi->SetComputeTextureSampler(0, hiz_gpu_tex);
         }
 
         const auto& uniforms = culling.GetUniforms();
-        unsigned int shader = ctx_.vg_cluster_cull_shader;
+        ShaderHandle shader = ctx_.vg_cluster_cull_shader;
         rhi->SetComputeUniformMat4(shader, "u_view_projection", &uniforms.view_projection[0][0]);
         rhi->SetComputeUniformVec4(shader, "u_camera_pos",
             uniforms.camera_pos.x, uniforms.camera_pos.y,
@@ -186,6 +192,7 @@ void VGCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 void VGRasterPass::Setup(RenderGraph& /*graph*/) {
     // reads:  vg_selected_clusters, vg_raster_class
     // writes: vg_visibility_buffer
+    InitShaders(ctx_.rhi_device);
 }
 
 void VGRasterPass::Execute(CommandBuffer& /*cmd_buffer*/) {
@@ -227,12 +234,12 @@ void VGRasterPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     rhi->UpdateGpuBuffer(ctx_.vg_atomic_counter_ssbo, 0, sizeof(counters), counters);
 
     // --- GPU compute dispatch ---
-    if (rhi->SupportsCompute() && ctx_.vg_sw_raster_shader != 0) {
+    if (rhi->SupportsCompute() && ctx_.vg_sw_raster_shader) {
         rhi->BindGpuBuffer(ctx_.vg_sw_triangle_ssbo, 0, false);
         rhi->BindGpuBuffer(ctx_.vg_visbuf_ssbo, 1, true);
         rhi->BindGpuBuffer(ctx_.vg_atomic_counter_ssbo, 2, true);
 
-        unsigned int shader = ctx_.vg_sw_raster_shader;
+        ShaderHandle shader = ctx_.vg_sw_raster_shader;
         rhi->SetComputeUniformInt(shader, "u_screen_width", static_cast<int>(w));
         rhi->SetComputeUniformInt(shader, "u_screen_height", static_cast<int>(h));
         rhi->SetComputeUniformInt(shader, "u_triangle_count", static_cast<int>(triangles.size()));
@@ -250,6 +257,7 @@ void VGRasterPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 void VGResolvePass::Setup(RenderGraph& /*graph*/) {
     // reads:  vg_visibility_buffer, vg_vertex_data, vg_materials
     // writes: gbuffer_albedo, gbuffer_normal, gbuffer_orm
+    InitShaders(ctx_.rhi_device);
 }
 
 void VGResolvePass::Execute(CommandBuffer& /*cmd_buffer*/) {
@@ -280,7 +288,7 @@ void VGResolvePass::Execute(CommandBuffer& /*cmd_buffer*/) {
     }
 
     // --- Bind SSBOs and draw full-screen triangle ---
-    if (ctx_.vg_resolve_program != 0) {
+    if (ctx_.vg_resolve_program) {
         rhi->BindGpuBuffer(ctx_.vg_visbuf_ssbo, 0, false);
         rhi->BindGpuBuffer(ctx_.vg_vertex_data_ssbo, 1, false);
         rhi->BindGpuBuffer(ctx_.vg_cluster_data_ssbo, 2, false);
@@ -310,18 +318,41 @@ void VGCullPass::InitShaders(RhiDevice* rhi) {
     if (!rhi || !rhi->SupportsCompute()) return;
     if (shader_compiled_) return;
     shader_compiled_ = true;
+    // 此前为空壳（只置标志、不编译任何 shader），GPU dispatch 分支永不触发。
+    // LOD 选择：5 SSBO（DAG nodes/clusters/selected/expansion/counters）+ push 192B
+    ctx_.vg_lod_select_shader = rhi->CreateComputeShaderEx(
+        dse::render::generated_shaders::kvg_lod_select_comp_glsl430,
+        dse::render::generated_shaders::kvg_lod_select_comp_glsl450,
+        dse::render::generated_shaders::kvg_lod_select_comp_hlsl,
+        5, 0, 0, 192);
+    // Cluster 剔除：3 SSBO（clusters/draw_cmds/raster_class）+ 1 sampler（HiZ）+ push 208B
+    ctx_.vg_cluster_cull_shader = rhi->CreateComputeShaderEx(
+        dse::render::generated_shaders::kvg_cluster_cull_comp_glsl430,
+        dse::render::generated_shaders::kvg_cluster_cull_comp_glsl450,
+        dse::render::generated_shaders::kvg_cluster_cull_comp_hlsl,
+        3, 0, 1, 208);
 }
 
 void VGRasterPass::InitShaders(RhiDevice* rhi) {
     if (!rhi || !rhi->SupportsCompute()) return;
     if (shader_compiled_) return;
     shader_compiled_ = true;
+    // 软件光栅：3 SSBO（triangles/visbuffer/counters）+ push 12B
+    ctx_.vg_sw_raster_shader = rhi->CreateComputeShaderEx(
+        dse::render::generated_shaders::kvg_sw_raster_comp_glsl430,
+        dse::render::generated_shaders::kvg_sw_raster_comp_glsl450,
+        dse::render::generated_shaders::kvg_sw_raster_comp_hlsl,
+        3, 0, 0, 12);
 }
 
 void VGResolvePass::InitShaders(RhiDevice* rhi) {
     if (!rhi) return;
     if (shader_compiled_) return;
     shader_compiled_ = true;
+    // VisBuffer → GBuffer 全屏 pass：普通图形程序（vert + frag）
+    ctx_.vg_resolve_program = rhi->CreateShaderProgram(
+        dse::render::generated_shaders::kvg_resolve_vert_glsl430,
+        dse::render::generated_shaders::kvg_resolve_frag_glsl430);
 }
 
 }  // namespace vg
