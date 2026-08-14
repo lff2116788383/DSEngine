@@ -866,6 +866,24 @@ void Physics3DSystem::RemoveActor(entt::entity entity) {
 }
 
 // ---------------------------------------------------------------------------
+// 物理 LOD — 强制休眠/唤醒（DeactivateBody 后 body 不参与模拟也不被查询，
+// ActivateBody 恢复。仅动态体有意义，静态/运动学体保持原状。）
+// ---------------------------------------------------------------------------
+void Physics3DSystem::SetBodySleepState(entt::entity entity, bool sleep) {
+    if (!impl_) return;
+    auto it = impl_->entity_to_body.find(static_cast<uint32_t>(entity));
+    if (it == impl_->entity_to_body.end()) return;
+    auto& bi = impl_->physics_system->GetBodyInterface();
+    const BodyID body_id = it->second;
+    if (bi.GetMotionType(body_id) != EMotionType::Dynamic) return;
+    if (sleep) {
+        if (bi.IsActive(body_id)) bi.DeactivateBody(body_id);
+    } else {
+        bi.ActivateBody(body_id);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 碰撞层
 // ---------------------------------------------------------------------------
 void Physics3DSystem::SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask) {

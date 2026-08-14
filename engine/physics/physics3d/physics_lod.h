@@ -122,6 +122,12 @@ public:
     /// Floating Origin 偏移
     void RebaseOrigin(const glm::vec3& offset);
 
+    /// 遍历所有注册物理体（entity_id, entry）——供后端接线方把 LOD 状态应用到物理引擎
+    template <typename F>
+    void ForEachBody(F&& fn) const {
+        for (const auto& [id, entry] : bodies_) fn(id, entry);
+    }
+
     const PhysicsLODConfig& GetConfig() const { return config_; }
 
 private:

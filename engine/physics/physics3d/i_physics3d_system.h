@@ -100,6 +100,10 @@ public:
     // 碰撞层
     virtual void SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask) = 0;
 
+    // 物理 LOD：强制休眠/唤醒刚体（休眠体不参与模拟，节省远距离开销）
+    // Jolt: SetObjectOffline/ActivateBody；PhysX: putToSleep/wakeUp。仅动态体生效。
+    virtual void SetBodySleepState(entt::entity entity, bool sleep) = 0;
+
     // Floating Origin: 整体平移所有物理 body 和角色控制器
     virtual void RebaseOrigin(const glm::vec3& offset) = 0;
 

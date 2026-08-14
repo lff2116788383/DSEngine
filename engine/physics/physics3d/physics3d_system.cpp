@@ -930,6 +930,19 @@ void Physics3DSystem::RemoveActor(entt::entity entity) {
     }
 }
 
+void Physics3DSystem::SetBodySleepState(entt::entity entity, bool sleep) {
+    if (!world_cache_) return;
+    const auto* rb = world_cache_->registry().try_get<RigidBody3DComponent>(entity);
+    if (!rb || !rb->runtime_body) return;
+    PxRigidDynamic* dynamic = static_cast<PxRigidActor*>(rb->runtime_body)->is<PxRigidDynamic>();
+    if (!dynamic) return;
+    if (sleep) {
+        dynamic->putToSleep();
+    } else {
+        dynamic->wakeUp();
+    }
+}
+
 // ---------------------------------------------------------------------------
 // CharacterController 实现
 // 基于 kinematic PxRigidDynamic + PxScene::sweep 的自定义角色控制器

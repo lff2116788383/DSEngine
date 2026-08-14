@@ -21,6 +21,7 @@
 #include "engine/physics/physics3d/physics3d_system_jolt.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/transform.h"
 
 using namespace dse;
 using namespace dse::physics3d;
@@ -115,6 +116,43 @@ TEST(Physics3DSystemJoltTest, MeshCollider3DComponentDefaultValue) {
     EXPECT_FLOAT_EQ(mc.friction, 0.5f);
     EXPECT_EQ(mc.runtime_shape, nullptr);
     EXPECT_TRUE(mc.prev_mesh_path.empty());
+}
+
+// 测试 物理3D系统Jolt：LOD 休眠冻结刚体，唤醒后恢复模拟
+// 前置：Init 后 FixedUpdate 创建动态刚体并开始下落；
+// 预期：SetBodySleepState(true) 后多帧位置不变（不参与模拟），
+//       SetBodySleepState(false) 后恢复重力下落。
+TEST(Physics3DSystemJoltTest, SetBodySleepStateFreezesThenResumesBody) {
+    Physics3DSystem sys;
+    World world;
+    ASSERT_TRUE(sys.Init(world));
+
+    auto e = world.registry().create();
+    auto& t = world.registry().emplace<TransformComponent>(e);
+    t.position = glm::vec3(0.0f, 10.0f, 0.0f);
+    t.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    auto& rb = world.registry().emplace<RigidBody3DComponent>(e);
+    rb.type = RigidBody3DType::Dynamic;
+    rb.mass = 1.0f;
+    auto& box = world.registry().emplace<BoxCollider3DComponent>(e);
+    box.size = glm::vec3(1.0f);
+
+    // 创建 body 并模拟数帧（开始下落）
+    for (int i = 0; i < 5; ++i) sys.FixedUpdate(world, 1.0f / 60.0f);
+    const float y_before = world.registry().get<TransformComponent>(e).position.y;
+    EXPECT_LT(y_before, 10.0f);  // 确认确实在下落
+
+    // 休眠：后续帧位置必须冻结
+    sys.SetBodySleepState(e, true);
+    for (int i = 0; i < 10; ++i) sys.FixedUpdate(world, 1.0f / 60.0f);
+    EXPECT_FLOAT_EQ(world.registry().get<TransformComponent>(e).position.y, y_before);
+
+    // 唤醒：恢复重力下落
+    sys.SetBodySleepState(e, false);
+    for (int i = 0; i < 5; ++i) sys.FixedUpdate(world, 1.0f / 60.0f);
+    EXPECT_LT(world.registry().get<TransformComponent>(e).position.y, y_before);
+
+    sys.Shutdown();
 }
 
 #endif // DSE_ENABLE_JOLT

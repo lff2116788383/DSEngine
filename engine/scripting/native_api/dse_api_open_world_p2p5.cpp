@@ -9,12 +9,15 @@
 
 #include "engine/render/mesh_streaming.h"
 #include "engine/physics/physics3d/physics_lod.h"
+#include "engine/physics/physics3d/i_physics3d_system.h"
+#include "engine/core/service_locator.h"
 #include "engine/terrain/terrain_deformation.h"
 #include "engine/audio/audio_lod.h"
 
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <entt/entt.hpp>
 
 namespace {
 
@@ -24,6 +27,11 @@ std::unique_ptr<dse::terrain::TerrainDeformationSystem> s_terrain_deform;
 std::unique_ptr<dse::audio::AudioLODSystem> s_audio_lod;
 
 bool Keep(float v) { return std::isnan(v); }
+
+/// 获取当前 3D 物理系统（可能为 nullptr：物理后端未启用/未注册）
+dse::physics3d::IPhysics3DSystem* GetPhysics3D() {
+    return dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>();
+}
 
 }  // namespace
 
@@ -94,6 +102,18 @@ extern "C" int dse_physics_lod_evaluate(float cam_x, float cam_y, float cam_z,
                                         uint32_t frame, uint32_t* out_ids, int cap) {
     if (!s_physics_lod) return 0;
     auto active = s_physics_lod->Evaluate(glm::vec3(cam_x, cam_y, cam_z), frame);
+
+    // 接线物理后端：把 LOD 状态真正应用到刚体。
+    // - Sleep 级 / 降频跳过帧（Reduced/Simplified 的 divider 帧）→ 休眠（不参与模拟）
+    // - 本帧需要模拟 → 唤醒
+    // 之前 LOD 判定只改内部状态机，对物理世界零影响（技术债 #2）。
+    if (auto* phy = GetPhysics3D()) {
+        s_physics_lod->ForEachBody([&](uint32_t eid, const dse::physics3d::PhysicsLODEntry&) {
+            phy->SetBodySleepState(static_cast<entt::entity>(eid),
+                                   !s_physics_lod->ShouldSimulateThisFrame(eid, frame));
+        });
+    }
+
     int total = static_cast<int>(active.size());
     if (out_ids && cap > 0) {
         int n = std::min(total, cap);
@@ -116,14 +136,27 @@ extern "C" int dse_physics_lod_get_stats(int* out_stats) {
 
 extern "C" void dse_physics_lod_wake(uint32_t entity_id) {
     if (s_physics_lod) s_physics_lod->WakeBody(entity_id);
+    if (auto* phy = GetPhysics3D()) {
+        phy->SetBodySleepState(static_cast<entt::entity>(entity_id), false);
+    }
 }
 
 extern "C" void dse_physics_lod_sleep(uint32_t entity_id) {
     if (s_physics_lod) s_physics_lod->SleepBody(entity_id);
+    if (auto* phy = GetPhysics3D()) {
+        phy->SetBodySleepState(static_cast<entt::entity>(entity_id), true);
+    }
 }
 
 extern "C" void dse_physics_lod_shutdown(void) {
-    if (s_physics_lod) s_physics_lod->Shutdown();
+    if (!s_physics_lod) return;
+    // 先恢复所有 body 的模拟状态，避免 LOD 关闭后刚体仍被冻结在 offline
+    if (auto* phy = GetPhysics3D()) {
+        s_physics_lod->ForEachBody([&](uint32_t eid, const dse::physics3d::PhysicsLODEntry&) {
+            phy->SetBodySleepState(static_cast<entt::entity>(eid), false);
+        });
+    }
+    s_physics_lod->Shutdown();
 }
 
 // ============================================================

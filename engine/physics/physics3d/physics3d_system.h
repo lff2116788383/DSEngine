@@ -69,6 +69,9 @@ public:
     // 碰撞层设置 API
     void SetCollisionLayer(entt::entity entity, uint16_t layer, uint16_t mask) override;
 
+    // 物理 LOD：强制休眠/唤醒刚体（PhysX: putToSleep/wakeUp，仅动态体生效）
+    void SetBodySleepState(entt::entity entity, bool sleep) override;
+
     // Floating Origin
     void RebaseOrigin(const glm::vec3& offset) override;
 
