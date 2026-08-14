@@ -246,6 +246,13 @@ void OpenGLCommandBuffer::DrawIndexedIndirect(BufferHandle indirect_buffer, uint
 
 void OpenGLCommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
     // GL 无 compute 路径：消费者经 GetBloomComputeShader()==0 回退全屏 quad，此处不应被命中。
+    // 防御：意外命中（新增消费者未按能力门控）时一次性告警，避免静默 no-op 掩盖问题。
+    static bool s_warned = false;
+    if (!s_warned) {
+        s_warned = true;
+        DEBUG_LOG_WARN("[GL] DispatchComputePass 被调用但 GL 无 compute 支持——"
+                       "调用方未按能力门控，已跳过（请经 GetBloomComputeShader()==0 回退）");
+    }
     (void)dispatch;
 }
 

@@ -1,5 +1,10 @@
 # RHI 三后端统一审查任务指令
 
+## 当前状态（2026 更新）
+7 个问题全部处理完毕（修复或验证无需修改）。此后三后端仍持续维护：
+HandleActivityLedger 句柄账本、RenderGraph 瞬态 RT、SDF 描边色等改动均保持
+三后端一致（见 AGENTS.md §5 渲染改动同步要求）。本文件保留为历史审查记录。
+
 ## 背景
 DSEngine 支持 OpenGL / Vulkan / DX11 三个渲染后端。已完成 `GetProjectionCorrection()` 修正投影矩阵（commit 49c221f），但仍有多个位置存在后端差异未统一。
 
@@ -129,7 +134,7 @@ Vulkan/DX11 面序相同, 但 **Y 轴方向不同**:
 
 ---
 
-## 工作流程
+## 工作流程（历史记录；当前构建/测试已迁移到 CMake preset + ctest）
 
 1. 按问题编号从 1 开始逐个处理
 2. 每个问题先做最小排查 (grep/read), 确认是否真的影响当前渲染
@@ -146,6 +151,10 @@ Vulkan/DX11 面序相同, 但 **Y 轴方向不同**:
    ```
    git add -A && git commit -m "RHI统一: [具体修复内容]" && git push origin master
    ```
+
+> 现行做法：`cmake --preset windows-x64-debug`（Ninja + VS2022）构建、`ctest --preset windows-x64-debug`
+> 跑 gtest（unit/integration/smoke + 像素级三后端 golden 对比）；提交走 Conventional Commits 到
+> `feature/engine-lib` 分支，经 PR 合入 master，不直接推 master。
 
 ## 优先级
 

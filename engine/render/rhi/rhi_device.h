@@ -447,8 +447,12 @@ public:
         return fs;
     }
 
-    /// GPU→CPU 读回是否低成本（OpenGL: 是; DX11: 否，同步 pipeline flush）
+    /// GPU→CPU 读回是否低成本（OpenGL: 否，glReadPixels 同步等待；DX11/Vulkan: 是，
+    /// staging 拷贝 + 按需等待，不阻塞整管线）
     /// 返回 false 时跳过 GPU Driven / Hi-Z readback 以避免帧卡顿
+    /// @note 当前全仓无消费者（保留为 GPU-driven readback 门控接口）；
+    ///       DX11 实现为 staging 异步路径（dx11_resource_manager.cpp ReadRenderTargetColor），
+    ///       与旧注释"DX11: 否，同步 pipeline flush"相反，已按实现核对修正。
     virtual bool SupportsEfficientReadback() const { return true; }
 
     /// 在 EndFrame 之后补写 GPU Driven 剔除统计（因 readback 在 EndFrame 后发生）

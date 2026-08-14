@@ -48,6 +48,8 @@ public:
     RenderTargetHandle CreateRenderTarget(const RenderTargetDesc& desc) override;
     void DeleteRenderTarget(RenderTargetHandle render_target_handle) override;
     RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
+    /// GL 读回是同步 glReadPixels（等待 GPU 完成），非低成本路径
+    bool SupportsEfficientReadback() const override { return false; }
     TextureHandle GetRenderTargetColorTexture(RenderTargetHandle render_target_handle) const override;
     TextureHandle GetRenderTargetColorTexture(RenderTargetHandle render_target_handle, int index) const override;
     TextureHandle GetRenderTargetDepthTexture(RenderTargetHandle render_target_handle) const override;
