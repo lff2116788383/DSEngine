@@ -162,7 +162,7 @@ void VideoTrack::Evaluate(float time) {
     }
 
     // Update opacity for fade in/out on active cue
-    if (active_cue_idx_ >= 0 && play_func_) {
+    if (active_cue_idx_ >= 0) {
         const auto& cue = cues_[static_cast<size_t>(active_cue_idx_)];
         float elapsed = time - cue.time;
         float opacity = cue.opacity;
@@ -178,7 +178,11 @@ void VideoTrack::Evaluate(float time) {
             // Without duration info, this is handled by the player's on_finished callback
         }
 
-        (void)opacity; // Would update render opacity
+        // 每帧下发插值后的透明度（fade in 平滑过渡；播放器经回调实时调节混合透明度）。
+        // 此前 opacity 计算后直接丢弃（(void)opacity），fade 效果从未生效。
+        if (opacity_update_func_) {
+            opacity_update_func_(opacity);
+        }
     }
 
     last_time_ = time;

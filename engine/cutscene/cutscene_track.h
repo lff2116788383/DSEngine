@@ -197,6 +197,8 @@ struct VideoCue {
 /// 视频播放回调（开始/停止/更新不透明度）
 using VideoPlayFunc = std::function<void(const std::string& path, bool fullscreen, float opacity)>;
 using VideoStopFunc = std::function<void()>;
+/// 每帧不透明度更新回调（fade in/out 期间由 Evaluate 逐帧下发插值后的透明度）
+using VideoOpacityFunc = std::function<void(float opacity)>;
 
 class DSE_EXPORT VideoTrack : public CutsceneTrack {
 public:
@@ -206,6 +208,9 @@ public:
     void AddCue(const VideoCue& cue) { cues_.push_back(cue); }
     void SetPlayCallback(VideoPlayFunc func) { play_func_ = std::move(func); }
     void SetStopCallback(VideoStopFunc func) { stop_func_ = std::move(func); }
+    /// 设置每帧 opacity 更新回调（播放器据此实时调节视频混合透明度，
+    /// 支持 fade in/out 平滑过渡；未设置时仅依赖 play_func_ 的初始 opacity）
+    void SetOpacityUpdateCallback(VideoOpacityFunc func) { opacity_update_func_ = std::move(func); }
     void Evaluate(float time) override;
     void Reset() override;
 
@@ -215,6 +220,7 @@ private:
     std::vector<VideoCue> cues_;
     VideoPlayFunc play_func_;
     VideoStopFunc stop_func_;
+    VideoOpacityFunc opacity_update_func_;
     float last_time_ = -1.0f;
     int active_cue_idx_ = -1;
 };

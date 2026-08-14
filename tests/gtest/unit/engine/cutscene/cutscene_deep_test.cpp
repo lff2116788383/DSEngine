@@ -418,3 +418,42 @@ TEST(AudioTrackDeepTest, VolumeAndLoopParams) {
     EXPECT_FLOAT_EQ(recv_vol, 0.7f);
     EXPECT_TRUE(recv_loop);
 }
+
+// 测试 视频轨道：fade in 期间每帧 opacity 回调收到插值透明度
+// 前置：cue 带 fade_in=2s、opacity=0.8；
+// 预期：开始时刻收到 0.0（elapsed=0），中点收到 0.4，fade 结束后保持 0.8。
+TEST_F(VideoTrackDeepTest, OpacityUpdateCallbackReceivesFadeInValues) {
+    VideoCue cue;
+    cue.time = 1.0f;
+    cue.video_path = "fade.mp4";
+    cue.opacity = 0.8f;
+    cue.fade_in = 2.0f;
+    track->AddCue(cue);
+
+    std::vector<float> received;
+    track->SetOpacityUpdateCallback([&](float opacity) { received.push_back(opacity); });
+
+    track->Evaluate(1.0f);  // 激活，elapsed=0 → 0.8 * 0 = 0
+    track->Evaluate(2.0f);  // elapsed=1 → 0.8 * 0.5 = 0.4
+    track->Evaluate(3.0f);  // elapsed=2 → fade 结束 = 0.8
+    track->Evaluate(4.0f);  // 保持 0.8
+
+    ASSERT_EQ(received.size(), 4u);
+    EXPECT_FLOAT_EQ(received[0], 0.0f);
+    EXPECT_NEAR(received[1], 0.4f, 1e-5f);
+    EXPECT_FLOAT_EQ(received[2], 0.8f);
+    EXPECT_FLOAT_EQ(received[3], 0.8f);
+}
+
+// 测试 视频轨道：未设置 opacity 回调时 Evaluate 不崩溃（兼容旧用法）
+TEST_F(VideoTrackDeepTest, EvaluateWithoutOpacityCallbackDoesNotCrash) {
+    VideoCue cue;
+    cue.time = 0.0f;
+    cue.video_path = "plain.mp4";
+    cue.fade_in = 1.0f;
+    track->AddCue(cue);
+
+    track->Evaluate(0.5f);
+    track->Evaluate(1.5f);
+    EXPECT_EQ(last_path, "plain.mp4");
+}
