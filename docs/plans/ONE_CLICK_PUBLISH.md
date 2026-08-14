@@ -1,76 +1,76 @@
-# DSEngine ä¸€é”®å‘å¸ƒæ–¹æ¡ˆ
+# DSEngine 一键发布方案
 
-> ç‰ˆæœ¬: v2.0 | æ—¥æœŸ: 2026-07-03
-> ç›®æ ‡: ç¼–è¾‘å™¨å†…ä¸€é”®æž„å»º Web æ¸¸æˆ â†’ ä¸Šä¼ åˆ° DSE å®˜æ–¹æ‰˜ç®¡ â†’ ç”ŸæˆäºŒç»´ç /é“¾æŽ¥ â†’ åˆ†äº«å³çŽ©
-> ç¦»çº¿æ¨¡å¼: æœåŠ¡å™¨æœªå°±ç»ªæ—¶ï¼Œä»…æž„å»º+å¯¼å‡º zipï¼Œä¸å½±å“æ­£å¸¸ä½¿ç”¨
+> 版本: v2.0 | 日期: 2026-07-03
+> 目标: 编辑器内一键构建 Web 游戏 → 上传到 DSE 官方托管 → 生成二维码/链接 → 分享即玩
+> 离线模式: 服务器未就绪时，仅构建+导出 zip，不影响正常使用
 
 ---
 
-## ä¸€ã€æ¦‚è¿°
+## 一、概述
 
-### 1.1 ç”¨æˆ·æ•…äº‹
+### 1.1 用户故事
 
-ä½œä¸º DSEngine çš„ç”¨æˆ·ï¼ˆæ¸¸æˆå¼€å‘è€…ï¼‰ï¼š
-1. åœ¨ç¼–è¾‘å™¨é‡Œå®Œæˆæ¸¸æˆå¼€å‘
-2. ç‚¹ `File â†’ Build Game â†’ å¹³å°é€‰ Web â†’ ç‚¹"æž„å»ºå¹¶å‘å¸ƒ"`
-3. ç­‰å¾… ~30 ç§’
-4. å¾—åˆ°ä¸€ä¸ªäºŒç»´ç å’Œé“¾æŽ¥ï¼š`https://mygame.dse.run`
-5. åˆ†äº«ç»™æœ‹å‹ â†’ æ‰«ç å³çŽ©
-6. ä¸‹æ¬¡æ›´æ–°æ¸¸æˆï¼Œå†æ¬¡ç‚¹"æž„å»ºå¹¶å‘å¸ƒ"â†’ åŒåè¦†ç›–ï¼ˆURL ä¸å˜ï¼‰
+作为 DSEngine 的用户（游戏开发者）：
+1. 在编辑器里完成游戏开发
+2. 点 `File → Build Game → 平台选 Web → 点"构建并发布"`
+3. 等待 ~30 秒
+4. 得到一个二维码和链接：`https://mygame.dse.run`
+5. 分享给朋友 → 扫码即玩
+6. 下次更新游戏，再次点"构建并发布"→ 同名覆盖（URL 不变）
 
-**ç¦»çº¿æ¨¡å¼**ï¼ˆæœåŠ¡å™¨æœªé…ç½®æ—¶ï¼‰ï¼š
-1. ç‚¹ `File â†’ Build Game â†’ å¹³å°é€‰ Web â†’ ç‚¹"å¯¼å‡º Web åŒ…"`
-2. ç­‰å¾… ~20 ç§’
-3. å¾—åˆ°æœ¬åœ° zip æ–‡ä»¶è·¯å¾„ï¼ˆå¦‚ `build/web/mygame.zip`ï¼‰
-4. ç”¨æˆ·è‡ªè¡Œéƒ¨ç½²åˆ°ä»»æ„é™æ€æœåŠ¡å™¨
+**离线模式**（服务器未配置时）：
+1. 点 `File → Build Game → 平台选 Web → 点"导出 Web 包"`
+2. 等待 ~20 秒
+3. 得到本地 zip 文件路径（如 `build/web/mygame.zip`）
+4. 用户自行部署到任意静态服务器
 
-### 1.2 æž¶æž„æ€»è§ˆ
+### 1.2 架构总览
 
 ```
-æ¸¸æˆå¼€å‘è€…                              DSE æœåŠ¡å™¨                       çŽ©å®¶
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    POST       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ DSEngine Editor     â”‚  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¶  â”‚ dse.run æ‰˜ç®¡æœåŠ¡     â”‚  HTTPS   â”‚ æ‰‹æœº/PC â”‚
-â”‚                     â”‚  game.zip     â”‚                     â”‚  â—€â”€â”€â”€â”€â”€  â”‚ æµè§ˆå™¨  â”‚
-â”‚ Build Game (Web)    â”‚  + API Key    â”‚ Node.js ä¸Šä¼ æœåŠ¡     â”‚          â”‚         â”‚
-â”‚   â†“                 â”‚               â”‚ Nginx é™æ€æ‰˜ç®¡       â”‚          â”‚ æ‰«ç     â”‚
-â”‚ minizip åŽ‹ç¼©        â”‚               â”‚ CDN ç¼“å­˜             â”‚          â”‚ å³çŽ©    â”‚
-â”‚ æ˜¾ç¤ºäºŒç»´ç /é“¾æŽ¥     â”‚  â—€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€  â”‚                     â”‚          â”‚         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  è¿”å›ž URL     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+游戏开发者                              DSE 服务器                       玩家
+┌─────────────────────┐    POST       ┌─────────────────────┐          ┌─────────┐
+│ DSEngine Editor     │  ──────────▶  │ dse.run 托管服务     │  HTTPS   │ 手机/PC │
+│                     │  game.zip     │                     │  ◀─────  │ 浏览器  │
+│ Build Game (Web)    │  + API Key    │ Node.js 上传服务     │          │         │
+│   ↓                 │               │ Nginx 静态托管       │          │ 扫码    │
+│ minizip 压缩        │               │ CDN 缓存             │          │ 即玩    │
+│ 显示二维码/链接     │  ◀──────────  │                     │          │         │
+└─────────────────────┘  返回 URL     └─────────────────────┘          └─────────┘
 ```
 
-### 1.3 è¿è¡Œæ¨¡å¼
+### 1.3 运行模式
 
-| æ¨¡å¼ | æ¡ä»¶ | è¡Œä¸º |
+| 模式 | 条件 | 行为 |
 |:-----|:-----|:-----|
-| **ç¦»çº¿æ¨¡å¼** | æœåŠ¡å™¨åœ°å€ä¸ºç©º æˆ– `DSE_PUBLISH_ENABLED` æœªå®šä¹‰ | ä»…æž„å»º+åŽ‹ç¼©ä¸º zipï¼Œä¿å­˜åˆ°æœ¬åœ° |
-| **åœ¨çº¿æ¨¡å¼** | æœåŠ¡å™¨åœ°å€å·²é…ç½® ä¸” API Key æœ‰æ•ˆ | æž„å»º+åŽ‹ç¼©+ä¸Šä¼ +è¿”å›žé“¾æŽ¥ |
+| **离线模式** | 服务器地址为空 或 `DSE_PUBLISH_ENABLED` 未定义 | 仅构建+压缩为 zip，保存到本地 |
+| **在线模式** | 服务器地址已配置 且 API Key 有效 | 构建+压缩+上传+返回链接 |
 
-### 1.4 å¯¹æ¸¸æˆå¼€å‘è€…çš„è¦æ±‚
+### 1.4 对游戏开发者的要求
 
-| è¦æ±‚ | è¯´æ˜Ž |
+| 要求 | 说明 |
 |:-----|:------|
-| å®‰è£… Emscripten SDK | **å¿…é¡»ã€‚** `emsdk install latest && emsdk activate latest`ï¼Œä¸€æ¬¡æ€§çš„ |
-| é…ç½®æœåŠ¡å™¨åœ°å€ | å¯é€‰ã€‚ç¼–è¾‘å™¨å†…ç½®é»˜è®¤ `https://api.dse.run/api/publish` |
-| API Key | åœ¨çº¿æ¨¡å¼å¿…é¡»ã€‚ç¼–è¾‘å™¨ Settings â†’ Publish â†’ å¡«å…¥ API Key |
+| 安装 Emscripten SDK | **必须。** `emsdk install latest && emsdk activate latest`，一次性的 |
+| 配置服务器地址 | 可选。编辑器内置默认 `https://api.dse.run/api/publish` |
+| API Key | 在线模式必须。编辑器 Settings → Publish → 填入 API Key |
 
 ---
 
-## äºŒã€æœåŠ¡å™¨ç«¯
+## 二、服务器端
 
-### 2.1 æŠ€æœ¯é€‰åž‹
+### 2.1 技术选型
 
-| ç»„ä»¶ | é€‰æ‹© | ç†ç”± |
+| 组件 | 选择 | 理由 |
 |:-----|:------|:------|
-| è¿è¡Œæ—¶ | Node.js 18+ | è½»é‡ã€å•è¿›ç¨‹å¤Ÿç”¨ |
-| ä¸Šä¼ å¤„ç† | multer + adm-zip | æˆç†Ÿ npm åŒ… |
-| HTTP æœåŠ¡ | Express | æœ€ç®€è·¯ç”± |
-| é‰´æƒ | API Key + HMAC | é˜²æ­¢æœªæŽˆæƒä¸Šä¼  |
-| é™é€Ÿ | express-rate-limit | é˜²æ»¥ç”¨ï¼ˆ5æ¬¡/å°æ—¶/IPï¼‰ |
-| è¿›ç¨‹ç®¡ç† | PM2 | è‡ªåŠ¨é‡å¯ã€æ—¥å¿— |
-| é™æ€æ‰˜ç®¡ | Nginx | é«˜æ€§èƒ½é™æ€æ–‡ä»¶æœåŠ¡ |
-| æ³›åŸŸå | `*.dse.run` DNS A è®°å½• â†’ æœåŠ¡å™¨ IP | æ¯ä¸ªæ¸¸æˆè‡ªåŠ¨èŽ·å¾—å­åŸŸå |
+| 运行时 | Node.js 18+ | 轻量、单进程够用 |
+| 上传处理 | multer + adm-zip | 成熟 npm 包 |
+| HTTP 服务 | Express | 最简路由 |
+| 鉴权 | API Key + HMAC | 防止未授权上传 |
+| 限速 | express-rate-limit | 防滥用（5次/小时/IP） |
+| 进程管理 | PM2 | 自动重启、日志 |
+| 静态托管 | Nginx | 高性能静态文件服务 |
+| 泛域名 | `*.dse.run` DNS A 记录 → 服务器 IP | 每个游戏自动获得子域名 |
 
-### 2.2 Node.js æœåŠ¡
+### 2.2 Node.js 服务
 
 ```javascript
 // dse-publish-server/server.js
@@ -87,10 +87,10 @@ const upload = multer({ dest: '/tmp/dse_uploads/', limits: { fileSize: 200 * 102
 const GAMES_DIR = '/var/www/games';
 const MAX_SIZE_MB = 200;
 
-// API Key åˆ—è¡¨ï¼ˆç”Ÿäº§çŽ¯å¢ƒä»ŽçŽ¯å¢ƒå˜é‡æˆ–æ•°æ®åº“è¯»å–ï¼‰
+// API Key 列表（生产环境从环境变量或数据库读取）
 const VALID_API_KEYS = new Set((process.env.DSE_API_KEYS || '').split(',').filter(Boolean));
 
-// æ–‡ä»¶ç™½åå•
+// 文件白名单
 const ALLOWED_EXTENSIONS = new Set([
     '.html', '.htm', '.js', '.mjs', '.wasm', '.data',
     '.css', '.json', '.png', '.jpg', '.jpeg', '.gif',
@@ -100,85 +100,85 @@ const ALLOWED_EXTENSIONS = new Set([
 
 fs.mkdirSync(GAMES_DIR, { recursive: true });
 
-// â”€â”€ é™é€Ÿä¸­é—´ä»¶ â”€â”€
+// ── 限速中间件 ──
 const publishLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000,  // 1 å°æ—¶
-    max: 5,                     // æ¯ IP æœ€å¤š 5 æ¬¡
-    message: { error: 'ä¸Šä¼ é¢‘çŽ‡è¿‡é«˜ï¼Œè¯·ç¨åŽå†è¯•' }
+    windowMs: 60 * 60 * 1000,  // 1 小时
+    max: 5,                     // 每 IP 最多 5 次
+    message: { error: '上传频率过高，请稍后再试' }
 });
 
-// â”€â”€ é‰´æƒä¸­é—´ä»¶ â”€â”€
+// ── 鉴权中间件 ──
 function requireApiKey(req, res, next) {
     const key = req.headers['x-api-key'] || req.body.api_key || '';
     if (!VALID_API_KEYS.has(key)) {
-        return res.status(401).json({ error: 'æ— æ•ˆçš„ API Key' });
+        return res.status(401).json({ error: '无效的 API Key' });
     }
     next();
 }
 
-// â”€â”€ è·¯å¾„å®‰å…¨æ£€æŸ¥ â”€â”€
+// ── 路径安全检查 ──
 function isPathSafe(filePath, baseDir) {
     const resolved = path.resolve(baseDir, filePath);
     return resolved.startsWith(path.resolve(baseDir));
 }
 
-// â”€â”€ æ–‡ä»¶æ‰©å±•åæ£€æŸ¥ â”€â”€
+// ── 文件扩展名检查 ──
 function isFileAllowed(filename) {
     const ext = path.extname(filename).toLowerCase();
     return ALLOWED_EXTENSIONS.has(ext) || ext === '';
 }
 
-// â”€â”€ POST /api/publish â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── POST /api/publish ─────────────────────────────────────────────
 app.post('/api/publish', publishLimiter, requireApiKey, upload.single('package'), (req, res) => {
     try {
         const file = req.file;
         if (!file) {
-            return res.status(400).json({ error: 'ç¼ºå°‘ package æ–‡ä»¶' });
+            return res.status(400).json({ error: '缺少 package 文件' });
         }
 
-        // ç¡®å®šæ¸¸æˆ ID
+        // 确定游戏 ID
         let gameId = req.body.game_id || '';
         if (!gameId || !/^[a-z0-9_-]{1,64}$/i.test(gameId)) {
             gameId = crypto.randomBytes(4).toString('hex');
         }
 
-        // è§£åŽ‹å‰å®‰å…¨æ£€æŸ¥
+        // 解压前安全检查
         const zip = new AdmZip(file.path);
         const entries = zip.getEntries();
 
-        // æ£€æŸ¥è·¯å¾„ç©¿è¶Šå’Œæ–‡ä»¶ç±»åž‹
+        // 检查路径穿越和文件类型
         const gameDir = path.join(GAMES_DIR, gameId);
         for (const entry of entries) {
             if (!isPathSafe(entry.entryName, gameDir)) {
                 fs.unlinkSync(file.path);
-                return res.status(400).json({ error: 'æ¸¸æˆåŒ…å«éžæ³•è·¯å¾„' });
+                return res.status(400).json({ error: '游戏包含非法路径' });
             }
             if (!entry.isDirectory && !isFileAllowed(entry.entryName)) {
                 fs.unlinkSync(file.path);
                 return res.status(400).json({
-                    error: `ä¸å…è®¸çš„æ–‡ä»¶ç±»åž‹: ${entry.entryName}`
+                    error: `不允许的文件类型: ${entry.entryName}`
                 });
             }
         }
 
-        // é¦–æ¬¡å‘å¸ƒæˆ–è¦†ç›–æ›´æ–°
+        // 首次发布或覆盖更新
         if (fs.existsSync(gameDir)) {
             fs.rmSync(gameDir, { recursive: true });
         }
 
-        // è§£åŽ‹åˆ° /var/www/games/{gameId}/
+        // 解压到 /var/www/games/{gameId}/
         zip.extractAllTo(gameDir, true);
 
-        // éªŒè¯è§£åŽ‹ç»“æžœï¼šå¿…é¡»æœ‰ index.html
+        // 验证解压结果：必须有 index.html
         if (!fs.existsSync(path.join(gameDir, 'index.html'))) {
             fs.rmSync(gameDir, { recursive: true });
             fs.unlinkSync(file.path);
             return res.status(400).json({
-                error: 'æ¸¸æˆåŒ…ç¼ºå°‘ index.htmlï¼Œè¯·ç¡®è®¤ Web æž„å»ºæˆåŠŸ'
+                error: '游戏包缺少 index.html，请确认 Web 构建成功'
             });
         }
 
-        // å†™å…¥å…ƒä¿¡æ¯
+        // 写入元信息
         const meta = {
             title: req.body.title || gameId,
             game_id: gameId,
@@ -192,10 +192,10 @@ app.post('/api/publish', publishLimiter, requireApiKey, upload.single('package')
             JSON.stringify(meta, null, 2)
         );
 
-        // æ¸…ç†ä¸´æ—¶æ–‡ä»¶
+        // 清理临时文件
         fs.unlinkSync(file.path);
 
-        // è¿”å›žç»“æžœ
+        // 返回结果
         res.json({
             url: `https://${gameId}.dse.run`,
             game_id: gameId,
@@ -208,11 +208,11 @@ app.post('/api/publish', publishLimiter, requireApiKey, upload.single('package')
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
-        res.status(500).json({ error: 'æœåŠ¡å™¨å†…éƒ¨é”™è¯¯' });
+        res.status(500).json({ error: '服务器内部错误' });
     }
 });
 
-// â”€â”€ GET /api/games â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── GET /api/games ────────────────────────────────────────────────
 app.get('/api/games', requireApiKey, (req, res) => {
     const games = [];
     if (fs.existsSync(GAMES_DIR)) {
@@ -221,7 +221,7 @@ app.get('/api/games', requireApiKey, (req, res) => {
             if (fs.existsSync(metaPath)) {
                 try {
                     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-                    delete meta.update_token;  // ä¸æš´éœ² token
+                    delete meta.update_token;  // 不暴露 token
                     games.push(meta);
                 } catch {}
             }
@@ -230,43 +230,43 @@ app.get('/api/games', requireApiKey, (req, res) => {
     res.json({ games });
 });
 
-// â”€â”€ DELETE /api/games/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── DELETE /api/games/:id ─────────────────────────────────────────
 app.delete('/api/games/:id', requireApiKey, (req, res) => {
     const gameDir = path.join(GAMES_DIR, req.params.id);
     if (!fs.existsSync(gameDir)) {
-        return res.status(404).json({ error: 'æ¸¸æˆä¸å­˜åœ¨' });
+        return res.status(404).json({ error: '游戏不存在' });
     }
     fs.rmSync(gameDir, { recursive: true });
     res.json({ success: true });
 });
 
-// â”€â”€ å¯åŠ¨ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 启动 ──────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`DSE Publish Server running on port ${PORT}`);
 });
 ```
 
-### 2.3 éƒ¨ç½²
+### 2.3 部署
 
 ```bash
-# 1. å®‰è£…ä¾èµ–
+# 1. 安装依赖
 cd /opt/dse-publish-server
 npm init -y
 npm install express multer adm-zip express-rate-limit
 npm install -g pm2
 
-# 2. é…ç½®çŽ¯å¢ƒå˜é‡
+# 2. 配置环境变量
 export DSE_API_KEYS="your-api-key-1,your-api-key-2"
 
-# 3. å¯åŠ¨
+# 3. 启动
 pm2 start server.js --name dse-publish
 pm2 save
-pm2 startup  # å¼€æœºè‡ªå¯
+pm2 startup  # 开机自启
 
-# 4. Nginx é…ç½®
+# 4. Nginx 配置
 cat > /etc/nginx/sites-available/dse.run << 'EOF'
-# æ³›åŸŸåï¼šæŒ‰å­åŸŸåè·¯ç”±åˆ°å¯¹åº”æ¸¸æˆç›®å½•
+# 泛域名：按子域名路由到对应游戏目录
 server {
     listen 80;
     server_name ~^(?<game_id>.+)\.dse\.run$;
@@ -274,17 +274,17 @@ server {
     root /var/www/games/$game_id;
     index index.html;
 
-    # å®‰å…¨å¤´
+    # 安全头
     add_header X-Content-Type-Options nosniff;
     add_header X-Frame-Options SAMEORIGIN;
     add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:;";
 
-    # WASM MIME ç±»åž‹
+    # WASM MIME 类型
     types {
         application/wasm wasm;
     }
 
-    # ç¼“å­˜ç­–ç•¥
+    # 缓存策略
     location ~* \.(wasm|data)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
@@ -301,7 +301,7 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # ç¦æ­¢è®¿é—®å…ƒä¿¡æ¯
+    # 禁止访问元信息
     location = /.dse_meta.json {
         return 404;
     }
@@ -309,7 +309,7 @@ server {
     client_max_body_size 200M;
 }
 
-# ä¸Šä¼  API åä»£
+# 上传 API 反代
 server {
     listen 80;
     server_name api.dse.run;
@@ -328,62 +328,62 @@ EOF
 ln -s /etc/nginx/sites-available/dse.run /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 
-# 5. é…ç½® HTTPSï¼ˆæ³›åŸŸåéœ€è¦ DNS éªŒè¯ï¼‰
+# 5. 配置 HTTPS（泛域名需要 DNS 验证）
 apt install certbot python3-certbot-nginx python3-certbot-dns-cloudflare
 certbot certonly --dns-cloudflare -d dse.run -d '*.dse.run'
 
-# 6. DNS é…ç½®
-# æ·»åŠ  A è®°å½•:
-#   *.dse.run    â†’ æœåŠ¡å™¨ IP
-#   api.dse.run  â†’ æœåŠ¡å™¨ IP
+# 6. DNS 配置
+# 添加 A 记录:
+#   *.dse.run    → 服务器 IP
+#   api.dse.run  → 服务器 IP
 ```
 
-### 2.4 CDN é…ç½®ï¼ˆå¯é€‰ï¼ŒæŽ¨èï¼‰
+### 2.4 CDN 配置（可选，推荐）
 
-ä»¥è…¾è®¯äº‘ CDN ä¸ºä¾‹ï¼š
+以腾讯云 CDN 为例：
 
 ```
-1. CDN æŽ§åˆ¶å° â†’ æ·»åŠ åŸŸå
-   åŸŸå: *.dse.run
-   æºç«™: æœåŠ¡å™¨ IP
-   åŠ é€ŸåŒºåŸŸ: ä¸­å›½å¢ƒå†…
+1. CDN 控制台 → 添加域名
+   域名: *.dse.run
+   源站: 服务器 IP
+   加速区域: 中国境内
 
-2. ç¼“å­˜è§„åˆ™:
-   *.wasm      â†’ ç¼“å­˜ 30 å¤©
-   *.js        â†’ ç¼“å­˜ 7 å¤©ï¼ˆå¸¦ hash çš„å¯ä»¥ 30 å¤©ï¼‰
-   *.data      â†’ ç¼“å­˜ 30 å¤©
-   index.html  â†’ ä¸ç¼“å­˜
+2. 缓存规则:
+   *.wasm      → 缓存 30 天
+   *.js        → 缓存 7 天（带 hash 的可以 30 天）
+   *.data      → 缓存 30 天
+   index.html  → 不缓存
 
-3. åˆ·æ–°ç­–ç•¥:
-   æ¯æ¬¡ä¸Šä¼ æˆåŠŸåŽè°ƒç”¨ CDN åˆ·æ–° API:
+3. 刷新策略:
+   每次上传成功后调用 CDN 刷新 API:
    POST https://cdn.tencentcloudapi.com/?Action=PurgePathCache
    Paths: ["https://{gameId}.dse.run/"]
 ```
 
-### 2.5 ç£ç›˜ç©ºé—´ç®¡ç†
+### 2.5 磁盘空间管理
 
 ```bash
-# crontab æ·»åŠ å®šæ—¶æ¸…ç†ï¼šæ¯å¤©å‡Œæ™¨æ¸…ç†è¶…è¿‡ 90 å¤©æœªæ›´æ–°çš„æ¸¸æˆ
+# crontab 添加定时清理：每天凌晨清理超过 90 天未更新的游戏
 0 3 * * * find /var/www/games -name '.dse_meta.json' -mtime +90 -execdir rm -rf $(dirname {}) \;
 
-# ç›‘æŽ§ç£ç›˜ä½¿ç”¨ï¼ˆè¶…è¿‡ 80% å‘Šè­¦ï¼‰
+# 监控磁盘使用（超过 80% 告警）
 */5 * * * * [ $(df /var/www/games --output=pcent | tail -1 | tr -d '% ') -gt 80 ] && echo "Disk warning" | mail admin@dse.run
 ```
 
 ---
 
-## ä¸‰ã€ç¼–è¾‘å™¨æ”¹é€ 
+## 三、编辑器改造
 
-### 3.1 ä¿®æ”¹æ–‡ä»¶
+### 3.1 修改文件
 
-| æ–‡ä»¶ | æ”¹åŠ¨ |
+| 文件 | 改动 |
 |:-----|:------|
-| `apps/editor_cpp/src/editor_build_game.h` | æ–°å¢ž `PublishState` ç»“æž„ä½“ |
-| `apps/editor_cpp/src/editor_build_game.cpp` | ä¿®æ”¹ Build Game å¯¹è¯æ¡† UI + ç¦»çº¿/åœ¨çº¿æ¨¡å¼åˆ‡æ¢ |
-| `apps/editor_cpp/src/editor_build_game_publish.cpp` | **æ–°å»ºã€‚** åŽ‹ç¼©ï¼ˆminizipï¼‰+ HTTP ä¸Šä¼  + QR ç  |
-| `CMakeLists.txt` | æ–°å¢ž `DSE_PUBLISH_ENABLED` ç¼–è¯‘é€‰é¡¹ |
+| `apps/editor_cpp/src/editor_build_game.h` | 新增 `PublishState` 结构体 |
+| `apps/editor_cpp/src/editor_build_game.cpp` | 修改 Build Game 对话框 UI + 离线/在线模式切换 |
+| `apps/editor_cpp/src/editor_build_game_publish.cpp` | **新建。** 压缩（minizip）+ HTTP 上传 + QR 码 |
+| `CMakeLists.txt` | 新增 `DSE_PUBLISH_ENABLED` 编译选项 |
 
-### 3.2 ç¼–è¯‘å¼€å…³
+### 3.2 编译开关
 
 ```cmake
 # CMakeLists.txt
@@ -396,57 +396,57 @@ if(DSE_PUBLISH_ENABLED)
 endif()
 ```
 
-æœªå¼€å¯æ—¶ï¼šç¼–è¾‘å™¨åªæœ‰"å¯¼å‡º Web åŒ…"åŠŸèƒ½ï¼ˆç¦»çº¿æ¨¡å¼ï¼‰ï¼Œä¸ç¼–è¯‘ä¸Šä¼ ä»£ç ï¼Œä¸ä¾èµ– libcurlã€‚
+未开启时：编辑器只有"导出 Web 包"功能（离线模式），不编译上传代码，不依赖 libcurl。
 
-### 3.3 æ–°å¢žçŠ¶æ€
+### 3.3 新增状态
 
 ```cpp
-// editor_build_game.h æ–°å¢ž
+// editor_build_game.h 新增
 struct PublishState {
-    // é…ç½®
-    bool enable_publish = false;            // æ˜¯å¦å‹¾é€‰"ä¸€é”®å‘å¸ƒ"
-    char game_id[64] = "";                  // è‡ªå®šä¹‰æ¸¸æˆ ID
+    // 配置
+    bool enable_publish = false;            // 是否勾选"一键发布"
+    char game_id[64] = "";                  // 自定义游戏 ID
     char upload_url[256] = "https://api.dse.run/api/publish";
     char api_key[128] = "";                 // API Key
-    bool auto_copy_url = true;              // å‘å¸ƒåŽè‡ªåŠ¨å¤åˆ¶é“¾æŽ¥
+    bool auto_copy_url = true;              // 发布后自动复制链接
 
-    // ç»“æžœ
-    std::string publish_url;                // å‘å¸ƒåŽå¾—åˆ°çš„ URL
-    std::string local_zip_path;             // ç¦»çº¿æ¨¡å¼çš„æœ¬åœ° zip è·¯å¾„
-    std::string qr_code_png_base64;         // äºŒç»´ç  PNG base64
+    // 结果
+    std::string publish_url;                // 发布后得到的 URL
+    std::string local_zip_path;             // 离线模式的本地 zip 路径
+    std::string qr_code_png_base64;         // 二维码 PNG base64
     bool publish_done = false;
     bool publish_success = false;
     std::string publish_error;
 
-    // è¿›åº¦
-    float upload_progress = 0.0f;           // ä¸Šä¼ è¿›åº¦ 0.0~1.0
-    std::string status_text;                // å½“å‰çŠ¶æ€æ–‡å­—
+    // 进度
+    float upload_progress = 0.0f;           // 上传进度 0.0~1.0
+    std::string status_text;                // 当前状态文字
 
-    // ç”Ÿå‘½å‘¨æœŸç®¡ç†
-    std::future<void> build_future;         // async ä»»åŠ¡å¥æŸ„
-    std::string pending_clipboard;          // å¾…å¤åˆ¶åˆ°å‰ªè´´æ¿çš„æ–‡æœ¬ï¼ˆä¸»çº¿ç¨‹å¤„ç†ï¼‰
+    // 生命周期管理
+    std::future<void> build_future;         // async 任务句柄
+    std::string pending_clipboard;          // 待复制到剪贴板的文本（主线程处理）
 };
 ```
 
-### 3.4 UI æ”¹åŠ¨
+### 3.4 UI 改动
 
 ```cpp
 // editor_build_game.cppï¼ŒDrawBuildGameDialog å†…
 if (state.platform == BuildPlatform::Web) {
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), ICON_FA_GLOBE " Web å‘å¸ƒ");
+    ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), ICON_FA_GLOBE " Web 发布");
 
 #ifdef DSE_PUBLISH_ENABLED
-    ImGui::Checkbox("æž„å»ºåŽä¸Šä¼ åˆ°æœåŠ¡å™¨", &state.publish_enable);
+    ImGui::Checkbox("构建后上传到服务器", &state.publish_enable);
 
     if (state.publish_enable) {
         ImGui::Indent();
-        ImGui::Text("æ¸¸æˆ ID:");
+        ImGui::Text("游戏 ID:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(200);
         ImGui::InputText("##game_id", state.game_id, sizeof(state.game_id));
         ImGui::SameLine();
-        ImGui::TextDisabled("(ç•™ç©ºè‡ªåŠ¨ç”Ÿæˆ)");
+        ImGui::TextDisabled("(留空自动生成)");
 
         ImGui::Text("API Key:");
         ImGui::SameLine();
@@ -454,70 +454,70 @@ if (state.platform == BuildPlatform::Web) {
         ImGui::InputText("##api_key", state.api_key, sizeof(state.api_key),
                          ImGuiInputTextFlags_Password);
 
-        ImGui::Text("æœåŠ¡å™¨:");
+        ImGui::Text("服务器:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(300);
         ImGui::InputText("##upload_url", state.upload_url, sizeof(state.upload_url));
 
-        ImGui::Checkbox("å‘å¸ƒåŽè‡ªåŠ¨å¤åˆ¶é“¾æŽ¥", &state.auto_copy_url);
+        ImGui::Checkbox("发布后自动复制链接", &state.auto_copy_url);
         ImGui::Unindent();
     }
 
-    // æž„å»ºæŒ‰é’®
-    const char* btn_text = state.publish_enable ? "æž„å»ºå¹¶å‘å¸ƒ" : "å¯¼å‡º Web åŒ…";
+    // 构建按钮
+    const char* btn_text = state.publish_enable ? "构建并发布" : "导出 Web 包";
     if (ImGui::Button(btn_text, ImVec2(140, 28)) && !state.building) {
         StartWebBuild(state);
     }
 #else
-    // ç¦»çº¿æ¨¡å¼ï¼šåªæœ‰å¯¼å‡ºåŠŸèƒ½
-    if (ImGui::Button("å¯¼å‡º Web åŒ…", ImVec2(140, 28)) && !state.building) {
+    // 离线模式：只有导出功能
+    if (ImGui::Button("导出 Web 包", ImVec2(140, 28)) && !state.building) {
         StartWebBuild(state);
     }
 #endif
 
-    // è¿›åº¦æ˜¾ç¤º
+    // 进度显示
     if (state.building) {
         ImGui::ProgressBar(state.upload_progress);
         ImGui::Text("%s", state.status_text.c_str());
     }
 
-    // ä¸»çº¿ç¨‹å¤„ç†å‰ªè´´æ¿ï¼ˆImGui å‰ªè´´æ¿ä¸æ˜¯çº¿ç¨‹å®‰å…¨çš„ï¼‰
+    // 主线程处理剪贴板（ImGui 剪贴板不是线程安全的）
     if (!state.pending_clipboard.empty()) {
         ImGui::SetClipboardText(state.pending_clipboard.c_str());
         state.pending_clipboard.clear();
     }
 
-    // ç»“æžœæ˜¾ç¤º
+    // 结果显示
     if (state.publish_done && state.publish_success) {
         ImGui::Separator();
         if (!state.publish_url.empty()) {
-            ImGui::TextColored(ImVec4(0,1,0,1), ICON_FA_CHECK " å‘å¸ƒæˆåŠŸ!");
-            ImGui::Text("é“¾æŽ¥: %s", state.publish_url.c_str());
-            if (ImGui::SmallButton("å¤åˆ¶é“¾æŽ¥")) {
+            ImGui::TextColored(ImVec4(0,1,0,1), ICON_FA_CHECK " 发布成功!");
+            ImGui::Text("链接: %s", state.publish_url.c_str());
+            if (ImGui::SmallButton("复制链接")) {
                 ImGui::SetClipboardText(state.publish_url.c_str());
             }
             ShowQRCodeCached(state.qr_code_png_base64);
         } else {
-            ImGui::TextColored(ImVec4(0,1,0,1), ICON_FA_CHECK " å¯¼å‡ºæˆåŠŸ!");
-            ImGui::Text("æ–‡ä»¶: %s", state.local_zip_path.c_str());
-            if (ImGui::SmallButton("æ‰“å¼€ç›®å½•")) {
+            ImGui::TextColored(ImVec4(0,1,0,1), ICON_FA_CHECK " 导出成功!");
+            ImGui::Text("文件: %s", state.local_zip_path.c_str());
+            if (ImGui::SmallButton("打开目录")) {
                 OpenInExplorer(state.local_zip_path);
             }
         }
     } else if (state.publish_done && !state.publish_success) {
-        ImGui::TextColored(ImVec4(1,0,0,1), ICON_FA_TIMES " å¤±è´¥: %s",
+        ImGui::TextColored(ImVec4(1,0,0,1), ICON_FA_TIMES " 失败: %s",
                           state.publish_error.c_str());
     }
 }
 ```
 
-### 3.5 æ ¸å¿ƒé€»è¾‘
+### 3.5 核心逻辑
 
 ```cpp
-// editor_build_game_publish.cppï¼ˆæ–°å»ºï¼‰
+// editor_build_game_publish.cpp（新建）
 
 #include "editor_build_game.h"
-#include <minizip/zip.h>       // å¼•æ“Žå·²æœ‰ zlibï¼Œminizip æ˜¯å…¶ä¸€éƒ¨åˆ†
+#include <minizip/zip.h>       // 引擎已有 zlib，minizip 是其一部分
 #include <filesystem>
 #include <thread>
 #include <atomic>
@@ -530,7 +530,7 @@ if (state.platform == BuildPlatform::Web) {
 
 namespace dse::editor {
 
-// â”€â”€ åŽ‹ç¼©ç›®å½•ä¸º .zipï¼ˆè·¨å¹³å°ï¼Œä½¿ç”¨ minizipï¼‰â”€â”€
+// ── 压缩目录为 .zip（跨平台，使用 minizip）──
 std::string ZipDirectory(const std::string& dir_path) {
     namespace fs = std::filesystem;
     std::string zip_path = dir_path + ".zip";
@@ -564,7 +564,7 @@ std::string ZipDirectory(const std::string& dir_path) {
 }
 
 #ifdef DSE_PUBLISH_ENABLED
-// â”€â”€ ä¸Šä¼ è¿›åº¦å›žè°ƒ â”€â”€
+// ── 上传进度回调 ──
 static int UploadProgressCallback(void* userdata, curl_off_t dltotal,
                                    curl_off_t dlnow, curl_off_t ultotal,
                                    curl_off_t ulnow) {
@@ -575,14 +575,14 @@ static int UploadProgressCallback(void* userdata, curl_off_t dltotal,
     return 0;
 }
 
-// â”€â”€ ä¸Šä¼ ç»“æžœ â”€â”€
+// ── 上传结果 ──
 struct PublishResult {
     bool success = false;
     std::string url;
     std::string error;
 };
 
-// â”€â”€ ä¸Šä¼ åˆ°æœåŠ¡å™¨ â”€â”€
+// ── 上传到服务器 ──
 PublishResult UploadToServer(const std::string& zip_path,
                               const std::string& server_url,
                               const std::string& game_id,
@@ -592,11 +592,11 @@ PublishResult UploadToServer(const std::string& zip_path,
 
     CURL* curl = curl_easy_init();
     if (!curl) {
-        result.error = "åˆå§‹åŒ– HTTP å®¢æˆ·ç«¯å¤±è´¥";
+        result.error = "初始化 HTTP 客户端失败";
         return result;
     }
 
-    // æž„å»º multipart formï¼ˆä½¿ç”¨æ–°ç‰ˆ curl_mime APIï¼‰
+    // 构建 multipart form（使用新版 curl_mime API）
     curl_mime* mime = curl_mime_init(curl);
 
     curl_mimepart* part = curl_mime_addpart(mime);
@@ -609,7 +609,7 @@ PublishResult UploadToServer(const std::string& zip_path,
         curl_mime_data(part, game_id.c_str(), CURL_ZERO_TERMINATED);
     }
 
-    // å“åº”è¯»å–
+    // 响应读取
     std::string response;
     curl_easy_setopt(curl, CURLOPT_URL, server_url.c_str());
     curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
@@ -620,7 +620,7 @@ PublishResult UploadToServer(const std::string& zip_path,
     headers = curl_slist_append(headers, auth_header.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-    // å†™å›žè°ƒ
+    // 写回调
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
         +[](char* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
             auto* resp = static_cast<std::string*>(userdata);
@@ -629,12 +629,12 @@ PublishResult UploadToServer(const std::string& zip_path,
         });
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-    // è¿›åº¦å›žè°ƒ
+    // 进度回调
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, UploadProgressCallback);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
-    // è¶…æ—¶
+    // 超时
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
 
@@ -648,16 +648,16 @@ PublishResult UploadToServer(const std::string& zip_path,
     curl_easy_cleanup(curl);
 
     if (res != CURLE_OK) {
-        result.error = std::string("ç½‘ç»œé”™è¯¯: ") + curl_easy_strerror(res);
+        result.error = std::string("网络错误: ") + curl_easy_strerror(res);
         return result;
     }
 
     if (http_code != 200) {
-        result.error = "æœåŠ¡å™¨è¿”å›žé”™è¯¯ " + std::to_string(http_code);
+        result.error = "服务器返回错误 " + std::to_string(http_code);
         return result;
     }
 
-    // è§£æž JSONï¼ˆä½¿ç”¨å¼•æ“Žå·²æœ‰çš„ nlohmann/jsonï¼‰
+    // 解析 JSON（使用引擎已有的 nlohmann/json）
     try {
         auto json = nlohmann::json::parse(response);
         if (json.contains("error")) {
@@ -667,14 +667,14 @@ PublishResult UploadToServer(const std::string& zip_path,
             result.url = json["url"].get<std::string>();
         }
     } catch (...) {
-        result.error = "è§£æžæœåŠ¡å™¨å“åº”å¤±è´¥: " + response.substr(0, 200);
+        result.error = "解析服务器响应失败: " + response.substr(0, 200);
     }
 
     return result;
 }
 #endif  // DSE_PUBLISH_ENABLED
 
-// â”€â”€ ä¸»æž„å»ºæµç¨‹ â”€â”€
+// ── 主构建流程 ──
 void StartWebBuild(PublishState& state) {
     state.building = true;
     state.publish_done = false;
@@ -683,36 +683,36 @@ void StartWebBuild(PublishState& state) {
     state.publish_url.clear();
     state.local_zip_path.clear();
     state.upload_progress = 0.0f;
-    state.status_text = "æ­£åœ¨æž„å»º Web ç‰ˆæœ¬...";
+    state.status_text = "正在构建 Web 版本...";
 
-    // ä½¿ç”¨ std::asyncï¼ˆå®‰å…¨ç®¡ç†ç”Ÿå‘½å‘¨æœŸï¼Œé¿å… detach æ‚¬ç©ºå¼•ç”¨ï¼‰
+    // 使用 std::async（安全管理生命周期，避免 detach 悬空引用）
     state.build_future = std::async(std::launch::async, [&state]() {
-        // 1. æž„å»º Webï¼ˆè°ƒç”¨ Emscriptenï¼‰
+        // 1. 构建 Web（调用 Emscripten）
         bool build_ok = DoBuildWeb(state);
         if (!build_ok) {
-            state.publish_error = "Web æž„å»ºå¤±è´¥ï¼Œè¯·æ£€æŸ¥ Emscripten é…ç½®";
+            state.publish_error = "Web 构建失败，请检查 Emscripten 配置";
             state.building = false;
             state.publish_done = true;
             return;
         }
 
-        // 2. åŽ‹ç¼©äº§ç‰©ï¼ˆä½¿ç”¨ minizipï¼Œè·¨å¹³å°ï¼‰
-        state.status_text = "æ­£åœ¨åŽ‹ç¼©...";
+        // 2. 压缩产物（使用 minizip，跨平台）
+        state.status_text = "正在压缩...";
         std::string zip_path = ZipDirectory(state.output_dir);
         if (zip_path.empty()) {
-            state.publish_error = "åŽ‹ç¼©äº§ç‰©å¤±è´¥";
+            state.publish_error = "压缩产物失败";
             state.building = false;
             state.publish_done = true;
             return;
         }
 
 #ifdef DSE_PUBLISH_ENABLED
-        // 3. åœ¨çº¿æ¨¡å¼ï¼šä¸Šä¼ 
+        // 3. 在线模式：上传
         if (state.enable_publish && state.upload_url[0] != '\0' && state.api_key[0] != '\0') {
-            state.status_text = "æ­£åœ¨ä¸Šä¼ ...";
+            state.status_text = "正在上传...";
             std::atomic<float> progress{0.0f};
 
-            // è¿›åº¦æ›´æ–°çº¿ç¨‹
+            // 进度更新线程
             auto progress_updater = std::thread([&state, &progress]() {
                 while (state.building) {
                     state.upload_progress = progress.load();
@@ -740,7 +740,7 @@ void StartWebBuild(PublishState& state) {
         } else
 #endif
         {
-            // ç¦»çº¿æ¨¡å¼ï¼šä¿å­˜ zip åˆ°æœ¬åœ°
+            // 离线模式：保存 zip 到本地
             state.local_zip_path = zip_path;
             state.publish_success = true;
         }
@@ -750,7 +750,7 @@ void StartWebBuild(PublishState& state) {
     });
 }
 
-// â”€â”€ äºŒç»´ç ç”Ÿæˆï¼ˆqrcodegen header-only, MIT Licenseï¼‰â”€â”€
+// ── 二维码生成（qrcodegen header-only, MIT License）──
 // https://github.com/nayuki/QR-Code-generator
 std::string GenerateQRCodeBase64(const std::string& url) {
     auto qr = qrcodegen::QrCode::encodeText(
@@ -771,7 +771,7 @@ std::string GenerateQRCodeBase64(const std::string& url) {
         }
     }
 
-    // ç”¨ stb_image_write ç¼–ç ä¸º PNGï¼ˆå¼•æ“Žå·²æœ‰ stb ä¾èµ–ï¼‰
+    // 用 stb_image_write 编码为 PNG（引擎已有 stb 依赖）
     int png_len = 0;
     unsigned char* png = stbi_write_png_to_mem(
         pixels.data(), size, size, size, 1, &png_len);
@@ -782,7 +782,7 @@ std::string GenerateQRCodeBase64(const std::string& url) {
     return "data:image/png;base64," + base64;
 }
 
-// â”€â”€ äºŒç»´ç çº¹ç†ç¼“å­˜ï¼ˆé¿å…é‡å¤åˆ›å»ºå¯¼è‡´æ³„æ¼ï¼‰â”€â”€
+// ── 二维码纹理缓存（避免重复创建导致泄漏）──
 static GLuint s_qr_texture = 0;
 static std::string s_qr_last_data;
 
@@ -823,91 +823,91 @@ void ShowQRCodeCached(const std::string& base64_png) {
 
 ---
 
-## å››ã€å¤–éƒ¨ä¾èµ–
+## 四、外部依赖
 
-| ä¾èµ– | ç”¨é€” | å·²æœ‰? | å¤‡æ³¨ |
+| 依赖 | 用途 | 已有? | 备注 |
 |:-----|:------|:------|:------|
-| `zlib` / `minizip` | ZIP åŽ‹ç¼©ï¼ˆè·¨å¹³å°ï¼‰ | âœ… å¼•æ“Žå·²æœ‰ zlib | minizip æ˜¯ zlib contrib çš„ä¸€éƒ¨åˆ† |
-| `stb_image_write.h` | PNG ç¼–ç  | âœ… å·²æœ‰ | |
-| `stb_image.h` | PNG è§£ç  | âœ… å·²æœ‰ | |
-| `qrcodegen` (header-only) | QR ç ç”Ÿæˆ | âŒ éœ€æ·»åŠ  | ~300 è¡Œ C++ï¼ŒMIT License |
-| `nlohmann/json` | JSON è§£æž | âœ… å¼•æ“Žå·²æœ‰ | |
-| `libcurl` | HTTP ä¸Šä¼ ï¼ˆä»…åœ¨çº¿æ¨¡å¼ï¼‰ | æ¡ä»¶ä¾èµ– | `DSE_PUBLISH_ENABLED=ON` æ—¶éœ€è¦ |
-| Node.js + express + multer + adm-zip + express-rate-limit | æœåŠ¡å™¨ç«¯ | âŒ æœåŠ¡å™¨å®‰è£… | |
-| Nginx | åå‘ä»£ç† + é™æ€æ–‡ä»¶ | âŒ æœåŠ¡å™¨å®‰è£… | |
+| `zlib` / `minizip` | ZIP 压缩（跨平台） | ✅ 引擎已有 zlib | minizip 是 zlib contrib 的一部分 |
+| `stb_image_write.h` | PNG 编码 | ✅ 已有 | |
+| `stb_image.h` | PNG 解码 | ✅ 已有 | |
+| `qrcodegen` (header-only) | QR 码生成 | ❌ 需添加 | ~300 行 C++，MIT License |
+| `nlohmann/json` | JSON 解析 | ✅ 引擎已有 | |
+| `libcurl` | HTTP 上传（仅在线模式） | 条件依赖 | `DSE_PUBLISH_ENABLED=ON` 时需要 |
+| Node.js + express + multer + adm-zip + express-rate-limit | 服务器端 | ❌ 服务器安装 | |
+| Nginx | 反向代理 + 静态文件 | ❌ 服务器安装 | |
 
 ---
 
-## äº”ã€å®žæ–½è®¡åˆ’
+## 五、实施计划
 
-| é˜¶æ®µ | å†…å®¹ | å·¥ä½œé‡ | ä¾èµ– |
+| 阶段 | 内容 | 工作量 | 依赖 |
 |:-----|:------|:-------|:-----|
-| **Phase 1** | ç¼–è¾‘å™¨ç¦»çº¿æ¨¡å¼ï¼šWeb æž„å»º + minizip åŽ‹ç¼© + å¯¼å‡º | **2 å¤©** | æ—  |
-| **Phase 2** | æ·»åŠ  qrcodegen + äºŒç»´ç æ˜¾ç¤º | **åŠå¤©** | Phase 1 |
-| **Phase 3** | æœåŠ¡å™¨æ­å»ºï¼šNode.js + Nginx + HTTPS + DNS | **1 å¤©** | éœ€è¦æœåŠ¡å™¨ |
-| **Phase 4** | ç¼–è¾‘å™¨åœ¨çº¿æ¨¡å¼ï¼šlibcurl ä¸Šä¼  + è¿›åº¦æ¡ + é“¾æŽ¥æ˜¾ç¤º | **2 å¤©** | Phase 1+3 |
-| **Phase 5** | è°ƒè¯• + é”™è¯¯å¤„ç† + CDN é…ç½® | **1 å¤©** | Phase 4 |
-| **æ€»è®¡** | | **~6 å¤©** | Phase 1-2 å¯ç«‹å³å¼€å§‹ |
+| **Phase 1** | 编辑器离线模式：Web 构建 + minizip 压缩 + 导出 | **2 天** | 无 |
+| **Phase 2** | 添加 qrcodegen + 二维码显示 | **半天** | Phase 1 |
+| **Phase 3** | 服务器搭建：Node.js + Nginx + HTTPS + DNS | **1 天** | 需要服务器 |
+| **Phase 4** | 编辑器在线模式：libcurl 上传 + 进度条 + 链接显示 | **2 天** | Phase 1+3 |
+| **Phase 5** | 调试 + 错误处理 + CDN 配置 | **1 天** | Phase 4 |
+| **总计** | | **~6 天** | Phase 1-2 可立即开始 |
 
-**åˆ†é˜¶æ®µäº¤ä»˜ç­–ç•¥**ï¼š
-- Phase 1-2 **ä¸éœ€è¦æœåŠ¡å™¨**ï¼Œå¯ä»¥ç«‹å³å®žçŽ°å¹¶åˆå…¥ä¸»çº¿
-- Phase 3-5 ç­‰æœåŠ¡å™¨å°±ç»ªåŽå†åš
-- ä¸¤è€…äº’ä¸é˜»å¡ž
+**分阶段交付策略**：
+- Phase 1-2 **不需要服务器**，可以立即实现并合入主线
+- Phase 3-5 等服务器就绪后再做
+- 两者互不阻塞
 
 ---
 
-## å…­ã€å®‰å…¨æŽªæ–½
+## 六、安全措施
 
-| é˜²æŠ¤ç‚¹ | å®žçŽ°æ–¹å¼ |
+| 防护点 | 实现方式 |
 |:-------|:---------|
-| **é‰´æƒ** | API Key å¤´éªŒè¯ï¼ˆ`X-API-Key`ï¼‰ |
-| **é™é€Ÿ** | express-rate-limit: 5 æ¬¡/å°æ—¶/IP |
-| **è·¯å¾„ç©¿è¶Š** | è§£åŽ‹å‰é€æ–‡ä»¶æ£€æŸ¥ `path.resolve` æ˜¯å¦åœ¨ç›®æ ‡ç›®å½•å†… |
-| **æ–‡ä»¶ç±»åž‹** | ç™½åå•è¿‡æ»¤ï¼ˆä»…å…è®¸ Web èµ„æºç±»åž‹ï¼‰ |
-| **å¤§å°é™åˆ¶** | multer 200MB é™åˆ¶ + Nginx `client_max_body_size` |
-| **å…ƒä¿¡æ¯éšè—** | Nginx è¿”å›ž 404 for `.dse_meta.json` |
-| **HTTPS** | Let's Encrypt å…¨è¦†ç›– |
-| **å®‰å…¨å¤´** | X-Content-Type-Options, X-Frame-Options, CSP |
+| **鉴权** | API Key 头验证（`X-API-Key`） |
+| **限速** | express-rate-limit: 5 次/小时/IP |
+| **路径穿越** | 解压前逐文件检查 `path.resolve` 是否在目标目录内 |
+| **文件类型** | 白名单过滤（仅允许 Web 资源类型） |
+| **大小限制** | multer 200MB 限制 + Nginx `client_max_body_size` |
+| **元信息隐藏** | Nginx 返回 404 for `.dse_meta.json` |
+| **HTTPS** | Let's Encrypt 全覆盖 |
+| **安全头** | X-Content-Type-Options, X-Frame-Options, CSP |
 
 ---
 
-## ä¸ƒã€æˆæœ¬ä¼°ç®—
+## 七、成本估算
 
-| é¡¹ç›® | æœˆè´¹ |
+| 项目 | 月费 |
 |:-----|:------|
-| è½»é‡äº‘æœåŠ¡å™¨ï¼ˆ2æ ¸2G 3Mbpsï¼‰ | ï¿¥40 |
-| CDNï¼ˆæŒ‰é‡ï¼Œ10GB ä»¥å†…ï¼‰ | ï¿¥10 |
-| åŸŸå dse.runï¼ˆç»­è´¹ï¼‰ | ï¿¥30/å¹´ â‰ˆ ï¿¥2.5/æœˆ |
-| **æ€»è®¡** | **â‰ˆ ï¿¥52.5/æœˆ** |
+| 轻量云服务器（2核2G 3Mbps） | ￥40 |
+| CDN（按量，10GB 以内） | ￥10 |
+| 域名 dse.run（续费） | ￥30/年 ≈ ￥2.5/月 |
+| **总计** | **≈ ￥52.5/月** |
 
 ---
 
-## å…«ã€æŠ€æœ¯å€ºä¸ŽåŽç»­è¿­ä»£
+## 八、技术债与后续迭代
 
-### 8.1 å½“å‰æ–¹æ¡ˆæ— æŠ€æœ¯å€º
+### 8.1 当前方案无技术债
 
-æ‰€æœ‰å·²çŸ¥é—®é¢˜å‡åœ¨ v2.0 ä¸­è§£å†³ï¼š
-- âœ… é‰´æƒï¼ˆAPI Keyï¼‰
-- âœ… è·¯å¾„ç©¿è¶Šé˜²æŠ¤
-- âœ… æ–‡ä»¶ç±»åž‹ç™½åå•
-- âœ… é™é€Ÿ
-- âœ… è·¨å¹³å°åŽ‹ç¼©ï¼ˆminizip æ›¿ä»£ system("zip")ï¼‰
-- âœ… çº¹ç†ç¼“å­˜ï¼ˆé˜²æ³„æ¼ï¼‰
-- âœ… std::async æ›¿ä»£ detachï¼ˆç”Ÿå‘½å‘¨æœŸå®‰å…¨ï¼‰
-- âœ… Nginx æ³›åŸŸåæ­£ç¡®è·¯ç”±ï¼ˆregex æå– game_idï¼‰
-- âœ… ç¦»çº¿/åœ¨çº¿æ¨¡å¼è§£è€¦ï¼ˆç¼–è¯‘å¼€å…³ï¼‰
-- âœ… ä¸Šä¼ è¿›åº¦æ¡
-- âœ… CDN åˆ·æ–°ç­–ç•¥
-- âœ… ç£ç›˜ç©ºé—´ç®¡ç†
+所有已知问题均在 v2.0 中解决：
+- ✅ 鉴权（API Key）
+- ✅ 路径穿越防护
+- ✅ 文件类型白名单
+- ✅ 限速
+- ✅ 跨平台压缩（minizip 替代 system("zip")）
+- ✅ 纹理缓存（防泄漏）
+- ✅ std::async 替代 detach（生命周期安全）
+- ✅ Nginx 泛域名正确路由（regex 提取 game_id）
+- ✅ 离线/在线模式解耦（编译开关）
+- ✅ 上传进度条
+- ✅ CDN 刷新策略
+- ✅ 磁盘空间管理
 
-### 8.2 åŽç»­è¿­ä»£ï¼ˆä¸å½±å“å½“å‰å‘å¸ƒï¼‰
+### 8.2 后续迭代（不影响当前发布）
 
-| åŠŸèƒ½ | ä¼˜å…ˆçº§ | è¯´æ˜Ž |
+| 功能 | 优先级 | 说明 |
 |:-----|:------:|:------|
-| ç”¨æˆ·ç™»å½•ç³»ç»Ÿ | P2 | DSE è´¦å·ï¼Œå…³è”å·²å‘å¸ƒæ¸¸æˆ |
-| ç‰ˆæœ¬ç®¡ç† | P2 | ä¿ç•™æœ€è¿‘ N ä¸ªç‰ˆæœ¬ï¼Œæ”¯æŒå›žæ»š |
-| è®¿é—®ç»Ÿè®¡ | P3 | ç®€å• PV/UV |
-| è‡ªå®šä¹‰åŸŸå | P3 | ç»‘å®šç”¨æˆ·è‡ªæœ‰åŸŸå |
-| å¯†ç ä¿æŠ¤ | P3 | ä¸ºæ¸¸æˆè®¾ç½®è®¿é—®å¯†ç  |
-| æŽ’è¡Œæ¦œ/äº‘å­˜æ¡£ | P3 | ç®€å•åŽç«¯ API |
-| Emscripten è‡ªåŠ¨å®‰è£… | P2 | ç¼–è¾‘å™¨é¦–æ¬¡æž„å»ºæ—¶å¼•å¯¼å®‰è£… |
+| 用户登录系统 | P2 | DSE 账号，关联已发布游戏 |
+| 版本管理 | P2 | 保留最近 N 个版本，支持回滚 |
+| 访问统计 | P3 | 简单 PV/UV |
+| 自定义域名 | P3 | 绑定用户自有域名 |
+| 密码保护 | P3 | 为游戏设置访问密码 |
+| 排行榜/云存档 | P3 | 简单后端 API |
+| Emscripten 自动安装 | P2 | 编辑器首次构建时引导安装 |

@@ -1,6 +1,6 @@
 /**
  * @file gl_shader_manager.cpp
- * @brief GLShaderManager 瀹炵幇 - 鐫€鑹插櫒绠＄悊鍣?
+ * @brief GLShaderManager 实现 - 着色器管理器
  */
 
 #include "engine/render/rhi/opengl/gl_shader_manager.h"
@@ -11,7 +11,7 @@
 #include <cstring>
 #include <string>
 
-// 鍐呭祵鐨?GLSL 330 鐫€鑹插櫒婧愮爜
+// 内嵌的 GLSL 330 着色器源码
 #include "embed/pbr_vert.gen.h"
 #include "embed/pbr_frag.gen.h"
 #include "embed/skybox_vert.gen.h"
@@ -174,7 +174,7 @@ namespace dse {
 namespace render {
 
 // ============================================================
-// 鐫€鑹插櫒缂栬瘧鍜岀鐞?
+// 着色器编译和管理
 // ============================================================
 
 unsigned int GLShaderManager::CompileProgram(const char* vertex_src, const char* fragment_src) {
@@ -229,13 +229,13 @@ void GLShaderManager::DeleteProgram(unsigned int handle) {
 }
 
 // ============================================================
-// GL 3.3 UBO Fallback锛氫粠 SSBO GLSL 430 鐢熸垚 GLSL 330 UBO 鍙樹綋
+// GL 3.3 UBO Fallback：从 SSBO GLSL 430 生成 GLSL 330 UBO 变体
 //
-// 鎵€鏈夋搷浣滃潎鎸?block/struct 鍚嶇О瀹氫綅锛屼笉渚濊禆 spirv-cross 鑷姩鍒嗛厤鐨?
-// OpVariable ID锛堝 _1904銆乢1996锛夛紝鍥犳 shader 鏀瑰姩鍚?ID 婕傜Щ鏃朵粛绋冲畾銆?
+// 所有操作均按 block/struct 名称定位，不依赖 spirv-cross 自动分配的
+// OpVariable ID（如 _1904/_1996），因此 shader 改动后 ID 漂移时仍稳定。
 // ============================================================
 
-// 鎸夊悕绉扮Щ闄や竴涓?SSBO block 澹版槑锛圛D 鏃犲叧锛?
+// 鎸夊悕绉扮Щ闄や竴涓?SSBO block 声明（ID 鏃犲叧锛?
 static bool RemoveSSBOBlock(std::string& src, const char* block_name) {
     const std::string marker = std::string("buffer ") + block_name + "\n";
     const auto blk = src.find(marker);
@@ -255,13 +255,13 @@ static bool RemoveSSBOBlock(std::string& src, const char* block_name) {
     }
     auto end = src.find('\n', close + 2); // 璺宠繃 "} _NNN;"
     if (end == std::string::npos) end = src.size();
-    else end++;                            // 鍖呭惈鎹㈣
-    while (end < src.size() && src[end] == '\n') end++; // 娑堣€楀熬閮ㄧ┖琛?
+    else end++;                            // 包含换行
+    while (end < src.size() && src[end] == '\n') end++; // 消耗尾部空行
     src.erase(layout_start, end - layout_start);
     return true;
 }
 
-// 灏?SSBO 鍧楀０鏄庡師鍦拌浆鎹负鍥哄畾澶у皬 UBO 鍧楋紙ID 鏃犲叧锛?
+// 将 SSBO 块声明原地转换为固定大小 UBO 块（ID 无关）
 static bool TransformSSBOToUBO(std::string& src, const char* ssbo_name, const char* ubo_name,
                                 const char* array_field, int max_count) {
     const std::string old_decl = std::string("std430) readonly buffer ") + ssbo_name;
@@ -302,7 +302,7 @@ static std::string LowerVertexSSBOToUBO(const char* vert_src) {
     return src;
 }
 
-// 鍔ㄦ€佹彁鍙?UBO 鍧楃殑 spirv-cross 瀹炰緥鍚嶏紙濡?"_2008"锛夛紝闅?shader 鍙樺姩鑰屽彉鍔?
+// 动态提取 UBO 块的 spirv-cross 实例名（如 "_2008"），随 shader 变动而变动
 static std::string ExtractInstanceName(const std::string& src, const char* ubo_name) {
     const std::string marker = std::string("uniform ") + ubo_name + "\n";
     const auto blk = src.find(marker);
@@ -315,8 +315,8 @@ static std::string ExtractInstanceName(const std::string& src, const char* ubo_n
     return src.substr(name_start, semi - name_start);
 }
 
-// 灏?Clustered Forward+ 鐐瑰厜婧愬惊鐜浛鎹负鏆村姏閬嶅巻锛圛D 鏃犲叧锛?
-// 瀹氫綅渚濇嵁锛氱粨鏋勬爣璁?"int cl_tx" 鍜?"for (uint ci = 0u;"锛屼笉渚濊禆浠讳綍 _NNN ID
+// 将 Clustered Forward+ 点光源循环替换为暴力遍历（ID 无关）
+// 瀹氫綅渚濇嵁锛氱粨鏋勬爣璁?"int cl_tx" 鍜?"for (uint ci = 0u;"，不依赖任何 _NNN ID
 static bool ReplacePointLoopCluster(std::string& src, const std::string& point_inst) {
     const auto preamble = src.find("    int cl_tx = int(gl_FragCoord.x)");
     if (preamble == std::string::npos) {
@@ -328,12 +328,12 @@ static bool ReplacePointLoopCluster(std::string& src, const std::string& point_i
         fprintf(stderr, "[GenerateUBOGLSL] point cluster for-loop not found\n");
         return false;
     }
-    const auto body = src.find("    {\n", for_kw); // for 寰幆浣撳紑濮?"    {\n"
+    const auto body = src.find("    {\n", for_kw); // for 循环体开始 "    {\n"
     if (body == std::string::npos) {
         fprintf(stderr, "[GenerateUBOGLSL] point loop body { not found\n");
         return false;
     }
-    // 寰幆浣撳唴绗竴涓?"        }\n" 鏄?if-guard 鐨勯棴鍚堟嫭鍙?
+    // 循环体内第一个 "        }\n" 是 if-guard 的闭合括号
     const auto guard_end = src.find("        }\n", body + 5);
     if (guard_end == std::string::npos) {
         fprintf(stderr, "[GenerateUBOGLSL] point loop guard } not found\n");
@@ -346,8 +346,8 @@ static bool ReplacePointLoopCluster(std::string& src, const std::string& point_i
     return true;
 }
 
-// 灏嗚仛鍏夌伅寰幆澶存浛鎹负鏆村姏閬嶅巻锛圛D 鏃犲叧锛?
-// 瀹氫綅渚濇嵁锛氱粨鏋勬爣璁?"for (uint si = 0u;"锛屼笉渚濊禆浠讳綍 _NNN ID
+// 将聚光灯循环头替换为暴力遍历（ID 无关）
+// 瀹氫綅渚濇嵁锛氱粨鏋勬爣璁?"for (uint si = 0u;"，不依赖任何 _NNN ID
 static bool ReplaceSpotLoopHeader(std::string& src, const std::string& spot_inst) {
     const auto for_kw = src.find("    for (uint si = 0u;");
     if (for_kw == std::string::npos) {
@@ -385,7 +385,7 @@ std::string GLShaderManager::GenerateUBOGLSL() {
             fprintf(stderr, "[GenerateUBOGLSL] unexpected shader version (expected 430 or 300 es)\n");
     }
 
-    // 2. 绉婚櫎 ClusterInfoEntry 缁撴瀯浣擄紙鎸夊悕绉板畾浣嶏紝ID 鏃犲叧锛?
+    // 2. 绉婚櫎 ClusterInfoEntry 结构体（按名称定位，ID 鏃犲叧锛?
     {
         const auto s = src.find("struct ClusterInfoEntry\n");
         if (s == std::string::npos) {
@@ -402,15 +402,15 @@ std::string GLShaderManager::GenerateUBOGLSL() {
         }
     }
 
-    // 3 & 4. 绉婚櫎 ClusterInfoSSBO + LightIndexSSBO锛堟寜鍚嶇О瀹氫綅锛孖D 鏃犲叧锛?
+    // 3 & 4. 绉婚櫎 ClusterInfoSSBO + LightIndexSSBO（按名称定位，ID 鏃犲叧锛?
     RemoveSSBOBlock(src, "ClusterInfoSSBO");
     RemoveSSBOBlock(src, "LightIndexSSBO");
 
-    // 5 & 6. PointLightSSBO + SpotLightSSBO 鈫?鍥哄畾澶у皬 UBO锛堟寜鍚嶇О瀹氫綅锛孖D 鏃犲叧锛?
+    // 5 & 6. PointLightSSBO + SpotLightSSBO 鈫?固定大小 UBO（按名称定位，ID 鏃犲叧锛?
     TransformSSBOToUBO(src, "PointLightSSBO", "PointLightUBO", "u_point_lights", kMaxUBOLights);
     TransformSSBOToUBO(src, "SpotLightSSBO",  "SpotLightUBO",  "u_spot_lights",  kMaxUBOLights);
 
-    // 7. 鍔ㄦ€佹彁鍙栧疄渚嬪悕锛堥殢 shader 鍙樺姩鑷姩閫傚簲锛屼笉鍐嶇‖缂栫爜 _2008/_2190锛?
+    // 7. 动态提取实例名（随 shader 变动自动适应，不再硬编码 _2008/_2190锛?
     const std::string point_inst = ExtractInstanceName(src, "PointLightUBO");
     const std::string spot_inst  = ExtractInstanceName(src, "SpotLightUBO");
     if (point_inst.empty())
@@ -418,7 +418,7 @@ std::string GLShaderManager::GenerateUBOGLSL() {
     if (spot_inst.empty())
         fprintf(stderr, "[GenerateUBOGLSL] SpotLightUBO instance name not found\n");
 
-    // 8 & 9. 鏇挎崲 Clustered Forward+ 寰幆涓烘毚鍔涢亶鍘嗭紙鎸夌粨鏋勬爣璁板畾浣嶏紝ID 鏃犲叧锛?
+    // 8 & 9. 替换 Clustered Forward+ 循环为暴力遍历（按结构标记定位，ID 鏃犲叧锛?
     ReplacePointLoopCluster(src, point_inst);
     ReplaceSpotLoopHeader(src, spot_inst);
 
@@ -426,7 +426,7 @@ std::string GLShaderManager::GenerateUBOGLSL() {
 }
 
 // ============================================================
-// 鍐呯疆 PBR 鐫€鑹插櫒
+// 内置 PBR 着色器
 // ============================================================
 
 void GLShaderManager::InitBuiltinPBRShader() {
@@ -456,7 +456,7 @@ void GLShaderManager::InitBuiltinPBRShader() {
     }
 }
 
-// UBO name 鈫?engine UBOBindingPoint 鏄犲皠琛紙鐢ㄤ簬 reflection 鑷姩缁戝畾锛?
+// UBO name → engine UBOBindingPoint 映射表（用于 reflection 自动绑定）
 static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     if (std::strcmp(name, "PerFrame") == 0)       return UBOBindingPoint::PerFrame;
     if (std::strcmp(name, "PerScene") == 0)       return UBOBindingPoint::PerScene;
@@ -484,7 +484,7 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     return static_cast<UBOBindingPoint>(0xFF); // unknown 鈥?skipped
 }
 
-// 浠?reflection 鏁版嵁鑷姩缁戝畾鍗曚釜 stage 鐨勬墍鏈?UBO block
+// 浠?reflection 数据自动绑定单个 stage 鐨勬墍鏈?UBO block
 static void BindUBOsFromReflection(unsigned int prog,
                                     const shader_reflect::StageReflection& refl) {
     for (uint32_t i = 0; i < refl.uniform_buffer_count; ++i) {
@@ -501,12 +501,12 @@ void GLShaderManager::CachePBRLocations() {
     auto& loc = pbr_locations_;
     unsigned int h = pbr_shader_handle_;
 
-    // --- UBO block 缁戝畾锛坮eflection 椹卞姩锛?--
+    // --- UBO block 绑定（reflection 椹卞姩锛?--
     using namespace dse::render::generated_shaders::reflect;
     BindUBOsFromReflection(h, kpbr_vert_reflection);
     BindUBOsFromReflection(h, kpbr_frag_reflection);
 
-    // 缂撳瓨 block index 鍒?locations struct锛堝悜鍚庡吋瀹癸級
+    // 缓存 block index 鍒?locations struct（向后兼容）
     loc.per_frame_block_index = glGetUniformBlockIndex(h, "PerFrame");
     loc.per_scene_block_index = glGetUniformBlockIndex(h, "PerScene");
     loc.per_material_block_index = glGetUniformBlockIndex(h, "PerMaterial");
@@ -537,7 +537,7 @@ void GLShaderManager::CachePBRLocations() {
         bind_block(loc.bone_matrices_block_index, UBOBindingPoint::BoneMatrices);
     }
 
-    // --- 绾圭悊 unit 鑷姩鍒嗛厤锛坮eflection 椹卞姩锛屼竴娆℃€х粦瀹氾級---
+    // --- 纹理 unit 自动分配（reflection 驱动，一次性绑定）---
     {
         std::vector<gl_reflect::TextureUnitEntry> tex_entries;
         gl_reflect::ComputeFlatTextureUnits(kpbr_frag_reflection, tex_entries);
@@ -546,7 +546,7 @@ void GLShaderManager::CachePBRLocations() {
         glUseProgram(h);
         gl_reflect::BindSamplersOnce(h, tex_entries, glGetUniformLocation, glUniform1i);
 
-        // 浠庤绠楃粨鏋滃～鍏?PBRTextureSlots锛坉raw executor 浣跨敤锛?
+        // 从计算结果填充 PBRTextureSlots（draw executor 使用）
         auto& slots = pbr_texture_slots_;
         for (const auto& e : tex_entries) {
             int u = static_cast<int>(e.unit);
@@ -572,7 +572,7 @@ void GLShaderManager::CachePBRLocations() {
 #endif
     }
 
-    // --- 缂撳瓨 sampler location锛堝悜鍚庡吋瀹?draw executor锛?--
+    // --- 缓存 sampler location锛堝悜鍚庡吋瀹?draw executor锛?--
     loc.texture = glGetUniformLocation(h, "u_texture");
     loc.normal_map = glGetUniformLocation(h, "u_normal_map");
     loc.metallic_roughness_map = glGetUniformLocation(h, "u_metallic_roughness_map");
@@ -617,7 +617,7 @@ void GLShaderManager::CachePBRLocations() {
     loc.ddgi_normal_bias = glGetUniformLocation(h, "u_ddgi_normal_bias");
     loc.ddgi_irradiance_atlas = glGetUniformLocation(h, "u_ddgi_irradiance_atlas");
 
-    // --- 閫愬璞?uniform锛堜粠 push constants 灞曞钩锛?----
+    // --- 逐对象 uniform（从 push constants 展开）----
     loc.model = glGetUniformLocation(h, "u_model");
     loc.skinned = glGetUniformLocation(h, "u_skinned");
     loc.morph_enabled = glGetUniformLocation(h, "u_morph_enabled");
@@ -631,7 +631,7 @@ void GLShaderManager::CachePBRLocations() {
 // See git history for the old version.
 
 // ============================================================
-// 澶╃┖鐩掔潃鑹插櫒
+// 天空盒着色器
 // ============================================================
 
 void GLShaderManager::InitSkyboxShader() {
@@ -654,7 +654,7 @@ void GLShaderManager::InitSkyboxShader() {
 }
 
 // ============================================================
-// GBuffer 鐫€鑹插櫒锛堝欢杩熸覆鏌撳嚑浣曢€氶亾锛?
+// GBuffer 着色器（延迟渲染几何通道）
 // ============================================================
 
 void GLShaderManager::InitGBufferShader() {
@@ -691,7 +691,7 @@ void GLShaderManager::InitGBufferShader() {
 }
 
 // ============================================================
-// 绮剧伒鐫€鑹插櫒
+// 精灵着色器
 // ============================================================
 
 void GLShaderManager::InitSpriteShader() {
@@ -700,7 +700,7 @@ void GLShaderManager::InitSpriteShader() {
     sprite_shader_handle_ = CompileProgram(DSE_SL(ksprite_vert), DSE_SL(ksprite_frag));
     programs_created_ += 1;
 
-    // Sprite UBO 缁戝畾锛坮eflection 椹卞姩锛?
+    // Sprite UBO 绑定（reflection 椹卞姩锛?
     using namespace dse::render::generated_shaders::reflect;
     BindUBOsFromReflection(sprite_shader_handle_, ksprite_vert_reflection);
     BindUBOsFromReflection(sprite_shader_handle_, ksprite_frag_reflection);
@@ -1164,7 +1164,7 @@ void GLShaderManager::InitUIEffectsShader() {
 }
 
 // ============================================================
-// 闃村奖娣卞害鐫€鑹插櫒
+// 阴影深度着色器
 // ============================================================
 
 void GLShaderManager::InitShadowShader() {
@@ -1177,7 +1177,7 @@ void GLShaderManager::InitShadowShader() {
     shadow_shader_handle_ = CompileProgram(shadow_vert.c_str(), DSE_SL(kshadow_frag));
     programs_created_ += 1;
 
-    // Shadow UBO 缁戝畾锛坮eflection 椹卞姩锛?
+    // Shadow UBO 绑定（reflection 椹卞姩锛?
     using namespace dse::render::generated_shaders::reflect;
     BindUBOsFromReflection(shadow_shader_handle_, kshadow_vert_reflection);
     BindUBOsFromReflection(shadow_shader_handle_, kshadow_frag_reflection);

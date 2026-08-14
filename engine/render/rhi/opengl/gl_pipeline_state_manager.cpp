@@ -1,6 +1,6 @@
 /**
  * @file gl_pipeline_state_manager.cpp
- * @brief GLPipelineStateManager 瀹炵幇 - 绠＄嚎鐘舵€佺鐞嗗櫒锛堝甫 Diff 浼樺寲锛?
+ * @brief GLPipelineStateManager 实现 - 管线状态管理器（带 Diff 浼樺寲锛?
  */
 
 #include "engine/render/rhi/opengl/gl_pipeline_state_manager.h"
@@ -23,7 +23,7 @@ const PipelineStateDesc* GLPipelineStateManager::GetPipelineState(unsigned int h
 }
 
 void GLPipelineStateManager::ApplyState(unsigned int handle) {
-    // 蹇€熻矾寰勶細鍚屼竴绠＄嚎鐘舵€佽繛缁?Apply锛岀洿鎺ヨ烦杩?
+    // 快速路径：同一管线状态连续 Apply，直接跳过
     if (active_pipeline_state_ == handle && handle != 0) {
         ++diff_hits_;
         return;
@@ -33,7 +33,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
 
     auto it = pipeline_states_.find(handle);
     if (it == pipeline_states_.end()) {
-        // 鏈壘鍒扮姸鎬佹椂鍥為€€鍒伴粯璁ゆ贩鍚堢姸鎬?
+        // 未找到状态时回退到默认混合状态
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         return;
@@ -41,7 +41,7 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
 
     const auto& state = it->second;
 
-    // --- 娣峰悎鐘舵€?---
+    // --- 混合状态 ---
     // Apply blend state authoritatively on every PSO bind, for the same reason
     // as depth/cull below: raw glEnable(GL_BLEND)/glBlendFunc* calls across the
     // GL executors bypass this manager, so cached_gl_state_ does NOT reliably
@@ -87,13 +87,13 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
     glPolygonMode(GL_FRONT_AND_BACK, state.wireframe ? GL_LINE : GL_FILL);
 #endif
 
-    // 鏇存柊缂撳瓨
+    // 更新缓存
     cached_gl_state_ = state;
 }
 
 void GLPipelineStateManager::ClearActiveState() {
     active_pipeline_state_ = 0;
-    // 閲嶇疆缂撳瓨涓洪粯璁ゅ€硷紝纭繚涓嬫 ApplyState 浼氬畬鏁磋缃墍鏈?GL 鐘舵€?
+    // 重置缓存为默认值，确保下次 ApplyState 会完整设置所有 GL 状态
     cached_gl_state_ = PipelineStateDesc{};
 }
 

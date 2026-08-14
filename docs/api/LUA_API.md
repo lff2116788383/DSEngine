@@ -1,12 +1,11 @@
 # DSEngine Lua API 参考文档
 
 > 严格对齐 `engine/scripting/lua/bindings/` 源码
-> 更新日期：2026-07-16
-> 本次修订：补齐 `samples/lua` 与 `examples/KF_Framework` 示例所用的 ECS 缺口绑定（网格 UV/法线/切线、子场景加载计数、后处理颜色/状态、导航/转向/物理事件等）与 audio 友好别名（`restart`/`set_loop`/`set_3d_mode`/`add_listener`/`set_3d_distance`）；`ecs.get_post_process_state` 对齐 19 项返回、`audio.get_source_state` 对齐 12 项返回。
-> 绑定文件：`engine/scripting/lua/bindings/` 下约 33 个手写 C++ 源文件 + 13 个 `*.gen.cpp`，
-> 涵盖 21 个顶层模块（其中 `http` / `net` 为条件编译）。
-> 实测共注册 **1169** 个 Lua 可见函数（含 §18 的 380 个 Codegen 字段访问器 + §19 的 69 个开放世界系统函数 + §20-22 的 60 个 AI/过场/Meshlet 函数 + §23-29 的 91 个世界/视频系统函数 + §30 的 37 个 2D 扩展系统函数）。
-> 说明：ECS 高层封装函数见 §5；逐字段底层 getter/setter 见 §18（由 `tools/codegen/binding_defs.json` 自动派生）。
+> 更新日期：2026-08-14（§18 已按 `tools/audit/gen_accessor_doc.py` 重新生成并修复乱码；数字与源码核对）
+> 绑定文件：`engine/scripting/lua/bindings/` 下 **16 个手写 C++ 源文件 + 93 个 `*.gen.cpp`**（codegen 生成），
+> 涵盖 21 个顶层模块（其中 `http` / `net` / `repl` 为条件编译）。
+> 实测共注册 **1781** 个 Lua 可见函数（`tools/audit/lua_api_audit.py` 统计；含 §18 的 Codegen 字段访问器、§19 开放世界系统函数、§20-22 AI/过场/Meshlet 函数、§23-30 世界/视频/2D 扩展系统函数）。
+> 说明：ECS 高层封装函数见 §5；逐字段底层 getter/setter 见 §18（由 `tools/codegen/binding_defs.json` 自动派生，当前 50 个组件）。
 > 完整覆盖率与差距分析见 `docs/api/API_GAP_ANALYSIS.md`。
 
 ---
@@ -1768,714 +1767,714 @@ local local_entity = dse.repl.client_to_entity(cli, some_net_id)
 
 ---
 
-## 18. ECS τ╗äΣ╗╢σ¡ùµ«╡Φ«┐Θù«σÖ¿∩╝êCodegen Φç¬σè¿τöƒµêÉ∩╝ë
+## 18. ECS 组件字段访问器（Codegen 自动生成）
 
-> µ£¼Φèéτö▒ `tools/codegen/binding_defs.json` Φç¬σè¿µ┤╛τöƒ∩╝îσ»╣σ║ö `engine/scripting/lua/bindings/lua_binding_ecs_*.gen.cpp`πÇé
-> Φ┐ÖΣ║¢µÿ»ΘÇÉσ¡ùµ«╡τÜäσ║òσ▒é getter/setter∩╝îτ╗ƒΣ╕Çµ│¿σåîσ£¿ `dse.ecs` Φí¿Σ╕ï∩╝îΣ╕ÄΣ╕èµûçΘ½ÿσ▒éσ░üΦúàσç╜µò░Σ║ÆΦíÑπÇé
-> Φ░âτö¿τ║ªσ«Ü∩╝Ügetter σ╜óσªé `ecs.get_<prefix>_<field>(e)`∩╝îsetter σ╜óσªé `ecs.set_<prefix>_<field>(e, ...)`πÇé
+> 本节由 `tools/codegen/binding_defs.json` 自动派生，对应 `engine/scripting/lua/bindings/lua_binding_ecs_*.gen.cpp`。
+> 这些是逐字段的底层 getter/setter，统一注册在 `dse.ecs` 表下，与上文高层封装函数互补。
+> 调用约定：getter 形如 `ecs.get_<prefix>_<field>(e)`，setter 形如 `ecs.set_<prefix>_<field>(e, ...)`。
 
-> σÉêΦ«í∩╝Ü45 Σ╕¬τ╗äΣ╗╢∩╝î816 Σ╕¬Φ«┐Θù«σÖ¿σç╜µò░πÇé
+> 合计：50 个组件，896 个访问器函数。
 
 
-### 18.1 TransformComponent ΓÇö σëìτ╝Ç `transform`
+### 18.1 TransformComponent — 前缀 `transform`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `position` | vec3 | `ecs.get_transform_position(e)` ΓåÆ x, y, z | `ecs.set_transform_position(e, x, y, z)` | `ΓÇö` |
-| `rotation` | euler_quat | `ecs.get_transform_rotation(e)` ΓåÆ x, y, z | `ecs.set_transform_rotation(e, x, y, z)` | `ΓÇö` |
-| `scale` | vec3 | `ecs.get_transform_scale(e)` ΓåÆ x, y, z | `ecs.set_transform_scale(e, x, y, z)` | `ΓÇö` |
+| `position` | vec3 | `ecs.get_transform_position(e)` → x, y, z | `ecs.set_transform_position(e, x, y, z)` | `—` |
+| `rotation` | euler_quat | `ecs.get_transform_rotation(e)` → x, y, z | `ecs.set_transform_rotation(e, x, y, z)` | `—` |
+| `scale` | vec3 | `ecs.get_transform_scale(e)` → x, y, z | `ecs.set_transform_scale(e, x, y, z)` | `—` |
 
-### 18.2 Camera3DComponent ΓÇö σëìτ╝Ç `camera3d`
+### 18.2 Camera3DComponent — 前缀 `camera3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `fov` | float | `ecs.get_camera3d_fov(e)` ΓåÆ number | `ecs.set_camera3d_fov(e, value:number)` | `60.0f` |
-| `near_clip` | float | `ecs.get_camera3d_near_clip(e)` ΓåÆ number | `ecs.set_camera3d_near_clip(e, value:number)` | `0.1f` |
-| `far_clip` | float | `ecs.get_camera3d_far_clip(e)` ΓåÆ number | `ecs.set_camera3d_far_clip(e, value:number)` | `1000.0f` |
-| `enabled` | bool | `ecs.get_camera3d_enabled(e)` ΓåÆ boolean | `ecs.set_camera3d_enabled(e, value:bool)` | `true` |
-| `priority` | int | `ecs.get_camera3d_priority(e)` ΓåÆ integer | `ecs.set_camera3d_priority(e, value:int)` | `0` |
+| `fov` | float | `ecs.get_camera3d_fov(e)` → number | `ecs.set_camera3d_fov(e, value:number)` | `60.0f` |
+| `near_clip` | float | `ecs.get_camera3d_near_clip(e)` → number | `ecs.set_camera3d_near_clip(e, value:number)` | `0.1f` |
+| `far_clip` | float | `ecs.get_camera3d_far_clip(e)` → number | `ecs.set_camera3d_far_clip(e, value:number)` | `1000.0f` |
+| `enabled` | bool | `ecs.get_camera3d_enabled(e)` → boolean | `ecs.set_camera3d_enabled(e, value:bool)` | `true` |
+| `priority` | int | `ecs.get_camera3d_priority(e)` → integer | `ecs.set_camera3d_priority(e, value:int)` | `0` |
 
-### 18.3 MeshRendererComponent ΓÇö σëìτ╝Ç `mesh_renderer`
+### 18.3 MeshRendererComponent — 前缀 `mesh_renderer`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `color` | vec4 | `ecs.get_mesh_color(e)` ΓåÆ x, y, z, w | `ecs.set_mesh_color(e, x, y, z, w)` | `ΓÇö` |
-| `visible` | bool | `ecs.get_mesh_visible(e)` ΓåÆ boolean | `ecs.set_mesh_visible(e, value:bool)` | `true` |
-| `metallic` | float | `ecs.get_mesh_metallic(e)` ΓåÆ number | `ecs.set_mesh_metallic(e, value:number)` | `0.0f` |
-| `roughness` | float | `ecs.get_mesh_roughness(e)` ΓåÆ number | `ecs.set_mesh_roughness(e, value:number)` | `0.5f` |
-| `emissive` | vec3 | `ecs.get_mesh_emissive(e)` ΓåÆ x, y, z | `ecs.set_mesh_emissive(e, x, y, z)` | `ΓÇö` |
-| `receive_shadow` | bool | `ecs.get_mesh_receive_shadow(e)` ΓåÆ boolean | `ecs.set_mesh_receive_shadow(e, value:bool)` | `true` |
-| `mesh_path` | string | `ecs.get_mesh_path(e)` ΓåÆ string | `ecs.set_mesh_path(e, value:string)` | `ΓÇö` |
-| `shader_variant` | string | `ecs.get_mesh_shader_variant(e)` ΓåÆ string | `ecs.set_mesh_shader_variant(e, value:string)` | `ΓÇö` |
+| `color` | vec4 | `ecs.get_mesh_color(e)` → x, y, z, w | `ecs.set_mesh_color(e, x, y, z, w)` | `—` |
+| `visible` | bool | `ecs.get_mesh_visible(e)` → boolean | `ecs.set_mesh_visible(e, value:bool)` | `true` |
+| `metallic` | float | `ecs.get_mesh_metallic(e)` → number | `ecs.set_mesh_metallic(e, value:number)` | `0.0f` |
+| `roughness` | float | `ecs.get_mesh_roughness(e)` → number | `ecs.set_mesh_roughness(e, value:number)` | `0.5f` |
+| `emissive` | vec3 | `ecs.get_mesh_emissive(e)` → x, y, z | `ecs.set_mesh_emissive(e, x, y, z)` | `—` |
+| `receive_shadow` | bool | `ecs.get_mesh_receive_shadow(e)` → boolean | `ecs.set_mesh_receive_shadow(e, value:bool)` | `true` |
+| `mesh_path` | string | `ecs.get_mesh_path(e)` → string | `ecs.set_mesh_path(e, value:string)` | `—` |
+| `shader_variant` | string | `ecs.get_mesh_shader_variant(e)` → string | `ecs.set_mesh_shader_variant(e, value:string)` | `—` |
 
-### 18.4 DirectionalLight3DComponent ΓÇö σëìτ╝Ç `dir_light`
+### 18.4 DirectionalLight3DComponent — 前缀 `dir_light`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `direction` | vec3 | `ecs.get_dir_light_direction(e)` ΓåÆ x, y, z | `ecs.set_dir_light_direction(e, x, y, z)` | `ΓÇö` |
-| `color` | vec3 | `ecs.get_dir_light_color(e)` ΓåÆ x, y, z | `ecs.set_dir_light_color(e, x, y, z)` | `ΓÇö` |
-| `intensity` | float | `ecs.get_dir_light_intensity(e)` ΓåÆ number | `ecs.set_dir_light_intensity(e, value:number)` | `1.0f` |
-| `ambient_intensity` | float | `ecs.get_dir_light_ambient(e)` ΓåÆ number | `ecs.set_dir_light_ambient(e, value:number)` | `0.2f` |
-| `cast_shadow` | bool | `ecs.get_dir_light_cast_shadow(e)` ΓåÆ boolean | `ecs.set_dir_light_cast_shadow(e, value:bool)` | `true` |
-| `shadow_strength` | float | `ecs.get_dir_light_shadow_strength(e)` ΓåÆ number | `ecs.set_dir_light_shadow_strength(e, value:number)` | `0.35f` |
-| `enabled` | bool | `ecs.get_dir_light_enabled(e)` ΓåÆ boolean | `ecs.set_dir_light_enabled(e, value:bool)` | `true` |
+| `direction` | vec3 | `ecs.get_dir_light_direction(e)` → x, y, z | `ecs.set_dir_light_direction(e, x, y, z)` | `—` |
+| `color` | vec3 | `ecs.get_dir_light_color(e)` → x, y, z | `ecs.set_dir_light_color(e, x, y, z)` | `—` |
+| `intensity` | float | `ecs.get_dir_light_intensity(e)` → number | `ecs.set_dir_light_intensity(e, value:number)` | `1.0f` |
+| `ambient_intensity` | float | `ecs.get_dir_light_ambient(e)` → number | `ecs.set_dir_light_ambient(e, value:number)` | `0.2f` |
+| `cast_shadow` | bool | `ecs.get_dir_light_cast_shadow(e)` → boolean | `ecs.set_dir_light_cast_shadow(e, value:bool)` | `true` |
+| `shadow_strength` | float | `ecs.get_dir_light_shadow_strength(e)` → number | `ecs.set_dir_light_shadow_strength(e, value:number)` | `0.35f` |
+| `enabled` | bool | `ecs.get_dir_light_enabled(e)` → boolean | `ecs.set_dir_light_enabled(e, value:bool)` | `true` |
 
-### 18.5 PointLightComponent ΓÇö σëìτ╝Ç `point_light`
+### 18.5 PointLightComponent — 前缀 `point_light`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `color` | vec3 | `ecs.get_point_light_color(e)` ΓåÆ x, y, z | `ecs.set_point_light_color(e, x, y, z)` | `ΓÇö` |
-| `intensity` | float | `ecs.get_point_light_intensity(e)` ΓåÆ number | `ecs.set_point_light_intensity(e, value:number)` | `1.0f` |
-| `radius` | float | `ecs.get_point_light_radius(e)` ΓåÆ number | `ecs.set_point_light_radius(e, value:number)` | `10.0f` |
-| `enabled` | bool | `ecs.get_point_light_enabled(e)` ΓåÆ boolean | `ecs.set_point_light_enabled(e, value:bool)` | `true` |
-| `cast_shadow` | bool | `ecs.get_point_light_cast_shadow(e)` ΓåÆ boolean | `ecs.set_point_light_cast_shadow(e, value:bool)` | `false` |
+| `color` | vec3 | `ecs.get_point_light_color(e)` → x, y, z | `ecs.set_point_light_color(e, x, y, z)` | `—` |
+| `intensity` | float | `ecs.get_point_light_intensity(e)` → number | `ecs.set_point_light_intensity(e, value:number)` | `1.0f` |
+| `radius` | float | `ecs.get_point_light_radius(e)` → number | `ecs.set_point_light_radius(e, value:number)` | `10.0f` |
+| `enabled` | bool | `ecs.get_point_light_enabled(e)` → boolean | `ecs.set_point_light_enabled(e, value:bool)` | `true` |
+| `cast_shadow` | bool | `ecs.get_point_light_cast_shadow(e)` → boolean | `ecs.set_point_light_cast_shadow(e, value:bool)` | `false` |
 
-### 18.6 SpotLightComponent ΓÇö σëìτ╝Ç `spot_light`
+### 18.6 SpotLightComponent — 前缀 `spot_light`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `color` | vec3 | `ecs.get_spot_light_color(e)` ΓåÆ x, y, z | `ecs.set_spot_light_color(e, x, y, z)` | `ΓÇö` |
-| `intensity` | float | `ecs.get_spot_light_intensity(e)` ΓåÆ number | `ecs.set_spot_light_intensity(e, value:number)` | `1.0f` |
-| `radius` | float | `ecs.get_spot_light_radius(e)` ΓåÆ number | `ecs.set_spot_light_radius(e, value:number)` | `20.0f` |
-| `inner_cone_angle` | float | `ecs.get_spot_light_inner_cone_angle(e)` ΓåÆ number | `ecs.set_spot_light_inner_cone_angle(e, value:number)` | `12.5f` |
-| `outer_cone_angle` | float | `ecs.get_spot_light_outer_cone_angle(e)` ΓåÆ number | `ecs.set_spot_light_outer_cone_angle(e, value:number)` | `17.5f` |
-| `direction` | vec3 | `ecs.get_spot_light_direction(e)` ΓåÆ x, y, z | `ecs.set_spot_light_direction(e, x, y, z)` | `ΓÇö` |
-| `enabled` | bool | `ecs.get_spot_light_enabled(e)` ΓåÆ boolean | `ecs.set_spot_light_enabled(e, value:bool)` | `true` |
-| `cast_shadow` | bool | `ecs.get_spot_light_cast_shadow(e)` ΓåÆ boolean | `ecs.set_spot_light_cast_shadow(e, value:bool)` | `false` |
+| `color` | vec3 | `ecs.get_spot_light_color(e)` → x, y, z | `ecs.set_spot_light_color(e, x, y, z)` | `—` |
+| `intensity` | float | `ecs.get_spot_light_intensity(e)` → number | `ecs.set_spot_light_intensity(e, value:number)` | `1.0f` |
+| `radius` | float | `ecs.get_spot_light_radius(e)` → number | `ecs.set_spot_light_radius(e, value:number)` | `20.0f` |
+| `inner_cone_angle` | float | `ecs.get_spot_light_inner_cone_angle(e)` → number | `ecs.set_spot_light_inner_cone_angle(e, value:number)` | `12.5f` |
+| `outer_cone_angle` | float | `ecs.get_spot_light_outer_cone_angle(e)` → number | `ecs.set_spot_light_outer_cone_angle(e, value:number)` | `17.5f` |
+| `direction` | vec3 | `ecs.get_spot_light_direction(e)` → x, y, z | `ecs.set_spot_light_direction(e, x, y, z)` | `—` |
+| `enabled` | bool | `ecs.get_spot_light_enabled(e)` → boolean | `ecs.set_spot_light_enabled(e, value:bool)` | `true` |
+| `cast_shadow` | bool | `ecs.get_spot_light_cast_shadow(e)` → boolean | `ecs.set_spot_light_cast_shadow(e, value:bool)` | `false` |
 
-### 18.7 SkyLightComponent ΓÇö σëìτ╝Ç `sky_light`
+### 18.7 SkyLightComponent — 前缀 `sky_light`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `up_color` | vec3 | `ecs.get_sky_light_up_color(e)` ΓåÆ x, y, z | `ecs.set_sky_light_up_color(e, x, y, z)` | `ΓÇö` |
-| `down_color` | vec3 | `ecs.get_sky_light_down_color(e)` ΓåÆ x, y, z | `ecs.set_sky_light_down_color(e, x, y, z)` | `ΓÇö` |
-| `intensity` | float | `ecs.get_sky_light_intensity(e)` ΓåÆ number | `ecs.set_sky_light_intensity(e, value:number)` | `1.0f` |
-| `enabled` | bool | `ecs.get_sky_light_enabled(e)` ΓåÆ boolean | `ecs.set_sky_light_enabled(e, value:bool)` | `true` |
+| `up_color` | vec3 | `ecs.get_sky_light_up_color(e)` → x, y, z | `ecs.set_sky_light_up_color(e, x, y, z)` | `—` |
+| `down_color` | vec3 | `ecs.get_sky_light_down_color(e)` → x, y, z | `ecs.set_sky_light_down_color(e, x, y, z)` | `—` |
+| `intensity` | float | `ecs.get_sky_light_intensity(e)` → number | `ecs.set_sky_light_intensity(e, value:number)` | `1.0f` |
+| `enabled` | bool | `ecs.get_sky_light_enabled(e)` → boolean | `ecs.set_sky_light_enabled(e, value:bool)` | `true` |
 
-### 18.8 TreeComponent ΓÇö σëìτ╝Ç `tree`
+### 18.8 TreeComponent — 前缀 `tree`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_tree_enabled(e)` ΓåÆ boolean | `ecs.set_tree_enabled(e, value:bool)` | `true` |
-| `density` | float | `ecs.get_tree_density(e)` ΓåÆ number | `ecs.set_tree_density(e, value:number)` | `0.02f` |
-| `spawn_radius` | float | `ecs.get_tree_spawn_radius(e)` ΓåÆ number | `ecs.set_tree_spawn_radius(e, value:number)` | `120.0f` |
-| `chunk_size` | float | `ecs.get_tree_chunk_size(e)` ΓåÆ number | `ecs.set_tree_chunk_size(e, value:number)` | `32.0f` |
-| `min_scale` | float | `ecs.get_tree_min_scale(e)` ΓåÆ number | `ecs.set_tree_min_scale(e, value:number)` | `0.8f` |
-| `max_scale` | float | `ecs.get_tree_max_scale(e)` ΓåÆ number | `ecs.set_tree_max_scale(e, value:number)` | `1.3f` |
-| `lod1_distance` | float | `ecs.get_tree_lod1_distance(e)` ΓåÆ number | `ecs.set_tree_lod1_distance(e, value:number)` | `60.0f` |
-| `cull_distance` | float | `ecs.get_tree_cull_distance(e)` ΓåÆ number | `ecs.set_tree_cull_distance(e, value:number)` | `200.0f` |
-| `wind_strength` | float | `ecs.get_tree_wind_strength(e)` ΓåÆ number | `ecs.set_tree_wind_strength(e, value:number)` | `0.3f` |
-| `wind_speed` | float | `ecs.get_tree_wind_speed(e)` ΓåÆ number | `ecs.set_tree_wind_speed(e, value:number)` | `1.0f` |
-| `cast_shadow` | bool | `ecs.get_tree_cast_shadow(e)` ΓåÆ boolean | `ecs.set_tree_cast_shadow(e, value:bool)` | `true` |
-| `shadow_distance` | float | `ecs.get_tree_shadow_distance(e)` ΓåÆ number | `ecs.set_tree_shadow_distance(e, value:number)` | `80.0f` |
-| `seed` | int | `ecs.get_tree_seed(e)` ΓåÆ integer | `ecs.set_tree_seed(e, value:int)` | `12345` |
-| `height_variation` | float | `ecs.get_tree_height_variation(e)` ΓåÆ number | `ecs.set_tree_height_variation(e, value:number)` | `0.2f` |
-| `random_rotation` | bool | `ecs.get_tree_random_rotation(e)` ΓåÆ boolean | `ecs.set_tree_random_rotation(e, value:bool)` | `true` |
-| `billboard_distance` | float | `ecs.get_tree_billboard_distance(e)` ΓåÆ number | `ecs.set_tree_billboard_distance(e, value:number)` | `150.0f` |
-| `mesh_path` | string | `ecs.get_tree_mesh_path(e)` ΓåÆ string | `ecs.set_tree_mesh_path(e, value:string)` | `ΓÇö` |
-| `lod1_mesh_path` | string | `ecs.get_tree_lod1_mesh_path(e)` ΓåÆ string | `ecs.set_tree_lod1_mesh_path(e, value:string)` | `ΓÇö` |
-| `billboard_texture_path` | string | `ecs.get_tree_billboard_texture_path(e)` ΓåÆ string | `ecs.set_tree_billboard_texture_path(e, value:string)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_tree_enabled(e)` → boolean | `ecs.set_tree_enabled(e, value:bool)` | `true` |
+| `density` | float | `ecs.get_tree_density(e)` → number | `ecs.set_tree_density(e, value:number)` | `0.02f` |
+| `spawn_radius` | float | `ecs.get_tree_spawn_radius(e)` → number | `ecs.set_tree_spawn_radius(e, value:number)` | `120.0f` |
+| `chunk_size` | float | `ecs.get_tree_chunk_size(e)` → number | `ecs.set_tree_chunk_size(e, value:number)` | `32.0f` |
+| `min_scale` | float | `ecs.get_tree_min_scale(e)` → number | `ecs.set_tree_min_scale(e, value:number)` | `0.8f` |
+| `max_scale` | float | `ecs.get_tree_max_scale(e)` → number | `ecs.set_tree_max_scale(e, value:number)` | `1.3f` |
+| `lod1_distance` | float | `ecs.get_tree_lod1_distance(e)` → number | `ecs.set_tree_lod1_distance(e, value:number)` | `60.0f` |
+| `cull_distance` | float | `ecs.get_tree_cull_distance(e)` → number | `ecs.set_tree_cull_distance(e, value:number)` | `200.0f` |
+| `wind_strength` | float | `ecs.get_tree_wind_strength(e)` → number | `ecs.set_tree_wind_strength(e, value:number)` | `0.3f` |
+| `wind_speed` | float | `ecs.get_tree_wind_speed(e)` → number | `ecs.set_tree_wind_speed(e, value:number)` | `1.0f` |
+| `cast_shadow` | bool | `ecs.get_tree_cast_shadow(e)` → boolean | `ecs.set_tree_cast_shadow(e, value:bool)` | `true` |
+| `shadow_distance` | float | `ecs.get_tree_shadow_distance(e)` → number | `ecs.set_tree_shadow_distance(e, value:number)` | `80.0f` |
+| `seed` | int | `ecs.get_tree_seed(e)` → integer | `ecs.set_tree_seed(e, value:int)` | `12345` |
+| `height_variation` | float | `ecs.get_tree_height_variation(e)` → number | `ecs.set_tree_height_variation(e, value:number)` | `0.2f` |
+| `random_rotation` | bool | `ecs.get_tree_random_rotation(e)` → boolean | `ecs.set_tree_random_rotation(e, value:bool)` | `true` |
+| `billboard_distance` | float | `ecs.get_tree_billboard_distance(e)` → number | `ecs.set_tree_billboard_distance(e, value:number)` | `150.0f` |
+| `mesh_path` | string | `ecs.get_tree_mesh_path(e)` → string | `ecs.set_tree_mesh_path(e, value:string)` | `—` |
+| `lod1_mesh_path` | string | `ecs.get_tree_lod1_mesh_path(e)` → string | `ecs.set_tree_lod1_mesh_path(e, value:string)` | `—` |
+| `billboard_texture_path` | string | `ecs.get_tree_billboard_texture_path(e)` → string | `ecs.set_tree_billboard_texture_path(e, value:string)` | `—` |
 
-### 18.9 TerrainTileManagerComponent ΓÇö σëìτ╝Ç `terrain_tile`
+### 18.9 TerrainTileManagerComponent — 前缀 `terrain_tile`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_terrain_tile_enabled(e)` ΓåÆ boolean | `ecs.set_terrain_tile_enabled(e, value:bool)` | `true` |
-| `tile_world_size` | float | `ecs.get_terrain_tile_world_size(e)` ΓåÆ number | `ecs.set_terrain_tile_world_size(e, value:number)` | `64.0f` |
-| `tile_resolution` | int | `ecs.get_terrain_tile_resolution(e)` ΓåÆ integer | `ecs.set_terrain_tile_resolution(e, value:int)` | `64` |
-| `max_height` | float | `ecs.get_terrain_tile_max_height(e)` ΓåÆ number | `ecs.set_terrain_tile_max_height(e, value:number)` | `20.0f` |
-| `load_radius` | float | `ecs.get_terrain_tile_load_radius(e)` ΓåÆ number | `ecs.set_terrain_tile_load_radius(e, value:number)` | `200.0f` |
-| `unload_radius` | float | `ecs.get_terrain_tile_unload_radius(e)` ΓåÆ number | `ecs.set_terrain_tile_unload_radius(e, value:number)` | `250.0f` |
-| `use_procedural` | bool | `ecs.get_terrain_tile_use_procedural(e)` ΓåÆ boolean | `ecs.set_terrain_tile_use_procedural(e, value:bool)` | `true` |
-| `procedural_base_height` | float | `ecs.get_terrain_tile_procedural_base_height(e)` ΓåÆ number | `ecs.set_terrain_tile_procedural_base_height(e, value:number)` | `0.0f` |
-| `max_lod_levels` | int | `ecs.get_terrain_tile_max_lod_levels(e)` ΓåÆ integer | `ecs.set_terrain_tile_max_lod_levels(e, value:int)` | `4` |
-| `lod_distance_factor` | float | `ecs.get_terrain_tile_lod_distance_factor(e)` ΓåÆ number | `ecs.set_terrain_tile_lod_distance_factor(e, value:number)` | `50.0f` |
+| `enabled` | bool | `ecs.get_terrain_tile_enabled(e)` → boolean | `ecs.set_terrain_tile_enabled(e, value:bool)` | `true` |
+| `tile_world_size` | float | `ecs.get_terrain_tile_world_size(e)` → number | `ecs.set_terrain_tile_world_size(e, value:number)` | `64.0f` |
+| `tile_resolution` | int | `ecs.get_terrain_tile_resolution(e)` → integer | `ecs.set_terrain_tile_resolution(e, value:int)` | `64` |
+| `max_height` | float | `ecs.get_terrain_tile_max_height(e)` → number | `ecs.set_terrain_tile_max_height(e, value:number)` | `20.0f` |
+| `load_radius` | float | `ecs.get_terrain_tile_load_radius(e)` → number | `ecs.set_terrain_tile_load_radius(e, value:number)` | `200.0f` |
+| `unload_radius` | float | `ecs.get_terrain_tile_unload_radius(e)` → number | `ecs.set_terrain_tile_unload_radius(e, value:number)` | `250.0f` |
+| `use_procedural` | bool | `ecs.get_terrain_tile_use_procedural(e)` → boolean | `ecs.set_terrain_tile_use_procedural(e, value:bool)` | `true` |
+| `procedural_base_height` | float | `ecs.get_terrain_tile_procedural_base_height(e)` → number | `ecs.set_terrain_tile_procedural_base_height(e, value:number)` | `0.0f` |
+| `max_lod_levels` | int | `ecs.get_terrain_tile_max_lod_levels(e)` → integer | `ecs.set_terrain_tile_max_lod_levels(e, value:int)` | `4` |
+| `lod_distance_factor` | float | `ecs.get_terrain_tile_lod_distance_factor(e)` → number | `ecs.set_terrain_tile_lod_distance_factor(e, value:number)` | `50.0f` |
 
-### 18.10 DynamicObstacleComponent ΓÇö σëìτ╝Ç `dyn_obstacle`
+### 18.10 DynamicObstacleComponent — 前缀 `dyn_obstacle`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_dyn_obstacle_enabled(e)` ΓåÆ boolean | `ecs.set_dyn_obstacle_enabled(e, value:bool)` | `true` |
-| `shape` | enum_int | `ecs.get_dyn_obstacle_shape(e)` ΓåÆ integer | `ecs.set_dyn_obstacle_shape(e, value:int)` | `0` |
-| `box_extents` | vec3 | `ecs.get_dyn_obstacle_box_extents(e)` ΓåÆ x, y, z | `ecs.set_dyn_obstacle_box_extents(e, x, y, z)` | `ΓÇö` |
-| `cylinder_radius` | float | `ecs.get_dyn_obstacle_cylinder_radius(e)` ΓåÆ number | `ecs.set_dyn_obstacle_cylinder_radius(e, value:number)` | `1.0f` |
-| `cylinder_height` | float | `ecs.get_dyn_obstacle_cylinder_height(e)` ΓåÆ number | `ecs.set_dyn_obstacle_cylinder_height(e, value:number)` | `2.0f` |
+| `enabled` | bool | `ecs.get_dyn_obstacle_enabled(e)` → boolean | `ecs.set_dyn_obstacle_enabled(e, value:bool)` | `true` |
+| `shape` | enum_int | `ecs.get_dyn_obstacle_shape(e)` → integer | `ecs.set_dyn_obstacle_shape(e, value:int)` | `0` |
+| `box_extents` | vec3 | `ecs.get_dyn_obstacle_box_extents(e)` → x, y, z | `ecs.set_dyn_obstacle_box_extents(e, x, y, z)` | `—` |
+| `cylinder_radius` | float | `ecs.get_dyn_obstacle_cylinder_radius(e)` → number | `ecs.set_dyn_obstacle_cylinder_radius(e, value:number)` | `1.0f` |
+| `cylinder_height` | float | `ecs.get_dyn_obstacle_cylinder_height(e)` → number | `ecs.set_dyn_obstacle_cylinder_height(e, value:number)` | `2.0f` |
 
-### 18.11 NavMeshAutoRebakeComponent ΓÇö σëìτ╝Ç `navmesh_rebake`
+### 18.11 NavMeshAutoRebakeComponent — 前缀 `navmesh_rebake`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_navmesh_auto_rebake_enabled(e)` ΓåÆ boolean | `ecs.set_navmesh_auto_rebake_enabled(e, value:bool)` | `true` |
-| `tile_size` | float | `ecs.get_navmesh_auto_rebake_tile_size(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_tile_size(e, value:number)` | `48.0f` |
-| `rebake_cooldown` | float | `ecs.get_navmesh_auto_rebake_cooldown(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_cooldown(e, value:number)` | `1.0f` |
-| `collect_terrain` | bool | `ecs.get_navmesh_auto_rebake_collect_terrain(e)` ΓåÆ boolean | `ecs.set_navmesh_auto_rebake_collect_terrain(e, value:bool)` | `true` |
-| `collect_mesh_renderers` | bool | `ecs.get_navmesh_auto_rebake_collect_mesh_renderers(e)` ΓåÆ boolean | `ecs.set_navmesh_auto_rebake_collect_mesh_renderers(e, value:bool)` | `true` |
-| `agent_height` | float | `ecs.get_navmesh_auto_rebake_agent_height(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_agent_height(e, value:number)` | `2.0f` |
-| `agent_radius` | float | `ecs.get_navmesh_auto_rebake_agent_radius(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_agent_radius(e, value:number)` | `0.6f` |
-| `agent_max_climb` | float | `ecs.get_navmesh_auto_rebake_agent_max_climb(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_agent_max_climb(e, value:number)` | `0.9f` |
-| `agent_max_slope` | float | `ecs.get_navmesh_auto_rebake_agent_max_slope(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_agent_max_slope(e, value:number)` | `45.0f` |
-| `cell_size` | float | `ecs.get_navmesh_auto_rebake_cell_size(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_cell_size(e, value:number)` | `0.3f` |
-| `cell_height` | float | `ecs.get_navmesh_auto_rebake_cell_height(e)` ΓåÆ number | `ecs.set_navmesh_auto_rebake_cell_height(e, value:number)` | `0.2f` |
+| `enabled` | bool | `ecs.get_navmesh_auto_rebake_enabled(e)` → boolean | `ecs.set_navmesh_auto_rebake_enabled(e, value:bool)` | `true` |
+| `tile_size` | float | `ecs.get_navmesh_auto_rebake_tile_size(e)` → number | `ecs.set_navmesh_auto_rebake_tile_size(e, value:number)` | `48.0f` |
+| `rebake_cooldown` | float | `ecs.get_navmesh_auto_rebake_cooldown(e)` → number | `ecs.set_navmesh_auto_rebake_cooldown(e, value:number)` | `1.0f` |
+| `collect_terrain` | bool | `ecs.get_navmesh_auto_rebake_collect_terrain(e)` → boolean | `ecs.set_navmesh_auto_rebake_collect_terrain(e, value:bool)` | `true` |
+| `collect_mesh_renderers` | bool | `ecs.get_navmesh_auto_rebake_collect_mesh_renderers(e)` → boolean | `ecs.set_navmesh_auto_rebake_collect_mesh_renderers(e, value:bool)` | `true` |
+| `agent_height` | float | `ecs.get_navmesh_auto_rebake_agent_height(e)` → number | `ecs.set_navmesh_auto_rebake_agent_height(e, value:number)` | `2.0f` |
+| `agent_radius` | float | `ecs.get_navmesh_auto_rebake_agent_radius(e)` → number | `ecs.set_navmesh_auto_rebake_agent_radius(e, value:number)` | `0.6f` |
+| `agent_max_climb` | float | `ecs.get_navmesh_auto_rebake_agent_max_climb(e)` → number | `ecs.set_navmesh_auto_rebake_agent_max_climb(e, value:number)` | `0.9f` |
+| `agent_max_slope` | float | `ecs.get_navmesh_auto_rebake_agent_max_slope(e)` → number | `ecs.set_navmesh_auto_rebake_agent_max_slope(e, value:number)` | `45.0f` |
+| `cell_size` | float | `ecs.get_navmesh_auto_rebake_cell_size(e)` → number | `ecs.set_navmesh_auto_rebake_cell_size(e, value:number)` | `0.3f` |
+| `cell_height` | float | `ecs.get_navmesh_auto_rebake_cell_height(e)` → number | `ecs.set_navmesh_auto_rebake_cell_height(e, value:number)` | `0.2f` |
 
-### 18.12 PostProcessComponent ΓÇö σëìτ╝Ç `post_process`
+### 18.12 PostProcessComponent — 前缀 `post_process`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_post_process_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_enabled(e, value:bool)` | `true` |
-| `bloom_enabled` | bool | `ecs.get_post_process_bloom_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_bloom_enabled(e, value:bool)` | `true` |
-| `bloom_threshold` | float | `ecs.get_post_process_bloom_threshold(e)` ΓåÆ number | `ecs.set_post_process_bloom_threshold(e, value:number)` | `1.0f` |
-| `bloom_intensity` | float | `ecs.get_post_process_bloom_intensity(e)` ΓåÆ number | `ecs.set_post_process_bloom_intensity(e, value:number)` | `0.5f` |
-| `bloom_knee` | float | `ecs.get_post_process_bloom_knee(e)` ΓåÆ number | `ecs.set_post_process_bloom_knee(e, value:number)` | `0.1f` |
-| `bloom_mip_weight` | float | `ecs.get_post_process_bloom_mip_weight(e)` ΓåÆ number | `ecs.set_post_process_bloom_mip_weight(e, value:number)` | `0.005f` |
-| `color_grading_enabled` | bool | `ecs.get_post_process_color_grading_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_color_grading_enabled(e, value:bool)` | `true` |
-| `exposure` | float | `ecs.get_post_process_exposure(e)` ΓåÆ number | `ecs.set_post_process_exposure(e, value:number)` | `1.0f` |
-| `gamma` | float | `ecs.get_post_process_gamma(e)` ΓåÆ number | `ecs.set_post_process_gamma(e, value:number)` | `2.2f` |
-| `ssao_enabled` | bool | `ecs.get_post_process_ssao_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_ssao_enabled(e, value:bool)` | `false` |
-| `ssao_radius` | float | `ecs.get_post_process_ssao_radius(e)` ΓåÆ number | `ecs.set_post_process_ssao_radius(e, value:number)` | `0.5f` |
-| `ssao_bias` | float | `ecs.get_post_process_ssao_bias(e)` ΓåÆ number | `ecs.set_post_process_ssao_bias(e, value:number)` | `0.025f` |
-| `ssao_sample_count` | int | `ecs.get_post_process_ssao_sample_count(e)` ΓåÆ integer | `ecs.set_post_process_ssao_sample_count(e, value:int)` | `32` |
-| `ssao_power` | float | `ecs.get_post_process_ssao_power(e)` ΓåÆ number | `ecs.set_post_process_ssao_power(e, value:number)` | `2.0f` |
-| `ssao_intensity` | float | `ecs.get_post_process_ssao_intensity(e)` ΓåÆ number | `ecs.set_post_process_ssao_intensity(e, value:number)` | `1.0f` |
-| `auto_exposure_enabled` | bool | `ecs.get_post_process_auto_exposure_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_auto_exposure_enabled(e, value:bool)` | `false` |
-| `exposure_min` | float | `ecs.get_post_process_exposure_min(e)` ΓåÆ number | `ecs.set_post_process_exposure_min(e, value:number)` | `0.1f` |
-| `exposure_max` | float | `ecs.get_post_process_exposure_max(e)` ΓåÆ number | `ecs.set_post_process_exposure_max(e, value:number)` | `10.0f` |
-| `adaptation_speed_up` | float | `ecs.get_post_process_adaptation_speed_up(e)` ΓåÆ number | `ecs.set_post_process_adaptation_speed_up(e, value:number)` | `2.0f` |
-| `adaptation_speed_down` | float | `ecs.get_post_process_adaptation_speed_down(e)` ΓåÆ number | `ecs.set_post_process_adaptation_speed_down(e, value:number)` | `1.0f` |
-| `exposure_compensation` | float | `ecs.get_post_process_exposure_compensation(e)` ΓåÆ number | `ecs.set_post_process_exposure_compensation(e, value:number)` | `0.0f` |
-| `color_lut_intensity` | float | `ecs.get_post_process_color_lut_intensity(e)` ΓåÆ number | `ecs.set_post_process_color_lut_intensity(e, value:number)` | `1.0f` |
-| `vignette_enabled` | bool | `ecs.get_post_process_vignette_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_vignette_enabled(e, value:bool)` | `false` |
-| `vignette_intensity` | float | `ecs.get_post_process_vignette_intensity(e)` ΓåÆ number | `ecs.set_post_process_vignette_intensity(e, value:number)` | `0.35f` |
-| `vignette_radius` | float | `ecs.get_post_process_vignette_radius(e)` ΓåÆ number | `ecs.set_post_process_vignette_radius(e, value:number)` | `0.75f` |
-| `vignette_softness` | float | `ecs.get_post_process_vignette_softness(e)` ΓåÆ number | `ecs.set_post_process_vignette_softness(e, value:number)` | `0.35f` |
-| `film_grain_enabled` | bool | `ecs.get_post_process_film_grain_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_film_grain_enabled(e, value:bool)` | `false` |
-| `film_grain_intensity` | float | `ecs.get_post_process_film_grain_intensity(e)` ΓåÆ number | `ecs.set_post_process_film_grain_intensity(e, value:number)` | `0.08f` |
-| `film_grain_time_scale` | float | `ecs.get_post_process_film_grain_time_scale(e)` ΓåÆ number | `ecs.set_post_process_film_grain_time_scale(e, value:number)` | `1.0f` |
-| `fxaa_enabled` | bool | `ecs.get_post_process_fxaa_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_fxaa_enabled(e, value:bool)` | `true` |
-| `taa_enabled` | bool | `ecs.get_post_process_taa_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_taa_enabled(e, value:bool)` | `false` |
-| `taa_blend_factor` | float | `ecs.get_post_process_taa_blend_factor(e)` ΓåÆ number | `ecs.set_post_process_taa_blend_factor(e, value:number)` | `0.1f` |
-| `contact_shadow_enabled` | bool | `ecs.get_post_process_contact_shadow_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_contact_shadow_enabled(e, value:bool)` | `false` |
-| `contact_shadow_strength` | float | `ecs.get_post_process_contact_shadow_strength(e)` ΓåÆ number | `ecs.set_post_process_contact_shadow_strength(e, value:number)` | `0.5f` |
-| `contact_shadow_steps` | int | `ecs.get_post_process_contact_shadow_steps(e)` ΓåÆ integer | `ecs.set_post_process_contact_shadow_steps(e, value:int)` | `16` |
-| `contact_shadow_step_size` | float | `ecs.get_post_process_contact_shadow_step_size(e)` ΓåÆ number | `ecs.set_post_process_contact_shadow_step_size(e, value:number)` | `0.5f` |
-| `dof_enabled` | bool | `ecs.get_post_process_dof_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_dof_enabled(e, value:bool)` | `false` |
-| `dof_focus_distance` | float | `ecs.get_post_process_dof_focus_distance(e)` ΓåÆ number | `ecs.set_post_process_dof_focus_distance(e, value:number)` | `100.0f` |
-| `dof_focus_range` | float | `ecs.get_post_process_dof_focus_range(e)` ΓåÆ number | `ecs.set_post_process_dof_focus_range(e, value:number)` | `50.0f` |
-| `dof_bokeh_radius` | float | `ecs.get_post_process_dof_bokeh_radius(e)` ΓåÆ number | `ecs.set_post_process_dof_bokeh_radius(e, value:number)` | `4.0f` |
-| `motion_blur_enabled` | bool | `ecs.get_post_process_motion_blur_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_motion_blur_enabled(e, value:bool)` | `false` |
-| `motion_blur_intensity` | float | `ecs.get_post_process_motion_blur_intensity(e)` ΓåÆ number | `ecs.set_post_process_motion_blur_intensity(e, value:number)` | `1.0f` |
-| `motion_blur_samples` | int | `ecs.get_post_process_motion_blur_samples(e)` ΓåÆ integer | `ecs.set_post_process_motion_blur_samples(e, value:int)` | `8` |
-| `ssr_enabled` | bool | `ecs.get_post_process_ssr_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_ssr_enabled(e, value:bool)` | `false` |
-| `ssr_max_distance` | float | `ecs.get_post_process_ssr_max_distance(e)` ΓåÆ number | `ecs.set_post_process_ssr_max_distance(e, value:number)` | `100.0f` |
-| `ssr_thickness` | float | `ecs.get_post_process_ssr_thickness(e)` ΓåÆ number | `ecs.set_post_process_ssr_thickness(e, value:number)` | `0.5f` |
-| `ssr_step_size` | float | `ecs.get_post_process_ssr_step_size(e)` ΓåÆ number | `ecs.set_post_process_ssr_step_size(e, value:number)` | `1.0f` |
-| `ssr_max_steps` | int | `ecs.get_post_process_ssr_max_steps(e)` ΓåÆ integer | `ecs.set_post_process_ssr_max_steps(e, value:int)` | `64` |
-| `ssr_fade_distance` | float | `ecs.get_post_process_ssr_fade_distance(e)` ΓåÆ number | `ecs.set_post_process_ssr_fade_distance(e, value:number)` | `0.2f` |
-| `ssr_max_roughness` | float | `ecs.get_post_process_ssr_max_roughness(e)` ΓåÆ number | `ecs.set_post_process_ssr_max_roughness(e, value:number)` | `0.5f` |
-| `outline_enabled` | bool | `ecs.get_post_process_outline_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_outline_enabled(e, value:bool)` | `false` |
-| `outline_color` | vec3 | `ecs.get_post_process_outline_color(e)` ΓåÆ x, y, z | `ecs.set_post_process_outline_color(e, x, y, z)` | `ΓÇö` |
-| `outline_thickness` | float | `ecs.get_post_process_outline_thickness(e)` ΓåÆ number | `ecs.set_post_process_outline_thickness(e, value:number)` | `1.0f` |
-| `outline_depth_threshold` | float | `ecs.get_post_process_outline_depth_threshold(e)` ΓåÆ number | `ecs.set_post_process_outline_depth_threshold(e, value:number)` | `0.1f` |
-| `outline_normal_threshold` | float | `ecs.get_post_process_outline_normal_threshold(e)` ΓåÆ number | `ecs.set_post_process_outline_normal_threshold(e, value:number)` | `0.4f` |
-| `light_shaft_enabled` | bool | `ecs.get_post_process_light_shaft_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_light_shaft_enabled(e, value:bool)` | `false` |
-| `light_shaft_color` | vec3 | `ecs.get_post_process_light_shaft_color(e)` ΓåÆ x, y, z | `ecs.set_post_process_light_shaft_color(e, x, y, z)` | `ΓÇö` |
-| `light_shaft_density` | float | `ecs.get_post_process_light_shaft_density(e)` ΓåÆ number | `ecs.set_post_process_light_shaft_density(e, value:number)` | `0.84f` |
-| `light_shaft_weight` | float | `ecs.get_post_process_light_shaft_weight(e)` ΓåÆ number | `ecs.set_post_process_light_shaft_weight(e, value:number)` | `0.04f` |
-| `light_shaft_decay` | float | `ecs.get_post_process_light_shaft_decay(e)` ΓåÆ number | `ecs.set_post_process_light_shaft_decay(e, value:number)` | `0.97f` |
-| `light_shaft_exposure` | float | `ecs.get_post_process_light_shaft_exposure(e)` ΓåÆ number | `ecs.set_post_process_light_shaft_exposure(e, value:number)` | `0.4f` |
-| `light_shaft_intensity` | float | `ecs.get_post_process_light_shaft_intensity(e)` ΓåÆ number | `ecs.set_post_process_light_shaft_intensity(e, value:number)` | `1.0f` |
-| `light_shaft_samples` | int | `ecs.get_post_process_light_shaft_samples(e)` ΓåÆ integer | `ecs.set_post_process_light_shaft_samples(e, value:int)` | `64` |
-| `fog_enabled` | bool | `ecs.get_post_process_fog_enabled(e)` ΓåÆ boolean | `ecs.set_post_process_fog_enabled(e, value:bool)` | `false` |
-| `fog_color` | vec3 | `ecs.get_post_process_fog_color(e)` ΓåÆ x, y, z | `ecs.set_post_process_fog_color(e, x, y, z)` | `ΓÇö` |
-| `fog_density` | float | `ecs.get_post_process_fog_density(e)` ΓåÆ number | `ecs.set_post_process_fog_density(e, value:number)` | `0.02f` |
-| `fog_height_falloff` | float | `ecs.get_post_process_fog_height_falloff(e)` ΓåÆ number | `ecs.set_post_process_fog_height_falloff(e, value:number)` | `0.3f` |
-| `fog_height_offset` | float | `ecs.get_post_process_fog_height_offset(e)` ΓåÆ number | `ecs.set_post_process_fog_height_offset(e, value:number)` | `0.0f` |
-| `fog_start` | float | `ecs.get_post_process_fog_start(e)` ΓåÆ number | `ecs.set_post_process_fog_start(e, value:number)` | `0.0f` |
-| `fog_end` | float | `ecs.get_post_process_fog_end(e)` ΓåÆ number | `ecs.set_post_process_fog_end(e, value:number)` | `1000.0f` |
-| `fog_steps` | int | `ecs.get_post_process_fog_steps(e)` ΓåÆ integer | `ecs.set_post_process_fog_steps(e, value:int)` | `16` |
-| `fog_sun_scatter` | float | `ecs.get_post_process_fog_sun_scatter(e)` ΓåÆ number | `ecs.set_post_process_fog_sun_scatter(e, value:number)` | `0.6f` |
+| `enabled` | bool | `ecs.get_post_process_enabled(e)` → boolean | `ecs.set_post_process_enabled(e, value:bool)` | `true` |
+| `bloom_enabled` | bool | `ecs.get_post_process_bloom_enabled(e)` → boolean | `ecs.set_post_process_bloom_enabled(e, value:bool)` | `true` |
+| `bloom_threshold` | float | `ecs.get_post_process_bloom_threshold(e)` → number | `ecs.set_post_process_bloom_threshold(e, value:number)` | `1.0f` |
+| `bloom_intensity` | float | `ecs.get_post_process_bloom_intensity(e)` → number | `ecs.set_post_process_bloom_intensity(e, value:number)` | `0.5f` |
+| `bloom_knee` | float | `ecs.get_post_process_bloom_knee(e)` → number | `ecs.set_post_process_bloom_knee(e, value:number)` | `0.1f` |
+| `bloom_mip_weight` | float | `ecs.get_post_process_bloom_mip_weight(e)` → number | `ecs.set_post_process_bloom_mip_weight(e, value:number)` | `0.005f` |
+| `color_grading_enabled` | bool | `ecs.get_post_process_color_grading_enabled(e)` → boolean | `ecs.set_post_process_color_grading_enabled(e, value:bool)` | `true` |
+| `exposure` | float | `ecs.get_post_process_exposure(e)` → number | `ecs.set_post_process_exposure(e, value:number)` | `1.0f` |
+| `gamma` | float | `ecs.get_post_process_gamma(e)` → number | `ecs.set_post_process_gamma(e, value:number)` | `2.2f` |
+| `ssao_enabled` | bool | `ecs.get_post_process_ssao_enabled(e)` → boolean | `ecs.set_post_process_ssao_enabled(e, value:bool)` | `false` |
+| `ssao_radius` | float | `ecs.get_post_process_ssao_radius(e)` → number | `ecs.set_post_process_ssao_radius(e, value:number)` | `0.5f` |
+| `ssao_bias` | float | `ecs.get_post_process_ssao_bias(e)` → number | `ecs.set_post_process_ssao_bias(e, value:number)` | `0.025f` |
+| `ssao_sample_count` | int | `ecs.get_post_process_ssao_sample_count(e)` → integer | `ecs.set_post_process_ssao_sample_count(e, value:int)` | `32` |
+| `ssao_power` | float | `ecs.get_post_process_ssao_power(e)` → number | `ecs.set_post_process_ssao_power(e, value:number)` | `2.0f` |
+| `ssao_intensity` | float | `ecs.get_post_process_ssao_intensity(e)` → number | `ecs.set_post_process_ssao_intensity(e, value:number)` | `1.0f` |
+| `auto_exposure_enabled` | bool | `ecs.get_post_process_auto_exposure_enabled(e)` → boolean | `ecs.set_post_process_auto_exposure_enabled(e, value:bool)` | `false` |
+| `exposure_min` | float | `ecs.get_post_process_exposure_min(e)` → number | `ecs.set_post_process_exposure_min(e, value:number)` | `0.1f` |
+| `exposure_max` | float | `ecs.get_post_process_exposure_max(e)` → number | `ecs.set_post_process_exposure_max(e, value:number)` | `10.0f` |
+| `adaptation_speed_up` | float | `ecs.get_post_process_adaptation_speed_up(e)` → number | `ecs.set_post_process_adaptation_speed_up(e, value:number)` | `2.0f` |
+| `adaptation_speed_down` | float | `ecs.get_post_process_adaptation_speed_down(e)` → number | `ecs.set_post_process_adaptation_speed_down(e, value:number)` | `1.0f` |
+| `exposure_compensation` | float | `ecs.get_post_process_exposure_compensation(e)` → number | `ecs.set_post_process_exposure_compensation(e, value:number)` | `0.0f` |
+| `color_lut_intensity` | float | `ecs.get_post_process_color_lut_intensity(e)` → number | `ecs.set_post_process_color_lut_intensity(e, value:number)` | `1.0f` |
+| `vignette_enabled` | bool | `ecs.get_post_process_vignette_enabled(e)` → boolean | `ecs.set_post_process_vignette_enabled(e, value:bool)` | `false` |
+| `vignette_intensity` | float | `ecs.get_post_process_vignette_intensity(e)` → number | `ecs.set_post_process_vignette_intensity(e, value:number)` | `0.35f` |
+| `vignette_radius` | float | `ecs.get_post_process_vignette_radius(e)` → number | `ecs.set_post_process_vignette_radius(e, value:number)` | `0.75f` |
+| `vignette_softness` | float | `ecs.get_post_process_vignette_softness(e)` → number | `ecs.set_post_process_vignette_softness(e, value:number)` | `0.35f` |
+| `film_grain_enabled` | bool | `ecs.get_post_process_film_grain_enabled(e)` → boolean | `ecs.set_post_process_film_grain_enabled(e, value:bool)` | `false` |
+| `film_grain_intensity` | float | `ecs.get_post_process_film_grain_intensity(e)` → number | `ecs.set_post_process_film_grain_intensity(e, value:number)` | `0.08f` |
+| `film_grain_time_scale` | float | `ecs.get_post_process_film_grain_time_scale(e)` → number | `ecs.set_post_process_film_grain_time_scale(e, value:number)` | `1.0f` |
+| `fxaa_enabled` | bool | `ecs.get_post_process_fxaa_enabled(e)` → boolean | `ecs.set_post_process_fxaa_enabled(e, value:bool)` | `true` |
+| `taa_enabled` | bool | `ecs.get_post_process_taa_enabled(e)` → boolean | `ecs.set_post_process_taa_enabled(e, value:bool)` | `false` |
+| `taa_blend_factor` | float | `ecs.get_post_process_taa_blend_factor(e)` → number | `ecs.set_post_process_taa_blend_factor(e, value:number)` | `0.1f` |
+| `contact_shadow_enabled` | bool | `ecs.get_post_process_contact_shadow_enabled(e)` → boolean | `ecs.set_post_process_contact_shadow_enabled(e, value:bool)` | `false` |
+| `contact_shadow_strength` | float | `ecs.get_post_process_contact_shadow_strength(e)` → number | `ecs.set_post_process_contact_shadow_strength(e, value:number)` | `0.5f` |
+| `contact_shadow_steps` | int | `ecs.get_post_process_contact_shadow_steps(e)` → integer | `ecs.set_post_process_contact_shadow_steps(e, value:int)` | `16` |
+| `contact_shadow_step_size` | float | `ecs.get_post_process_contact_shadow_step_size(e)` → number | `ecs.set_post_process_contact_shadow_step_size(e, value:number)` | `0.5f` |
+| `dof_enabled` | bool | `ecs.get_post_process_dof_enabled(e)` → boolean | `ecs.set_post_process_dof_enabled(e, value:bool)` | `false` |
+| `dof_focus_distance` | float | `ecs.get_post_process_dof_focus_distance(e)` → number | `ecs.set_post_process_dof_focus_distance(e, value:number)` | `100.0f` |
+| `dof_focus_range` | float | `ecs.get_post_process_dof_focus_range(e)` → number | `ecs.set_post_process_dof_focus_range(e, value:number)` | `50.0f` |
+| `dof_bokeh_radius` | float | `ecs.get_post_process_dof_bokeh_radius(e)` → number | `ecs.set_post_process_dof_bokeh_radius(e, value:number)` | `4.0f` |
+| `motion_blur_enabled` | bool | `ecs.get_post_process_motion_blur_enabled(e)` → boolean | `ecs.set_post_process_motion_blur_enabled(e, value:bool)` | `false` |
+| `motion_blur_intensity` | float | `ecs.get_post_process_motion_blur_intensity(e)` → number | `ecs.set_post_process_motion_blur_intensity(e, value:number)` | `1.0f` |
+| `motion_blur_samples` | int | `ecs.get_post_process_motion_blur_samples(e)` → integer | `ecs.set_post_process_motion_blur_samples(e, value:int)` | `8` |
+| `ssr_enabled` | bool | `ecs.get_post_process_ssr_enabled(e)` → boolean | `ecs.set_post_process_ssr_enabled(e, value:bool)` | `false` |
+| `ssr_max_distance` | float | `ecs.get_post_process_ssr_max_distance(e)` → number | `ecs.set_post_process_ssr_max_distance(e, value:number)` | `100.0f` |
+| `ssr_thickness` | float | `ecs.get_post_process_ssr_thickness(e)` → number | `ecs.set_post_process_ssr_thickness(e, value:number)` | `0.5f` |
+| `ssr_step_size` | float | `ecs.get_post_process_ssr_step_size(e)` → number | `ecs.set_post_process_ssr_step_size(e, value:number)` | `1.0f` |
+| `ssr_max_steps` | int | `ecs.get_post_process_ssr_max_steps(e)` → integer | `ecs.set_post_process_ssr_max_steps(e, value:int)` | `64` |
+| `ssr_fade_distance` | float | `ecs.get_post_process_ssr_fade_distance(e)` → number | `ecs.set_post_process_ssr_fade_distance(e, value:number)` | `0.2f` |
+| `ssr_max_roughness` | float | `ecs.get_post_process_ssr_max_roughness(e)` → number | `ecs.set_post_process_ssr_max_roughness(e, value:number)` | `0.5f` |
+| `outline_enabled` | bool | `ecs.get_post_process_outline_enabled(e)` → boolean | `ecs.set_post_process_outline_enabled(e, value:bool)` | `false` |
+| `outline_color` | vec3 | `ecs.get_post_process_outline_color(e)` → x, y, z | `ecs.set_post_process_outline_color(e, x, y, z)` | `—` |
+| `outline_thickness` | float | `ecs.get_post_process_outline_thickness(e)` → number | `ecs.set_post_process_outline_thickness(e, value:number)` | `1.0f` |
+| `outline_depth_threshold` | float | `ecs.get_post_process_outline_depth_threshold(e)` → number | `ecs.set_post_process_outline_depth_threshold(e, value:number)` | `0.1f` |
+| `outline_normal_threshold` | float | `ecs.get_post_process_outline_normal_threshold(e)` → number | `ecs.set_post_process_outline_normal_threshold(e, value:number)` | `0.4f` |
+| `light_shaft_enabled` | bool | `ecs.get_post_process_light_shaft_enabled(e)` → boolean | `ecs.set_post_process_light_shaft_enabled(e, value:bool)` | `false` |
+| `light_shaft_color` | vec3 | `ecs.get_post_process_light_shaft_color(e)` → x, y, z | `ecs.set_post_process_light_shaft_color(e, x, y, z)` | `—` |
+| `light_shaft_density` | float | `ecs.get_post_process_light_shaft_density(e)` → number | `ecs.set_post_process_light_shaft_density(e, value:number)` | `0.84f` |
+| `light_shaft_weight` | float | `ecs.get_post_process_light_shaft_weight(e)` → number | `ecs.set_post_process_light_shaft_weight(e, value:number)` | `0.04f` |
+| `light_shaft_decay` | float | `ecs.get_post_process_light_shaft_decay(e)` → number | `ecs.set_post_process_light_shaft_decay(e, value:number)` | `0.97f` |
+| `light_shaft_exposure` | float | `ecs.get_post_process_light_shaft_exposure(e)` → number | `ecs.set_post_process_light_shaft_exposure(e, value:number)` | `0.4f` |
+| `light_shaft_intensity` | float | `ecs.get_post_process_light_shaft_intensity(e)` → number | `ecs.set_post_process_light_shaft_intensity(e, value:number)` | `1.0f` |
+| `light_shaft_samples` | int | `ecs.get_post_process_light_shaft_samples(e)` → integer | `ecs.set_post_process_light_shaft_samples(e, value:int)` | `64` |
+| `fog_enabled` | bool | `ecs.get_post_process_fog_enabled(e)` → boolean | `ecs.set_post_process_fog_enabled(e, value:bool)` | `false` |
+| `fog_color` | vec3 | `ecs.get_post_process_fog_color(e)` → x, y, z | `ecs.set_post_process_fog_color(e, x, y, z)` | `—` |
+| `fog_density` | float | `ecs.get_post_process_fog_density(e)` → number | `ecs.set_post_process_fog_density(e, value:number)` | `0.02f` |
+| `fog_height_falloff` | float | `ecs.get_post_process_fog_height_falloff(e)` → number | `ecs.set_post_process_fog_height_falloff(e, value:number)` | `0.3f` |
+| `fog_height_offset` | float | `ecs.get_post_process_fog_height_offset(e)` → number | `ecs.set_post_process_fog_height_offset(e, value:number)` | `0.0f` |
+| `fog_start` | float | `ecs.get_post_process_fog_start(e)` → number | `ecs.set_post_process_fog_start(e, value:number)` | `0.0f` |
+| `fog_end` | float | `ecs.get_post_process_fog_end(e)` → number | `ecs.set_post_process_fog_end(e, value:number)` | `1000.0f` |
+| `fog_steps` | int | `ecs.get_post_process_fog_steps(e)` → integer | `ecs.set_post_process_fog_steps(e, value:int)` | `16` |
+| `fog_sun_scatter` | float | `ecs.get_post_process_fog_sun_scatter(e)` → number | `ecs.set_post_process_fog_sun_scatter(e, value:number)` | `0.6f` |
 
-### 18.13 Animator3DComponent ΓÇö σëìτ╝Ç `animator3d`
+### 18.13 Animator3DComponent — 前缀 `animator3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_animator3d_enabled(e)` ΓåÆ boolean | `ecs.set_animator3d_enabled(e, value:bool)` | `true` |
-| `danim_path` | string | `ecs.get_animator3d_danim_path(e)` ΓåÆ string | `ecs.set_animator3d_danim_path(e, value:string)` | `ΓÇö` |
-| `dskel_path` | string | `ecs.get_animator3d_dskel_path(e)` ΓåÆ string | `ecs.set_animator3d_dskel_path(e, value:string)` | `ΓÇö` |
-| `speed` | float | `ecs.get_animator3d_speed(e)` ΓåÆ number | `ecs.set_animator3d_speed(e, value:number)` | `1.0f` |
-| `loop` | bool | `ecs.get_animator3d_loop(e)` ΓåÆ boolean | `ecs.set_animator3d_loop(e, value:bool)` | `true` |
-| `use_anim_tree` | bool | `ecs.get_animator3d_use_anim_tree(e)` ΓåÆ boolean | `ecs.set_animator3d_use_anim_tree(e, value:bool)` | `false` |
-| `blend_parameter` | string | `ecs.get_animator3d_blend_parameter(e)` ΓåÆ string | `ecs.set_animator3d_blend_parameter(e, value:string)` | `ΓÇö` |
-| `blend_parameter_value` | float | `ecs.get_animator3d_blend_parameter_value(e)` ΓåÆ number | `ecs.set_animator3d_blend_parameter_value(e, value:number)` | `0.0f` |
+| `enabled` | bool | `ecs.get_animator3d_enabled(e)` → boolean | `ecs.set_animator3d_enabled(e, value:bool)` | `true` |
+| `danim_path` | string | `ecs.get_animator3d_danim_path(e)` → string | `ecs.set_animator3d_danim_path(e, value:string)` | `—` |
+| `dskel_path` | string | `ecs.get_animator3d_dskel_path(e)` → string | `ecs.set_animator3d_dskel_path(e, value:string)` | `—` |
+| `speed` | float | `ecs.get_animator3d_speed(e)` → number | `ecs.set_animator3d_speed(e, value:number)` | `1.0f` |
+| `loop` | bool | `ecs.get_animator3d_loop(e)` → boolean | `ecs.set_animator3d_loop(e, value:bool)` | `true` |
+| `use_anim_tree` | bool | `ecs.get_animator3d_use_anim_tree(e)` → boolean | `ecs.set_animator3d_use_anim_tree(e, value:bool)` | `false` |
+| `blend_parameter` | string | `ecs.get_animator3d_blend_parameter(e)` → string | `ecs.set_animator3d_blend_parameter(e, value:string)` | `—` |
+| `blend_parameter_value` | float | `ecs.get_animator3d_blend_parameter_value(e)` → number | `ecs.set_animator3d_blend_parameter_value(e, value:number)` | `0.0f` |
 
-### 18.14 DecalComponent ΓÇö σëìτ╝Ç `decal`
+### 18.14 DecalComponent — 前缀 `decal`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_decal_enabled(e)` ΓåÆ boolean | `ecs.set_decal_enabled(e, value:bool)` | `true` |
-| `color` | vec4 | `ecs.get_decal_color(e)` ΓåÆ x, y, z, w | `ecs.set_decal_color(e, x, y, z, w)` | `ΓÇö` |
-| `angle_fade` | float | `ecs.get_decal_angle_fade(e)` ΓåÆ number | `ecs.set_decal_angle_fade(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_decal_enabled(e)` → boolean | `ecs.set_decal_enabled(e, value:bool)` | `true` |
+| `color` | vec4 | `ecs.get_decal_color(e)` → x, y, z, w | `ecs.set_decal_color(e, x, y, z, w)` | `—` |
+| `angle_fade` | float | `ecs.get_decal_angle_fade(e)` → number | `ecs.set_decal_angle_fade(e, value:number)` | `—` |
 
-### 18.15 SkyboxComponent ΓÇö σëìτ╝Ç `skybox`
+### 18.15 SkyboxComponent — 前缀 `skybox`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_skybox_enabled(e)` ΓåÆ boolean | `ecs.set_skybox_enabled(e, value:bool)` | `true` |
-| `cubemap_path` | string | `ecs.get_skybox_cubemap_path(e)` ΓåÆ string | `ecs.set_skybox_cubemap_path(e, value:string)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_skybox_enabled(e)` → boolean | `ecs.set_skybox_enabled(e, value:bool)` | `true` |
+| `cubemap_path` | string | `ecs.get_skybox_cubemap_path(e)` → string | `ecs.set_skybox_cubemap_path(e, value:string)` | `—` |
 
-### 18.16 FreeCameraControllerComponent ΓÇö σëìτ╝Ç `free_camera`
+### 18.16 FreeCameraControllerComponent — 前缀 `free_camera`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_free_camera_enabled(e)` ΓåÆ boolean | `ecs.set_free_camera_enabled(e, value:bool)` | `true` |
-| `move_speed` | float | `ecs.get_free_camera_move_speed(e)` ΓåÆ number | `ecs.set_free_camera_move_speed(e, value:number)` | `ΓÇö` |
-| `mouse_sensitivity` | float | `ecs.get_free_camera_mouse_sensitivity(e)` ΓåÆ number | `ecs.set_free_camera_mouse_sensitivity(e, value:number)` | `ΓÇö` |
-| `pitch` | float | `ecs.get_free_camera_pitch(e)` ΓåÆ number | `ecs.set_free_camera_pitch(e, value:number)` | `ΓÇö` |
-| `yaw` | float | `ecs.get_free_camera_yaw(e)` ΓåÆ number | `ecs.set_free_camera_yaw(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_free_camera_enabled(e)` → boolean | `ecs.set_free_camera_enabled(e, value:bool)` | `true` |
+| `move_speed` | float | `ecs.get_free_camera_move_speed(e)` → number | `ecs.set_free_camera_move_speed(e, value:number)` | `—` |
+| `mouse_sensitivity` | float | `ecs.get_free_camera_mouse_sensitivity(e)` → number | `ecs.set_free_camera_mouse_sensitivity(e, value:number)` | `—` |
+| `pitch` | float | `ecs.get_free_camera_pitch(e)` → number | `ecs.set_free_camera_pitch(e, value:number)` | `—` |
+| `yaw` | float | `ecs.get_free_camera_yaw(e)` → number | `ecs.set_free_camera_yaw(e, value:number)` | `—` |
 
-### 18.17 SubSceneComponent ΓÇö σëìτ╝Ç `sub_scene`
+### 18.17 SubSceneComponent — 前缀 `sub_scene`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_sub_scene_enabled(e)` ΓåÆ boolean | `ecs.set_sub_scene_enabled(e, value:bool)` | `true` |
-| `scene_path` | string | `ecs.get_sub_scene_scene_path(e)` ΓåÆ string | `ecs.set_sub_scene_scene_path(e, value:string)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_sub_scene_enabled(e)` → boolean | `ecs.set_sub_scene_enabled(e, value:bool)` | `true` |
+| `scene_path` | string | `ecs.get_sub_scene_scene_path(e)` → string | `ecs.set_sub_scene_scene_path(e, value:string)` | `—` |
 
-### 18.18 BoundingBoxComponent ΓÇö σëìτ╝Ç `bounding_box`
+### 18.18 BoundingBoxComponent — 前缀 `bounding_box`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `min_extents` | vec3 | `ecs.get_bounding_box_min_extents(e)` ΓåÆ x, y, z | `ecs.set_bounding_box_min_extents(e, x, y, z)` | `ΓÇö` |
-| `max_extents` | vec3 | `ecs.get_bounding_box_max_extents(e)` ΓåÆ x, y, z | `ecs.set_bounding_box_max_extents(e, x, y, z)` | `ΓÇö` |
+| `min_extents` | vec3 | `ecs.get_bounding_box_min_extents(e)` → x, y, z | `ecs.set_bounding_box_min_extents(e, x, y, z)` | `—` |
+| `max_extents` | vec3 | `ecs.get_bounding_box_max_extents(e)` → x, y, z | `ecs.set_bounding_box_max_extents(e, x, y, z)` | `—` |
 
-### 18.19 WaterComponent ΓÇö σëìτ╝Ç `water`
+### 18.19 WaterComponent — 前缀 `water`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_water_enabled(e)` ΓåÆ boolean | `ecs.set_water_enabled(e, value:bool)` | `true` |
-| `water_level` | float | `ecs.get_water_water_level(e)` ΓåÆ number | `ecs.set_water_water_level(e, value:number)` | `ΓÇö` |
-| `deep_color` | vec4 | `ecs.get_water_deep_color(e)` ΓåÆ x, y, z, w | `ecs.set_water_deep_color(e, x, y, z, w)` | `ΓÇö` |
-| `shallow_color` | vec4 | `ecs.get_water_shallow_color(e)` ΓåÆ x, y, z, w | `ecs.set_water_shallow_color(e, x, y, z, w)` | `ΓÇö` |
-| `max_depth` | float | `ecs.get_water_max_depth(e)` ΓåÆ number | `ecs.set_water_max_depth(e, value:number)` | `ΓÇö` |
-| `transparency` | float | `ecs.get_water_transparency(e)` ΓåÆ number | `ecs.set_water_transparency(e, value:number)` | `ΓÇö` |
-| `wave_amplitude` | float | `ecs.get_water_wave_amplitude(e)` ΓåÆ number | `ecs.set_water_wave_amplitude(e, value:number)` | `ΓÇö` |
-| `wave_frequency` | float | `ecs.get_water_wave_frequency(e)` ΓåÆ number | `ecs.set_water_wave_frequency(e, value:number)` | `ΓÇö` |
-| `wave_speed` | float | `ecs.get_water_wave_speed(e)` ΓåÆ number | `ecs.set_water_wave_speed(e, value:number)` | `ΓÇö` |
-| `wave_direction` | vec3 | `ecs.get_water_wave_direction(e)` ΓåÆ x, y, z | `ecs.set_water_wave_direction(e, x, y, z)` | `ΓÇö` |
-| `refraction_strength` | float | `ecs.get_water_refraction_strength(e)` ΓåÆ number | `ecs.set_water_refraction_strength(e, value:number)` | `ΓÇö` |
-| `reflection_strength` | float | `ecs.get_water_reflection_strength(e)` ΓåÆ number | `ecs.set_water_reflection_strength(e, value:number)` | `ΓÇö` |
-| `specular_power` | float | `ecs.get_water_specular_power(e)` ΓåÆ number | `ecs.set_water_specular_power(e, value:number)` | `ΓÇö` |
-| `caustic_intensity` | float | `ecs.get_water_caustic_intensity(e)` ΓåÆ number | `ecs.set_water_caustic_intensity(e, value:number)` | `ΓÇö` |
-| `caustic_scale` | float | `ecs.get_water_caustic_scale(e)` ΓåÆ number | `ecs.set_water_caustic_scale(e, value:number)` | `ΓÇö` |
-| `foam_intensity` | float | `ecs.get_water_foam_intensity(e)` ΓåÆ number | `ecs.set_water_foam_intensity(e, value:number)` | `ΓÇö` |
-| `foam_depth_threshold` | float | `ecs.get_water_foam_depth_threshold(e)` ΓåÆ number | `ecs.set_water_foam_depth_threshold(e, value:number)` | `ΓÇö` |
-| `underwater_fog_density` | float | `ecs.get_water_underwater_fog_density(e)` ΓåÆ number | `ecs.set_water_underwater_fog_density(e, value:number)` | `ΓÇö` |
-| `underwater_fog_color` | vec4 | `ecs.get_water_underwater_fog_color(e)` ΓåÆ x, y, z, w | `ecs.set_water_underwater_fog_color(e, x, y, z, w)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_water_enabled(e)` → boolean | `ecs.set_water_enabled(e, value:bool)` | `true` |
+| `water_level` | float | `ecs.get_water_water_level(e)` → number | `ecs.set_water_water_level(e, value:number)` | `—` |
+| `deep_color` | vec3 | `ecs.get_water_deep_color(e)` → x, y, z | `ecs.set_water_deep_color(e, x, y, z)` | `—` |
+| `shallow_color` | vec3 | `ecs.get_water_shallow_color(e)` → x, y, z | `ecs.set_water_shallow_color(e, x, y, z)` | `—` |
+| `max_depth` | float | `ecs.get_water_max_depth(e)` → number | `ecs.set_water_max_depth(e, value:number)` | `—` |
+| `transparency` | float | `ecs.get_water_transparency(e)` → number | `ecs.set_water_transparency(e, value:number)` | `—` |
+| `wave_amplitude` | float | `ecs.get_water_wave_amplitude(e)` → number | `ecs.set_water_wave_amplitude(e, value:number)` | `—` |
+| `wave_frequency` | float | `ecs.get_water_wave_frequency(e)` → number | `ecs.set_water_wave_frequency(e, value:number)` | `—` |
+| `wave_speed` | float | `ecs.get_water_wave_speed(e)` → number | `ecs.set_water_wave_speed(e, value:number)` | `—` |
+| `wave_direction` | vec2 | `ecs.get_water_wave_direction(e)` → value | `ecs.set_water_wave_direction(e, value)` | `—` |
+| `refraction_strength` | float | `ecs.get_water_refraction_strength(e)` → number | `ecs.set_water_refraction_strength(e, value:number)` | `—` |
+| `reflection_strength` | float | `ecs.get_water_reflection_strength(e)` → number | `ecs.set_water_reflection_strength(e, value:number)` | `—` |
+| `specular_power` | float | `ecs.get_water_specular_power(e)` → number | `ecs.set_water_specular_power(e, value:number)` | `—` |
+| `caustic_intensity` | float | `ecs.get_water_caustic_intensity(e)` → number | `ecs.set_water_caustic_intensity(e, value:number)` | `—` |
+| `caustic_scale` | float | `ecs.get_water_caustic_scale(e)` → number | `ecs.set_water_caustic_scale(e, value:number)` | `—` |
+| `foam_intensity` | float | `ecs.get_water_foam_intensity(e)` → number | `ecs.set_water_foam_intensity(e, value:number)` | `—` |
+| `foam_depth_threshold` | float | `ecs.get_water_foam_depth_threshold(e)` → number | `ecs.set_water_foam_depth_threshold(e, value:number)` | `—` |
+| `underwater_fog_density` | float | `ecs.get_water_underwater_fog_density(e)` → number | `ecs.set_water_underwater_fog_density(e, value:number)` | `—` |
+| `underwater_fog_color` | vec3 | `ecs.get_water_underwater_fog_color(e)` → x, y, z | `ecs.set_water_underwater_fog_color(e, x, y, z)` | `—` |
 
-### 18.20 LightProbeComponent ΓÇö σëìτ╝Ç `light_probe`
+### 18.20 LightProbeComponent — 前缀 `light_probe`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_light_probe_enabled(e)` ΓåÆ boolean | `ecs.set_light_probe_enabled(e, value:bool)` | `true` |
-| `influence_radius` | float | `ecs.get_light_probe_influence_radius(e)` ΓåÆ number | `ecs.set_light_probe_influence_radius(e, value:number)` | `ΓÇö` |
-| `show_debug` | bool | `ecs.get_light_probe_show_debug(e)` ΓåÆ boolean | `ecs.set_light_probe_show_debug(e, value:bool)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_light_probe_enabled(e)` → boolean | `ecs.set_light_probe_enabled(e, value:bool)` | `true` |
+| `influence_radius` | float | `ecs.get_light_probe_influence_radius(e)` → number | `ecs.set_light_probe_influence_radius(e, value:number)` | `—` |
+| `show_debug` | bool | `ecs.get_light_probe_show_debug(e)` → boolean | `ecs.set_light_probe_show_debug(e, value:bool)` | `—` |
 
-### 18.21 ReflectionProbeComponent ΓÇö σëìτ╝Ç `reflection_probe`
+### 18.21 ReflectionProbeComponent — 前缀 `reflection_probe`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_reflection_probe_enabled(e)` ΓåÆ boolean | `ecs.set_reflection_probe_enabled(e, value:bool)` | `true` |
-| `influence_radius` | float | `ecs.get_reflection_probe_influence_radius(e)` ΓåÆ number | `ecs.set_reflection_probe_influence_radius(e, value:number)` | `ΓÇö` |
-| `box_size_x` | float | `ecs.get_reflection_probe_box_size_x(e)` ΓåÆ number | `ecs.set_reflection_probe_box_size_x(e, value:number)` | `ΓÇö` |
-| `box_size_y` | float | `ecs.get_reflection_probe_box_size_y(e)` ΓåÆ number | `ecs.set_reflection_probe_box_size_y(e, value:number)` | `ΓÇö` |
-| `box_size_z` | float | `ecs.get_reflection_probe_box_size_z(e)` ΓåÆ number | `ecs.set_reflection_probe_box_size_z(e, value:number)` | `ΓÇö` |
-| `use_box_projection` | bool | `ecs.get_reflection_probe_use_box_projection(e)` ΓåÆ boolean | `ecs.set_reflection_probe_use_box_projection(e, value:bool)` | `ΓÇö` |
-| `resolution` | int | `ecs.get_reflection_probe_resolution(e)` ΓåÆ integer | `ecs.set_reflection_probe_resolution(e, value:int)` | `ΓÇö` |
-| `show_debug` | bool | `ecs.get_reflection_probe_show_debug(e)` ΓåÆ boolean | `ecs.set_reflection_probe_show_debug(e, value:bool)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_reflection_probe_enabled(e)` → boolean | `ecs.set_reflection_probe_enabled(e, value:bool)` | `true` |
+| `influence_radius` | float | `ecs.get_reflection_probe_influence_radius(e)` → number | `ecs.set_reflection_probe_influence_radius(e, value:number)` | `—` |
+| `box_size_x` | float | `ecs.get_reflection_probe_box_size_x(e)` → number | `ecs.set_reflection_probe_box_size_x(e, value:number)` | `—` |
+| `box_size_y` | float | `ecs.get_reflection_probe_box_size_y(e)` → number | `ecs.set_reflection_probe_box_size_y(e, value:number)` | `—` |
+| `box_size_z` | float | `ecs.get_reflection_probe_box_size_z(e)` → number | `ecs.set_reflection_probe_box_size_z(e, value:number)` | `—` |
+| `use_box_projection` | bool | `ecs.get_reflection_probe_use_box_projection(e)` → boolean | `ecs.set_reflection_probe_use_box_projection(e, value:bool)` | `—` |
+| `resolution` | int | `ecs.get_reflection_probe_resolution(e)` → integer | `ecs.set_reflection_probe_resolution(e, value:int)` | `—` |
+| `show_debug` | bool | `ecs.get_reflection_probe_show_debug(e)` → boolean | `ecs.set_reflection_probe_show_debug(e, value:bool)` | `—` |
 
-### 18.22 GIProbeVolumeComponent ΓÇö σëìτ╝Ç `gi_probe`
+### 18.22 GIProbeVolumeComponent — 前缀 `gi_probe`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_gi_probe_enabled(e)` ΓåÆ boolean | `ecs.set_gi_probe_enabled(e, value:bool)` | `true` |
-| `origin` | vec3 | `ecs.get_gi_probe_origin(e)` ΓåÆ x, y, z | `ecs.set_gi_probe_origin(e, x, y, z)` | `ΓÇö` |
-| `extent` | vec3 | `ecs.get_gi_probe_extent(e)` ΓåÆ x, y, z | `ecs.set_gi_probe_extent(e, x, y, z)` | `ΓÇö` |
-| `resolution_x` | int | `ecs.get_gi_probe_resolution_x(e)` ΓåÆ integer | `ecs.set_gi_probe_resolution_x(e, value:int)` | `ΓÇö` |
-| `resolution_y` | int | `ecs.get_gi_probe_resolution_y(e)` ΓåÆ integer | `ecs.set_gi_probe_resolution_y(e, value:int)` | `ΓÇö` |
-| `resolution_z` | int | `ecs.get_gi_probe_resolution_z(e)` ΓåÆ integer | `ecs.set_gi_probe_resolution_z(e, value:int)` | `ΓÇö` |
-| `irradiance_texels` | int | `ecs.get_gi_probe_irradiance_texels(e)` ΓåÆ integer | `ecs.set_gi_probe_irradiance_texels(e, value:int)` | `ΓÇö` |
-| `visibility_texels` | int | `ecs.get_gi_probe_visibility_texels(e)` ΓåÆ integer | `ecs.set_gi_probe_visibility_texels(e, value:int)` | `ΓÇö` |
-| `rays_per_probe` | int | `ecs.get_gi_probe_rays_per_probe(e)` ΓåÆ integer | `ecs.set_gi_probe_rays_per_probe(e, value:int)` | `ΓÇö` |
-| `hysteresis` | float | `ecs.get_gi_probe_hysteresis(e)` ΓåÆ number | `ecs.set_gi_probe_hysteresis(e, value:number)` | `ΓÇö` |
-| `gi_intensity` | float | `ecs.get_gi_probe_gi_intensity(e)` ΓåÆ number | `ecs.set_gi_probe_gi_intensity(e, value:number)` | `ΓÇö` |
-| `normal_bias` | float | `ecs.get_gi_probe_normal_bias(e)` ΓåÆ number | `ecs.set_gi_probe_normal_bias(e, value:number)` | `ΓÇö` |
-| `view_bias` | float | `ecs.get_gi_probe_view_bias(e)` ΓåÆ number | `ecs.set_gi_probe_view_bias(e, value:number)` | `ΓÇö` |
-| `show_debug_probes` | bool | `ecs.get_gi_probe_show_debug_probes(e)` ΓåÆ boolean | `ecs.set_gi_probe_show_debug_probes(e, value:bool)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_gi_probe_enabled(e)` → boolean | `ecs.set_gi_probe_enabled(e, value:bool)` | `true` |
+| `origin` | vec3 | `ecs.get_gi_probe_origin(e)` → x, y, z | `ecs.set_gi_probe_origin(e, x, y, z)` | `—` |
+| `extent` | vec3 | `ecs.get_gi_probe_extent(e)` → x, y, z | `ecs.set_gi_probe_extent(e, x, y, z)` | `—` |
+| `resolution_x` | int | `ecs.get_gi_probe_resolution_x(e)` → integer | `ecs.set_gi_probe_resolution_x(e, value:int)` | `—` |
+| `resolution_y` | int | `ecs.get_gi_probe_resolution_y(e)` → integer | `ecs.set_gi_probe_resolution_y(e, value:int)` | `—` |
+| `resolution_z` | int | `ecs.get_gi_probe_resolution_z(e)` → integer | `ecs.set_gi_probe_resolution_z(e, value:int)` | `—` |
+| `irradiance_texels` | int | `ecs.get_gi_probe_irradiance_texels(e)` → integer | `ecs.set_gi_probe_irradiance_texels(e, value:int)` | `—` |
+| `visibility_texels` | int | `ecs.get_gi_probe_visibility_texels(e)` → integer | `ecs.set_gi_probe_visibility_texels(e, value:int)` | `—` |
+| `rays_per_probe` | int | `ecs.get_gi_probe_rays_per_probe(e)` → integer | `ecs.set_gi_probe_rays_per_probe(e, value:int)` | `—` |
+| `hysteresis` | float | `ecs.get_gi_probe_hysteresis(e)` → number | `ecs.set_gi_probe_hysteresis(e, value:number)` | `—` |
+| `gi_intensity` | float | `ecs.get_gi_probe_gi_intensity(e)` → number | `ecs.set_gi_probe_gi_intensity(e, value:number)` | `—` |
+| `normal_bias` | float | `ecs.get_gi_probe_normal_bias(e)` → number | `ecs.set_gi_probe_normal_bias(e, value:number)` | `—` |
+| `view_bias` | float | `ecs.get_gi_probe_view_bias(e)` → number | `ecs.set_gi_probe_view_bias(e, value:number)` | `—` |
+| `show_debug_probes` | bool | `ecs.get_gi_probe_show_debug_probes(e)` → boolean | `ecs.set_gi_probe_show_debug_probes(e, value:bool)` | `—` |
 
-### 18.23 FoliageComponent ΓÇö σëìτ╝Ç `foliage`
+### 18.23 FoliageComponent — 前缀 `foliage`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_foliage_enabled(e)` ΓåÆ boolean | `ecs.set_foliage_enabled(e, value:bool)` | `true` |
-| `wind_strength` | float | `ecs.get_foliage_wind_strength(e)` ΓåÆ number | `ecs.set_foliage_wind_strength(e, value:number)` | `ΓÇö` |
-| `stiffness` | float | `ecs.get_foliage_stiffness(e)` ΓåÆ number | `ecs.set_foliage_stiffness(e, value:number)` | `ΓÇö` |
-| `phase_offset` | float | `ecs.get_foliage_phase_offset(e)` ΓåÆ number | `ecs.set_foliage_phase_offset(e, value:number)` | `ΓÇö` |
-| `push_response` | float | `ecs.get_foliage_push_response(e)` ΓåÆ number | `ecs.set_foliage_push_response(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_foliage_enabled(e)` → boolean | `ecs.set_foliage_enabled(e, value:bool)` | `true` |
+| `wind_strength` | float | `ecs.get_foliage_wind_strength(e)` → number | `ecs.set_foliage_wind_strength(e, value:number)` | `—` |
+| `stiffness` | float | `ecs.get_foliage_stiffness(e)` → number | `ecs.set_foliage_stiffness(e, value:number)` | `—` |
+| `phase_offset` | float | `ecs.get_foliage_phase_offset(e)` → number | `ecs.set_foliage_phase_offset(e, value:number)` | `—` |
+| `push_response` | float | `ecs.get_foliage_push_response(e)` → number | `ecs.set_foliage_push_response(e, value:number)` | `—` |
 
-### 18.24 RigidBody3DComponent ΓÇö σëìτ╝Ç `rigidbody3d`
+### 18.24 RigidBody3DComponent — 前缀 `rigidbody3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `type` | int | `ecs.get_rigidbody3d_type(e)` ΓåÆ integer | `ecs.set_rigidbody3d_type(e, value:int)` | `ΓÇö` |
-| `mass` | float | `ecs.get_rigidbody3d_mass(e)` ΓåÆ number | `ecs.set_rigidbody3d_mass(e, value:number)` | `ΓÇö` |
-| `drag` | float | `ecs.get_rigidbody3d_drag(e)` ΓåÆ number | `ecs.set_rigidbody3d_drag(e, value:number)` | `ΓÇö` |
-| `angular_drag` | float | `ecs.get_rigidbody3d_angular_drag(e)` ΓåÆ number | `ecs.set_rigidbody3d_angular_drag(e, value:number)` | `ΓÇö` |
-| `use_gravity` | bool | `ecs.get_rigidbody3d_use_gravity(e)` ΓåÆ boolean | `ecs.set_rigidbody3d_use_gravity(e, value:bool)` | `true` |
-| `gravity_scale` | float | `ecs.get_rigidbody3d_gravity_scale(e)` ΓåÆ number | `ecs.set_rigidbody3d_gravity_scale(e, value:number)` | `ΓÇö` |
-| `is_kinematic` | bool | `ecs.get_rigidbody3d_is_kinematic(e)` ΓåÆ boolean | `ecs.set_rigidbody3d_is_kinematic(e, value:bool)` | `ΓÇö` |
-| `collision_layer` | int | `ecs.get_rigidbody3d_collision_layer(e)` ΓåÆ integer | `ecs.set_rigidbody3d_collision_layer(e, value:int)` | `ΓÇö` |
-| `collision_mask` | int | `ecs.get_rigidbody3d_collision_mask(e)` ΓåÆ integer | `ecs.set_rigidbody3d_collision_mask(e, value:int)` | `ΓÇö` |
+| `type` | enum_int | `ecs.get_rigidbody3d_type(e)` → integer | `ecs.set_rigidbody3d_type(e, value:int)` | `—` |
+| `mass` | float | `ecs.get_rigidbody3d_mass(e)` → number | `ecs.set_rigidbody3d_mass(e, value:number)` | `—` |
+| `drag` | float | `ecs.get_rigidbody3d_drag(e)` → number | `ecs.set_rigidbody3d_drag(e, value:number)` | `—` |
+| `angular_drag` | float | `ecs.get_rigidbody3d_angular_drag(e)` → number | `ecs.set_rigidbody3d_angular_drag(e, value:number)` | `—` |
+| `use_gravity` | bool | `ecs.get_rigidbody3d_use_gravity(e)` → boolean | `ecs.set_rigidbody3d_use_gravity(e, value:bool)` | `true` |
+| `gravity_scale` | float | `ecs.get_rigidbody3d_gravity_scale(e)` → number | `ecs.set_rigidbody3d_gravity_scale(e, value:number)` | `—` |
+| `is_kinematic` | bool | `ecs.get_rigidbody3d_is_kinematic(e)` → boolean | `ecs.set_rigidbody3d_is_kinematic(e, value:bool)` | `—` |
+| `collision_layer` | int | `ecs.get_rigidbody3d_collision_layer(e)` → integer | `ecs.set_rigidbody3d_collision_layer(e, value:int)` | `—` |
+| `collision_mask` | int | `ecs.get_rigidbody3d_collision_mask(e)` → integer | `ecs.set_rigidbody3d_collision_mask(e, value:int)` | `—` |
 
-### 18.25 BoxCollider3DComponent ΓÇö σëìτ╝Ç `box_collider3d`
+### 18.25 BoxCollider3DComponent — 前缀 `box_collider3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `size` | vec3 | `ecs.get_box_collider3d_size(e)` ΓåÆ x, y, z | `ecs.set_box_collider3d_size(e, x, y, z)` | `ΓÇö` |
-| `center` | vec3 | `ecs.get_box_collider3d_center(e)` ΓåÆ x, y, z | `ecs.set_box_collider3d_center(e, x, y, z)` | `ΓÇö` |
-| `is_trigger` | bool | `ecs.get_box_collider3d_is_trigger(e)` ΓåÆ boolean | `ecs.set_box_collider3d_is_trigger(e, value:bool)` | `ΓÇö` |
-| `bounciness` | float | `ecs.get_box_collider3d_bounciness(e)` ΓåÆ number | `ecs.set_box_collider3d_bounciness(e, value:number)` | `ΓÇö` |
-| `friction` | float | `ecs.get_box_collider3d_friction(e)` ΓåÆ number | `ecs.set_box_collider3d_friction(e, value:number)` | `ΓÇö` |
+| `size` | vec3 | `ecs.get_box_collider3d_size(e)` → x, y, z | `ecs.set_box_collider3d_size(e, x, y, z)` | `—` |
+| `center` | vec3 | `ecs.get_box_collider3d_center(e)` → x, y, z | `ecs.set_box_collider3d_center(e, x, y, z)` | `—` |
+| `is_trigger` | bool | `ecs.get_box_collider3d_is_trigger(e)` → boolean | `ecs.set_box_collider3d_is_trigger(e, value:bool)` | `—` |
+| `bounciness` | float | `ecs.get_box_collider3d_bounciness(e)` → number | `ecs.set_box_collider3d_bounciness(e, value:number)` | `—` |
+| `friction` | float | `ecs.get_box_collider3d_friction(e)` → number | `ecs.set_box_collider3d_friction(e, value:number)` | `—` |
 
-### 18.26 SphereCollider3DComponent ΓÇö σëìτ╝Ç `sphere_collider3d`
+### 18.26 SphereCollider3DComponent — 前缀 `sphere_collider3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `radius` | float | `ecs.get_sphere_collider3d_radius(e)` ΓåÆ number | `ecs.set_sphere_collider3d_radius(e, value:number)` | `ΓÇö` |
-| `center` | vec3 | `ecs.get_sphere_collider3d_center(e)` ΓåÆ x, y, z | `ecs.set_sphere_collider3d_center(e, x, y, z)` | `ΓÇö` |
-| `is_trigger` | bool | `ecs.get_sphere_collider3d_is_trigger(e)` ΓåÆ boolean | `ecs.set_sphere_collider3d_is_trigger(e, value:bool)` | `ΓÇö` |
-| `bounciness` | float | `ecs.get_sphere_collider3d_bounciness(e)` ΓåÆ number | `ecs.set_sphere_collider3d_bounciness(e, value:number)` | `ΓÇö` |
-| `friction` | float | `ecs.get_sphere_collider3d_friction(e)` ΓåÆ number | `ecs.set_sphere_collider3d_friction(e, value:number)` | `ΓÇö` |
+| `radius` | float | `ecs.get_sphere_collider3d_radius(e)` → number | `ecs.set_sphere_collider3d_radius(e, value:number)` | `—` |
+| `center` | vec3 | `ecs.get_sphere_collider3d_center(e)` → x, y, z | `ecs.set_sphere_collider3d_center(e, x, y, z)` | `—` |
+| `is_trigger` | bool | `ecs.get_sphere_collider3d_is_trigger(e)` → boolean | `ecs.set_sphere_collider3d_is_trigger(e, value:bool)` | `—` |
+| `bounciness` | float | `ecs.get_sphere_collider3d_bounciness(e)` → number | `ecs.set_sphere_collider3d_bounciness(e, value:number)` | `—` |
+| `friction` | float | `ecs.get_sphere_collider3d_friction(e)` → number | `ecs.set_sphere_collider3d_friction(e, value:number)` | `—` |
 
-### 18.27 CapsuleCollider3DComponent ΓÇö σëìτ╝Ç `capsule_collider3d`
+### 18.27 CapsuleCollider3DComponent — 前缀 `capsule_collider3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `radius` | float | `ecs.get_capsule_collider3d_radius(e)` ΓåÆ number | `ecs.set_capsule_collider3d_radius(e, value:number)` | `ΓÇö` |
-| `height` | float | `ecs.get_capsule_collider3d_height(e)` ΓåÆ number | `ecs.set_capsule_collider3d_height(e, value:number)` | `ΓÇö` |
-| `center` | vec3 | `ecs.get_capsule_collider3d_center(e)` ΓåÆ x, y, z | `ecs.set_capsule_collider3d_center(e, x, y, z)` | `ΓÇö` |
-| `direction` | int | `ecs.get_capsule_collider3d_direction(e)` ΓåÆ integer | `ecs.set_capsule_collider3d_direction(e, value:int)` | `ΓÇö` |
-| `is_trigger` | bool | `ecs.get_capsule_collider3d_is_trigger(e)` ΓåÆ boolean | `ecs.set_capsule_collider3d_is_trigger(e, value:bool)` | `ΓÇö` |
-| `bounciness` | float | `ecs.get_capsule_collider3d_bounciness(e)` ΓåÆ number | `ecs.set_capsule_collider3d_bounciness(e, value:number)` | `ΓÇö` |
-| `friction` | float | `ecs.get_capsule_collider3d_friction(e)` ΓåÆ number | `ecs.set_capsule_collider3d_friction(e, value:number)` | `ΓÇö` |
+| `radius` | float | `ecs.get_capsule_collider3d_radius(e)` → number | `ecs.set_capsule_collider3d_radius(e, value:number)` | `—` |
+| `height` | float | `ecs.get_capsule_collider3d_height(e)` → number | `ecs.set_capsule_collider3d_height(e, value:number)` | `—` |
+| `center` | vec3 | `ecs.get_capsule_collider3d_center(e)` → x, y, z | `ecs.set_capsule_collider3d_center(e, x, y, z)` | `—` |
+| `direction` | int | `ecs.get_capsule_collider3d_direction(e)` → integer | `ecs.set_capsule_collider3d_direction(e, value:int)` | `—` |
+| `is_trigger` | bool | `ecs.get_capsule_collider3d_is_trigger(e)` → boolean | `ecs.set_capsule_collider3d_is_trigger(e, value:bool)` | `—` |
+| `bounciness` | float | `ecs.get_capsule_collider3d_bounciness(e)` → number | `ecs.set_capsule_collider3d_bounciness(e, value:number)` | `—` |
+| `friction` | float | `ecs.get_capsule_collider3d_friction(e)` → number | `ecs.set_capsule_collider3d_friction(e, value:number)` | `—` |
 
-### 18.28 MeshCollider3DComponent ΓÇö σëìτ╝Ç `mesh_collider3d`
+### 18.28 MeshCollider3DComponent — 前缀 `mesh_collider3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `convex` | bool | `ecs.get_mesh_collider3d_convex(e)` ΓåÆ boolean | `ecs.set_mesh_collider3d_convex(e, value:bool)` | `ΓÇö` |
-| `is_trigger` | bool | `ecs.get_mesh_collider3d_is_trigger(e)` ΓåÆ boolean | `ecs.set_mesh_collider3d_is_trigger(e, value:bool)` | `ΓÇö` |
-| `bounciness` | float | `ecs.get_mesh_collider3d_bounciness(e)` ΓåÆ number | `ecs.set_mesh_collider3d_bounciness(e, value:number)` | `ΓÇö` |
-| `friction` | float | `ecs.get_mesh_collider3d_friction(e)` ΓåÆ number | `ecs.set_mesh_collider3d_friction(e, value:number)` | `ΓÇö` |
+| `convex` | bool | `ecs.get_mesh_collider3d_convex(e)` → boolean | `ecs.set_mesh_collider3d_convex(e, value:bool)` | `—` |
+| `is_trigger` | bool | `ecs.get_mesh_collider3d_is_trigger(e)` → boolean | `ecs.set_mesh_collider3d_is_trigger(e, value:bool)` | `—` |
+| `bounciness` | float | `ecs.get_mesh_collider3d_bounciness(e)` → number | `ecs.set_mesh_collider3d_bounciness(e, value:number)` | `—` |
+| `friction` | float | `ecs.get_mesh_collider3d_friction(e)` → number | `ecs.set_mesh_collider3d_friction(e, value:number)` | `—` |
 
-### 18.29 CharacterController3DComponent ΓÇö σëìτ╝Ç `character_ctrl3d`
+### 18.29 CharacterController3DComponent — 前缀 `character_ctrl3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `radius` | float | `ecs.get_character_ctrl3d_radius(e)` ΓåÆ number | `ecs.set_character_ctrl3d_radius(e, value:number)` | `ΓÇö` |
-| `height` | float | `ecs.get_character_ctrl3d_height(e)` ΓåÆ number | `ecs.set_character_ctrl3d_height(e, value:number)` | `ΓÇö` |
-| `slope_limit` | float | `ecs.get_character_ctrl3d_slope_limit(e)` ΓåÆ number | `ecs.set_character_ctrl3d_slope_limit(e, value:number)` | `ΓÇö` |
-| `step_offset` | float | `ecs.get_character_ctrl3d_step_offset(e)` ΓåÆ number | `ecs.set_character_ctrl3d_step_offset(e, value:number)` | `ΓÇö` |
-| `skin_width` | float | `ecs.get_character_ctrl3d_skin_width(e)` ΓåÆ number | `ecs.set_character_ctrl3d_skin_width(e, value:number)` | `ΓÇö` |
-| `min_move_distance` | float | `ecs.get_character_ctrl3d_min_move_distance(e)` ΓåÆ number | `ecs.set_character_ctrl3d_min_move_distance(e, value:number)` | `ΓÇö` |
+| `radius` | float | `ecs.get_character_ctrl3d_radius(e)` → number | `ecs.set_character_ctrl3d_radius(e, value:number)` | `—` |
+| `height` | float | `ecs.get_character_ctrl3d_height(e)` → number | `ecs.set_character_ctrl3d_height(e, value:number)` | `—` |
+| `slope_limit` | float | `ecs.get_character_ctrl3d_slope_limit(e)` → number | `ecs.set_character_ctrl3d_slope_limit(e, value:number)` | `—` |
+| `step_offset` | float | `ecs.get_character_ctrl3d_step_offset(e)` → number | `ecs.set_character_ctrl3d_step_offset(e, value:number)` | `—` |
+| `skin_width` | float | `ecs.get_character_ctrl3d_skin_width(e)` → number | `ecs.set_character_ctrl3d_skin_width(e, value:number)` | `—` |
+| `min_move_distance` | float | `ecs.get_character_ctrl3d_min_move_distance(e)` → number | `ecs.set_character_ctrl3d_min_move_distance(e, value:number)` | `—` |
 
-### 18.30 Joint3DComponent ΓÇö σëìτ╝Ç `joint3d`
+### 18.30 Joint3DComponent — 前缀 `joint3d`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `type` | int | `ecs.get_joint3d_type(e)` ΓåÆ integer | `ecs.set_joint3d_type(e, value:int)` | `ΓÇö` |
-| `connected_entity_id` | int | `ecs.get_joint3d_connected_entity_id(e)` ΓåÆ integer | `ecs.set_joint3d_connected_entity_id(e, value:int)` | `ΓÇö` |
-| `anchor` | vec3 | `ecs.get_joint3d_anchor(e)` ΓåÆ x, y, z | `ecs.set_joint3d_anchor(e, x, y, z)` | `ΓÇö` |
-| `connected_anchor` | vec3 | `ecs.get_joint3d_connected_anchor(e)` ΓåÆ x, y, z | `ecs.set_joint3d_connected_anchor(e, x, y, z)` | `ΓÇö` |
-| `axis` | vec3 | `ecs.get_joint3d_axis(e)` ΓåÆ x, y, z | `ecs.set_joint3d_axis(e, x, y, z)` | `ΓÇö` |
-| `use_limits` | bool | `ecs.get_joint3d_use_limits(e)` ΓåÆ boolean | `ecs.set_joint3d_use_limits(e, value:bool)` | `ΓÇö` |
-| `lower_limit` | float | `ecs.get_joint3d_lower_limit(e)` ΓåÆ number | `ecs.set_joint3d_lower_limit(e, value:number)` | `ΓÇö` |
-| `upper_limit` | float | `ecs.get_joint3d_upper_limit(e)` ΓåÆ number | `ecs.set_joint3d_upper_limit(e, value:number)` | `ΓÇö` |
-| `min_distance` | float | `ecs.get_joint3d_min_distance(e)` ΓåÆ number | `ecs.set_joint3d_min_distance(e, value:number)` | `ΓÇö` |
-| `max_distance` | float | `ecs.get_joint3d_max_distance(e)` ΓåÆ number | `ecs.set_joint3d_max_distance(e, value:number)` | `ΓÇö` |
-| `spring_stiffness` | float | `ecs.get_joint3d_spring_stiffness(e)` ΓåÆ number | `ecs.set_joint3d_spring_stiffness(e, value:number)` | `ΓÇö` |
-| `spring_damping` | float | `ecs.get_joint3d_spring_damping(e)` ΓåÆ number | `ecs.set_joint3d_spring_damping(e, value:number)` | `ΓÇö` |
-| `break_force` | float | `ecs.get_joint3d_break_force(e)` ΓåÆ number | `ecs.set_joint3d_break_force(e, value:number)` | `ΓÇö` |
-| `break_torque` | float | `ecs.get_joint3d_break_torque(e)` ΓåÆ number | `ecs.set_joint3d_break_torque(e, value:number)` | `ΓÇö` |
+| `type` | enum_int | `ecs.get_joint3d_type(e)` → integer | `ecs.set_joint3d_type(e, value:int)` | `—` |
+| `connected_entity_id` | int | `ecs.get_joint3d_connected_entity_id(e)` → integer | `ecs.set_joint3d_connected_entity_id(e, value:int)` | `—` |
+| `anchor` | vec3 | `ecs.get_joint3d_anchor(e)` → x, y, z | `ecs.set_joint3d_anchor(e, x, y, z)` | `—` |
+| `connected_anchor` | vec3 | `ecs.get_joint3d_connected_anchor(e)` → x, y, z | `ecs.set_joint3d_connected_anchor(e, x, y, z)` | `—` |
+| `axis` | vec3 | `ecs.get_joint3d_axis(e)` → x, y, z | `ecs.set_joint3d_axis(e, x, y, z)` | `—` |
+| `use_limits` | bool | `ecs.get_joint3d_use_limits(e)` → boolean | `ecs.set_joint3d_use_limits(e, value:bool)` | `—` |
+| `lower_limit` | float | `ecs.get_joint3d_lower_limit(e)` → number | `ecs.set_joint3d_lower_limit(e, value:number)` | `—` |
+| `upper_limit` | float | `ecs.get_joint3d_upper_limit(e)` → number | `ecs.set_joint3d_upper_limit(e, value:number)` | `—` |
+| `min_distance` | float | `ecs.get_joint3d_min_distance(e)` → number | `ecs.set_joint3d_min_distance(e, value:number)` | `—` |
+| `max_distance` | float | `ecs.get_joint3d_max_distance(e)` → number | `ecs.set_joint3d_max_distance(e, value:number)` | `—` |
+| `spring_stiffness` | float | `ecs.get_joint3d_spring_stiffness(e)` → number | `ecs.set_joint3d_spring_stiffness(e, value:number)` | `—` |
+| `spring_damping` | float | `ecs.get_joint3d_spring_damping(e)` → number | `ecs.set_joint3d_spring_damping(e, value:number)` | `—` |
+| `break_force` | float | `ecs.get_joint3d_break_force(e)` → number | `ecs.set_joint3d_break_force(e, value:number)` | `—` |
+| `break_torque` | float | `ecs.get_joint3d_break_torque(e)` → number | `ecs.set_joint3d_break_torque(e, value:number)` | `—` |
 
-### 18.31 RagdollComponent ΓÇö σëìτ╝Ç `ragdoll`
+### 18.31 RagdollComponent — 前缀 `ragdoll`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `active` | bool | `ecs.get_ragdoll_active(e)` ΓåÆ boolean | `ecs.set_ragdoll_active(e, value:bool)` | `ΓÇö` |
-| `auto_setup` | bool | `ecs.get_ragdoll_auto_setup(e)` ΓåÆ boolean | `ecs.set_ragdoll_auto_setup(e, value:bool)` | `ΓÇö` |
-| `total_mass` | float | `ecs.get_ragdoll_total_mass(e)` ΓåÆ number | `ecs.set_ragdoll_total_mass(e, value:number)` | `ΓÇö` |
-| `joint_stiffness` | float | `ecs.get_ragdoll_joint_stiffness(e)` ΓåÆ number | `ecs.set_ragdoll_joint_stiffness(e, value:number)` | `ΓÇö` |
-| `joint_damping` | float | `ecs.get_ragdoll_joint_damping(e)` ΓåÆ number | `ecs.set_ragdoll_joint_damping(e, value:number)` | `ΓÇö` |
-| `collision_layer` | int | `ecs.get_ragdoll_collision_layer(e)` ΓåÆ integer | `ecs.set_ragdoll_collision_layer(e, value:int)` | `ΓÇö` |
-| `collision_mask` | int | `ecs.get_ragdoll_collision_mask(e)` ΓåÆ integer | `ecs.set_ragdoll_collision_mask(e, value:int)` | `ΓÇö` |
+| `active` | bool | `ecs.get_ragdoll_active(e)` → boolean | `ecs.set_ragdoll_active(e, value:bool)` | `—` |
+| `auto_setup` | bool | `ecs.get_ragdoll_auto_setup(e)` → boolean | `ecs.set_ragdoll_auto_setup(e, value:bool)` | `—` |
+| `total_mass` | float | `ecs.get_ragdoll_total_mass(e)` → number | `ecs.set_ragdoll_total_mass(e, value:number)` | `—` |
+| `joint_stiffness` | float | `ecs.get_ragdoll_joint_stiffness(e)` → number | `ecs.set_ragdoll_joint_stiffness(e, value:number)` | `—` |
+| `joint_damping` | float | `ecs.get_ragdoll_joint_damping(e)` → number | `ecs.set_ragdoll_joint_damping(e, value:number)` | `—` |
+| `collision_layer` | int | `ecs.get_ragdoll_collision_layer(e)` → integer | `ecs.set_ragdoll_collision_layer_value(e, value:int)` | `—` |
+| `collision_mask` | int | `ecs.get_ragdoll_collision_mask(e)` → integer | `ecs.set_ragdoll_collision_mask(e, value:int)` | `—` |
 
-### 18.32 SoftBodyComponent ΓÇö σëìτ╝Ç `soft_body`
+### 18.32 SoftBodyComponent — 前缀 `soft_body`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_soft_body_enabled(e)` ΓåÆ boolean | `ecs.set_soft_body_enabled(e, value:bool)` | `true` |
-| `stiffness` | float | `ecs.get_soft_body_stiffness(e)` ΓåÆ number | `ecs.set_soft_body_stiffness(e, value:number)` | `ΓÇö` |
-| `solver_iterations` | int | `ecs.get_soft_body_solver_iterations(e)` ΓåÆ integer | `ecs.set_soft_body_solver_iterations(e, value:int)` | `ΓÇö` |
-| `damping` | float | `ecs.get_soft_body_damping(e)` ΓåÆ number | `ecs.set_soft_body_damping(e, value:number)` | `ΓÇö` |
-| `use_gravity` | bool | `ecs.get_soft_body_use_gravity(e)` ΓåÆ boolean | `ecs.set_soft_body_use_gravity(e, value:bool)` | `true` |
-| `gravity_scale` | float | `ecs.get_soft_body_gravity_scale(e)` ΓåÆ number | `ecs.set_soft_body_gravity_scale(e, value:number)` | `ΓÇö` |
-| `volume_stiffness` | float | `ecs.get_soft_body_volume_stiffness(e)` ΓåÆ number | `ecs.set_soft_body_volume_stiffness(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_soft_body_enabled(e)` → boolean | `ecs.set_soft_body_enabled(e, value:bool)` | `true` |
+| `stiffness` | float | `ecs.get_soft_body_stiffness(e)` → number | `ecs.set_soft_body_stiffness(e, value:number)` | `—` |
+| `solver_iterations` | int | `ecs.get_soft_body_solver_iterations(e)` → integer | `ecs.set_soft_body_solver_iterations(e, value:int)` | `—` |
+| `damping` | float | `ecs.get_soft_body_damping(e)` → number | `ecs.set_soft_body_damping(e, value:number)` | `—` |
+| `use_gravity` | bool | `ecs.get_soft_body_use_gravity(e)` → boolean | `ecs.set_soft_body_use_gravity(e, value:bool)` | `true` |
+| `gravity_scale` | float | `ecs.get_soft_body_gravity_scale(e)` → number | `ecs.set_soft_body_gravity_scale(e, value:number)` | `—` |
+| `volume_stiffness` | float | `ecs.get_soft_body_volume_stiffness(e)` → number | `ecs.set_soft_body_volume_stiffness(e, value:number)` | `—` |
 
-### 18.33 VehicleComponent ΓÇö σëìτ╝Ç `vehicle`
+### 18.33 VehicleComponent — 前缀 `vehicle`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_vehicle_enabled(e)` ΓåÆ boolean | `ecs.set_vehicle_enabled(e, value:bool)` | `true` |
-| `max_engine_force` | float | `ecs.get_vehicle_max_engine_force(e)` ΓåÆ number | `ecs.set_vehicle_max_engine_force(e, value:number)` | `ΓÇö` |
-| `max_brake_force` | float | `ecs.get_vehicle_max_brake_force(e)` ΓåÆ number | `ecs.set_vehicle_max_brake_force(e, value:number)` | `ΓÇö` |
-| `max_steer_angle` | float | `ecs.get_vehicle_max_steer_angle(e)` ΓåÆ number | `ecs.set_vehicle_max_steer_angle(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_vehicle_enabled(e)` → boolean | `ecs.set_vehicle_enabled(e, value:bool)` | `true` |
+| `max_engine_force` | float | `ecs.get_vehicle_max_engine_force(e)` → number | `ecs.set_vehicle_max_engine_force(e, value:number)` | `—` |
+| `max_brake_force` | float | `ecs.get_vehicle_max_brake_force(e)` → number | `ecs.set_vehicle_max_brake_force(e, value:number)` | `—` |
+| `max_steer_angle` | float | `ecs.get_vehicle_max_steer_angle(e)` → number | `ecs.set_vehicle_max_steer_angle(e, value:number)` | `—` |
 
-### 18.34 RopeComponent ΓÇö σëìτ╝Ç `rope`
+### 18.34 RopeComponent — 前缀 `rope`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_rope_enabled(e)` ΓåÆ boolean | `ecs.set_rope_enabled(e, value:bool)` | `true` |
-| `segment_count` | int | `ecs.get_rope_segment_count(e)` ΓåÆ integer | `ecs.set_rope_segment_count(e, value:int)` | `ΓÇö` |
-| `segment_length` | float | `ecs.get_rope_segment_length(e)` ΓåÆ number | `ecs.set_rope_segment_length(e, value:number)` | `ΓÇö` |
-| `radius` | float | `ecs.get_rope_radius(e)` ΓåÆ number | `ecs.set_rope_radius(e, value:number)` | `ΓÇö` |
-| `damping` | float | `ecs.get_rope_damping(e)` ΓåÆ number | `ecs.set_rope_damping(e, value:number)` | `ΓÇö` |
-| `solver_iterations` | int | `ecs.get_rope_solver_iterations(e)` ΓåÆ integer | `ecs.set_rope_solver_iterations(e, value:int)` | `ΓÇö` |
-| `use_gravity` | bool | `ecs.get_rope_use_gravity(e)` ΓåÆ boolean | `ecs.set_rope_use_gravity(e, value:bool)` | `true` |
-| `gravity_scale` | float | `ecs.get_rope_gravity_scale(e)` ΓåÆ number | `ecs.set_rope_gravity_scale(e, value:number)` | `ΓÇö` |
-| `anchor_entity_a` | int | `ecs.get_rope_anchor_entity_a(e)` ΓåÆ integer | `ecs.set_rope_anchor_entity_a(e, value:int)` | `ΓÇö` |
-| `anchor_entity_b` | int | `ecs.get_rope_anchor_entity_b(e)` ΓåÆ integer | `ecs.set_rope_anchor_entity_b(e, value:int)` | `ΓÇö` |
-| `anchor_offset_a` | vec3 | `ecs.get_rope_anchor_offset_a(e)` ΓåÆ x, y, z | `ecs.set_rope_anchor_offset_a(e, x, y, z)` | `ΓÇö` |
-| `anchor_offset_b` | vec3 | `ecs.get_rope_anchor_offset_b(e)` ΓåÆ x, y, z | `ecs.set_rope_anchor_offset_b(e, x, y, z)` | `ΓÇö` |
-| `start_position` | vec3 | `ecs.get_rope_start_position(e)` ΓåÆ x, y, z | `ecs.set_rope_start_position(e, x, y, z)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_rope_enabled(e)` → boolean | `ecs.set_rope_enabled(e, value:bool)` | `true` |
+| `segment_count` | int | `ecs.get_rope_segment_count(e)` → integer | `ecs.set_rope_segment_count(e, value:int)` | `—` |
+| `segment_length` | float | `ecs.get_rope_segment_length(e)` → number | `ecs.set_rope_segment_length(e, value:number)` | `—` |
+| `radius` | float | `ecs.get_rope_radius(e)` → number | `ecs.set_rope_radius(e, value:number)` | `—` |
+| `damping` | float | `ecs.get_rope_damping(e)` → number | `ecs.set_rope_damping(e, value:number)` | `—` |
+| `solver_iterations` | int | `ecs.get_rope_solver_iterations(e)` → integer | `ecs.set_rope_solver_iterations(e, value:int)` | `—` |
+| `use_gravity` | bool | `ecs.get_rope_use_gravity(e)` → boolean | `ecs.set_rope_use_gravity(e, value:bool)` | `true` |
+| `gravity_scale` | float | `ecs.get_rope_gravity_scale(e)` → number | `ecs.set_rope_gravity_scale(e, value:number)` | `—` |
+| `anchor_entity_a` | int | `ecs.get_rope_anchor_entity_a(e)` → integer | `ecs.set_rope_anchor_entity_a(e, value:int)` | `—` |
+| `anchor_entity_b` | int | `ecs.get_rope_anchor_entity_b(e)` → integer | `ecs.set_rope_anchor_entity_b(e, value:int)` | `—` |
+| `anchor_offset_a` | vec3 | `ecs.get_rope_anchor_offset_a(e)` → x, y, z | `ecs.set_rope_anchor_offset_a(e, x, y, z)` | `—` |
+| `anchor_offset_b` | vec3 | `ecs.get_rope_anchor_offset_b(e)` → x, y, z | `ecs.set_rope_anchor_offset_b(e, x, y, z)` | `—` |
+| `start_position` | vec3 | `ecs.get_rope_start_position(e)` → x, y, z | `ecs.set_rope_start_position(e, x, y, z)` | `—` |
 
-### 18.35 BuoyancyComponent ΓÇö σëìτ╝Ç `buoyancy`
+### 18.35 BuoyancyComponent — 前缀 `buoyancy`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_buoyancy_enabled(e)` ΓåÆ boolean | `ecs.set_buoyancy_enabled(e, value:bool)` | `true` |
-| `water_level` | float | `ecs.get_buoyancy_water_level(e)` ΓåÆ number | `ecs.set_buoyancy_water_level(e, value:number)` | `ΓÇö` |
-| `use_fluid_system` | bool | `ecs.get_buoyancy_use_fluid_system(e)` ΓåÆ boolean | `ecs.set_buoyancy_use_fluid_system(e, value:bool)` | `ΓÇö` |
-| `buoyancy_force` | float | `ecs.get_buoyancy_buoyancy_force(e)` ΓåÆ number | `ecs.set_buoyancy_buoyancy_force(e, value:number)` | `ΓÇö` |
-| `water_drag` | float | `ecs.get_buoyancy_water_drag(e)` ΓåÆ number | `ecs.set_buoyancy_water_drag(e, value:number)` | `ΓÇö` |
-| `water_angular_drag` | float | `ecs.get_buoyancy_water_angular_drag(e)` ΓåÆ number | `ecs.set_buoyancy_water_angular_drag(e, value:number)` | `ΓÇö` |
-| `submerge_depth` | float | `ecs.get_buoyancy_submerge_depth(e)` ΓåÆ number | `ecs.set_buoyancy_submerge_depth(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_buoyancy_enabled(e)` → boolean | `ecs.set_buoyancy_enabled(e, value:bool)` | `true` |
+| `water_level` | float | `ecs.get_buoyancy_water_level(e)` → number | `ecs.set_buoyancy_water_level(e, value:number)` | `—` |
+| `use_fluid_system` | bool | `ecs.get_buoyancy_use_fluid_system(e)` → boolean | `ecs.set_buoyancy_use_fluid_system(e, value:bool)` | `—` |
+| `buoyancy_force` | float | `ecs.get_buoyancy_buoyancy_force(e)` → number | `ecs.set_buoyancy_buoyancy_force(e, value:number)` | `—` |
+| `water_drag` | float | `ecs.get_buoyancy_water_drag(e)` → number | `ecs.set_buoyancy_water_drag(e, value:number)` | `—` |
+| `water_angular_drag` | float | `ecs.get_buoyancy_water_angular_drag(e)` → number | `ecs.set_buoyancy_water_angular_drag(e, value:number)` | `—` |
+| `submerge_depth` | float | `ecs.get_buoyancy_submerge_depth(e)` → number | `ecs.set_buoyancy_submerge_depth(e, value:number)` | `—` |
 
-### 18.36 AtmosphereComponent ΓÇö σëìτ╝Ç `atmosphere`
+### 18.36 AtmosphereComponent — 前缀 `atmosphere`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_atmosphere_enabled(e)` ΓåÆ boolean | `ecs.set_atmosphere_enabled(e, value:bool)` | `true` |
-| `planet_radius` | float | `ecs.get_atmosphere_planet_radius(e)` ΓåÆ number | `ecs.set_atmosphere_planet_radius(e, value:number)` | `ΓÇö` |
-| `atmosphere_height` | float | `ecs.get_atmosphere_atmosphere_height(e)` ΓåÆ number | `ecs.set_atmosphere_atmosphere_height(e, value:number)` | `ΓÇö` |
-| `rayleigh_coeff` | vec3 | `ecs.get_atmosphere_rayleigh_coeff(e)` ΓåÆ x, y, z | `ecs.set_atmosphere_rayleigh_coeff(e, x, y, z)` | `ΓÇö` |
-| `rayleigh_scale_height` | float | `ecs.get_atmosphere_rayleigh_scale_height(e)` ΓåÆ number | `ecs.set_atmosphere_rayleigh_scale_height(e, value:number)` | `ΓÇö` |
-| `mie_coeff` | float | `ecs.get_atmosphere_mie_coeff(e)` ΓåÆ number | `ecs.set_atmosphere_mie_coeff(e, value:number)` | `ΓÇö` |
-| `mie_scale_height` | float | `ecs.get_atmosphere_mie_scale_height(e)` ΓåÆ number | `ecs.set_atmosphere_mie_scale_height(e, value:number)` | `ΓÇö` |
-| `mie_g` | float | `ecs.get_atmosphere_mie_g(e)` ΓåÆ number | `ecs.set_atmosphere_mie_g(e, value:number)` | `ΓÇö` |
-| `mie_albedo` | vec3 | `ecs.get_atmosphere_mie_albedo(e)` ΓåÆ x, y, z | `ecs.set_atmosphere_mie_albedo(e, x, y, z)` | `ΓÇö` |
-| `ozone_coeff` | vec3 | `ecs.get_atmosphere_ozone_coeff(e)` ΓåÆ x, y, z | `ecs.set_atmosphere_ozone_coeff(e, x, y, z)` | `ΓÇö` |
-| `ozone_center_h` | float | `ecs.get_atmosphere_ozone_center_h(e)` ΓåÆ number | `ecs.set_atmosphere_ozone_center_h(e, value:number)` | `ΓÇö` |
-| `ozone_width` | float | `ecs.get_atmosphere_ozone_width(e)` ΓåÆ number | `ecs.set_atmosphere_ozone_width(e, value:number)` | `ΓÇö` |
-| `sun_intensity` | float | `ecs.get_atmosphere_sun_intensity(e)` ΓåÆ number | `ecs.set_atmosphere_sun_intensity(e, value:number)` | `ΓÇö` |
-| `sun_disk_angle` | float | `ecs.get_atmosphere_sun_disk_angle(e)` ΓåÆ number | `ecs.set_atmosphere_sun_disk_angle(e, value:number)` | `ΓÇö` |
-| `aerial_perspective_enabled` | bool | `ecs.get_atmosphere_aerial_perspective_enabled(e)` ΓåÆ boolean | `ecs.set_atmosphere_aerial_perspective_enabled(e, value:bool)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_atmosphere_enabled(e)` → boolean | `ecs.set_atmosphere_enabled(e, value:bool)` | `true` |
+| `planet_radius` | float | `ecs.get_atmosphere_planet_radius(e)` → number | `ecs.set_atmosphere_planet_radius(e, value:number)` | `—` |
+| `atmosphere_height` | float | `ecs.get_atmosphere_atmosphere_height(e)` → number | `ecs.set_atmosphere_atmosphere_height(e, value:number)` | `—` |
+| `rayleigh_coeff` | vec3 | `ecs.get_atmosphere_rayleigh_coeff(e)` → x, y, z | `ecs.set_atmosphere_rayleigh_coeff(e, x, y, z)` | `—` |
+| `rayleigh_scale_height` | float | `ecs.get_atmosphere_rayleigh_scale_height(e)` → number | `ecs.set_atmosphere_rayleigh_scale_height(e, value:number)` | `—` |
+| `mie_coeff` | float | `ecs.get_atmosphere_mie_coeff(e)` → number | `ecs.set_atmosphere_mie_coeff(e, value:number)` | `—` |
+| `mie_scale_height` | float | `ecs.get_atmosphere_mie_scale_height(e)` → number | `ecs.set_atmosphere_mie_scale_height(e, value:number)` | `—` |
+| `mie_g` | float | `ecs.get_atmosphere_mie_g(e)` → number | `ecs.set_atmosphere_mie_g(e, value:number)` | `—` |
+| `mie_albedo` | vec3 | `ecs.get_atmosphere_mie_albedo(e)` → x, y, z | `ecs.set_atmosphere_mie_albedo(e, x, y, z)` | `—` |
+| `ozone_coeff` | vec3 | `ecs.get_atmosphere_ozone_coeff(e)` → x, y, z | `ecs.set_atmosphere_ozone_coeff(e, x, y, z)` | `—` |
+| `ozone_center_h` | float | `ecs.get_atmosphere_ozone_center_h(e)` → number | `ecs.set_atmosphere_ozone_center_h(e, value:number)` | `—` |
+| `ozone_width` | float | `ecs.get_atmosphere_ozone_width(e)` → number | `ecs.set_atmosphere_ozone_width(e, value:number)` | `—` |
+| `sun_intensity` | vec3 | `ecs.get_atmosphere_sun_intensity(e)` → x, y, z | `ecs.set_atmosphere_sun_intensity(e, x, y, z)` | `—` |
+| `sun_disk_angle` | float | `ecs.get_atmosphere_sun_disk_angle(e)` → number | `ecs.set_atmosphere_sun_disk_angle(e, value:number)` | `—` |
+| `aerial_perspective_enabled` | bool | `ecs.get_atmosphere_aerial_perspective_enabled(e)` → boolean | `ecs.set_atmosphere_aerial_perspective_enabled(e, value:bool)` | `—` |
 
-### 18.37 VolumetricCloudComponent ΓÇö σëìτ╝Ç `volumetric_cloud`
+### 18.37 VolumetricCloudComponent — 前缀 `volumetric_cloud`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_volumetric_cloud_enabled(e)` ΓåÆ boolean | `ecs.set_volumetric_cloud_enabled(e, value:bool)` | `true` |
-| `cloud_bottom` | float | `ecs.get_volumetric_cloud_cloud_bottom(e)` ΓåÆ number | `ecs.set_volumetric_cloud_cloud_bottom(e, value:number)` | `ΓÇö` |
-| `cloud_top` | float | `ecs.get_volumetric_cloud_cloud_top(e)` ΓåÆ number | `ecs.set_volumetric_cloud_cloud_top(e, value:number)` | `ΓÇö` |
-| `coverage` | float | `ecs.get_volumetric_cloud_coverage(e)` ΓåÆ number | `ecs.set_volumetric_cloud_coverage(e, value:number)` | `ΓÇö` |
-| `density` | float | `ecs.get_volumetric_cloud_density(e)` ΓåÆ number | `ecs.set_volumetric_cloud_density(e, value:number)` | `ΓÇö` |
-| `shape_scale` | float | `ecs.get_volumetric_cloud_shape_scale(e)` ΓåÆ number | `ecs.set_volumetric_cloud_shape_scale(e, value:number)` | `ΓÇö` |
-| `detail_scale` | float | `ecs.get_volumetric_cloud_detail_scale(e)` ΓåÆ number | `ecs.set_volumetric_cloud_detail_scale(e, value:number)` | `ΓÇö` |
-| `detail_strength` | float | `ecs.get_volumetric_cloud_detail_strength(e)` ΓåÆ number | `ecs.set_volumetric_cloud_detail_strength(e, value:number)` | `ΓÇö` |
-| `erosion` | float | `ecs.get_volumetric_cloud_erosion(e)` ΓåÆ number | `ecs.set_volumetric_cloud_erosion(e, value:number)` | `ΓÇö` |
-| `wind_direction` | vec3 | `ecs.get_volumetric_cloud_wind_direction(e)` ΓåÆ x, y, z | `ecs.set_volumetric_cloud_wind_direction(e, x, y, z)` | `ΓÇö` |
-| `wind_speed` | float | `ecs.get_volumetric_cloud_wind_speed(e)` ΓåÆ number | `ecs.set_volumetric_cloud_wind_speed(e, value:number)` | `ΓÇö` |
-| `silver_intensity` | float | `ecs.get_volumetric_cloud_silver_intensity(e)` ΓåÆ number | `ecs.set_volumetric_cloud_silver_intensity(e, value:number)` | `ΓÇö` |
-| `silver_spread` | float | `ecs.get_volumetric_cloud_silver_spread(e)` ΓåÆ number | `ecs.set_volumetric_cloud_silver_spread(e, value:number)` | `ΓÇö` |
-| `powder_strength` | float | `ecs.get_volumetric_cloud_powder_strength(e)` ΓåÆ number | `ecs.set_volumetric_cloud_powder_strength(e, value:number)` | `ΓÇö` |
-| `ambient_strength` | float | `ecs.get_volumetric_cloud_ambient_strength(e)` ΓåÆ number | `ecs.set_volumetric_cloud_ambient_strength(e, value:number)` | `ΓÇö` |
-| `half_resolution` | bool | `ecs.get_volumetric_cloud_half_resolution(e)` ΓåÆ boolean | `ecs.set_volumetric_cloud_half_resolution(e, value:bool)` | `ΓÇö` |
-| `temporal_reprojection` | bool | `ecs.get_volumetric_cloud_temporal_reprojection(e)` ΓåÆ boolean | `ecs.set_volumetric_cloud_temporal_reprojection(e, value:bool)` | `ΓÇö` |
-| `cloud_shadow_enabled` | bool | `ecs.get_volumetric_cloud_cloud_shadow_enabled(e)` ΓåÆ boolean | `ecs.set_volumetric_cloud_cloud_shadow_enabled(e, value:bool)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_volumetric_cloud_enabled(e)` → boolean | `ecs.set_volumetric_cloud_enabled(e, value:bool)` | `true` |
+| `cloud_bottom` | float | `ecs.get_volumetric_cloud_cloud_bottom(e)` → number | `ecs.set_volumetric_cloud_cloud_bottom(e, value:number)` | `—` |
+| `cloud_top` | float | `ecs.get_volumetric_cloud_cloud_top(e)` → number | `ecs.set_volumetric_cloud_cloud_top(e, value:number)` | `—` |
+| `coverage` | float | `ecs.get_volumetric_cloud_coverage(e)` → number | `ecs.set_volumetric_cloud_coverage(e, value:number)` | `—` |
+| `density` | float | `ecs.get_volumetric_cloud_density(e)` → number | `ecs.set_volumetric_cloud_density(e, value:number)` | `—` |
+| `shape_scale` | float | `ecs.get_volumetric_cloud_shape_scale(e)` → number | `ecs.set_volumetric_cloud_shape_scale(e, value:number)` | `—` |
+| `detail_scale` | float | `ecs.get_volumetric_cloud_detail_scale(e)` → number | `ecs.set_volumetric_cloud_detail_scale(e, value:number)` | `—` |
+| `detail_strength` | float | `ecs.get_volumetric_cloud_detail_strength(e)` → number | `ecs.set_volumetric_cloud_detail_strength(e, value:number)` | `—` |
+| `erosion` | float | `ecs.get_volumetric_cloud_erosion(e)` → number | `ecs.set_volumetric_cloud_erosion(e, value:number)` | `—` |
+| `wind_direction` | vec2 | `ecs.get_volumetric_cloud_wind_direction(e)` → value | `ecs.set_volumetric_cloud_wind_direction(e, value)` | `—` |
+| `wind_speed` | float | `ecs.get_volumetric_cloud_wind_speed(e)` → number | `ecs.set_volumetric_cloud_wind_speed(e, value:number)` | `—` |
+| `silver_intensity` | float | `ecs.get_volumetric_cloud_silver_intensity(e)` → number | `ecs.set_volumetric_cloud_silver_intensity(e, value:number)` | `—` |
+| `silver_spread` | float | `ecs.get_volumetric_cloud_silver_spread(e)` → number | `ecs.set_volumetric_cloud_silver_spread(e, value:number)` | `—` |
+| `powder_strength` | float | `ecs.get_volumetric_cloud_powder_strength(e)` → number | `ecs.set_volumetric_cloud_powder_strength(e, value:number)` | `—` |
+| `ambient_strength` | float | `ecs.get_volumetric_cloud_ambient_strength(e)` → number | `ecs.set_volumetric_cloud_ambient_strength(e, value:number)` | `—` |
+| `half_resolution` | bool | `ecs.get_volumetric_cloud_half_resolution(e)` → boolean | `ecs.set_volumetric_cloud_half_resolution(e, value:bool)` | `—` |
+| `temporal_reprojection` | bool | `ecs.get_volumetric_cloud_temporal_reprojection(e)` → boolean | `ecs.set_volumetric_cloud_temporal_reprojection(e, value:bool)` | `—` |
+| `cloud_shadow_enabled` | bool | `ecs.get_volumetric_cloud_cloud_shadow_enabled(e)` → boolean | `ecs.set_volumetric_cloud_cloud_shadow_enabled(e, value:bool)` | `—` |
 
-### 18.38 DayNightCycleComponent ΓÇö σëìτ╝Ç `day_night`
+### 18.38 DayNightCycleComponent — 前缀 `day_night`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_day_night_enabled(e)` ΓåÆ boolean | `ecs.set_day_night_enabled(e, value:bool)` | `true` |
-| `time_of_day` | float | `ecs.get_day_night_time_of_day(e)` ΓåÆ number | `ecs.set_day_night_time_of_day(e, value:number)` | `ΓÇö` |
-| `time_speed` | float | `ecs.get_day_night_time_speed(e)` ΓåÆ number | `ecs.set_day_night_time_speed(e, value:number)` | `ΓÇö` |
-| `auto_advance` | bool | `ecs.get_day_night_auto_advance(e)` ΓåÆ boolean | `ecs.set_day_night_auto_advance(e, value:bool)` | `ΓÇö` |
-| `latitude` | float | `ecs.get_day_night_latitude(e)` ΓåÆ number | `ecs.set_day_night_latitude(e, value:number)` | `ΓÇö` |
-| `longitude` | float | `ecs.get_day_night_longitude(e)` ΓåÆ number | `ecs.set_day_night_longitude(e, value:number)` | `ΓÇö` |
-| `day_of_year` | int | `ecs.get_day_night_day_of_year(e)` ΓåÆ integer | `ecs.set_day_night_day_of_year(e, value:int)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_day_night_enabled(e)` → boolean | `ecs.set_day_night_enabled(e, value:bool)` | `true` |
+| `time_of_day` | float | `ecs.get_day_night_time_of_day(e)` → number | `ecs.set_day_night_time_of_day(e, value:number)` | `—` |
+| `time_speed` | float | `ecs.get_day_night_time_speed(e)` → number | `ecs.set_day_night_time_speed(e, value:number)` | `—` |
+| `auto_advance` | bool | `ecs.get_day_night_auto_advance(e)` → boolean | `ecs.set_day_night_auto_advance(e, value:bool)` | `—` |
+| `latitude` | float | `ecs.get_day_night_latitude(e)` → number | `ecs.set_day_night_latitude(e, value:number)` | `—` |
+| `longitude` | float | `ecs.get_day_night_longitude(e)` → number | `ecs.set_day_night_longitude(e, value:number)` | `—` |
+| `day_of_year` | int | `ecs.get_day_night_day_of_year(e)` → integer | `ecs.set_day_night_day_of_year(e, value:int)` | `—` |
 
-### 18.39 HairComponent ΓÇö σëìτ╝Ç `hair`
+### 18.39 HairComponent — 前缀 `hair`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_hair_enabled(e)` ΓåÆ boolean | `ecs.set_hair_enabled(e, value:bool)` | `true` |
-| `hair_asset_path` | string | `ecs.get_hair_hair_asset_path(e)` ΓåÆ string | `ecs.set_hair_hair_asset_path(e, value:string)` | `ΓÇö` |
-| `damping` | float | `ecs.get_hair_damping(e)` ΓåÆ number | `ecs.set_hair_damping(e, value:number)` | `ΓÇö` |
-| `stiffness_local` | float | `ecs.get_hair_stiffness_local(e)` ΓåÆ number | `ecs.set_hair_stiffness_local(e, value:number)` | `ΓÇö` |
-| `stiffness_global` | float | `ecs.get_hair_stiffness_global(e)` ΓåÆ number | `ecs.set_hair_stiffness_global(e, value:number)` | `ΓÇö` |
-| `gravity` | float | `ecs.get_hair_gravity(e)` ΓåÆ number | `ecs.set_hair_gravity(e, value:number)` | `ΓÇö` |
-| `wind` | vec3 | `ecs.get_hair_wind(e)` ΓåÆ x, y, z | `ecs.set_hair_wind(e, x, y, z)` | `ΓÇö` |
-| `wind_turbulence` | float | `ecs.get_hair_wind_turbulence(e)` ΓåÆ number | `ecs.set_hair_wind_turbulence(e, value:number)` | `ΓÇö` |
-| `root_color` | vec4 | `ecs.get_hair_root_color(e)` ΓåÆ x, y, z, w | `ecs.set_hair_root_color(e, x, y, z, w)` | `ΓÇö` |
-| `tip_color` | vec4 | `ecs.get_hair_tip_color(e)` ΓåÆ x, y, z, w | `ecs.set_hair_tip_color(e, x, y, z, w)` | `ΓÇö` |
-| `fiber_radius` | float | `ecs.get_hair_fiber_radius(e)` ΓåÆ number | `ecs.set_hair_fiber_radius(e, value:number)` | `ΓÇö` |
-| `opacity` | float | `ecs.get_hair_opacity(e)` ΓåÆ number | `ecs.set_hair_opacity(e, value:number)` | `ΓÇö` |
-| `cast_shadow` | bool | `ecs.get_hair_cast_shadow(e)` ΓåÆ boolean | `ecs.set_hair_cast_shadow(e, value:bool)` | `ΓÇö` |
-| `receive_shadow` | bool | `ecs.get_hair_receive_shadow(e)` ΓåÆ boolean | `ecs.set_hair_receive_shadow(e, value:bool)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_hair_enabled(e)` → boolean | `ecs.set_hair_enabled(e, value:bool)` | `true` |
+| `hair_asset_path` | string | `ecs.get_hair_hair_asset_path(e)` → string | `ecs.set_hair_hair_asset_path(e, value:string)` | `—` |
+| `damping` | float | `ecs.get_hair_damping(e)` → number | `ecs.set_hair_damping(e, value:number)` | `—` |
+| `stiffness_local` | float | `ecs.get_hair_stiffness_local(e)` → number | `ecs.set_hair_stiffness_local(e, value:number)` | `—` |
+| `stiffness_global` | float | `ecs.get_hair_stiffness_global(e)` → number | `ecs.set_hair_stiffness_global(e, value:number)` | `—` |
+| `gravity` | float | `ecs.get_hair_gravity(e)` → number | `ecs.set_hair_gravity(e, value:number)` | `—` |
+| `wind` | vec3 | `ecs.get_hair_wind(e)` → x, y, z | `ecs.set_hair_wind(e, x, y, z)` | `—` |
+| `wind_turbulence` | float | `ecs.get_hair_wind_turbulence(e)` → number | `ecs.set_hair_wind_turbulence(e, value:number)` | `—` |
+| `root_color` | vec4 | `ecs.get_hair_root_color(e)` → x, y, z, w | `ecs.set_hair_root_color(e, x, y, z, w)` | `—` |
+| `tip_color` | vec4 | `ecs.get_hair_tip_color(e)` → x, y, z, w | `ecs.set_hair_tip_color(e, x, y, z, w)` | `—` |
+| `fiber_radius` | float | `ecs.get_hair_fiber_radius(e)` → number | `ecs.set_hair_fiber_radius(e, value:number)` | `—` |
+| `opacity` | float | `ecs.get_hair_opacity(e)` → number | `ecs.set_hair_opacity(e, value:number)` | `—` |
+| `cast_shadow` | bool | `ecs.get_hair_cast_shadow(e)` → boolean | `ecs.set_hair_cast_shadow(e, value:bool)` | `—` |
+| `receive_shadow` | bool | `ecs.get_hair_receive_shadow(e)` → boolean | `ecs.set_hair_receive_shadow(e, value:bool)` | `—` |
 
-### 18.40 ImpostorComponent ΓÇö σëìτ╝Ç `impostor`
+### 18.40 ImpostorComponent — 前缀 `impostor`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_impostor_enabled(e)` ΓåÆ boolean | `ecs.set_impostor_enabled(e, value:bool)` | `true` |
-| `atlas_path` | string | `ecs.get_impostor_atlas_path(e)` ΓåÆ string | `ecs.set_impostor_atlas_path(e, value:string)` | `ΓÇö` |
-| `frames_x` | int | `ecs.get_impostor_frames_x(e)` ΓåÆ integer | `ecs.set_impostor_frames_x(e, value:int)` | `ΓÇö` |
-| `frames_y` | int | `ecs.get_impostor_frames_y(e)` ΓåÆ integer | `ecs.set_impostor_frames_y(e, value:int)` | `ΓÇö` |
-| `transition_distance` | float | `ecs.get_impostor_transition_distance(e)` ΓåÆ number | `ecs.set_impostor_transition_distance(e, value:number)` | `ΓÇö` |
-| `fade_range` | float | `ecs.get_impostor_fade_range(e)` ΓåÆ number | `ecs.set_impostor_fade_range(e, value:number)` | `ΓÇö` |
-| `cull_distance` | float | `ecs.get_impostor_cull_distance(e)` ΓåÆ number | `ecs.set_impostor_cull_distance(e, value:number)` | `ΓÇö` |
-| `impostor_size` | float | `ecs.get_impostor_impostor_size(e)` ΓåÆ number | `ecs.set_impostor_impostor_size(e, value:number)` | `ΓÇö` |
-| `pivot_offset` | vec3 | `ecs.get_impostor_pivot_offset(e)` ΓåÆ x, y, z | `ecs.set_impostor_pivot_offset(e, x, y, z)` | `ΓÇö` |
-| `cast_shadow` | bool | `ecs.get_impostor_cast_shadow(e)` ΓåÆ boolean | `ecs.set_impostor_cast_shadow(e, value:bool)` | `ΓÇö` |
-| `use_frame_interpolation` | bool | `ecs.get_impostor_use_frame_interpolation(e)` ΓåÆ boolean | `ecs.set_impostor_use_frame_interpolation(e, value:bool)` | `ΓÇö` |
-| `normal_strength` | float | `ecs.get_impostor_normal_strength(e)` ΓåÆ number | `ecs.set_impostor_normal_strength(e, value:number)` | `ΓÇö` |
-| `auto_from_lod_group` | bool | `ecs.get_impostor_auto_from_lod_group(e)` ΓåÆ boolean | `ecs.set_impostor_auto_from_lod_group(e, value:bool)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_impostor_enabled(e)` → boolean | `ecs.set_impostor_enabled(e, value:bool)` | `true` |
+| `atlas_path` | string | `ecs.get_impostor_atlas_path(e)` → string | `ecs.set_impostor_atlas_path(e, value:string)` | `—` |
+| `frames_x` | int | `ecs.get_impostor_frames_x(e)` → integer | `ecs.set_impostor_frames_x(e, value:int)` | `—` |
+| `frames_y` | int | `ecs.get_impostor_frames_y(e)` → integer | `ecs.set_impostor_frames_y(e, value:int)` | `—` |
+| `transition_distance` | float | `ecs.get_impostor_transition_distance(e)` → number | `ecs.set_impostor_transition_distance(e, value:number)` | `—` |
+| `fade_range` | float | `ecs.get_impostor_fade_range(e)` → number | `ecs.set_impostor_fade_range(e, value:number)` | `—` |
+| `cull_distance` | float | `ecs.get_impostor_cull_distance(e)` → number | `ecs.set_impostor_cull_distance(e, value:number)` | `—` |
+| `impostor_size` | float | `ecs.get_impostor_impostor_size(e)` → number | `ecs.set_impostor_impostor_size(e, value:number)` | `—` |
+| `pivot_offset` | vec3 | `ecs.get_impostor_pivot_offset(e)` → x, y, z | `ecs.set_impostor_pivot_offset(e, x, y, z)` | `—` |
+| `cast_shadow` | bool | `ecs.get_impostor_cast_shadow(e)` → boolean | `ecs.set_impostor_cast_shadow(e, value:bool)` | `—` |
+| `use_frame_interpolation` | bool | `ecs.get_impostor_use_frame_interpolation(e)` → boolean | `ecs.set_impostor_use_frame_interpolation(e, value:bool)` | `—` |
+| `normal_strength` | float | `ecs.get_impostor_normal_strength(e)` → number | `ecs.set_impostor_normal_strength(e, value:number)` | `—` |
+| `auto_from_lod_group` | bool | `ecs.get_impostor_auto_from_lod_group(e)` → boolean | `ecs.set_impostor_auto_from_lod_group(e, value:bool)` | `—` |
 
-### 18.41 StreamingOriginComponent ΓÇö σëìτ╝Ç `streaming_origin`
+### 18.41 StreamingOriginComponent — 前缀 `streaming_origin`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_streaming_origin_enabled(e)` ΓåÆ boolean | `ecs.set_streaming_origin_enabled(e, value:bool)` | `true` |
-| `load_radius` | float | `ecs.get_streaming_origin_load_radius(e)` ΓåÆ number | `ecs.set_streaming_origin_load_radius(e, value:number)` | `ΓÇö` |
-| `unload_radius` | float | `ecs.get_streaming_origin_unload_radius(e)` ΓåÆ number | `ecs.set_streaming_origin_unload_radius(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_streaming_origin_enabled(e)` → boolean | `ecs.set_streaming_origin_enabled(e, value:bool)` | `true` |
+| `load_radius` | float | `ecs.get_streaming_origin_load_radius(e)` → number | `ecs.set_streaming_origin_load_radius(e, value:number)` | `—` |
+| `unload_radius` | float | `ecs.get_streaming_origin_unload_radius(e)` → number | `ecs.set_streaming_origin_unload_radius(e, value:number)` | `—` |
 
-### 18.42 WorldPartitionConfigComponent ΓÇö σëìτ╝Ç `world_partition`
+### 18.42 WorldPartitionConfigComponent — 前缀 `world_partition`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_world_partition_enabled(e)` ΓåÆ boolean | `ecs.set_world_partition_enabled(e, value:bool)` | `true` |
-| `cell_size` | float | `ecs.get_world_partition_cell_size(e)` ΓåÆ number | `ecs.set_world_partition_cell_size(e, value:number)` | `ΓÇö` |
-| `cells_directory` | string | `ecs.get_world_partition_cells_directory(e)` ΓåÆ string | `ecs.set_world_partition_cells_directory(e, value:string)` | `ΓÇö` |
-| `grid_min_x` | int | `ecs.get_world_partition_grid_min_x(e)` ΓåÆ integer | `ecs.set_world_partition_grid_min_x(e, value:int)` | `ΓÇö` |
-| `grid_max_x` | int | `ecs.get_world_partition_grid_max_x(e)` ΓåÆ integer | `ecs.set_world_partition_grid_max_x(e, value:int)` | `ΓÇö` |
-| `grid_min_y` | int | `ecs.get_world_partition_grid_min_y(e)` ΓåÆ integer | `ecs.set_world_partition_grid_min_y(e, value:int)` | `ΓÇö` |
-| `grid_max_y` | int | `ecs.get_world_partition_grid_max_y(e)` ΓåÆ integer | `ecs.set_world_partition_grid_max_y(e, value:int)` | `ΓÇö` |
-| `max_loads_per_frame` | int | `ecs.get_world_partition_max_loads_per_frame(e)` ΓåÆ integer | `ecs.set_world_partition_max_loads_per_frame(e, value:int)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_world_partition_enabled(e)` → boolean | `ecs.set_world_partition_enabled(e, value:bool)` | `true` |
+| `cell_size` | float | `ecs.get_world_partition_cell_size(e)` → number | `ecs.set_world_partition_cell_size(e, value:number)` | `—` |
+| `cells_directory` | string | `ecs.get_world_partition_cells_directory(e)` → string | `ecs.set_world_partition_cells_directory(e, value:string)` | `—` |
+| `grid_min_x` | int | `ecs.get_world_partition_grid_min_x(e)` → integer | `ecs.set_world_partition_grid_min_x(e, value:int)` | `—` |
+| `grid_max_x` | int | `ecs.get_world_partition_grid_max_x(e)` → integer | `ecs.set_world_partition_grid_max_x(e, value:int)` | `—` |
+| `grid_min_y` | int | `ecs.get_world_partition_grid_min_y(e)` → integer | `ecs.set_world_partition_grid_min_y(e, value:int)` | `—` |
+| `grid_max_y` | int | `ecs.get_world_partition_grid_max_y(e)` → integer | `ecs.set_world_partition_grid_max_y(e, value:int)` | `—` |
+| `max_loads_per_frame` | int | `ecs.get_world_partition_max_loads_per_frame(e)` → integer | `ecs.set_world_partition_max_loads_per_frame(e, value:int)` | `—` |
 
-### 18.43 HLODConfigComponent ΓÇö σëìτ╝Ç `hlod_config`
+### 18.43 HLODConfigComponent — 前缀 `hlod_config`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_hlod_config_enabled(e)` ΓåÆ boolean | `ecs.set_hlod_config_enabled(e, value:bool)` | `true` |
-| `hlod_data_path` | string | `ecs.get_hlod_config_hlod_data_path(e)` ΓåÆ string | `ecs.set_hlod_config_hlod_data_path(e, value:string)` | `ΓÇö` |
-| `distance_scale` | float | `ecs.get_hlod_config_distance_scale(e)` ΓåÆ number | `ecs.set_hlod_config_distance_scale(e, value:number)` | `ΓÇö` |
-| `hysteresis` | float | `ecs.get_hlod_config_hysteresis(e)` ΓåÆ number | `ecs.set_hlod_config_hysteresis(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_hlod_config_enabled(e)` → boolean | `ecs.set_hlod_config_enabled(e, value:bool)` | `true` |
+| `hlod_data_path` | string | `ecs.get_hlod_config_hlod_data_path(e)` → string | `ecs.set_hlod_config_hlod_data_path(e, value:string)` | `—` |
+| `distance_scale` | float | `ecs.get_hlod_config_distance_scale(e)` → number | `ecs.set_hlod_config_distance_scale(e, value:number)` | `—` |
+| `hysteresis` | float | `ecs.get_hlod_config_hysteresis(e)` → number | `ecs.set_hlod_config_hysteresis(e, value:number)` | `—` |
 
-### 18.44 VirtualTextureComponent ΓÇö σëìτ╝Ç `virtual_texture`
+### 18.44 VirtualTextureComponent — 前缀 `virtual_texture`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `enabled` | bool | `ecs.get_virtual_texture_enabled(e)` ΓåÆ boolean | `ecs.set_virtual_texture_enabled(e, value:bool)` | `true` |
-| `vt_id` | int | `ecs.get_virtual_texture_vt_id(e)` ΓåÆ integer | `ecs.set_virtual_texture_vt_id(e, value:int)` | `ΓÇö` |
-| `tile_data_path` | string | `ecs.get_virtual_texture_tile_data_path(e)` ΓåÆ string | `ecs.set_virtual_texture_tile_data_path(e, value:string)` | `ΓÇö` |
-| `virtual_width` | int | `ecs.get_virtual_texture_virtual_width(e)` ΓåÆ integer | `ecs.set_virtual_texture_virtual_width(e, value:int)` | `ΓÇö` |
-| `virtual_height` | int | `ecs.get_virtual_texture_virtual_height(e)` ΓåÆ integer | `ecs.set_virtual_texture_virtual_height(e, value:int)` | `ΓÇö` |
-| `mip_bias` | float | `ecs.get_virtual_texture_mip_bias(e)` ΓåÆ number | `ecs.set_virtual_texture_mip_bias(e, value:number)` | `ΓÇö` |
+| `enabled` | bool | `ecs.get_virtual_texture_enabled(e)` → boolean | `ecs.set_virtual_texture_enabled(e, value:bool)` | `true` |
+| `vt_id` | int | `ecs.get_virtual_texture_vt_id(e)` → integer | `ecs.set_virtual_texture_vt_id(e, value:int)` | `—` |
+| `tile_data_path` | string | `ecs.get_virtual_texture_tile_data_path(e)` → string | `ecs.set_virtual_texture_tile_data_path(e, value:string)` | `—` |
+| `virtual_width` | int | `ecs.get_virtual_texture_virtual_width(e)` → integer | `ecs.set_virtual_texture_virtual_width(e, value:int)` | `—` |
+| `virtual_height` | int | `ecs.get_virtual_texture_virtual_height(e)` → integer | `ecs.set_virtual_texture_virtual_height(e, value:int)` | `—` |
+| `mip_bias` | float | `ecs.get_virtual_texture_mip_bias(e)` → number | `ecs.set_virtual_texture_mip_bias(e, value:number)` | `—` |
 
-### 18.45 LightmapComponent ΓÇö σëìτ╝Ç `lightmap`
+### 18.45 LightmapComponent — 前缀 `lightmap`
 
-| σ¡ùµ«╡ | τ▒╗σ₧ï | Getter ΓåÆ Φ┐öσ¢₧ | Setter(σÅéµò░) | Θ╗ÿΦ«ñσÇ╝ |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
-| `lightmap_path` | string | `ecs.get_lightmap_lightmap_path(e)` ΓåÆ string | `ecs.set_lightmap_lightmap_path(e, value:string)` | `ΓÇö` |
-| `intensity` | float | `ecs.get_lightmap_intensity(e)` ΓåÆ number | `ecs.set_lightmap_intensity(e, value:number)` | `ΓÇö` |
-| `st_offset` | vec4 | `ecs.get_lightmap_st_offset(e)` ΓåÆ x, y, z, w | `ecs.set_lightmap_st_offset(e, x, y, z, w)` | `ΓÇö` |
-| `use_ao` | bool | `ecs.get_lightmap_use_ao(e)` ΓåÆ boolean | `ecs.set_lightmap_use_ao(e, value:bool)` | `ΓÇö` |
+| `lightmap_path` | string | `ecs.get_lightmap_lightmap_path(e)` → string | `ecs.set_lightmap_lightmap_path(e, value:string)` | `—` |
+| `intensity` | float | `ecs.get_lightmap_intensity(e)` → number | `ecs.set_lightmap_intensity(e, value:number)` | `—` |
+| `st_offset` | vec4 | `ecs.get_lightmap_st_offset(e)` → x, y, z, w | `ecs.set_lightmap_st_offset(e, x, y, z, w)` | `—` |
+| `use_ao` | bool | `ecs.get_lightmap_use_ao(e)` → boolean | `ecs.set_lightmap_use_ao(e, value:bool)` | `—` |
 
 ### 18.46 CharacterMovementConfig — 前缀 `character_movement_cfg`
-
-> 3C 系统：角色移动配置组件（走/跑/蹲/跳/飞/游泳参数）
 
 | 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
 | `enabled` | bool | `ecs.get_character_movement_cfg_enabled(e)` → boolean | `ecs.set_character_movement_cfg_enabled(e, value:bool)` | `true` |
-| `max_walk_speed` | float | `ecs.get_character_movement_cfg_max_walk_speed(e)` → number | `ecs.set_character_movement_cfg_max_walk_speed(e, value:number)` | `6.0` |
-| `max_sprint_speed` | float | `ecs.get_character_movement_cfg_max_sprint_speed(e)` → number | `ecs.set_character_movement_cfg_max_sprint_speed(e, value:number)` | `10.0` |
-| `max_crouch_speed` | float | `ecs.get_character_movement_cfg_max_crouch_speed(e)` → number | `ecs.set_character_movement_cfg_max_crouch_speed(e, value:number)` | `3.0` |
-| `ground_acceleration` | float | `ecs.get_character_movement_cfg_ground_acceleration(e)` → number | `ecs.set_character_movement_cfg_ground_acceleration(e, value:number)` | `20.0` |
-| `ground_deceleration` | float | `ecs.get_character_movement_cfg_ground_deceleration(e)` → number | `ecs.set_character_movement_cfg_ground_deceleration(e, value:number)` | `12.0` |
-| `ground_friction` | float | `ecs.get_character_movement_cfg_ground_friction(e)` → number | `ecs.set_character_movement_cfg_ground_friction(e, value:number)` | `8.0` |
-| `gravity` | float | `ecs.get_character_movement_cfg_gravity(e)` → number | `ecs.set_character_movement_cfg_gravity(e, value:number)` | `-19.62` |
-| `jump_velocity` | float | `ecs.get_character_movement_cfg_jump_velocity(e)` → number | `ecs.set_character_movement_cfg_jump_velocity(e, value:number)` | `8.0` |
+| `max_walk_speed` | float | `ecs.get_character_movement_cfg_max_walk_speed(e)` → number | `ecs.set_character_movement_cfg_max_walk_speed(e, value:number)` | `6.0f` |
+| `max_sprint_speed` | float | `ecs.get_character_movement_cfg_max_sprint_speed(e)` → number | `ecs.set_character_movement_cfg_max_sprint_speed(e, value:number)` | `10.0f` |
+| `max_crouch_speed` | float | `ecs.get_character_movement_cfg_max_crouch_speed(e)` → number | `ecs.set_character_movement_cfg_max_crouch_speed(e, value:number)` | `3.0f` |
+| `ground_acceleration` | float | `ecs.get_character_movement_cfg_ground_acceleration(e)` → number | `ecs.set_character_movement_cfg_ground_acceleration(e, value:number)` | `20.0f` |
+| `ground_deceleration` | float | `ecs.get_character_movement_cfg_ground_deceleration(e)` → number | `ecs.set_character_movement_cfg_ground_deceleration(e, value:number)` | `12.0f` |
+| `ground_friction` | float | `ecs.get_character_movement_cfg_ground_friction(e)` → number | `ecs.set_character_movement_cfg_ground_friction(e, value:number)` | `8.0f` |
+| `gravity` | float | `ecs.get_character_movement_cfg_gravity(e)` → number | `ecs.set_character_movement_cfg_gravity(e, value:number)` | `-19.62f` |
+| `jump_velocity` | float | `ecs.get_character_movement_cfg_jump_velocity(e)` → number | `ecs.set_character_movement_cfg_jump_velocity(e, value:number)` | `8.0f` |
 | `max_jump_count` | int | `ecs.get_character_movement_cfg_max_jump_count(e)` → integer | `ecs.set_character_movement_cfg_max_jump_count(e, value:int)` | `2` |
-| `coyote_time` | float | `ecs.get_character_movement_cfg_coyote_time(e)` → number | `ecs.set_character_movement_cfg_coyote_time(e, value:number)` | `0.1` |
-| `jump_buffer_time` | float | `ecs.get_character_movement_cfg_jump_buffer_time(e)` → number | `ecs.set_character_movement_cfg_jump_buffer_time(e, value:number)` | `0.15` |
-| `air_control` | float | `ecs.get_character_movement_cfg_air_control(e)` → number | `ecs.set_character_movement_cfg_air_control(e, value:number)` | `0.3` |
-| `rotation_rate` | float | `ecs.get_character_movement_cfg_rotation_rate(e)` → number | `ecs.set_character_movement_cfg_rotation_rate(e, value:number)` | `720.0` |
+| `coyote_time` | float | `ecs.get_character_movement_cfg_coyote_time(e)` → number | `ecs.set_character_movement_cfg_coyote_time(e, value:number)` | `0.1f` |
+| `jump_buffer_time` | float | `ecs.get_character_movement_cfg_jump_buffer_time(e)` → number | `ecs.set_character_movement_cfg_jump_buffer_time(e, value:number)` | `0.15f` |
+| `air_control` | float | `ecs.get_character_movement_cfg_air_control(e)` → number | `ecs.set_character_movement_cfg_air_control(e, value:number)` | `0.3f` |
+| `rotation_rate` | float | `ecs.get_character_movement_cfg_rotation_rate(e)` → number | `ecs.set_character_movement_cfg_rotation_rate(e, value:number)` | `720.0f` |
 | `publish_events` | bool | `ecs.get_character_movement_cfg_publish_events(e)` → boolean | `ecs.set_character_movement_cfg_publish_events(e, value:bool)` | `true` |
 
 ### 18.47 CharacterMovementState — 前缀 `character_movement`
 
-> 3C 系统：角色移动运行时状态（输入驱动 + 只读运行时输出）
-
-| 字段 | 类型 | Getter → 返回 | Setter(参数) | 备注 |
-|------|------|--------------|--------------|------|
-| `input_direction` | vec3 | `ecs.get_character_movement_input_direction(e)` → x, y, z | `ecs.set_character_movement_input_direction(e, x, y, z)` | 输入移动方向 |
-| `input_jump` | bool | `ecs.get_character_movement_input_jump(e)` → boolean | `ecs.set_character_movement_input_jump(e, value:bool)` | 跳跃输入 |
-| `input_sprint` | bool | `ecs.get_character_movement_input_sprint(e)` → boolean | `ecs.set_character_movement_input_sprint(e, value:bool)` | 冲刺输入 |
-| `input_crouch` | bool | `ecs.get_character_movement_input_crouch(e)` → boolean | `ecs.set_character_movement_input_crouch(e, value:bool)` | 蹲伏输入 |
-| `velocity` | vec3 | `ecs.get_character_movement_velocity(e)` → x, y, z | *(readonly)* | 当前速度 |
-| `is_grounded` | bool | `ecs.get_character_movement_is_grounded(e)` → boolean | *(readonly)* | 是否着地 |
-| `is_jumping` | bool | `ecs.get_character_movement_is_jumping(e)` → boolean | *(readonly)* | 是否跳跃中 |
-| `jump_count` | int | `ecs.get_character_movement_jump_count(e)` → integer | *(readonly)* | 当前跳跃次数 |
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
+|------|------|--------------|--------------|--------|
+| `input_direction` | vec3 | `ecs.get_character_movement_input_direction(e)` → x, y, z | `ecs.set_character_movement_input_direction(e, x, y, z)` | `—` |
+| `input_jump` | bool | `ecs.get_character_movement_input_jump(e)` → boolean | `ecs.set_character_movement_input_jump(e, value:bool)` | `—` |
+| `input_sprint` | bool | `ecs.get_character_movement_input_sprint(e)` → boolean | `ecs.set_character_movement_input_sprint(e, value:bool)` | `—` |
+| `input_crouch` | bool | `ecs.get_character_movement_input_crouch(e)` → boolean | `ecs.set_character_movement_input_crouch(e, value:bool)` | `—` |
+| `velocity` | vec3 | `ecs.get_character_movement_velocity(e)` → x, y, z | — | `—` |
+| `is_grounded` | bool | `ecs.get_character_movement_is_grounded(e)` → boolean | — | `—` |
+| `is_jumping` | bool | `ecs.get_character_movement_is_jumping(e)` → boolean | — | `—` |
+| `jump_count` | int | `ecs.get_character_movement_jump_count(e)` → integer | — | `—` |
 
 ### 18.48 SpringArm3DComponent — 前缀 `spring_arm`
-
-> 3C 系统：弹簧臂相机组件（碰撞避让、延迟跟随、第一/第三人称切换）
 
 | 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
 | `enabled` | bool | `ecs.get_spring_arm_enabled(e)` → boolean | `ecs.set_spring_arm_enabled(e, value:bool)` | `true` |
-| `target_offset` | vec3 | `ecs.get_spring_arm_target_offset(e)` → x, y, z | `ecs.set_spring_arm_target_offset(e, x, y, z)` | `(0,0,0)` |
-| `arm_length` | float | `ecs.get_spring_arm_arm_length(e)` → number | `ecs.set_spring_arm_arm_length(e, value:number)` | `4.0` |
+| `target_offset` | vec3 | `ecs.get_spring_arm_target_offset(e)` → x, y, z | `ecs.set_spring_arm_target_offset(e, x, y, z)` | `—` |
+| `arm_length` | float | `ecs.get_spring_arm_arm_length(e)` → number | `ecs.set_spring_arm_arm_length(e, value:number)` | `4.0f` |
 | `collision_test` | bool | `ecs.get_spring_arm_collision_test(e)` → boolean | `ecs.set_spring_arm_collision_test(e, value:bool)` | `true` |
-| `pitch` | float | `ecs.get_spring_arm_pitch(e)` → number | `ecs.set_spring_arm_pitch(e, value:number)` | `-20.0` |
-| `yaw` | float | `ecs.get_spring_arm_yaw(e)` → number | `ecs.set_spring_arm_yaw(e, value:number)` | `0.0` |
-| `position_lag_speed` | float | `ecs.get_spring_arm_position_lag_speed(e)` → number | `ecs.set_spring_arm_position_lag_speed(e, value:number)` | `10.0` |
-| `shake_trauma` | float | `ecs.get_spring_arm_shake_trauma(e)` → number | `ecs.set_spring_arm_shake_trauma(e, value:number)` | `0.0` |
+| `pitch` | float | `ecs.get_spring_arm_pitch(e)` → number | `ecs.set_spring_arm_pitch(e, value:number)` | `-20.0f` |
+| `yaw` | float | `ecs.get_spring_arm_yaw(e)` → number | `ecs.set_spring_arm_yaw(e, value:number)` | `0.0f` |
+| `position_lag_speed` | float | `ecs.get_spring_arm_position_lag_speed(e)` → number | `ecs.set_spring_arm_position_lag_speed(e, value:number)` | `10.0f` |
+| `shake_trauma` | float | `ecs.get_spring_arm_shake_trauma(e)` → number | `ecs.set_spring_arm_shake_trauma(e, value:number)` | `0.0f` |
 
 ### 18.49 PlayerControllerComponent — 前缀 `player_controller`
-
-> 3C 系统：玩家控制器组件（输入灵敏度、死区、响应曲线）
 
 | 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
 |------|------|--------------|--------------|--------|
 | `enabled` | bool | `ecs.get_player_controller_enabled(e)` → boolean | `ecs.set_player_controller_enabled(e, value:bool)` | `true` |
-| `mouse_sensitivity` | float | `ecs.get_player_controller_mouse_sensitivity(e)` → number | `ecs.set_player_controller_mouse_sensitivity(e, value:number)` | `0.15` |
-| `gamepad_sensitivity` | float | `ecs.get_player_controller_gamepad_sensitivity(e)` → number | `ecs.set_player_controller_gamepad_sensitivity(e, value:number)` | `2.0` |
+| `mouse_sensitivity` | float | `ecs.get_player_controller_mouse_sensitivity(e)` → number | `ecs.set_player_controller_mouse_sensitivity(e, value:number)` | `0.15f` |
+| `gamepad_sensitivity` | float | `ecs.get_player_controller_gamepad_sensitivity(e)` → number | `ecs.set_player_controller_gamepad_sensitivity(e, value:number)` | `2.0f` |
 | `invert_y` | bool | `ecs.get_player_controller_invert_y(e)` → boolean | `ecs.set_player_controller_invert_y(e, value:bool)` | `false` |
-| `stick_dead_zone` | float | `ecs.get_player_controller_stick_dead_zone(e)` → number | `ecs.set_player_controller_stick_dead_zone(e, value:number)` | `0.15` |
-| `move_response_curve` | float | `ecs.get_player_controller_move_response_curve(e)` → number | `ecs.set_player_controller_move_response_curve(e, value:number)` | `1.5` |
-| `look_response_curve` | float | `ecs.get_player_controller_look_response_curve(e)` → number | `ecs.set_player_controller_look_response_curve(e, value:number)` | `1.0` |
+| `stick_dead_zone` | float | `ecs.get_player_controller_stick_dead_zone(e)` → number | `ecs.set_player_controller_stick_dead_zone(e, value:number)` | `0.15f` |
+| `move_response_curve` | float | `ecs.get_player_controller_move_response_curve(e)` → number | `ecs.set_player_controller_move_response_curve(e, value:number)` | `1.5f` |
+| `look_response_curve` | float | `ecs.get_player_controller_look_response_curve(e)` → number | `ecs.set_player_controller_look_response_curve(e, value:number)` | `1.0f` |
 
+### 18.50 JiggleBoneComponent — 前缀 `jiggle`
+
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
+|------|------|--------------|--------------|--------|
+| `enabled` | bool | `ecs.get_jiggle_enabled(e)` → boolean | `ecs.set_jiggle_enabled(e, value:bool)` | `true` |
+| `stiffness_scale` | float | `ecs.get_jiggle_stiffness_scale(e)` → number | `ecs.set_jiggle_stiffness_scale(e, value:number)` | `1.0f` |
+| `damping_scale` | float | `ecs.get_jiggle_damping_scale(e)` → number | `ecs.set_jiggle_damping_scale(e, value:number)` | `1.0f` |
+| `gravity_scale` | float | `ecs.get_jiggle_gravity_scale(e)` → number | `ecs.set_jiggle_gravity_scale(e, value:number)` | `1.0f` |
 ## 19. dse.* — 开放世界系统
 
 > 源文件：`engine/scripting/lua/bindings/lua_binding_open_world.cpp`

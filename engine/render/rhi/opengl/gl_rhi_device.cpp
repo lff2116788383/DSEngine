@@ -335,7 +335,7 @@ void OpenGLRhiDevice::EnsureInitialized() {
     }
     resource_mgr_.ledger().shader_programs_created += 1;
 
-    // 鍒濆鍖?UBO 绠＄悊鍣?
+    // 初始化 UBO 管理器
     ubo_mgr_.Init();
 
     // CreateBuffer / UpdateBuffer 内部检查 initialized_，必须在 InitGeometryBuffers 之前置 true
@@ -1701,7 +1701,7 @@ OpenGLRhiDevice::ComputePushUbo& OpenGLRhiDevice::EnsureComputePushUbo(ShaderHan
     return st;
 }
 
-// --- SSBO 璇诲洖 ---
+// --- SSBO 读回 ---
 
 void OpenGLRhiDevice::ReadSSBO(BufferHandle handle, size_t offset, size_t size, void* dst) {
     if (!supports_ssbo_ || !handle || !dst || size == 0) return;

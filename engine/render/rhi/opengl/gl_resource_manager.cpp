@@ -1,6 +1,6 @@
 /**
  * @file gl_resource_manager.cpp
- * @brief GLResourceManager 瀹炵幇 - GPU 璧勬簮绠＄悊鍣?
+ * @brief GLResourceManager 实现 - GPU 资源管理器
  */
 
 #include "engine/render/rhi/opengl/gl_resource_manager.h"

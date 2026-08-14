@@ -404,7 +404,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.hiz_downsample_shader = render_resources_.hiz_downsample_shader;
     render_pass_context_.hiz_cull_shader = render_resources_.hiz_cull_shader;
 
-    // GPU Driven 鐘舵€?
+    // GPU Driven 状态
     render_pass_context_.gpu_driven_enabled = render_resources_.gpu_driven_supported;
     render_pass_context_.gpu_driven_supported = render_resources_.gpu_driven_supported;
     render_pass_context_.gpu_driven_requested = gpu_driven_requested_;
@@ -470,7 +470,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         modules_impl_->RenderMeshes(cmd, *render_pass_context_.rhi_device, rs_->cpu_mesh_renderer_, frame);
     };
 
-    // ---- 澹版槑澶栭儴杈撳嚭 ----
+    // ---- 声明外部输出 ----
     auto main_color  = render_graph_dag_.DeclareResource("main_color");
     auto scene_color = render_graph_dag_.DeclareResource("scene_color");
     auto taa_color   = render_graph_dag_.DeclareResource("taa_color");
@@ -524,7 +524,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         registered_passes_.push_back(std::move(pass));
     }
 
-    // ---- 妯″潡鍔ㄦ€佹敞鍐岃嚜瀹氫箟 Pass ----
+    // ---- 模块动态注册自定义 Pass ----
     for (auto& mod : modules_) {
         if (mod.instance) {
             mod.instance->RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
@@ -534,14 +534,14 @@ void FramePipeline::BuildRenderGraphInternal() {
         modules_impl_->RegisterGameplay3DPasses(render_graph_dag_, render_pass_context_, registered_passes_);
     }
 
-    // ---- 鎵€鏈?Pass 鍦?RenderGraph 涓婂０鏄庝緷璧?----
+    // ---- 所有 Pass 在 RenderGraph 上声明依赖 ----
     for (auto& pass : registered_passes_) {
         pass->Setup(render_graph_dag_);
     }
 
-    // 缂栬瘧 DAG锛堟嫇鎵戞帓搴?+ 鏃犵敤 Pass 鍓旈櫎锛?
+    // 编译 DAG（拓扑排序 + 无用 Pass 剔除）
     if (!render_graph_dag_.Compile()) {
-        DEBUG_LOG_ERROR("RenderGraph 缂栬瘧澶辫触锛氭娴嬪埌寰幆渚濊禆");
+        DEBUG_LOG_ERROR("RenderGraph 编译失败：检测到循环依赖");
     }
 }
 
@@ -550,12 +550,12 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
     dse::runtime::ExecuteFrameRenderGraph(*this, cmd_buffer);
 }
 
-/// 棰勭儹 builtin Pass 鍦?Execute() 涓敤鍒扮殑鎵€鏈?ECS 缁勪欢姹犮€?
-/// 鏂板 Pass 鑻ヤ娇鐢ㄦ柊缁勪欢绫诲瀷锛屽繀椤诲湪姝ゅ琛ュ厖瀵瑰簲 view 璋冪敤銆?
-/// Debug 妯″紡涓?ExecuteRenderGraphInternal 浼氬湪骞惰鎵ц鍚庢柇瑷€姹犳暟閲忔湭澧為暱锛?
-/// 浠ユ娴嬮仐婕忕殑缁勪欢绫诲瀷銆?
+/// 预热 builtin Pass 在 Execute() 中用到的所有 ECS 组件池。
+/// 新增 Pass 若使用新组件类型，必须在此处补充对应 view 调用。
+/// Debug 模式下 ExecuteRenderGraphInternal 会在并行执行后断言池数量未增长，
+/// 以检测遗漏的组件类型。
 static void WarmUpRenderECSPools(entt::registry& reg) {
-    // --- builtin Pass 鐩存帴浣跨敤 ---
+    // --- builtin Pass 直接使用 ---
     (void)reg.view<TransformComponent>();
     (void)reg.view<CameraComponent>();
     (void)reg.view<dse::Camera3DComponent>();
