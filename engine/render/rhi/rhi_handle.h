@@ -3,9 +3,11 @@
  * @brief 类型安全的 GPU 资源句柄 — 编译期区分 Buffer/Texture/RT/Pipeline/VAO
  *
  * 零运行时开销（sizeof == sizeof(unsigned int)）。
- * 注意：当前 id 为裸 uint32_t，无世代校验（注释曾提及的 DSE_DEBUG_HANDLES 世代验证层尚未实现）。
- * 后果：id 回收复用后，滞留的旧句柄会静默绑定到新资源（无崩溃、无告警，表现为诡异渲染错误）。
- * TODO: [N4] 至少在 Debug 构建落实世代验证层（句柄高位叠加世代计数 + 查表时校验）。
+ * 句柄 id 现状：各后端资源管理器单调发号（next_*_handle_++，GL 用幻数基址错开），
+ * 进程内不回收复用 → "id 复用后旧句柄指向新资源"的世代冲突当前不会发生。
+ * 防御措施（Debug 构建）：HandleActivityLedger 跟踪分配/释放，句柄查询处断言
+ * 不在"已释放"集合——捕获 use-after-free 句柄调用（删除后仍被使用）。
+ * 若未来引入句柄池化/回收，需在句柄高位叠加世代计数（[N4]）。
  */
 
 #ifndef DSE_RHI_HANDLE_H
@@ -14,9 +16,55 @@
 #include <cstdint>
 #include <functional>
 #include <type_traits>
+#include <unordered_set>
 
 namespace dse {
 namespace render {
+
+// ============================================================
+// HandleActivityLedger — Debug 构建下的句柄生命周期账本
+// ============================================================
+// 仅 Debug 构建编译（_DEBUG）；Release 下所有方法为空操作、零开销。
+// MarkAllocated：句柄分配/登记时调用；MarkReleased：句柄释放时调用；
+// 维护分配/释放集合与计数（active_count/released_count），供调试排查/泄漏审计。
+// 注意：这里刻意不做断言——各后端对未知/已释放句柄的查询返回 nullptr（见
+// GLResourceManagerTest.Remove：删除后 Get 必须返回 nullptr），删除未知句柄是
+// 文档化 no-op（见 dx11/vulkan rhi 单测的 Delete(from_raw(999))）。若在查询或
+// 释放处断言"句柄必须有效"，会与这些既有 API 契约冲突产生误报。
+// 当前句柄单调发号、进程内不复用，不存在"旧句柄指向新资源"的世代冲突；
+// 若未来引入句柄池化/回收，需在句柄高位叠加世代计数（[N4]），本账本可作为跟踪基础。
+#if defined(_DEBUG) || defined(DSE_HANDLE_DEBUG)
+
+class HandleActivityLedger {
+public:
+    void MarkAllocated(uint32_t id) {
+        if (id == 0) return;
+        released_.erase(id);
+        allocated_.insert(id);
+    }
+    void MarkReleased(uint32_t id) {
+        if (id == 0) return;
+        allocated_.erase(id);
+        released_.insert(id);
+    }
+    std::size_t active_count() const { return allocated_.size(); }
+    std::size_t released_count() const { return released_.size(); }
+private:
+    std::unordered_set<uint32_t> allocated_;
+    std::unordered_set<uint32_t> released_;
+};
+
+#else
+
+class HandleActivityLedger {
+public:
+    void MarkAllocated(uint32_t) {}
+    void MarkReleased(uint32_t) {}
+    std::size_t active_count() const { return 0; }
+    std::size_t released_count() const { return 0; }
+};
+
+#endif // _DEBUG || DSE_HANDLE_DEBUG
 
 // ============================================================
 // TypedHandle — 编译期类型安全的 opaque handle

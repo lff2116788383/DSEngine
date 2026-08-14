@@ -258,6 +258,9 @@ private:
     unsigned int next_indirect_handle_ = 418000;
     unsigned int next_render_target_handle_ = 420000;
 
+    /// Debug 句柄活动账本：检测已释放句柄的二次使用（use-after-free）
+    HandleActivityLedger handle_ledger_;
+
     /// 同帧多次覆写动态缓冲时退役的旧 VkBuffer（命令缓冲仍引用，需过 in-flight 窗口后销毁）
     struct RetiredBuffer {
         VkBuffer buffer = VK_NULL_HANDLE;

@@ -204,6 +204,9 @@ private:
     unsigned int next_vao_handle_ = 830000;
     unsigned int next_indirect_handle_ = 840000;
 
+    /// Debug 句柄活动账本：检测已释放句柄的二次使用（use-after-free）
+    HandleActivityLedger handle_ledger_;
+
     bool initialized_ = false;
     unsigned int ssbo_register_base_ = 16; ///< SSBO t-register 起始偏移（由 reflection 计算填充）
 

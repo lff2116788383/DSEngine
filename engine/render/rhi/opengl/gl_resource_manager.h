@@ -121,6 +121,8 @@ private:
     std::unordered_map<unsigned int, PipelineStateDesc> pipeline_states_;
 
     ResourceLedger resource_ledger_;
+    /// Debug 句柄生命周期账本（use-after-free 句柄检测）
+    HandleActivityLedger handle_ledger_;
 };
 
 } // namespace render

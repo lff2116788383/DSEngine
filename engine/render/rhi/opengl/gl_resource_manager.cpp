@@ -25,6 +25,7 @@ unsigned int GLResourceManager::AllocatePipelineStateHandle() {
 }
 
 void GLResourceManager::StoreRenderTarget(unsigned int handle, const RenderTargetResource& rt) {
+    handle_ledger_.MarkAllocated(handle);
     render_targets_[handle] = rt;
     resource_ledger_.render_targets_created++;
 }
@@ -35,6 +36,7 @@ const RenderTargetResource* GLResourceManager::GetRenderTarget(unsigned int hand
 }
 
 void GLResourceManager::RemoveRenderTarget(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     if (render_targets_.erase(handle) > 0) {
         resource_ledger_.render_targets_destroyed++;
     }
@@ -73,6 +75,7 @@ void GLResourceManager::DestroyAllRenderTargets() {
 }
 
 void GLResourceManager::StorePipelineState(unsigned int handle, const PipelineStateDesc& desc) {
+    handle_ledger_.MarkAllocated(handle);
     pipeline_states_[handle] = desc;
     resource_ledger_.pipeline_states_created++;
 }

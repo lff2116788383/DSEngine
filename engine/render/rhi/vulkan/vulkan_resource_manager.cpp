@@ -861,6 +861,7 @@ unsigned int VulkanResourceManager::CreateTexture3D(int width, int height, int d
 }
 
 void VulkanResourceManager::DeleteTexture(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     auto it = textures_.find(handle);
     if (it == textures_.end()) return;
 
@@ -885,6 +886,7 @@ const VulkanTexture* VulkanResourceManager::GetTexture(unsigned int handle) cons
 unsigned int VulkanResourceManager::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
     if (!device_) return 0;
     unsigned int handle = next_buffer_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     VulkanBuffer buf;
     buf.size = size;
     buf.is_dynamic = is_dynamic;
@@ -971,6 +973,7 @@ unsigned int VulkanResourceManager::CreateBuffer(size_t size, const void* data, 
 unsigned int VulkanResourceManager::CreateUniformBuffer(size_t size, const void* data, bool /*is_dynamic*/) {
     if (!device_) return 0;
     unsigned int handle = next_buffer_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     VulkanBuffer buf;
     buf.size = size;
     // B0 通用 UBO：host-visible + 持久映射，UpdateBuffer 走 memcpy 路径（sprite 每帧更新 MVP）
@@ -1119,6 +1122,7 @@ void VulkanResourceManager::BeginFrameBufferGC(uint32_t frames_in_flight) {
 }
 
 void VulkanResourceManager::DeleteBuffer(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     auto it = buffers_.find(handle);
     if (it == buffers_.end()) return;
 
@@ -1141,6 +1145,7 @@ const VulkanBuffer* VulkanResourceManager::GetBuffer(unsigned int handle) const 
 
 unsigned int VulkanResourceManager::CreateSSBO(size_t size, const void* data) {
     unsigned int handle = next_ssbo_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     VulkanBuffer buf;
     buf.size = size;
     buf.is_dynamic = true;
@@ -1196,6 +1201,7 @@ void VulkanResourceManager::SetSkipHostSync(unsigned int handle, bool is_indirec
 }
 
 void VulkanResourceManager::DeleteSSBO(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     auto it = ssbos_.find(handle);
     if (it == ssbos_.end()) return;
     auto& buf = it->second;
@@ -1217,6 +1223,7 @@ const VulkanBuffer* VulkanResourceManager::GetSSBO(unsigned int handle) const {
 unsigned int VulkanResourceManager::CreateIndirectBuffer(size_t size, const void* data) {
     if (device_ == VK_NULL_HANDLE) return 0;
     unsigned int handle = next_indirect_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     VulkanBuffer buf;
     buf.size = size;
     buf.is_dynamic = true;
@@ -1265,6 +1272,7 @@ void VulkanResourceManager::UpdateIndirectBuffer(unsigned int handle, size_t off
 }
 
 void VulkanResourceManager::DeleteIndirectBuffer(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end()) return;
     auto& buf = it->second;
@@ -1361,6 +1369,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
                 rt.mrt_texture_handles.resize(static_cast<size_t>(num_color));
                 for (int ci = 0; ci < num_color; ++ci) {
                     unsigned int tex_h = next_texture_handle_++;
+                    handle_ledger_.MarkAllocated(tex_h);
                     textures_[tex_h] = rt.color_textures[ci];
                     rt.mrt_texture_handles[ci] = tex_h;
                 }
@@ -1621,6 +1630,7 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
 }
 
 void VulkanResourceManager::DeleteRenderTarget(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     auto it = render_targets_.find(handle);
     if (it == render_targets_.end()) return;
 
@@ -1634,6 +1644,7 @@ void VulkanResourceManager::DeleteRenderTarget(unsigned int handle) {
         if (rt.msaa_color_texture.memory != VK_NULL_HANDLE) vkFreeMemory(device_, rt.msaa_color_texture.memory, nullptr);
     }
     for (auto tex_h : rt.mrt_texture_handles) {
+        handle_ledger_.MarkReleased(tex_h);
         textures_.erase(tex_h);
     }
     for (auto& ct : rt.color_textures) {
@@ -1667,8 +1678,8 @@ VkImageView VulkanResourceManager::GetRenderTargetDepthImageView(unsigned int ha
 // 句柄生成
 // ============================================================
 
-unsigned int VulkanResourceManager::AllocateTextureHandle() { return next_texture_handle_++; }
-unsigned int VulkanResourceManager::AllocateRenderTargetHandle() { return next_render_target_handle_++; }
+unsigned int VulkanResourceManager::AllocateTextureHandle() { unsigned int h = next_texture_handle_++; handle_ledger_.MarkAllocated(h); return h; }
+unsigned int VulkanResourceManager::AllocateRenderTargetHandle() { unsigned int h = next_render_target_handle_++; handle_ledger_.MarkAllocated(h); return h; }
 
 // ============================================================
 // 内部工具

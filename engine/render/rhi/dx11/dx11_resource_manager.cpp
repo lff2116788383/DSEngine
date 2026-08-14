@@ -115,6 +115,7 @@ unsigned int DX11ResourceManager::CreateTexture2D(int width, int height,
     if (FAILED(hr)) return 0;
 
     unsigned int handle = next_texture_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     textures_[handle] = std::move(tex);
     return handle;
 }
@@ -163,6 +164,7 @@ unsigned int DX11ResourceManager::CreateComputeWriteTexture2D(int width, int hei
     device_->CreateSamplerState(&sd, tex.sampler.GetAddressOf());
 
     unsigned int handle = next_texture_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     textures_[handle] = std::move(tex);
     DEBUG_LOG_INFO("[D3D11] Compute write texture created: handle={} {}x{}", handle, width, height);
     return handle;
@@ -243,6 +245,7 @@ unsigned int DX11ResourceManager::CreateCompressedTexture2D(CompressedTextureFor
     if (FAILED(hr)) return 0;
 
     unsigned int handle = next_texture_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     textures_[handle] = std::move(tex);
     return handle;
 }
@@ -297,6 +300,7 @@ unsigned int DX11ResourceManager::CreateTextureCube(int width, int height,
     if (FAILED(hr)) return 0;
 
     unsigned int handle = next_texture_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     textures_[handle] = std::move(tex);
     return handle;
 }
@@ -351,11 +355,13 @@ unsigned int DX11ResourceManager::CreateTexture3D(int width, int height, int dep
     if (FAILED(hr)) return 0;
 
     unsigned int handle = next_texture_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     textures_[handle] = std::move(tex);
     return handle;
 }
 
 void DX11ResourceManager::DeleteTexture(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     textures_.erase(handle);
 }
 
@@ -396,6 +402,7 @@ unsigned int DX11ResourceManager::CreateBuffer(size_t size, const void* data, bo
     }
 
     unsigned int handle = next_buffer_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     buffers_[handle] = std::move(buf);
     return handle;
 }
@@ -428,6 +435,7 @@ unsigned int DX11ResourceManager::CreateConstantBuffer(size_t size, const void* 
     }
 
     unsigned int handle = next_buffer_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     buffers_[handle] = std::move(buf);
     return handle;
 }
@@ -459,6 +467,7 @@ void DX11ResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_
 }
 
 void DX11ResourceManager::DeleteBuffer(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     buffers_.erase(handle);
 }
 
@@ -473,6 +482,7 @@ const DX11Buffer* DX11ResourceManager::GetBuffer(unsigned int handle) const {
 
 unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
     unsigned int handle = next_ssbo_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     DX11SSBO ssbo;
     // ByteAddressBuffer 要求 4 字节对齐
     ssbo.size = (size + 3) & ~3;
@@ -566,6 +576,7 @@ void DX11ResourceManager::BindSSBOForCompute(unsigned int handle, unsigned int b
 }
 
 void DX11ResourceManager::DeleteSSBO(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     ssbos_.erase(handle);
 }
 
@@ -679,6 +690,7 @@ unsigned int DX11ResourceManager::CreateRenderTarget(int width, int height, bool
                 tex.width   = width;
                 tex.height  = height;
                 rt.color_texture_handles_mrt[ci] = next_texture_handle_++;
+                handle_ledger_.MarkAllocated(rt.color_texture_handles_mrt[ci]);
                 textures_[rt.color_texture_handles_mrt[ci]] = std::move(tex);
             }
             // 兼容：第一个纹理也赋给 color_texture/rtv/srv
@@ -729,6 +741,7 @@ unsigned int DX11ResourceManager::CreateRenderTarget(int width, int height, bool
                 color_tex.width   = width;
                 color_tex.height  = height;
                 rt.color_texture_handle = next_texture_handle_++;
+                handle_ledger_.MarkAllocated(rt.color_texture_handle);
                 textures_[rt.color_texture_handle] = std::move(color_tex);
             } else {
                 D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
@@ -753,6 +766,7 @@ unsigned int DX11ResourceManager::CreateRenderTarget(int width, int height, bool
                 color_tex.width   = width;
                 color_tex.height  = height;
                 rt.color_texture_handle = next_texture_handle_++;
+                handle_ledger_.MarkAllocated(rt.color_texture_handle);
                 textures_[rt.color_texture_handle] = std::move(color_tex);
             }
         }
@@ -796,11 +810,13 @@ unsigned int DX11ResourceManager::CreateRenderTarget(int width, int height, bool
             depth_tex.width   = width;
             depth_tex.height  = height;
             rt.depth_texture_handle = next_texture_handle_++;
+            handle_ledger_.MarkAllocated(rt.depth_texture_handle);
             textures_[rt.depth_texture_handle] = std::move(depth_tex);
         }
     }
 
     unsigned int handle = next_render_target_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     render_targets_[handle] = std::move(rt);
     return handle;
 }
@@ -812,12 +828,13 @@ void DX11ResourceManager::DeleteRenderTarget(unsigned int handle) {
     auto& rt = it->second;
     if (!rt.color_texture_handles_mrt.empty()) {
         for (auto h : rt.color_texture_handles_mrt)
-            if (h) textures_.erase(h);
+            if (h) { handle_ledger_.MarkReleased(h); textures_.erase(h); }
     } else {
-        if (rt.color_texture_handle) textures_.erase(rt.color_texture_handle);
+        if (rt.color_texture_handle) { handle_ledger_.MarkReleased(rt.color_texture_handle); textures_.erase(rt.color_texture_handle); }
     }
-    if (rt.depth_texture_handle) textures_.erase(rt.depth_texture_handle);
+    if (rt.depth_texture_handle) { handle_ledger_.MarkReleased(rt.depth_texture_handle); textures_.erase(rt.depth_texture_handle); }
 
+    handle_ledger_.MarkReleased(handle);
     render_targets_.erase(it);
 }
 
@@ -943,11 +960,13 @@ DX11ResourceManager::DepthReadbackResult DX11ResourceManager::ReadRenderTargetDe
 
 dse::render::VertexArrayHandle DX11ResourceManager::CreateVertexArray() {
     unsigned int handle = next_vao_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     vertex_arrays_[handle] = DX11VertexArray{handle};
     return dse::render::VertexArrayHandle{handle};
 }
 
 void DX11ResourceManager::DeleteVertexArray(dse::render::VertexArrayHandle handle) {
+    handle_ledger_.MarkReleased(handle.raw());
     vertex_arrays_.erase(handle.raw());
 }
 
@@ -991,6 +1010,7 @@ unsigned int DX11ResourceManager::CreateTexture2DAsync(int width, int height) {
     tex.height  = height;
 
     unsigned int handle = next_texture_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     textures_[handle] = std::move(tex);
     return handle;
 }
@@ -1072,6 +1092,7 @@ unsigned int DX11ResourceManager::CreateIndirectBuffer(size_t size, const void* 
         return 0;
     }
     unsigned int handle = next_indirect_handle_++;
+    handle_ledger_.MarkAllocated(handle);
     indirect_buffers_[handle] = std::move(buf);
     return handle;
 }
@@ -1093,6 +1114,7 @@ void DX11ResourceManager::UpdateIndirectBuffer(unsigned int handle,
 }
 
 void DX11ResourceManager::DeleteIndirectBuffer(unsigned int handle) {
+    handle_ledger_.MarkReleased(handle);
     indirect_buffers_.erase(handle);
 }
 
