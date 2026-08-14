@@ -227,9 +227,9 @@ bool EngineInstance::RunStartupSceneRegressionChecks() {
     }
 
     DEBUG_LOG_INFO("EngineInstance init: startup scene regression begin");
-    const bool scene_round_trip_ok = ::scene::RunSceneRoundTripRegressionSample(RuntimeOutputPathInBin("scene_roundtrip_regression.json"));
+    const bool scene_round_trip_ok = ::dse::scene::RunSceneRoundTripRegressionSample(RuntimeOutputPathInBin("scene_roundtrip_regression.json"));
     DEBUG_LOG_INFO("Scene round-trip regression: {}", scene_round_trip_ok ? "PASSED" : "FAILED");
-    const bool scene_backward_compat_ok = ::scene::RunSceneBackwardCompatibilityRegressionSample(RuntimeOutputPathInBin("scene_backward_compat_regression.json"));
+    const bool scene_backward_compat_ok = ::dse::scene::RunSceneBackwardCompatibilityRegressionSample(RuntimeOutputPathInBin("scene_backward_compat_regression.json"));
     DEBUG_LOG_INFO("Scene backward-compat regression: {}", scene_backward_compat_ok ? "PASSED" : "FAILED");
     return scene_round_trip_ok && scene_backward_compat_ok;
 }
@@ -255,12 +255,12 @@ void EngineInstance::RegisterRuntimeServices() {
         service_locator().Register<core::JobSystem, core::JobSystem>(job_system_shared);
     }
 
-    scene_manager_ = std::make_shared<scene::SceneManager>();
+    scene_manager_ = std::make_shared<dse::scene::SceneManager>();
     scene_manager_->SetWorld(services_.world);
     scene_manager_->SetAssetManager(services_.asset_manager);
     scene_manager_->SetEventBus(event_bus_.get());
     scene_manager_->SetJobSystem(services_.job_system);
-    service_locator().Register<scene::SceneManager, scene::SceneManager>(scene_manager_);
+    service_locator().Register<dse::scene::SceneManager, dse::scene::SceneManager>(scene_manager_);
 
     localization_manager_ = std::make_shared<dse::assets::LocalizationManager>();
     service_locator().Register<dse::assets::LocalizationManager, dse::assets::LocalizationManager>(localization_manager_);
@@ -295,7 +295,7 @@ void EngineInstance::ResetRuntimeServices() {
     service_locator().Reset<core::EventBus>();
     service_locator().Reset<FramePipeline>();
     service_locator().Reset<World>();
-    service_locator().Reset<scene::SceneManager>();
+    service_locator().Reset<dse::scene::SceneManager>();
     service_locator().Reset<dse::assets::LocalizationManager>();
     service_locator().Reset<dse::render::FontService>();
     service_locator().Reset<dse::assets::FileSystem>();

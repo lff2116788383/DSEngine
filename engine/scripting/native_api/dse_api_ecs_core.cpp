@@ -39,8 +39,8 @@ inline World* GW() { return static_cast<World*>(dse_get_world_ptr()); }
 inline AssetManager* GAM() { return static_cast<AssetManager*>(dse_get_asset_manager_ptr()); }
 inline Entity TE(uint32_t e) { return static_cast<Entity>(static_cast<entt::id_type>(e)); }
 
-scene::SceneManager* GetSceneManager() {
-    return core::ServiceLocator::Instance().Get<scene::SceneManager>();
+dse::scene::SceneManager* GetSceneManager() {
+    return core::ServiceLocator::Instance().Get<dse::scene::SceneManager>();
 }
 
 // 将相对路径解析为基于 data root 的完整路径。
@@ -196,7 +196,7 @@ extern "C" int dse_scene_load_sub(const char* path, int* out_entity_count) {
     World* w = GW();
     AssetManager* am = GAM();
     if (!w || !am || !path) return 0;
-    scene::SubScene sub;
+    dse::scene::SubScene sub;
     if (!sub.Load(*w, *am, ResolveScenePath(path))) return 0;
     if (out_entity_count) *out_entity_count = static_cast<int>(sub.EntityCount());
     return 1;
@@ -253,9 +253,9 @@ extern "C" int dse_scene_get_pending_count(void) {
 extern "C" void dse_scene_transition_to(const char* path, int mode, float fade_duration) {
     auto* sm = GetSceneManager();
     if (!sm || !path) return;
-    scene::TransitionMode m = scene::TransitionMode::Fade;
-    if (mode == 0) m = scene::TransitionMode::Instant;
-    else if (mode == 1) m = scene::TransitionMode::Additive;
+    dse::scene::TransitionMode m = dse::scene::TransitionMode::Fade;
+    if (mode == 0) m = dse::scene::TransitionMode::Instant;
+    else if (mode == 1) m = dse::scene::TransitionMode::Additive;
     sm->TransitionTo(ResolveScenePath(path), m, fade_duration);
 }
 
@@ -263,10 +263,10 @@ extern "C" int dse_scene_get_transition_state(void) {
     auto* sm = GetSceneManager();
     if (!sm) return 0;
     switch (sm->GetTransitionState()) {
-        case scene::TransitionState::FadingOut: return 1;
-        case scene::TransitionState::Loading:   return 2;
-        case scene::TransitionState::FadingIn:  return 3;
-        case scene::TransitionState::Idle:
+        case dse::scene::TransitionState::FadingOut: return 1;
+        case dse::scene::TransitionState::Loading:   return 2;
+        case dse::scene::TransitionState::FadingIn:  return 3;
+        case dse::scene::TransitionState::Idle:
         default:                                return 0;
     }
 }

@@ -23,17 +23,17 @@ public:
     void Update(World& world);
 
     /// 获取上一次 Update 产生的可见集（供渲染 Pass 消费）
-    const scene::VisibleSet& GetVisibleSet() const { return visible_set_; }
+    const dse::scene::VisibleSet& GetVisibleSet() const { return visible_set_; }
 
     /// 强制下一帧重建静态 Octree（场景结构变化时调用）
     void InvalidateStaticTree() { spatial_scene_.Invalidate(); }
 
     /// 获取 SpatialScene 引用（供外部查询统计）
-    const scene::SpatialScene& GetSpatialScene() const { return spatial_scene_; }
+    const dse::scene::SpatialScene& GetSpatialScene() const { return spatial_scene_; }
 
 private:
-    scene::SpatialScene spatial_scene_;
-    scene::VisibleSet visible_set_;
+    dse::scene::SpatialScene spatial_scene_;
+    dse::scene::VisibleSet visible_set_;
 };
 
 } // namespace dse::gameplay3d

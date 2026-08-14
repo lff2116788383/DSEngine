@@ -15,7 +15,7 @@
 namespace dse::platform { class PlatformApp; }
 namespace dse::assets { class NativeFileSystem; class LocalizationManager; }
 namespace dse::render { class FontService; }
-namespace scene { class SceneManager; }
+namespace dse::scene { class SceneManager; }
 #include "engine/runtime/runtime_services.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/core/service_locator.h"
@@ -117,7 +117,7 @@ private:
     void ResetRuntimeServices();
     dse::core::JobSystem* job_system() const { return services_.job_system; }
     std::shared_ptr<dse::core::EventBus> event_bus_;
-    std::shared_ptr<scene::SceneManager> scene_manager_;
+    std::shared_ptr<dse::scene::SceneManager> scene_manager_;
     std::shared_ptr<dse::assets::LocalizationManager> localization_manager_;
     std::shared_ptr<dse::render::FontService> font_service_;
 

@@ -14,7 +14,7 @@
 
 // Forward declare rapidjson or similar json library if needed, 
 // for now we'll use a string representation for interface
-namespace scene {
+namespace dse::scene {
 
 struct PrefabInstantiateOptions {
     bool override_position = false;

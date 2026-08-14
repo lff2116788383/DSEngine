@@ -8,7 +8,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 
-using namespace scene;
+using namespace dse::scene;
 
 // 测试 场景绑定世界：构造带名称
 TEST(SceneBindWorldTest, ConstructionWithName) {

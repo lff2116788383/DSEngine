@@ -52,7 +52,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     // ── Open-world systems 初始化 ──────────────────────────────────────────
 
     // World Partition: 通过 ServiceLocator 获取 SceneManager 依赖
-    auto* scene_mgr = dse::core::ServiceLocator::Instance().Get<::scene::SceneManager>();
+    auto* scene_mgr = dse::core::ServiceLocator::Instance().Get<::dse::scene::SceneManager>();
     world_partition_system_.Init(scene_mgr);
 
     // HLOD: 检查场景根是否有 HLODConfigComponent

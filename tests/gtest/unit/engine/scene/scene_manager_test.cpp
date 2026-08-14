@@ -16,7 +16,7 @@
 #include <thread>
 #include <chrono>
 
-using namespace scene;
+using namespace dse::scene;
 using namespace dse::core;
 
 namespace {

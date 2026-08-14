@@ -574,7 +574,7 @@ extern "C" int dse_l10n_has_key(const char* key) {
 extern "C" int dse_scene_load(const char* path) {
     World* w = GW();
     if (!w || !path) return 0;
-    scene::Scene loader("native_api_scene_loader");
+    dse::scene::Scene loader("native_api_scene_loader");
     loader.BindWorld(w);
     const bool ok = loader.Deserialize(path);
     loader.UnbindWorld();
@@ -584,7 +584,7 @@ extern "C" int dse_scene_load(const char* path) {
 extern "C" int dse_scene_save(const char* path) {
     World* w = GW();
     if (!w || !path) return 0;
-    scene::Scene saver("native_api_scene_saver");
+    dse::scene::Scene saver("native_api_scene_saver");
     saver.BindWorld(w);
     const bool ok = saver.Serialize(path);
     saver.UnbindWorld();
@@ -594,7 +594,7 @@ extern "C" int dse_scene_save(const char* path) {
 extern "C" int dse_scene_save_prefab(uint32_t e, const char* path) {
     World* w = GW();
     if (!w || !w->registry().valid(TE(e)) || !path) return 0;
-    return scene::SaveEntityAsPrefab(*w, TE(e), path) ? 1 : 0;
+    return dse::scene::SaveEntityAsPrefab(*w, TE(e), path) ? 1 : 0;
 }
 
 extern "C" uint32_t dse_scene_instantiate_prefab(const char* path, float x, float y, float z,
@@ -603,12 +603,12 @@ extern "C" uint32_t dse_scene_instantiate_prefab(const char* path, float x, floa
     if (!w || !path) return static_cast<uint32_t>(entt::null);
     Entity e;
     if (use_pos) {
-        scene::PrefabInstantiateOptions opts;
+        dse::scene::PrefabInstantiateOptions opts;
         opts.override_position = true;
         opts.position = glm::vec3(x, y, z);
-        e = scene::InstantiatePrefab(*w, path, opts);
+        e = dse::scene::InstantiatePrefab(*w, path, opts);
     } else {
-        e = scene::InstantiatePrefab(*w, path);
+        e = dse::scene::InstantiatePrefab(*w, path);
     }
     return static_cast<uint32_t>(static_cast<entt::id_type>(e));
 }

@@ -6,7 +6,7 @@
 
 using Entity = entt::entity;
 
-namespace scene::component_io {
+namespace dse::scene::component_io {
 
 void SerializeExtendedComponents(entt::registry& registry, Entity entity,
                                rapidjson::Value& components,
@@ -15,6 +15,6 @@ void SerializeExtendedComponents(entt::registry& registry, Entity entity,
 void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
                                    const rapidjson::Value& components);
 
-} // namespace scene::component_io
+} // namespace dse::scene::component_io
 
 #endif // DSE_SCENE_COMPONENT_SERIALIZATION_H

@@ -18,7 +18,7 @@
 #include <string>
 #include <cmath>
 
-using namespace scene;
+using namespace dse::scene;
 
 namespace {
 

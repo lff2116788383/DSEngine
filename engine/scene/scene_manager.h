@@ -22,7 +22,7 @@
 
 class AssetManager;
 
-namespace scene {
+namespace dse::scene {
 
 /**
  * @enum TransitionMode

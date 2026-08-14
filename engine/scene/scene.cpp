@@ -24,7 +24,7 @@
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
 
-namespace scene {
+namespace dse::scene {
 
 constexpr int kCurrentMaterialSchemaVersion = 2;
 constexpr int kCurrentPrefabSchemaVersion = 1;

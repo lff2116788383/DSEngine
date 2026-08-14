@@ -1169,7 +1169,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     }
 
     // SceneManager: pump 异步加载完成的子场景
-    if (auto* sm = dse::core::ServiceLocator::Instance().Get<scene::SceneManager>()) {
+    if (auto* sm = dse::core::ServiceLocator::Instance().Get<dse::scene::SceneManager>()) {
         sm->Update(time.unscaled_dt);
 
         if (runtime_context_.world) {

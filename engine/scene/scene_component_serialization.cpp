@@ -19,7 +19,7 @@
 
 #include <glm/glm.hpp>
 
-namespace scene::component_io {
+namespace dse::scene::component_io {
 namespace {
 
 rapidjson::Value MakeVec3Array(const glm::vec3& v, rapidjson::Document::AllocatorType& allocator) {
@@ -268,4 +268,4 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
     }
 }
 
-} // namespace scene::component_io
+} // namespace dse::scene::component_io

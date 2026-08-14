@@ -16,7 +16,7 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/uuid_component.h"
 
-namespace scene {
+namespace dse::scene {
 namespace {
 
 bool DeserializeEntitiesFromDoc(World& world, AssetManager& /*asset_manager*/,

@@ -14,7 +14,7 @@
 #include <fstream>
 #include <set>
 
-using namespace scene;
+using namespace dse::scene;
 using namespace dse::core;
 
 // ========== UUIDComponent 单元测试 ==========

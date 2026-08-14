@@ -36,7 +36,7 @@ protected:
 // 测试 场景世界集成：Scenebind外部世界后期实体Operation为正确
 TEST_F(SceneWorldIntegrationTest, ScenebindExternalWorldPostEntityOperationIsCorrect) {
     World world;
-    scene::Scene sc("test_scene");
+    dse::scene::Scene sc("test_scene");
     sc.BindWorld(&world);
 
     // 通过 Scene 的 World 创建实体
@@ -48,7 +48,7 @@ TEST_F(SceneWorldIntegrationTest, ScenebindExternalWorldPostEntityOperationIsCor
 // 测试 场景世界集成：Sceneunbundle Worldthen回退返回到已构建于世界
 TEST_F(SceneWorldIntegrationTest, SceneunbundleWorldthenFallBackToTheBuiltInWorld) {
     World world;
-    scene::Scene sc("test_scene");
+    dse::scene::Scene sc("test_scene");
 
     sc.BindWorld(&world);
     Entity e1 = sc.GetWorld().CreateEntity();
@@ -63,15 +63,15 @@ TEST_F(SceneWorldIntegrationTest, SceneunbundleWorldthenFallBackToTheBuiltInWorl
 
 // 测试 场景世界集成：场景使用已构建于世界创建实体
 TEST_F(SceneWorldIntegrationTest, SceneUseTheBuiltInWorldCreateEntity) {
-    scene::Scene sc("internal_world_test");
+    dse::scene::Scene sc("internal_world_test");
     Entity e = sc.GetWorld().CreateEntity();
     EXPECT_TRUE(sc.GetWorld().IsAlive(e));
 }
 
 // 测试 场景世界集成：多场景世界不
 TEST_F(SceneWorldIntegrationTest, MultiSceneWorldNot) {
-    scene::Scene sc1("scene_a");
-    scene::Scene sc2("scene_b");
+    dse::scene::Scene sc1("scene_a");
+    dse::scene::Scene sc2("scene_b");
 
     Entity e1 = sc1.GetWorld().CreateEntity();
     Entity e2 = sc2.GetWorld().CreateEntity();
@@ -90,7 +90,7 @@ TEST_F(SceneWorldIntegrationTest, MultiSceneWorldNot) {
 
 // 测试 场景世界集成：场景Medium实体能够挂载且查询组件
 TEST_F(SceneWorldIntegrationTest, SceneMediumEntitiesCanMountAndQueryComponents) {
-    scene::Scene sc("component_test");
+    dse::scene::Scene sc("component_test");
     World& world = sc.GetWorld();
 
     Entity e = world.CreateEntity();
@@ -111,7 +111,7 @@ TEST_F(SceneWorldIntegrationTest, SceneMediumEntitiesCanMountAndQueryComponents)
 
 // 测试 场景世界集成：场景创建且销毁实体于批次
 TEST_F(SceneWorldIntegrationTest, SceneCreateAndDestroyEntitiesInBatches) {
-    scene::Scene sc("batch_test");
+    dse::scene::Scene sc("batch_test");
     World& world = sc.GetWorld();
 
     // 批量创建
@@ -137,7 +137,7 @@ TEST_F(SceneWorldIntegrationTest, SceneCreateAndDestroyEntitiesInBatches) {
 
 // 测试 场景世界集成：往返
 TEST_F(SceneWorldIntegrationTest, RoundTrip) {
-    scene::Scene sc("roundtrip_test");
+    dse::scene::Scene sc("roundtrip_test");
     World& world = sc.GetWorld();
 
     Entity e = world.CreateEntity();
@@ -152,7 +152,7 @@ TEST_F(SceneWorldIntegrationTest, RoundTrip) {
     // 注意：Serialize 可能因文件权限等原因失败，此处关注集成流程不崩溃
     if (save_ok) {
         // 反序列化到新 Scene
-        scene::Scene sc2("roundtrip_verify");
+        dse::scene::Scene sc2("roundtrip_verify");
         bool load_ok = sc2.Deserialize(test_path.string());
         // 如果反序列化成功，验证实体数量
         if (load_ok) {
@@ -178,10 +178,10 @@ TEST_F(SceneWorldIntegrationTest, PrefabSavingAndInstantiatingBasicProcesses) {
     const std::filesystem::path prefab_path = std::filesystem::temp_directory_path() / "dse_test_prefab.dprefab";
 
     // 保存为 Prefab
-    bool save_ok = scene::SaveEntityAsPrefab(world, source, prefab_path.string());
+    bool save_ok = dse::scene::SaveEntityAsPrefab(world, source, prefab_path.string());
     if (save_ok) {
         // 实例化 Prefab
-        Entity instance = scene::InstantiatePrefab(world, prefab_path.string());
+        Entity instance = dse::scene::InstantiatePrefab(world, prefab_path.string());
         if (world.IsAlive(instance)) {
             // 验证实例有相同组件
             EXPECT_TRUE(world.registry().all_of<TransformComponent>(instance));
@@ -201,13 +201,13 @@ TEST_F(SceneWorldIntegrationTest, PrefabInstantiationOverrideWithOptionsTransfor
 
     const std::filesystem::path prefab_path = std::filesystem::temp_directory_path() / "dse_test_prefab_override.dprefab";
 
-    bool save_ok = scene::SaveEntityAsPrefab(world, source, prefab_path.string());
+    bool save_ok = dse::scene::SaveEntityAsPrefab(world, source, prefab_path.string());
     if (save_ok) {
-        scene::PrefabInstantiateOptions opts;
+        dse::scene::PrefabInstantiateOptions opts;
         opts.override_position = true;
         opts.position = glm::vec3(100.0f, 200.0f, 0.0f);
 
-        Entity instance = scene::InstantiatePrefab(world, prefab_path.string(), opts);
+        Entity instance = dse::scene::InstantiatePrefab(world, prefab_path.string(), opts);
         if (world.IsAlive(instance) && world.registry().all_of<TransformComponent>(instance)) {
             auto& t = world.registry().get<TransformComponent>(instance);
             EXPECT_FLOAT_EQ(t.position.x, 100.0f);
@@ -224,7 +224,7 @@ TEST_F(SceneWorldIntegrationTest, PrefabInstantiationOverrideWithOptionsTransfor
 
 // 测试 场景世界集成：场景清空之后世界Stateconsistent
 TEST_F(SceneWorldIntegrationTest, SceneClearAfterWorldStateconsistent) {
-    scene::Scene sc("lifecycle_test");
+    dse::scene::Scene sc("lifecycle_test");
     World& world = sc.GetWorld();
 
     for (int i = 0; i < 10; ++i) {
@@ -238,7 +238,7 @@ TEST_F(SceneWorldIntegrationTest, SceneClearAfterWorldStateconsistent) {
 
 // 测试 场景世界集成：场景销毁实体之后正确
 TEST_F(SceneWorldIntegrationTest, SceneDestroyEntityAfterCorrect) {
-    scene::Scene sc("destroy_test");
+    dse::scene::Scene sc("destroy_test");
     World& world = sc.GetWorld();
 
     Entity e1 = world.CreateEntity();

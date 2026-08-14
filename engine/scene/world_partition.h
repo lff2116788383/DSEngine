@@ -25,7 +25,7 @@
 
 class World;
 
-namespace scene {
+namespace dse::scene {
 class SceneManager;
 }
 
@@ -96,7 +96,7 @@ public:
     ~WorldPartitionSystem() = default;
 
     /// 初始化，注入 SceneManager 依赖
-    void Init(::scene::SceneManager* scene_mgr);
+    void Init(::dse::scene::SceneManager* scene_mgr);
 
     /// 每帧更新：根据 StreamingOrigin 位置决定加载/卸载
     void Update(::World& world);
@@ -126,7 +126,7 @@ public:
 private:
     std::string BuildCellPath(const WorldPartitionConfigComponent& config, const CellCoord& coord) const;
 
-    ::scene::SceneManager* scene_mgr_ = nullptr;
+    ::dse::scene::SceneManager* scene_mgr_ = nullptr;
     std::unordered_map<CellCoord, CellInfo, CellCoordHash> cells_;
     WorldPartitionProgressCallback progress_cb_;
 };

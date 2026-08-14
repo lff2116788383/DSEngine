@@ -32,7 +32,7 @@ glm::vec3 WorldPartitionSystem::CellToWorld(const CellCoord& coord, float cell_s
 
 // ─── Init / Shutdown ────────────────────────────────────────────────────────
 
-void WorldPartitionSystem::Init(::scene::SceneManager* scene_mgr) {
+void WorldPartitionSystem::Init(::dse::scene::SceneManager* scene_mgr) {
     scene_mgr_ = scene_mgr;
 }
 

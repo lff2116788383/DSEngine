@@ -10,7 +10,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace scene {
+namespace dse::scene {
 
 SceneManager::SceneManager() = default;
 

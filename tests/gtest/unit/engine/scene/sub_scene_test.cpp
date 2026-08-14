@@ -11,7 +11,7 @@
 #include <filesystem>
 #include <fstream>
 
-using namespace scene;
+using namespace dse::scene;
 
 namespace {
 
