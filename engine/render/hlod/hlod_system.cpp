@@ -7,16 +7,22 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d_render.h"
+#include "engine/assets/compiler/raw_scene_data.h"
+#include "engine/base/debug.h"
 #include <algorithm>
 #include <fstream>
 #include <cstring>
 #include <cmath>
 #include <numeric>
+#include <filesystem>
 
 namespace dse {
 namespace render {
 
 using dse::MeshRendererComponent;
+using dse::asset::compiler::MeshHeader;
+using dse::asset::compiler::SubMeshDesc;
+using dse::asset::compiler::VertexAttribute;
 
 // ─── HLODBuilder: 离线构建 ──────────────────────────────────────────────────
 
@@ -129,6 +135,69 @@ void ComputeBounds(const std::vector<glm::vec3>& positions,
     out_extents = (mx - mn) * 0.5f;
 }
 
+/// 将 QEM 减面结果写出为 .dmesh（v1 格式，与 AssetBuilder importer 一致：
+/// MeshHeader + SubMeshDesc[] + 80B/顶点交错布局 P|N|UV|W|J|T + uint32 索引）。
+/// 返回是否写盘成功。
+bool WriteProxyDmesh(const std::string& path, const dse::mesh::DecimationResult& mesh) {
+    std::ofstream out(path, std::ios::binary);
+    if (!out.is_open()) return false;
+
+    MeshHeader header;
+    header.version = 1;
+    header.attribute_mask = static_cast<uint32_t>(
+        VertexAttribute::Position | VertexAttribute::Normal |
+        VertexAttribute::Tangent | VertexAttribute::TexCoord |
+        VertexAttribute::Joints | VertexAttribute::Weights);
+    header.vertex_count = static_cast<uint32_t>(mesh.positions.size());
+    header.index_count = static_cast<uint32_t>(mesh.indices.size());
+    header.submesh_count = 1;
+
+    glm::vec3 bmin(std::numeric_limits<float>::max());
+    glm::vec3 bmax(std::numeric_limits<float>::lowest());
+    for (const auto& p : mesh.positions) {
+        bmin = glm::min(bmin, p);
+        bmax = glm::max(bmax, p);
+    }
+
+    SubMeshDesc sub{};
+    sub.index_count = header.index_count;
+    sub.base_vertex = 0;
+    sub.material_id = 0;
+    sub.bounding_box_min = bmin;
+    sub.bounding_box_max = bmax;
+
+    // 布局与 RuntimeVertex（importer.cpp）一致：pos/normal/texcoord/weights/joints/tangent
+    constexpr size_t kVertexBytes = 80;  // v1 无 color：12+12+8+16+16+16
+    uint64_t offset = sizeof(MeshHeader);
+    header.submesh_data_offset = offset;
+    offset += sizeof(SubMeshDesc);
+    header.vertex_data_offset = offset;
+    offset += static_cast<uint64_t>(mesh.positions.size()) * kVertexBytes;
+    header.index_data_offset = offset;
+
+    out.write(reinterpret_cast<const char*>(&header), sizeof(MeshHeader));
+    out.write(reinterpret_cast<const char*>(&sub), sizeof(SubMeshDesc));
+
+    for (size_t i = 0; i < mesh.positions.size(); ++i) {
+        const glm::vec3 pos = mesh.positions[i];
+        const glm::vec3 nrm = i < mesh.normals.size() ? mesh.normals[i] : glm::vec3(0.0f, 1.0f, 0.0f);
+        const glm::vec2 uv  = i < mesh.texcoords.size() ? mesh.texcoords[i] : glm::vec2(0.0f);
+        const glm::vec4 weights(1.0f, 0.0f, 0.0f, 0.0f);
+        const glm::ivec4 joints(0, 0, 0, 0);
+        const glm::vec4 tangent(1.0f, 0.0f, 0.0f, 1.0f);
+        out.write(reinterpret_cast<const char*>(&pos), 12);
+        out.write(reinterpret_cast<const char*>(&nrm), 12);
+        out.write(reinterpret_cast<const char*>(&uv), 8);
+        out.write(reinterpret_cast<const char*>(&weights), 16);
+        out.write(reinterpret_cast<const char*>(&joints), 16);
+        out.write(reinterpret_cast<const char*>(&tangent), 16);
+    }
+    out.write(reinterpret_cast<const char*>(mesh.indices.data()),
+              mesh.indices.size() * sizeof(uint32_t));
+
+    return out.good();
+}
+
 } // anonymous namespace
 
 HLODBuildResult HLODBuilder::Build(const std::vector<HLODBuildMesh>& meshes,
@@ -160,6 +229,27 @@ HLODBuildResult HLODBuilder::Build(const std::vector<HLODBuildMesh>& meshes,
         float current_ratio = 1.0f;
         float current_distance = config.base_distance;
 
+        // 用 QEM 减面器对合并网格一次性生成各级 LOD 几何（累计比率逐级递减）。
+        // 此前只计算 target_tris 写入路径字符串，从不生成几何（技术债 B-4）。
+        dse::mesh::LodGenerationResult lod_result;
+        if (merged.positions.size() >= 3 && merged.indices.size() >= 3) {
+            dse::mesh::DecimationInput dec_in{};
+            dec_in.positions = merged.positions.data();
+            dec_in.normals = merged.normals.data();
+            dec_in.texcoords = merged.texcoords.data();
+            dec_in.vertex_count = static_cast<uint32_t>(merged.positions.size());
+            dec_in.indices = merged.indices.data();
+            dec_in.index_count = static_cast<uint32_t>(merged.indices.size());
+
+            dse::mesh::LodGenerationConfig lod_cfg;
+            float acc = 1.0f;
+            for (uint32_t l = 0; l < config.hlod_levels; ++l) {
+                acc *= config.simplify_ratio;
+                lod_cfg.level_ratios.push_back(acc);
+            }
+            lod_result = dse::mesh::MeshDecimator().GenerateLods(dec_in, lod_cfg);
+        }
+
         for (uint32_t level = 0; level < config.hlod_levels; ++level) {
             current_ratio *= config.simplify_ratio;
 
@@ -168,7 +258,6 @@ HLODBuildResult HLODBuilder::Build(const std::vector<HLODBuildMesh>& meshes,
             proxy.bounds_center = cluster.bounds_center;
             proxy.bounds_extents = cluster.bounds_extents;
 
-            // 使用 QEM 减面
             uint32_t target_tris = static_cast<uint32_t>(
                 (merged.indices.size() / 3) * current_ratio);
             if (target_tris < 4) target_tris = 4;
@@ -176,6 +265,49 @@ HLODBuildResult HLODBuilder::Build(const std::vector<HLODBuildMesh>& meshes,
             proxy.triangle_count = target_tris;
             proxy.mesh_path = "hlod/" + cluster.name + "_lod" + std::to_string(level) + ".dmesh";
             proxy.material_path = "hlod/" + cluster.name + "_mat.dmat";
+
+            // 减面成功且几何非空：写入真实几何；否则回退合并原始几何
+            // （QEM 对孤立方块等退化网格可能折叠到 0 三角形——每折叠删 2 个
+            // 共享面，孤立组件不足时归零；回退保证每级都有有效代理）。
+            const dse::mesh::DecimationResult* dec = nullptr;
+            if (lod_result.success && level < lod_result.levels.size() &&
+                lod_result.levels[level].success &&
+                !lod_result.levels[level].positions.empty()) {
+                dec = &lod_result.levels[level];
+                proxy.positions = dec->positions;
+                proxy.normals = dec->normals;
+                proxy.texcoords = dec->texcoords;
+                proxy.indices = dec->indices;
+                proxy.triangle_count = dec->result_triangle_count;
+            } else {
+                proxy.positions = merged.positions;
+                proxy.normals = merged.normals;
+                proxy.texcoords = merged.texcoords;
+                proxy.indices = merged.indices;
+                proxy.triangle_count = static_cast<uint32_t>(merged.indices.size() / 3);
+            }
+
+            // 落盘 .dmesh（输出根非空时）
+            if (!config.output_dir.empty() && !proxy.indices.empty()) {
+                dse::mesh::DecimationResult disk_mesh;
+                if (dec) {
+                    disk_mesh = *dec;
+                } else {
+                    disk_mesh.positions = proxy.positions;
+                    disk_mesh.normals = proxy.normals;
+                    disk_mesh.texcoords = proxy.texcoords;
+                    disk_mesh.indices = proxy.indices;
+                    disk_mesh.result_triangle_count = proxy.triangle_count;
+                    disk_mesh.success = true;
+                }
+                std::filesystem::path out_path =
+                    std::filesystem::path(config.output_dir) / proxy.mesh_path;
+                std::error_code ec;
+                std::filesystem::create_directories(out_path.parent_path(), ec);
+                if (!WriteProxyDmesh(out_path.string(), disk_mesh)) {
+                    DEBUG_LOG_WARN("[HLOD] Failed to write proxy mesh: {}", out_path.string());
+                }
+            }
 
             cluster.levels.push_back(proxy);
             current_distance *= config.level_distance_multiplier;

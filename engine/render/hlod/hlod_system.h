@@ -26,6 +26,7 @@
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
 #include "engine/core/dse_export.h"
+#include "engine/mesh/mesh_decimator.h"
 
 using Entity = entt::entity;
 class World;
@@ -43,6 +44,12 @@ struct HLODProxy {
     uint32_t triangle_count = 0;      ///< 代理三角形数
     glm::vec3 bounds_center{0.0f};
     glm::vec3 bounds_extents{0.0f};
+
+    // 减面代理几何（离线构建产物；output_dir 非空时同时落盘 .dmesh 供运行时加载）
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> normals;
+    std::vector<glm::vec2> texcoords;
+    std::vector<uint32_t> indices;
 };
 
 /// HLOD 簇：一组相邻物体共享的多级代理层次
@@ -82,6 +89,9 @@ struct HLODBuildConfig {
     float simplify_ratio = 0.25f;       ///< 每级简化比率
     float level_distance_multiplier = 2.0f; ///< 层级间距离倍数
     float base_distance = 100.0f;       ///< 第一级切换距离
+    /// 离线构建输出根目录（如 "data/"）；非空时每级代理几何经 MeshDecimator
+    /// 减面后落盘为 .dmesh（路径 = output_dir + proxy.mesh_path）。空 = 仅内存缓存。
+    std::string output_dir;
 };
 
 /// 构建输入中的 mesh 信息
