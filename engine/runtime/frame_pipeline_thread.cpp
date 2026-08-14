@@ -197,6 +197,10 @@ void FramePipeline::PrepareRenderFrame() {
     // 网格数据取自 MeshRendererComponent 的 CPU 顶点缓存（temp_vertices 等，
     // 解析与 impostor/physics 同源）；首次按 mesh_path 构建 DAG 并注册（缓存
     // mesh_id），此后每帧仅提交实例。Execute 必须在 VGCullPass 之前（快照已就绪）。
+    // ⚠ 已知限制：renderer 内部 culling 状态为单缓冲（非双缓冲），渲染线程激活
+    // 模式下 Prepare（主线程）写入与 VGCullPass（渲染线程）读取存在跨帧理论竞争；
+    // 实验特性默认关闭、无生产调用方，启用渲染线程 + NaniteStatic 实体时需先
+    // 为 renderer 引入 per-frame 双缓冲。
     if (virtual_geometry_renderer_ && virtual_geometry_renderer_->GetConfig().enabled &&
         runtime_context_.world) {
         const auto& snap = *render_pass_context_.snapshot;

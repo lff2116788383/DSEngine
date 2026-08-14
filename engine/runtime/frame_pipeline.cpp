@@ -1031,6 +1031,9 @@ void FramePipeline::OnWindowResize(int w, int h) {
     FreeResolutionDependentRTs();
     InitResolutionDependentRTs();
     SyncRenderPassContextTargets();
+    // 分辨率变化：释放瞬态 RT 跨帧缓存池（旧 desc 不再匹配，滞留到 Shutdown
+    // 会造成显存滞留；下帧按新 desc 重建）
+    render_graph_dag_.ReleaseCachedTransientResources();
 #ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
     if (virtual_geometry_renderer_) {
         virtual_geometry_renderer_->OnResize(

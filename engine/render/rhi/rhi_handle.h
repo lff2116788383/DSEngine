@@ -5,8 +5,9 @@
  * 零运行时开销（sizeof == sizeof(unsigned int)）。
  * 句柄 id 现状：各后端资源管理器单调发号（next_*_handle_++，GL 用幻数基址错开），
  * 进程内不回收复用 → "id 复用后旧句柄指向新资源"的世代冲突当前不会发生。
- * 防御措施（Debug 构建）：HandleActivityLedger 跟踪分配/释放，句柄查询处断言
- * 不在"已释放"集合——捕获 use-after-free 句柄调用（删除后仍被使用）。
+ * 防御措施（Debug 构建）：HandleActivityLedger 跟踪分配/释放，提供 active/released
+ * 计数供泄漏审计（刻意不做断言——查询已释放句柄返回 nullptr 与删除未知句柄为
+ * no-op 是既有 API 契约，见下方类注释）。
  * 若未来引入句柄池化/回收，需在句柄高位叠加世代计数（[N4]）。
  */
 
