@@ -246,5 +246,10 @@ void SystemScheduler::SetEnabled(const std::string& name, bool enabled) {
     }
 }
 
+void SystemScheduler::Reset() {
+    entries_.clear();
+    command_buffer_.Clear();
+}
+
 } // namespace ecs
 } // namespace dse

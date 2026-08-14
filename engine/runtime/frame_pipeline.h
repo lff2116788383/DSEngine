@@ -31,6 +31,7 @@ class RenderThreadManager;  // forward-declared; owned via unique_ptr
 #include "engine/runtime/runtime_render_shell.h"
 #include "engine/base/frame_update_context.h"
 #include "engine/core/dse_export.h"
+#include "engine/ecs/system_scheduler.h"
 
 // ── Forward declarations (formerly heavy #includes) ──────────────────────────
 // These types are used only as pointers, references, or in unique_ptr members
@@ -340,6 +341,11 @@ public:
     friend void dse::runtime::FinalizeRuntimeRenderFrame(FramePipeline& pipeline);
 
 private:
+    /// Gameplay 系统调度器（技术债 #1 接入）：Update 图经它统一执行。
+    /// 当前以粗粒度串行系统注册（2D/外部模块/3D/蓝图内部顺序依赖严格），
+    /// 后续可为无冲突子系统声明 ComponentAccess 自动并行。
+    dse::ecs::SystemScheduler gameplay_scheduler_;
+
     /// 解析 RHI 后端、创建并初始化 RHI 设备（含 D3D11/Vulkan 失败时回退到 OpenGL）。
     /// 成功返回最终生效的后端；失败返回 RhiBackend::Invalid。
     RhiBackend InitRhiDevice();

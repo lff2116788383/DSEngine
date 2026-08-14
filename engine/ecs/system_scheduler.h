@@ -160,6 +160,10 @@ public:
     /// 启用/禁用指定系统
     void SetEnabled(const std::string& name, bool enabled);
 
+    /// 清空全部已注册系统（供"每帧重建注册"的调用方使用，
+    /// 如捕获本帧上下文的 lambda 注册模式）
+    void Reset();
+
     /// 获取系统数量
     size_t SystemCount() const { return entries_.size(); }
 
