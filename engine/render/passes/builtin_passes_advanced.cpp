@@ -762,6 +762,71 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
 }
 )WGSL";
 
+// ---------------- Meshlet cluster cull：WebGPU WGSL（手译 meshlet_cull.comp） ----------------
+// 绑定约定同 Hi-Z/gpu_cull（group1 b8 = 命名 uniform 块；group2 = 纹理；group3 = SSBO）。
+// 注意：GLSL 版的 frustum/cone 剔除由 u_flags 开关控制，但 CPU 侧从未设置 flags
+// （meshlet_render_pass 只传 5 个参数），实际行为恒为"全部可见"；本 WGSL 固定执行
+// 视锥 + Hi-Z 剔除（数据均在 push/纹理内，不依赖 flags），WebGPU 上剔除真实生效。
+// WebGPU NDC z∈[0,1]（投影含 GetProjectionCorrection），nearest_z 直接比较，不做重映射。
+const char* kMeshletCullShaderSourceWGSL = R"WGSL(// dse-wgsl
+struct MeshletData { sphere : vec4<f32>, cone : vec4<f32>, };
+struct DrawCmd { count : u32, instance_count : u32, first_index : u32, base_vertex : i32, base_instance : u32, };
+struct PC {
+  u_view_projection : mat4x4<f32>,
+  @align(16) u_screen_size : vec2<f32>,
+  @align(16) u_mip_count : i32,
+  @align(16) u_meshlet_count : i32,
+  @align(16) u_camera_pos : vec4<f32>,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+@group(2) @binding(0) var u_hiz_texture : texture_2d<f32>;
+@group(3) @binding(0) var<storage, read_write> meshlets : array<MeshletData>;
+@group(3) @binding(1) var<storage, read_write> draw_cmds : array<DrawCmd>;
+fn sample_hiz(uv : vec2<f32>, mip : i32) -> f32 {
+  let dim = vec2<i32>(textureDimensions(u_hiz_texture, mip));
+  let c = clamp(vec2<i32>(uv * vec2<f32>(dim)), vec2<i32>(0, 0), dim - vec2<i32>(1, 1));
+  return textureLoad(u_hiz_texture, c, mip).r;
+}
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_meshlet_count) { return; }
+  let center = meshlets[idx].sphere.xyz;
+  let radius = meshlets[idx].sphere.w;
+  // 视锥剔除：Gribb-Hartmann 平面从 view_projection 提取，球体测试
+  var visible = true;
+  let r0 = pc.u_view_projection[3] + pc.u_view_projection[0];
+  let r1 = pc.u_view_projection[3] - pc.u_view_projection[0];
+  let r2 = pc.u_view_projection[3] + pc.u_view_projection[1];
+  let r3 = pc.u_view_projection[3] - pc.u_view_projection[1];
+  let r4 = pc.u_view_projection[3] + pc.u_view_projection[2];
+  let r5 = pc.u_view_projection[3] - pc.u_view_projection[2];
+  let planes = array<vec4<f32>, 6>(r0, r1, r2, r3, r4, r5);
+  for (var i = 0; i < 6; i = i + 1) {
+    let p = planes[i];
+    let d = dot(p.xyz, center) + p.w;
+    if (d < -radius) { visible = false; }
+  }
+  if (!visible) { draw_cmds[idx].instance_count = 0u; return; }
+  // Hi-Z 遮挡剔除（球体投影 + textureLoad，R32Float 不可过滤）
+  let clip = pc.u_view_projection * vec4<f32>(center, 1.0);
+  if (clip.w > 0.0) {
+    let ndc = clip.xyz / clip.w;
+    let proj_radius = radius * pc.u_view_projection[1][1] / clip.w;
+    let screen_radius = proj_radius * pc.u_screen_size.y * 0.5;
+    let uv_center = ndc.xy * 0.5 + 0.5;
+    let nearest_z = ndc.z - 0.005;
+    if (uv_center.x >= 0.0 && uv_center.x <= 1.0 && uv_center.y >= 0.0 && uv_center.y <= 1.0) {
+      var mipf = select(0.0, ceil(log2(screen_radius * 2.0)), screen_radius > 0.0);
+      mipf = clamp(mipf, 0.0, f32(pc.u_mip_count - 1));
+      let hiz = sample_hiz(uv_center, i32(mipf));
+      if (nearest_z > hiz) { draw_cmds[idx].instance_count = 0u; return; }
+    }
+  }
+  draw_cmds[idx].instance_count = 1u;
+}
+)WGSL";
+
 void GPUCullPass::Setup(RenderGraph& graph) {
     auto hiz_mips = graph.DeclareResource("hiz_mips");
     auto gpu_draw_cmds = graph.DeclareResource("gpu_draw_commands");

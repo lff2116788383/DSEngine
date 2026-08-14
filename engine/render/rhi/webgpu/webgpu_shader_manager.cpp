@@ -1016,8 +1016,10 @@ unsigned int WebGPUShaderManager::CreateComputeShaderEx(
     const std::string& /*gl_src*/, const std::string& /*vk_src*/, const std::string& /*hlsl_src*/,
     uint32_t /*ssbo_count*/, uint32_t /*storage_image_count*/, uint32_t /*sampler_count*/,
     uint32_t /*push_constant_bytes*/, const std::string& wgsl_src) {
-    // WebGPU 仅消费手写 WGSL 源槽。空槽表示该 compute 特性尚未手译 WGSL（如 GPU-driven
-    // 剔除 / HiZ / skinning / hair / grass）——返回 0，调用方按句柄 0 优雅回退到 CPU/无该特性。
+    // WebGPU 仅消费手写 WGSL 源槽。空槽表示该 compute 特性尚未手译 WGSL——返回 0，
+    // 调用方按句柄 0 优雅回退到 CPU/无该特性。
+    // 已手译：HiZ copy/downsample/cull、gpu_cull、meshlet_cull（B-3）、ddgi、
+    // hair×4、skinning、particle update/emit（B-3）。
     // 布局计数（ssbo/img/smp/pc）不需要：compute 管线 layout 由 WGSL @group/@binding 解析驱动。
     if (wgsl_src.empty()) return 0;
     return CreateComputeShader(wgsl_src);

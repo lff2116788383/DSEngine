@@ -115,6 +115,7 @@ namespace dse::render {
     extern const char* kHiZDownsampleShaderSourceWGSL;
     extern const char* kHiZCullShaderSourceWGSL;
     extern const char* kGPUCullShaderSourceWGSL;
+    extern const char* kMeshletCullShaderSourceWGSL;
 }
 
 struct ReadbackStats {
@@ -527,7 +528,7 @@ bool FramePipeline::Init() {
             dse::render::generated_shaders::kmeshlet_cull_comp_glsl430,
             dse::render::generated_shaders::kmeshlet_cull_comp_glsl450,
             dse::render::generated_shaders::kmeshlet_cull_comp_hlsl,
-            2, 0, 1, 208, "");
+            2, 0, 1, 208, dse::render::kMeshletCullShaderSourceWGSL);
         render_pass_context_.meshlet_enabled = static_cast<bool>(render_pass_context_.meshlet_cull_shader);
         DEBUG_LOG_INFO("Meshlet pipeline: GPU cull enabled={}, shader={}",
                        render_pass_context_.meshlet_enabled,

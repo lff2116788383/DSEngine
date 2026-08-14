@@ -21,6 +21,124 @@
 namespace dse {
 namespace render {
 
+// ─── WebGPU WGSL（手译 particle_update.comp / particle_emit.comp；无离线转译）───
+// 绑定约定与 Hi-Z/gpu_cull 一致：group1 b8 = 命名 uniform 块（16B 对齐累积），
+// group3 = SSBO（BindGpuBuffer slot → binding；compute 统一 read_write storage）。
+// 原子计数器用 atomic<u32>（内存布局与 u32 相同，CPU 侧读写兼容）。
+// 16B 对齐 push 块（SetComputeUniform* 调用序）：
+//   update: u_gravity_dt@0, u_wind_turbulence@16, u_collision@32, u_vortex@48, u_max_particles@64 (80B)
+//   emit:   u_emitter_pos@0, u_life_speed@16, u_emit_dir@32, u_emit_count@48, u_shape@64, u_seed@80 (96B)
+namespace {
+const char* kParticleUpdateWGSL = R"WGSL(// dse-wgsl
+struct Particle { pos_life : vec4<f32>, vel_maxlife : vec4<f32>, };
+struct Counters { alive : atomic<u32>, dead : atomic<u32>, dead_indices : array<atomic<u32>>, };
+struct PC {
+  u_gravity_dt : vec4<f32>,
+  @align(16) u_wind_turbulence : vec4<f32>,
+  @align(16) u_collision : vec4<f32>,
+  @align(16) u_vortex : vec4<f32>,
+  @align(16) u_max_particles : i32,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+@group(3) @binding(0) var<storage, read_write> particles_in : array<Particle>;
+@group(3) @binding(1) var<storage, read_write> particles_out : array<Particle>;
+@group(3) @binding(2) var<storage, read_write> counters : Counters;
+fn hash(n : f32) -> f32 { return fract(sin(n) * 43758.5453123); }
+@compute @workgroup_size(256)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_max_particles) { return; }
+  let p_in = particles_in[idx];
+  let dt = pc.u_gravity_dt.w;
+  var pos = p_in.pos_life.xyz;
+  var vel = p_in.vel_maxlife.xyz;
+  var life = p_in.pos_life.w;
+  if (life > 0.0) {
+    vel = vel + pc.u_gravity_dt.xyz * dt;
+    vel = vel + pc.u_wind_turbulence.xyz * dt;
+    if (pc.u_vortex.x > 0.0) {
+      let to_axis = vec3<f32>(-pos.z, 0.0, pos.x);
+      vel = vel + normalize(to_axis + vec3<f32>(0.001)) * pc.u_vortex.x * dt;
+    }
+    if (pc.u_wind_turbulence.w > 0.0) {
+      let n = hash(f32(idx) + life * 17.3);
+      vel = vel + vec3<f32>(n - 0.5, hash(n * 7.1) - 0.5, hash(n * 13.7) - 0.5) * pc.u_wind_turbulence.w * dt;
+    }
+    pos = pos + vel * dt;
+    life = life - dt;
+    if (pc.u_collision.x > 0.5 && pos.y < pc.u_collision.y) {
+      pos.y = pc.u_collision.y;
+      vel.y = -vel.y * pc.u_collision.z;
+      vel.xz = vel.xz * pc.u_collision.w;
+    }
+    if (life > 0.0) {
+      atomicAdd(&counters.alive, 1u);
+    } else {
+      let di = atomicAdd(&counters.dead, 1u);
+      atomicStore(&counters.dead_indices[di], idx);
+    }
+  } else {
+    let di = atomicAdd(&counters.dead, 1u);
+    atomicStore(&counters.dead_indices[di], idx);
+  }
+  particles_out[idx] = Particle(pos_life : vec4<f32>(pos, life), vel_maxlife : vec4<f32>(vel, p_in.vel_maxlife.w));
+}
+)WGSL";
+
+const char* kParticleEmitWGSL = R"WGSL(// dse-wgsl
+struct Particle { pos_life : vec4<f32>, vel_maxlife : vec4<f32>, };
+struct Counters { alive : atomic<u32>, dead : atomic<u32>, dead_indices : array<atomic<u32>>, };
+struct PC {
+  u_emitter_pos : vec4<f32>,
+  @align(16) u_life_speed : vec4<f32>,
+  @align(16) u_emit_dir : vec4<f32>,
+  @align(16) u_emit_count : i32,
+  @align(16) u_shape : i32,
+  @align(16) u_seed : i32,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+@group(3) @binding(1) var<storage, read_write> particles_out : array<Particle>;
+@group(3) @binding(2) var<storage, read_write> counters : Counters;
+fn hash(n : u32) -> f32 {
+  var h = (n << 13u) ^ n;
+  h = h * (h * h * 15731u + 789221u) + 1376312589u;
+  return f32(h & 0x7fffffffu) / f32(0x7fffffffu);
+}
+fn random_direction(seed : u32) -> vec3<f32> {
+  let u = hash(seed);
+  let v = hash(seed + 1u);
+  let theta = u * 6.2831853;
+  let phi = acos(2.0 * v - 1.0);
+  return vec3<f32>(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi));
+}
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_emit_count) { return; }
+  var dead_idx = atomicAdd(&counters.dead, 0xFFFFFFFFu);
+  if (dead_idx == 0u || dead_idx > 0x7FFFFFFFu) { return; }
+  dead_idx = dead_idx - 1u;
+  let slot = atomicLoad(&counters.dead_indices[dead_idx]);
+  let s = u32(pc.u_seed) + idx * 7u;
+  let life = mix(pc.u_life_speed.x, pc.u_life_speed.y, hash(s));
+  let speed = mix(pc.u_life_speed.z, pc.u_life_speed.w, hash(s + 3u));
+  var pos = pc.u_emitter_pos.xyz;
+  var dir = random_direction(s + 5u);
+  if (pc.u_shape == 1) {
+    pos = pos + dir * pc.u_emitter_pos.w * hash(s + 10u);
+  } else if (pc.u_shape == 2) {
+    let cos_angle = pc.u_emit_dir.w;
+    dir = normalize(mix(pc.u_emit_dir.xyz, dir, 1.0 - cos_angle));
+  } else if (pc.u_shape == 3) {
+    let angle = hash(s + 20u) * 6.2831853;
+    pos = pos + vec3<f32>(cos(angle), 0.0, sin(angle)) * pc.u_emitter_pos.w;
+  }
+  particles_out[slot] = Particle(pos_life : vec4<f32>(pos, life), vel_maxlife : vec4<f32>(dir * speed, life));
+  atomicAdd(&counters.alive, 1u);
+}
+)WGSL";
+} // namespace
+
 // ─── GpuParticleManager 实现 ─────────────────────────────────────────────
 
 bool GpuParticleManager::Init(RhiDevice* rhi) {
@@ -33,12 +151,12 @@ bool GpuParticleManager::Init(RhiDevice* rhi) {
     //   push=80B（u_gravity_dt/u_wind_turbulence/u_collision/u_vortex 各 vec4 + u_max_particles int）。
     update_shader_ = rhi->CreateComputeShaderEx(
         kparticle_update_comp_glsl430, kparticle_update_comp_glsl450, kparticle_update_comp_hlsl,
-        3, 0, 0, 80);
+        3, 0, 0, 80, kParticleUpdateWGSL);
     // Emit pass：SSBO binding 1=ParticlesOut(rw)/2=Counters(rw)（binding 0 保留占位以对齐 VK 布局），
     //   push=96B（u_emitter_pos/u_life_speed/u_emit_dir 各 vec4 + u_emit_count/u_shape/u_seed int）。
     emit_shader_ = rhi->CreateComputeShaderEx(
         kparticle_emit_comp_glsl430, kparticle_emit_comp_glsl450, kparticle_emit_comp_hlsl,
-        3, 0, 0, 96);
+        3, 0, 0, 96, kParticleEmitWGSL);
 
     inited_ = (update_shader_ && emit_shader_);
     if (!inited_) {
