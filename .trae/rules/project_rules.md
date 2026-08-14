@@ -92,7 +92,7 @@ apps/  ->  modules/  ->  engine/  ->  depends/
 
 ### 3.5 脚本系统
 
-- Lua 绑定使用 sol2。
+- Lua 绑定使用**裸 Lua C API + codegen 生成**（`tools/codegen/` 从 `binding_defs.json` 生成 `*.gen.cpp`；`depends/sol2-3.2.2` 已签入但未使用，待清理，勿在新绑定中引入 sol2）。
 - 新增组件绑定时，在 [`engine/scripting/lua/bindings/`](engine/scripting/lua/bindings/) 对应文件中添加，遵循现有模式。
 - 对外 Lua API 发生变化时，应同步检查 [`docs/LUA_API.md`](docs/LUA_API.md) 是否需要更新。
 - Lua 绑定文件按功能域拆分，避免一个超大绑定文件承载全部逻辑。

@@ -51,7 +51,7 @@
 - **Job 系统** —— 多线程任务图
 - **资产管线** —— `.dmesh` / `.dmat` / `.danim` / `.dskel` / `.dpak`
 - **内存管理子系统** —— 统一分配门面、按标签追踪 + 泄漏报告、线性/帧/scratch/池分配器、预算、STL 适配器、`Handle/HandleTable`、可选 mimalloc 后端（详见 [`docs/architecture/MEMORY_MANAGEMENT_DESIGN.md`](docs/architecture/MEMORY_MANAGEMENT_DESIGN.md)）
-- **网络层（实验性，默认关闭）** —— 基于 GameNetworkingSockets 的可靠/不可靠 + 多通道加密传输底座、C ABI、异步 HTTP 客户端，以及最小可用的服务器权威复制层 MVP（实体 spawn/despawn、Transform 全量快照、带所有权校验的输入 RPC）。详见 [`docs/architecture/NETWORK_LAYER_DESIGN.md`](docs/architecture/NETWORK_LAYER_DESIGN.md)
+- **网络层（默认开启，仅桌面；Android/iOS/OHOS/Web 关闭）** —— 基于 GameNetworkingSockets 的可靠/不可靠 + 多通道加密传输底座、C ABI、异步 HTTP 客户端，以及最小可用的服务器权威复制层 MVP（实体 spawn/despawn、Transform 全量快照、带所有权校验的输入 RPC）。详见 [`docs/architecture/NETWORK_LAYER_DESIGN.md`](docs/architecture/NETWORK_LAYER_DESIGN.md)
 
 ---
 
@@ -64,9 +64,9 @@ DSEngine/
 │   ├── audio/         音频播放
 │   ├── core/          Job 系统、事件总线、服务定位器、模块、内存管理（core/memory）
 │   ├── ecs/           ECS 组件与系统
-│   ├── http/          异步 HTTP(S) 客户端（实验性，DSE_ENABLE_HTTP）
+│   ├── http/          异步 HTTP(S) 客户端（DSE_ENABLE_HTTP，默认开）
 │   ├── input/         键盘 / 鼠标 / 手柄
-│   ├── net/           网络传输抽象 + GNS 后端 + C ABI + 复制层（实验性，DSE_ENABLE_NET）
+│   ├── net/           网络传输抽象 + GNS 后端 + C ABI + 复制层（DSE_ENABLE_NET，默认开）
 │   ├── physics/       Box2D 封装，PhysX 可选
 │   ├── render/        RHI 抽象、Pass、材质、着色器
 │   ├── runtime/       引擎应用外壳、帧管线
@@ -127,10 +127,10 @@ DSEngine/
 
 | 目标 | 输出（`bin/`） | 用途 | 开启开关（默认值） |
 |------|----------------|------|--------------------|
-| `dse_editor_cpp` | `dsengine-editor.exe` | **可视化编辑器**（Win32 GUI，ImGui） | `DSE_BUILD_EDITOR=ON`（默认 OFF） |
-| launcher | —— | 启动器（仓库提供 `apps/launcher` 时构建） | `DSE_BUILD_LAUNCHER=ON`（默认 OFF） |
-| `dse_http_smoke` / `dse_http_lua_smoke` | `bin/` | HTTP 客户端冒烟 / Lua 绑定冒烟 | `DSE_ENABLE_HTTP=ON`（默认 OFF） |
-| `dse_net_smoke` | `bin/` | 网络**传输层**回环冒烟（可靠/不可靠 + 多通道） | `DSE_ENABLE_NET=ON`（默认 OFF） |
+| `dse_editor_cpp` | `dsengine-editor.exe` | **可视化编辑器**（Win32 GUI，ImGui） | `DSE_BUILD_EDITOR=ON`（默认 ON） |
+| launcher | —— | 启动器（仓库提供 `apps/launcher` 时构建） | `DSE_BUILD_LAUNCHER=ON`（默认 ON） |
+| `dse_http_smoke` / `dse_http_lua_smoke` | `bin/` | HTTP 客户端冒烟 / Lua 绑定冒烟 | `DSE_ENABLE_HTTP=ON`（默认 ON） |
+| `dse_net_smoke` | `bin/` | 网络**传输层**回环冒烟（可靠/不可靠 + 多通道） | `DSE_ENABLE_NET=ON`（默认 ON） |
 | `dse_net_capi_smoke` | `bin/` | 网络 **C ABI** 冒烟 | `DSE_ENABLE_NET=ON` |
 | `dse_net_lua_smoke` | `bin/` | 网络 **Lua 绑定** 冒烟 | `DSE_ENABLE_NET=ON` |
 | `dse_repl_smoke` | `bin/` | **复制层回环冒烟**：spawn → 全量快照一致 → 所有权负例 → 属主输入 RPC 服务器权威移动 → despawn | `DSE_ENABLE_NET=ON` |
@@ -242,7 +242,7 @@ scripts\win\build_all.bat           # 全部
 | `DSE_BUILD_GTESTS` | ON | 构建 GoogleTest 测试目标 |
 | `DSE_ENABLE_LUA` | ON | 启用 Lua 脚本运行时 |
 | `DSE_ENABLE_NAVMESH` | ON | 启用 NavMesh / 寻路（Recast/Detour） |
-| `DSE_ENABLE_NET` | OFF | 启用网络层（GameNetworkingSockets 后端 + 复制层） |
+| `DSE_ENABLE_NET` | ON | 启用网络层（GameNetworkingSockets 后端 + 复制层） |
 | `DSE_ENABLE_HTTP` | OFF | 启用异步 HTTP(S) 客户端（IXWebSocket + OpenSSL） |
 | `DSE_MEM_BACKEND` | system | 内存后端：`system`（零依赖）或 `mimalloc`（需 `depends/mimalloc` 子模块） |
 

@@ -11,17 +11,17 @@
 |------|------|------|
 | UI 框架 | Dear ImGui (Docking) | 即时模式 GUI，内建 DockSpace |
 | 窗口/输入 | GLFW | 跨平台窗口管理 |
-| 渲染 | OpenGL 3.3 (GLAD) | 编辑器自身渲染（未走 RHI） |
+| 渲染 | 引擎 RHI（GL/Vulkan/D3D11 三后端 ImGuiBackend） | 编辑器 ImGui 走引擎 `RhiDevice` 统一渲染，非裸 GL 直出 |
 | Gizmo | ImGuizmo | 平移/旋转/缩放变换控件 |
 | 序列化 | RapidJSON | 场景/设置 JSON 读写 |
 | 字体 | Inter + NotoSansSC + MDI | 主字体 + 中文 + 图标 |
-| 引擎集成 | dse_engine (DLL) | 链接引擎动态库 |
+| 引擎集成 | dse_engine（默认静态库） | 内嵌引擎实例（`enable_editor=true` + 外部窗口），Play/Stop 不重启进程 |
 
 ---
 
 ## 二、代码规模与结构
 
-**总计：约 110 个源文件（.cpp+.h），`src/` 下 ~30,664 行代码，约 60 个功能模块/面板。**
+**总计：`src/` 236 个源文件（.cpp+.h）约 5.4 万行 + `core/` 8 文件（零 UI 门面，见 §架构），约 43+ 功能面板/工具。**
 （旧文档记 “59 文件 / 12,000 行 / 25 面板” 已严重过时，本次按 `find apps/editor_cpp/src` + `wc -l` 核实。）
 
 ### 自上次文档以来新增/此前漏记的面板（均已落地，非占位）
@@ -31,7 +31,7 @@
 | Shader Graph | `editor_shader_graph.cpp` | 1248 | 节点式着色器图 + 贝塞尔连线 + 编译为 DSSL | `Compile`，7 例 `ShaderGraphCompileTest` |
 | Anim State Machine | `editor_anim_state_machine.cpp` | 637 | 动画状态机图 + 过渡箭头 + 状态 Inspector | `DrawAnimStateMachinePanel` |
 | Tilemap | `editor_tilemap_panel.cpp` | 567 | 2D 瓦片笔刷/填充/橡皮 | — |
-| AI Chat Panel | `editor_chat_panel.cpp` | 892 | 编辑器内建 AI 对话 + @提及解析 + 历史持久化 | 接入 `editor_app.cpp:1022-1025` |
+| AI Agent Panel | `editor_agent_panel.cpp` | 892 | 编辑器内建 AI 助手面板（对话 + 工具调用 + 历史持久化；由旧 `editor_chat_panel` 演进而来） | 接入 `editor_app.cpp` |
 | Curve Editor | `editor_curve_editor.cpp` | 327 | 通用曲线编辑控件 | `DrawCurveEditor` |
 | NavMesh Panel | `editor_navmesh_panel.cpp` | 316 | 导航网格烘焙参数 + Overlay 预览 | `DrawNavMeshPanel` / `DrawNavMeshOverlay` |
 | Lua Debugger | `editor_lua_debugger.cpp` | 303 | Lua 断点/单步调试面板 | `DrawLuaDebuggerPanel` |

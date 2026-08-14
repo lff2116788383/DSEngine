@@ -14,8 +14,8 @@
 **DSEngine** —— 轻量级 **C++20 游戏引擎**，自带可视化编辑器、Lua 脚本与 2D/3D 渲染管线。
 
 - **渲染**：多后端 RHI（OpenGL 4.5 / Vulkan 1.3 / D3D11，失败自动回退）· RenderGraph（DAG 帧图）· PBR + IBL · 级联阴影 · Bloom 等后处理 · Clustered Forward+ · DSSL 着色语言。
-- **运行时**：ECS（EnTT）· 物理 Box2D(2D) / Jolt(3D) · 音频 · Job 系统 · 资产管线（`.dmesh/.dmat/.dpak/.bun`）· 内存子系统（`engine/core/memory`）· 实验性网络层（GNS，默认关）。
-- **脚本**：内嵌 Lua 5.4（sol2 绑定）+ 编辑器内热重载/REPL。
+- **运行时**：ECS（EnTT）· 物理 Box2D(2D) / Jolt(3D) · 音频 · Job 系统 · 资产管线（`.dmesh/.dmat/.dpak/.bun`）· 内存子系统（`engine/core/memory`）· 网络层（GNS，默认开，仅桌面；Android/iOS/OHOS/Web 关）。
+- **脚本**：内嵌 Lua 5.4（裸 Lua C API + codegen 生成绑定，非 sol2）+ 编辑器内热重载/REPL。
 - **工具**：ImGui 编辑器、`dse` headless CLI（建项目/打包/build）、AssetBuilder、着色器/DSSL 编译器。
 - **平台**：Windows（主）/ Linux(WSL) / Android(NDK) / Web(Emscripten, WebGL2)。
 - **版本**：`0.1.0-alpha`（见 [`CMakeLists.txt`](CMakeLists.txt) `project(... VERSION 0.1.0)` + `DSEngine_VERSION_PRERELEASE "alpha"`，约第 8、15 行）。SemVer 预发布标签；正式发布时把 `PRERELEASE` 置空字符串。
@@ -67,8 +67,8 @@ ctest  --preset windows-x64-debug         # 跑 gtest 标签用例
 | 预设组 | 目标系统 | 后端 | 备注 |
 |--------|----------|------|------|
 | `windows-x64-{debug,relwithdebinfo,release}` | 本地 | GL + Vulkan + D3D11 | 编辑器 + GTest，Ninja + MSVC |
-| `wsl-{debug,relwithdebinfo,release}` | WSL/Linux | GL (+Jolt) | 静态库，关 D3D11/Vulkan/GTest（与 CI `build-linux` 一致） |
-| `web-{debug,release}[-3d]` | Emscripten | WebGL2(=GLES3.0) | 需 `$EMSDK` 生效；目标 `dse_web_host`；`-3d` 保留前向 3D |
+| `wsl-{debug,relwithdebinfo,release}` | WSL/Linux | GL (+Jolt) | 静态库，关 D3D11/Vulkan/GTest（与 CI `build-linux` 一致）；另有 `wsl-tsan`（ThreadSanitizer 诊断构建） |
+| `web-{debug,release}[-3d]` | Emscripten | WebGL2(=GLES3.0) / WebGPU | 需 `$EMSDK` 生效；目标 `dse_web_host`；`-3d` 保留前向 3D 并启用 WebGPU 后端；另有 `web-release-3d-mt`（pthreads） |
 
 ### 3.2 手动 / 脚本（VS 2022 生成器，构建目录 `build_vs2022`）
 脚本与 CI 走这条路（`BUILD_DIR=build_vs2022`）：
@@ -96,8 +96,9 @@ scripts\win\verify_all.bat         # 全链路验证
 | `DSE_ENABLE_VULKAN` | ON（Android OFF） | Vulkan 后端 |
 | `DSE_ENABLE_D3D11` | ON（仅 Windows） | D3D11 后端 |
 | `DSE_ENABLE_LUA` / `DSE_ENABLE_NAVMESH` | ON / ON | Lua 脚本 / Recast 寻路 |
-| `DSE_ENABLE_SPINE` / `DSE_ENABLE_ASSIMP` | OFF / OFF | 2D 骨骼 / FBX-OBJ 导入（缩小包体，默认关；glTF 不受 Assimp 影响） |
-| `DSE_ENABLE_NET` / `DSE_ENABLE_HTTP` | OFF / OFF | 网络层(GNS) / 异步 HTTP |
+| `DSE_ENABLE_SPINE` / `DSE_ENABLE_ASSIMP` | ON / ON | 2D 骨骼 / FBX-OBJ 导入（v1 默认开；需缩小包体时手动 OFF，glTF 不受 Assimp 影响） |
+| `DSE_ENABLE_NET` / `DSE_ENABLE_HTTP` | ON / ON | 网络层(GNS) / 异步 HTTP（Android/iOS/OHOS/Web 交叉构建强制 OFF） |
+| `DSE_ENABLE_CSHARP` | ON | C# 脚本（.NET 8 CoreCLR；Android/iOS/OHOS/Web 强制 OFF） |
 | `DSE_BUILD_EDITOR` / `DSE_BUILD_GTESTS` | OFF / ON | 编辑器（preset 里置 ON） / 测试目标 |
 | `DSE_BUILD_SHARED` | OFF | 把 `dse_engine` 编成 DLL |
 | `DSE_MEM_BACKEND` | system | `system`（零依赖）或 `mimalloc` |
@@ -156,7 +157,7 @@ EngineInstance（生命周期）
 ```
 
 - 核心服务统一通过 [`ServiceLocator`](engine/core/service_locator.h) 注册/获取；生命周期由 [`EngineInstance`](engine/runtime/engine_app.h) 管理（`RegisterRuntimeServices()` / `ResetRuntimeServices()`）。**禁止新增不受控全局单例**；兼容入口可留，但新逻辑走运行时注入。
-- Lua 绑定用 sol2，按功能域拆分放 [`engine/scripting/lua/bindings/`](engine/scripting/lua/bindings/)；对外 Lua API 变更同步检查 [`docs/LUA_API.md`](docs/LUA_API.md)。
+- Lua 绑定为**裸 Lua C API + codegen 生成**（`engine/scripting/lua/bindings/` 下 16 手写 + 93 个 `*.gen.cpp`；`tools/codegen/` 从 `binding_defs.json` 生成，非 sol2——`depends/sol2-3.2.2` 已签入但未使用，待清理）；对外 Lua API 变更同步检查 [`docs/LUA_API.md`](docs/LUA_API.md)。
 - 关键文件索引见 [`.trae/rules/project_rules.md`](.trae/rules/project_rules.md) 第 7.2 节。
 
 ---
@@ -166,7 +167,7 @@ EngineInstance（生命周期）
 - **C++20**（`CMAKE_CXX_STANDARD 20`，`REQUIRED ON`），但新代码与现有工程保守风格一致，不为用而用新语法。
 - 命名：类型/函数 `PascalCase`，普通变量 `snake_case`，成员 `trailing_underscore_`；命名空间用 `dse::...`。
 - 头文件：`#ifndef/#define` 保护宏；**不在头文件写 `using namespace`**；能前向声明就不 `#include` 重头文件。
-- **内存/错误（`engine/` 层）**：默认禁用异常（`-fno-exceptions`）；**不要用裸 `new`/`delete` 管理所有权**——优先内存池/对象池/智能指针；致命错误用断言，常规错误用错误码 / `std::optional`。
+- **内存/错误（`engine/` 层）**：**不要用裸 `new`/`delete` 管理所有权**——优先内存池/对象池/智能指针；致命错误用断言，常规错误用错误码 / `std::optional`。注意：**当前未配置 `-fno-exceptions`**（CMake 无异常标志，存在少量 `throw`/`try-catch`）；新代码应避免引入新的异常路径，如要全库禁用异常需先统一清理再加固编译标志。
 - **注释**：拒绝“执行 XX 操作”式机器水文；解释**“因”而非“果”**（设计妥协/复杂算法/兼容性）；中文优先；C++ 公共接口用 Doxygen（`@param/@return/@warning`），ECS 组件字段用 `///<` 行内释义；改代码同步改注释。
 - 技术债标记统一可检索格式：`// TODO: [YYYY-MM-DD] 描述` / `// FIXME: 描述`。
 
@@ -188,7 +189,7 @@ EngineInstance（生命周期）
 - **分支模型**：在 feature 分支开发（如 `feature/engine-lib`），通过 **PR 合入 `master`**。**绝不直接 push `master`/`main`**，不强推主干。
 - **提交信息**：Conventional Commits（`feat:`/`fix:`/`docs:`/`refactor:`/`chore:` …）。
 - **CI**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 **push / PR 到 `master`** 及手动触发时运行，作业含：`build-and-test`(Windows)、`editor-build`(Windows)、`sdk-verify`(Windows)、`build-linux`(Ubuntu)、`build-android`(Ubuntu)、`build-web`(Ubuntu)。CI 的 `BUILD_DIR=build_vs2022`。
-- **发布**：SDK 打包 [`scripts/package_sdk.ps1`](scripts/package_sdk.ps1)（win-x64，解析 `CMakeLists.txt` 的 `PRERELEASE` 行命名发行包），验证 [`scripts/verify_sdk.ps1`](scripts/verify_sdk.ps1)。当前尚无 git tag，首个目标为 `v0.1.0-alpha`。
+- **发布**：SDK 打包 [`scripts/package_sdk.ps1`](scripts/package_sdk.ps1)（win-x64，解析 `CMakeLists.txt` 的 `PRERELEASE` 行命名发行包），验证 [`scripts/verify_sdk.ps1`](scripts/verify_sdk.ps1)。git tag `v0.1.0-alpha` 已存在（2026-06-15，其后仍有大量未发布提交）；**当前发布状态为 NO-GO**（见 `docs/RELEASE_GO_NO_GO.md`：feature ledger 19 项中 16 项 in_progress，`tools/audit/verify_feature_ledger.py --release` 未通过）。
 
 ---
 

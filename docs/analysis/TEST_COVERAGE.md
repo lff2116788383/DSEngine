@@ -496,3 +496,6 @@ smoke           41 用例 ⭐⭐⭐⭐   7文件  关键链路+D3D11 RHI+Lua生�
 | `MeshRenderSystemTest` 测试名微差 | 极低 | 名为“空World不崩溃”实测 EXPECT_THROW；抛异常≠崩溃，语义可接受 |
 | TAAPass jitter 非零分支未覆盖 | 低 | Screen::width()=0 时始终走 (0,0) 分支，只在有窗口时可测差异 |
 | “距离约束保持间距”测试 B 点 y=0 vs A 点 y=10 | 极低 | gravity=false 且只检查距离收敛，绝对位置不影响结果 |
+
+
+> ⚠️ **历史文档注记（2026-08-14）**：本文撰写于 2026-05/06，规模数字与功能状态已过时；现状以代码与 AGENTS.md 为准，最新评估见 docs/analysis/DSE_REVIEW_20260814.md。

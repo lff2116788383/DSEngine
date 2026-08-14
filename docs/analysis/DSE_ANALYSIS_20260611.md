@@ -141,3 +141,6 @@
 ---
 
 *备注：分析全部来自源码本身。构建健康度已在 feature/engine-lib 本地实测验证（VS2022 + MSVC 14.44 + CMake 4.3.3 + Ninja）：Debug 全量构建 0 错误、`ctest -L gtest` 3 套件通过（2789 通过 / 19 跳过 / 0 失败）；editor（`dse_editor_cpp`，D3D11+OpenGL）本地构建通过。*
+
+
+> ⚠️ **历史文档注记（2026-08-14）**：本文撰写于 2026-05/06，规模数字与功能状态已过时；现状以代码与 AGENTS.md 为准，最新评估见 docs/analysis/DSE_REVIEW_20260814.md。

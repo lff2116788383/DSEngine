@@ -689,3 +689,6 @@ GL 3.3 (无 SSBO/Compute) 下 GPU-driven 整体不可用——由 `gpu_driven_en
 - [x] DX11：`tmp/gpu_driven_refactor/dx11_visual_final.log`，`exit code 0`，`gpu_driven_active=true`，截图 `main1000_dx11_visual_final.png` 正常。
 - [x] DX11 已按生成 HLSL register 同步绑定 `TerrainParams=b4` 与 `SpotLightData=b5`。
 - [ ] DX11 RenderDoc slot 级检查仍可作为后续专项验证，不阻塞当前三端视觉收口。
+
+
+> ⚠️ **历史文档注记（2026-08-14）**：本文撰写于 2026-05/06，规模数字与功能状态已过时；现状以代码与 AGENTS.md 为准，最新评估见 docs/analysis/DSE_REVIEW_20260814.md。

@@ -30,7 +30,7 @@ DSEngine 是一个 ECS 内核 + 多后端 RHI + 分层模块 的 C++ 游戏引�
 │  引擎核心子系统 engine/*                                               │
 │   core(ServiceLocator/EventBus/JobSystem/Module/memory)                │
 │   ecs(World/registry, 52 文件) · scene · assets(48) · reflect          │
-│   render(393 文件: RHI 4后端 + 渲染图 + 高级特性) · physics · ai        │
+│   render(405 文件: RHI 4后端 + 渲染图 + 高级特性) · physics · ai        │
 │   navigation · audio · net · http · terrain · ui · video · input       │
 └──────────────────────────────────────────────────────────────────────┘
 ```

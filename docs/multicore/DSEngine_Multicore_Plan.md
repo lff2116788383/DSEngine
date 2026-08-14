@@ -3,6 +3,7 @@
 > 目标读者:引擎/并发方向开发者（人或 AI）。
 > 基线分支:`feature/engine-lib`。
 > 本文所有代码引用均已核对当前工作区源码。
+> **状态更新（2026-08-14）**：Phase 1（JobSystem 重写：工作窃取 + 代次句柄 + 池化 + helping）已随 `5355a3f1`/`7eaec06d` 落地；Phase 3 的 `SystemScheduler` 基础设施已实现并有单测，但 **gameplay 模块尚未迁移接入**（生产仍手写顺序串行）；Phase 2 的 Jolt JobSystem 桥接已实现（`jolt_job_system_adapter.h`）。下表"当前状态"为计划撰写时的旧状，仅作背景参考。
 
 ---
 

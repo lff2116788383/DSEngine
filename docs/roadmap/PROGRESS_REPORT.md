@@ -1,5 +1,7 @@
 # DSEngine 当前进度 · 对比主流引擎 · 发布 SDK 差距分析
 
+> ⚠️ **历史文档注记（2026-08-14）**：本文撰写于 2026-06-13，代码规模/TODO 计数/功能状态已过时；现状以代码与 AGENTS.md 为准。
+>
 > 生成日期：2026-06-10（与代码现状重新核对，仅以源码为准）
 > 二次复核：2026-06-10（逐项 grep 核实；更正风格化渲染 Outline/Edge-Detect 已实现的过时表述；确认 CSM 级联阴影、反射探针(Split-Sum IBL)、本地化、编辑器动画时间轴/撤销重做/性能分析器 均已在代码落地；新增第六节「生产级就绪度评估」）
 > 三次复核：2026-06-13（基于 `feature/engine-lib@f4d8e652`，自上次报告后 +88 提交；仅以源码为准重新逐项核实）。本轮主要变化：① 新增**内存管理子系统**（`engine/core/memory/`：Memory 门面 + Linear/Frame/Pool 分配器 + Handle/HandleTable + 可选 mimalloc 后端）；② 网络新增**玩法级复制层 MVP**（`engine/net/replication/`：服务器权威 Transform 同步 + spawn/快照/属主输入 RPC）；③ **资产热重载新增 Linux inotify 后端**（`asset_manager.cpp`，原仅 Windows）；④ headless **dse CLI** + 端到端加密资源打包；⑤ 启动 Splash（编辑器/运行时/打包游戏/Linux X11）；⑥ CI 增加 editor / Linux / Android 作业；⑦ Lua 绑定大幅补全（C ABI 由 ~330 增至 ~518）。

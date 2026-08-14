@@ -10,7 +10,7 @@ DSEngine Binding Codegen
 输入:
     binding_defs.json  — 组件字段定义（唯一数据源）
 
-输出（均写入 <repo_root>/generated/）:
+输出（生成文件**提交进源码树**，由 CMake GLOB 编译；`<repo_root>/generated/` 仅为着色器产物目录，与此无关）:
     engine/scripting/native_api/dse_api.gen.h
     engine/scripting/native_api/dse_api_<prefix>.gen.cpp           (每组件一个)
     engine/scripting/lua/bindings/lua_binding_ecs_<prefix>.gen.cpp  (每组件一个)

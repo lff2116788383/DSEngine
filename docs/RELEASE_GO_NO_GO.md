@@ -34,7 +34,7 @@
 3. **无独显 / 远程桌面回退**：确认干净机在无独显环境下自动回退（D3D11 WARP / OpenGL）不黑屏。
 4. **Go/No-Go 台账闸门**：`python tools/audit/verify_feature_ledger.py --release` 必须通过——
    要求所有 feature `complete`/`retired`、且 `editor_production_debt.json` 无遗留条目。当前尚有
-   `in_progress` feature 与生产债目，故该闸门 **未通过**。
+   16 个 `in_progress` feature（生产债目 `editor_production_debt.json` 已清零），故该闸门 **未通过**。
 
 ## 四、结论与放行条件
 

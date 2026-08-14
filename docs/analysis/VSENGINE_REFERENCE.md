@@ -663,3 +663,6 @@ VSEngine2.1 对 DSE 最有参考价值的三大技术：
 3. **GPU Tessellation 地形 LOD**（低成本的高端画质提升，三端都支持）
 
 这些方案都遵循 DSE 的架构约束（ECS 组件 + Module System 调度 + 不改动渲染后端），可以作为 Phase 2-3 路线图的具体参考实现。
+
+
+> ⚠️ **历史文档注记（2026-08-14）**：本文撰写于 2026-05/06，规模数字与功能状态已过时；现状以代码与 AGENTS.md 为准，最新评估见 docs/analysis/DSE_REVIEW_20260814.md。

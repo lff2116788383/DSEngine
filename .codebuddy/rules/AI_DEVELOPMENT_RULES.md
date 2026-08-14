@@ -28,7 +28,7 @@ DSEngine 项目的核心 CodeBuddy 开发规则，规定了 C++, Lua, React 混�
 ### 2. 技术栈约束
 - **C++ (`engine/`)**: 核心层。要求高性能、内存安全，遵循现代 C++ 规范。
   - **内存管理**: 禁用裸指针（`new`/`delete`）进行所有权管理。优先使用现有的内存池和对象池，常规动态分配必须使用智能指针。
-  - **错误处理**: 引擎层默认禁用异常（`-fno-exceptions`）。使用断言（`assert` 或自定义宏）处理致命错误，常规错误返回错误码或 `std::optional`。
+  - **错误处理**: 目标是不依赖异常路径（当前 CMake 未配置 `-fno-exceptions`，存在少量 `throw`/`try-catch` 遗留；新代码应避免新增异常路径）。使用断言（`assert` 或自定义宏）处理致命错误，常规错误返回错误码或 `std::optional`。
 - **Lua (`script/` & `samples/`)**: 脚本层。遵循表驱动编程，注意 C++/Lua 交互成本。
 - **C++ 应用层 (`apps/`)**: 以 C++ 为主 —— 编辑器 `editor_cpp`(ImGui)、`standalone`(独立运行时)、`runtime`(宿主示例)、`tools`(AssetBuilder)、`android_host`、`web_host`。
 - **React/TS (`apps/launcher_tauri/`)**: **仅**启动器前端用 Tauri + React/TS；遵循现代前端规范、Hooks 与严格类型检查。其余 `apps/` 子目录均非前端工程。

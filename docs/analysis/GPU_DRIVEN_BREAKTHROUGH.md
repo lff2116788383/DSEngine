@@ -598,3 +598,6 @@ GPU-driven 路径与 module per-item 路径的关系：
 | [builtin_passes.cpp](../../engine/render/passes/builtin_passes.cpp) | 31 个后处理 Pass 实现 |
 | [gpu_skinning.h](../../engine/render/skinning/gpu_skinning.h) | GPU Compute Skinning + Morph Target 系统 |
 | [skinning.comp](../../engine/render/shaders/src/skinning.comp) | 蒙皮 Compute Shader（GLSL 450，含 morph blending） |
+
+
+> ⚠️ **历史文档注记（2026-08-14）**：本文撰写于 2026-05/06，规模数字与功能状态已过时；现状以代码与 AGENTS.md 为准，最新评估见 docs/analysis/DSE_REVIEW_20260814.md。
