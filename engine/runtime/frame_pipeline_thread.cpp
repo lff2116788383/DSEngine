@@ -25,6 +25,11 @@
 #include "engine/core/service_locator.h"
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+#include "engine/render/virtual_geometry/virtual_geometry_renderer.h"
+#include "engine/render/virtual_geometry/dag_builder.h"
+#include "engine/ecs/components_3d_render.h"
+#endif
 #include <chrono>
 #include <cassert>
 #include <algorithm>
@@ -186,6 +191,91 @@ void FramePipeline::PrepareRenderFrame() {
     FlipSnapshotIndex();
     render_pass_context_.snapshot = &read_snapshot();
     render_pass_context_.camera_offset = render_pass_context_.snapshot->camera_offset;
+
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    // Virtual Geometry ECS 驱动（B-5）：收集 NaniteStatic 实体 → renderer。
+    // 网格数据取自 MeshRendererComponent 的 CPU 顶点缓存（temp_vertices 等，
+    // 解析与 impostor/physics 同源）；首次按 mesh_path 构建 DAG 并注册（缓存
+    // mesh_id），此后每帧仅提交实例。Execute 必须在 VGCullPass 之前（快照已就绪）。
+    if (virtual_geometry_renderer_ && virtual_geometry_renderer_->GetConfig().enabled &&
+        runtime_context_.world) {
+        const auto& snap = *render_pass_context_.snapshot;
+        auto& registry = runtime_context_.world->registry();
+        auto vg_view = registry.view<dse::NaniteStaticComponent, dse::MeshRendererComponent, ::TransformComponent>();
+        if (vg_view.begin() != vg_view.end()) {
+            virtual_geometry_renderer_->BeginFrame(static_cast<uint64_t>(taa_frame_index_));
+
+            const glm::mat4 view = snap.camera_3d.valid
+                ? glm::lookAt(snap.camera_3d.position, snap.camera_3d.position + snap.camera_3d.forward, snap.camera_3d.up)
+                : glm::mat4(1.0f);
+            const float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
+            const glm::mat4 proj = snap.camera_3d.valid
+                ? glm::perspective(glm::radians(snap.camera_3d.fov), aspect, snap.camera_3d.near_clip, snap.camera_3d.far_clip)
+                : glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
+
+            for (auto e : vg_view) {
+                auto& mr = vg_view.get<dse::MeshRendererComponent>(e);
+                auto& tf = vg_view.get<::TransformComponent>(e);
+                if (!vg_view.get<dse::NaniteStaticComponent>(e).enabled) continue;
+                if (mr.temp_vertices.empty() || mr.temp_indices.empty()) continue;
+
+                uint32_t mesh_id = 0;
+                auto cit = vg_mesh_id_cache_.find(mr.mesh_path);
+                if (cit != vg_mesh_id_cache_.end()) {
+                    mesh_id = cit->second;
+                } else {
+                    // 首次：从 CPU 顶点缓存构建 VirtualGeometryMesh（meshlet + DAG）
+                    const bool is_dmesh = mr.mesh_path.find(".dmesh") != std::string::npos;
+                    const size_t stride = is_dmesh ? static_cast<size_t>(mr.dmesh_vertex_stride) : 3;
+                    if (mr.temp_vertices.size() < stride || mr.temp_vertices.size() % stride != 0) continue;
+                    const size_t vcount = mr.temp_vertices.size() / stride;
+                    std::vector<glm::vec3> positions(vcount);
+                    for (size_t i = 0; i < vcount; ++i) {
+                        positions[i] = glm::vec3(
+                            mr.temp_vertices[i * stride + 0],
+                            mr.temp_vertices[i * stride + 1],
+                            mr.temp_vertices[i * stride + 2]);
+                    }
+                    std::vector<glm::vec3> normals;
+                    if (mr.temp_normals.size() >= vcount * 3) {
+                        normals.resize(vcount);
+                        for (size_t i = 0; i < vcount; ++i) {
+                            normals[i] = glm::vec3(mr.temp_normals[i * 3 + 0],
+                                                   mr.temp_normals[i * 3 + 1],
+                                                   mr.temp_normals[i * 3 + 2]);
+                        }
+                    }
+                    std::vector<glm::vec2> uvs;
+                    if (mr.temp_uvs.size() >= vcount * 2) {
+                        uvs.resize(vcount);
+                        for (size_t i = 0; i < vcount; ++i) {
+                            uvs[i] = glm::vec2(mr.temp_uvs[i * 2 + 0], mr.temp_uvs[i * 2 + 1]);
+                        }
+                    }
+                    dse::render::vg::VirtualGeometryMesh vgm =
+                        dse::render::vg::DAGBuilder().Build(positions, normals, uvs, mr.temp_indices);
+                    if (vgm.clusters.empty()) continue;
+                    const std::string name = mr.mesh_path.empty()
+                        ? "vg_mesh_" + std::to_string(static_cast<uint32_t>(e))
+                        : mr.mesh_path;
+                    mesh_id = virtual_geometry_renderer_->RegisterMesh(name, vgm);
+                    vg_mesh_id_cache_[mr.mesh_path] = mesh_id;
+                }
+
+                dse::render::vg::VGInstance inst;
+                inst.mesh_id = mesh_id;
+                inst.model = tf.local_to_world;
+                inst.material_id = 0;
+                inst.nanite_static = true;
+                virtual_geometry_renderer_->SubmitInstance(inst);
+            }
+
+            virtual_geometry_renderer_->Execute(view, proj,
+                snap.camera_3d.valid ? snap.camera_3d.position : glm::vec3(0.0f),
+                snap.camera_3d.valid ? snap.camera_3d.fov : 60.0f);
+        }
+    }
+#endif
 }
 
 void FramePipeline::ExecuteRenderFrame() {

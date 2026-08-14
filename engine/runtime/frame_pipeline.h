@@ -13,6 +13,7 @@
 #include <string>
 #include <cstddef>
 #include <atomic>
+#include <unordered_map>
 
 // Extracted responsibility classes
 #include "engine/runtime/frame_stats_collector.h"
@@ -354,6 +355,8 @@ private:
     /// Init 时创建并注入 render_pass_context_.vg_renderer；实例由外部经
     /// VirtualGeometryRenderer::RegisterMesh/SubmitInstance 驱动（B-5 接线）。
     std::unique_ptr<dse::render::vg::VirtualGeometryRenderer> virtual_geometry_renderer_;
+    /// NaniteStatic ECS 驱动：mesh_path → 已注册 mesh_id（首帧构建 DAG 后缓存）
+    std::unordered_map<std::string, uint32_t> vg_mesh_id_cache_;
 #endif
 
     /// 解析 RHI 后端、创建并初始化 RHI 设备（含 D3D11/Vulkan 失败时回退到 OpenGL）。

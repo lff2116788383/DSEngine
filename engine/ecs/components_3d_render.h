@@ -17,6 +17,13 @@
 
 namespace dse {
 
+/// 标记实体使用 Virtual Geometry（Nanite 风格）管线渲染。
+/// 仅 DSE_ENABLE_VIRTUAL_GEOMETRY 编译开关开启时生效（默认 OFF）；
+/// 网格数据取自 MeshRendererComponent 的 CPU 顶点缓存，首帧构建 DAG 后缓存。
+struct NaniteStaticComponent {
+    bool enabled = true;
+};
+
 struct MeshRendererComponent {
     enum class MaterialDataSource {
         ComponentFallback = 0,
