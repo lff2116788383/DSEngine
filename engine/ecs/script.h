@@ -19,16 +19,15 @@ struct ScriptComponent {
 
 /**
  * @struct LuaScriptComponent
- * @brief Sol2 绑定的 Lua 脚本实例组件，持有运行时脚本环境
+ * @brief Lua 脚本挂载组件（编辑器/旧路径兼容），由 lua_runtime 双轨驱动
  */
 struct LuaScriptComponent {
     std::string script_path;
     bool is_initialized = false;
-    
-    // Sol2 table instance representing the script environment for this entity
-    // We use a void pointer or forward declaration here if sol::table is not included
-    // to avoid polluting the ECS header with Lua/Sol2 dependencies.
-    void* script_instance = nullptr; 
+
+    // 保留字段：早期 sol2 时代的脚本环境指针（已弃用，当前运行时实例状态
+    // 由 lua_runtime.cpp 的 script_instances 表管理，不再存于组件内）。
+    void* script_instance = nullptr;
 };
 
 /**
