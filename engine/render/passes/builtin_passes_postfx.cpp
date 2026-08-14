@@ -51,6 +51,14 @@ void BloomPass::Setup(RenderGraph& graph) {
     graph.PassWrite(pass, bloom_mip2);
     graph.PassWrite(pass, bloom_mip3);
     graph.PassWrite(pass, bloom_mip4);
+    // 帧内瞬态 RT（FramePipeline 声明，同名复用 desc）：无状态写声明仅进拓扑，
+    // 触发 Compile 生命周期分配；Execute 自行 BeginRenderPass（避免 auto_bind 嵌套）。
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_bloom_extract", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_bloom_mip0", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_bloom_mip1", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_bloom_mip2", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_bloom_mip3", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_bloom_mip4", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -144,6 +152,10 @@ void CompositePass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, contact_shadow);
     graph.PassRead(pass, lum_data);
     graph.PassWrite(pass, main_color);
+    // 读取帧内瞬态 RT（扩展其生命周期，防止别名复用提前覆写）
+    graph.PassRead(pass, graph.DeclareTransient("pp_ssao_blur", {}));
+    graph.PassRead(pass, graph.DeclareTransient("pp_contact_shadow", {}));
+    graph.PassRead(pass, graph.DeclareTransient("pp_bloom_mip0", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -336,6 +348,9 @@ void SSAOPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, prez_depth);
     graph.PassRead(pass, scene_color);
     graph.PassWrite(pass, ssao_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_ssao", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_ssao_blur", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -390,6 +405,8 @@ void ContactShadowPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, contact_shadow);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_contact_shadow", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -440,6 +457,8 @@ void FXAAPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, main_color);
     graph.PassWrite(pass, fxaa_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_fxaa", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -476,6 +495,8 @@ void PresentPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, main_color);
     graph.PassRead(pass, fxaa_color);
+    // 读取帧内瞬态 RT（fxaa 结果），扩展其生命周期至本 Pass
+    graph.PassRead(pass, graph.DeclareTransient("pp_fxaa", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -532,6 +553,8 @@ void TAAPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, main_color);
     graph.PassWrite(pass, taa_color);
+    // 读取帧内瞬态 RT（motion vector），扩展其生命周期
+    graph.PassRead(pass, graph.DeclareTransient("pp_motion_vector", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -621,6 +644,8 @@ void DOFPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, main_color);
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, dof_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_dof", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -673,6 +698,8 @@ void MotionVectorPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, mv_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_motion_vector", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -732,6 +759,10 @@ void MotionBlurPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, main_color);
     graph.PassRead(pass, mv_color);
     graph.PassWrite(pass, mb_color);
+    // 读取/写入帧内瞬态 RT（复用 dof RT 做模糊输出），扩展其生命周期
+    graph.PassRead(pass, graph.DeclareTransient("pp_motion_vector", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_dof", {}));
+    graph.PassRead(pass, graph.DeclareTransient("pp_dof", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -780,6 +811,8 @@ void SSRPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, ssr_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_ssr", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -837,6 +870,8 @@ void OutlinePass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, outline_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_outline", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 

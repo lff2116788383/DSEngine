@@ -85,7 +85,7 @@ struct RenderPassHandle {
 class DSE_EXPORT RenderGraph {
 public:
     RenderGraph() = default;
-    ~RenderGraph() = default;
+    ~RenderGraph();
 
     // 禁止拷贝
     RenderGraph(const RenderGraph&) = delete;
@@ -135,6 +135,12 @@ public:
     /// 为指定 Pass 声明写入资源（无状态，不参与自动屏障）
     void PassWrite(RenderPassHandle pass, RenderResourceHandle resource);
 
+    /// 仅声明拓扑写依赖，不设置资源状态 —— 不触发自动 RT 绑定/屏障。
+    /// 供"Execute 内自行 BeginRenderPass 管理瞬态 RT"的写者使用
+    /// （PassWrite 会把状态设为 RenderTarget，导致 Compile 生成 auto_bind_rt，
+    /// 与手写 RenderPass 嵌套冲突）。
+    void PassWriteNoState(RenderPassHandle pass, RenderResourceHandle resource);
+
     /// 状态感知版本：声明读取并指定所需资源状态（参与自动屏障）
     void PassReadWithState(RenderPassHandle pass, RenderResourceHandle resource, ResourceState state);
 
@@ -171,8 +177,11 @@ public:
     void SetGpuTimingEnabled(bool enabled) { gpu_timing_enabled_ = enabled; }
     bool IsGpuTimingEnabled() const { return gpu_timing_enabled_; }
 
-    /// 重置渲染图（清空所有 Pass 和资源声明）
+    /// 重置渲染图（清空所有 Pass 和资源声明；瞬态 RT 归还跨帧缓存池，不销毁）
     void Reset();
+
+    /// 销毁跨帧缓存池中的全部瞬态 RT（FramePipeline Shutdown / RHI 销毁前调用）
+    void ReleaseCachedTransientResources();
 
     // --- 查询 ---
 
@@ -262,6 +271,14 @@ private:
 
     /// RHI 设备指针（用于 Transient RT 分配，可为 null）
     RhiDevice* rhi_device_ = nullptr;
+
+    /// 跨帧瞬态 RT 缓存池：Reset 时归还、Compile 时按 desc 复用，
+    /// 避免"每帧 Reset+Compile 的图"每帧创建/销毁 GPU RT（性能倒退）。
+    struct CachedTransientRT {
+        RenderTargetHandle rt_handle;
+        RenderTargetDesc desc;
+    };
+    std::vector<CachedTransientRT> cached_transient_rts_;
 
     bool is_compiled_ = false;
     bool gpu_timing_enabled_ = true;  ///< 自动 GPU 计时开关

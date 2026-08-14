@@ -360,6 +360,8 @@ bool FramePipeline::Init() {
             device_info.is_software ? 1 : 0);
     }
     asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
+    // RenderGraph 瞬态 RT 分配/跨帧缓存池依赖 RHI 设备
+    render_graph_dag_.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";
     if (const char* env_data_root = dse::core::env::GetRaw(dse::core::env::names::kDataRoot)) {
         data_root = env_data_root;
@@ -787,6 +789,8 @@ void FramePipeline::Shutdown() {
 
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     render_graph_dag_.Reset();
+    // 销毁瞬态 RT 跨帧缓存（RHI 仍有效时执行，避免 GPU 资源泄漏）
+    render_graph_dag_.ReleaseCachedTransientResources();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
     modules_impl_->ShutdownGameplay2D(*runtime_context_.world);
     if (builtin_gameplay3d_enabled_) {
@@ -948,47 +952,11 @@ void FramePipeline::InitResolutionDependentRTs() {
     if (!render_resources_.prez_render_target) {
         render_resources_.prez_render_target = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, false, true});
     }
-    if (!render_resources_.pp_bloom_extract_rt) {
-        render_resources_.pp_bloom_extract_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    }
-    if (render_resources_.pp_bloom_mip_rts.empty()) {
-        int mip_w = render_width / 2, mip_h = render_height / 2;
-        for (int i = 0; i < 5; ++i) {
-            RenderTargetDesc d{}; d.width = mip_w; d.height = mip_h;
-            d.has_color = true; d.allow_uav = true;
-            render_resources_.pp_bloom_mip_rts.push_back(runtime_context_.rhi_device->CreateRenderTarget(d));
-            mip_w = (std::max)(1, mip_w / 2);
-            mip_h = (std::max)(1, mip_h / 2);
-        }
-    }
-    if (!render_resources_.pp_ssao_rt)
-        render_resources_.pp_ssao_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (!render_resources_.pp_ssao_blur_rt)
-        render_resources_.pp_ssao_blur_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (!render_resources_.pp_contact_shadow_rt)
-        render_resources_.pp_contact_shadow_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (!render_resources_.pp_fxaa_rt)
-        render_resources_.pp_fxaa_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
+    // 帧内一次性后处理 RT（bloom/ssao/fxaa/dof/ssr/mv/outline/fog/cloud/wboit/sss）
+    // 已移交 RenderGraph 瞬态管理（DeclareTransient + 跨帧缓存池，见 BuildRenderGraphInternal），
+    // 不再常驻创建；仅跨帧资源（taa/lum/hiz）保留在此。
     if (!render_resources_.pp_taa_rt)
         render_resources_.pp_taa_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (!render_resources_.pp_dof_rt)
-        render_resources_.pp_dof_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (!render_resources_.pp_ssr_rt)
-        render_resources_.pp_ssr_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width/2, render_height/2, true, false, false});
-    if (!render_resources_.pp_motion_vector_rt)
-        render_resources_.pp_motion_vector_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (!render_resources_.pp_outline_rt)
-        render_resources_.pp_outline_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (!render_resources_.pp_fog_rt)
-        render_resources_.pp_fog_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width / 2, render_height / 2, true, false, false});
-    if (!render_resources_.pp_cloud_rt)
-        render_resources_.pp_cloud_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width / 2, render_height / 2, true, false, false});
-    if (!render_resources_.wboit_accum_rt)
-        render_resources_.wboit_accum_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (!render_resources_.wboit_reveal_rt)
-        render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (!render_resources_.pp_sss_temp_rt)
-        render_resources_.pp_sss_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (!render_resources_.hiz_texture && runtime_context_.rhi_device->SupportsCompute()) {
         render_resources_.hiz_texture = runtime_context_.rhi_device->CreateHiZTexture(render_width, render_height);
         if (render_resources_.hiz_texture) {
@@ -1014,23 +982,8 @@ void FramePipeline::FreeResolutionDependentRTs() {
     del(render_resources_.scene_render_target);
     del(render_resources_.ui_render_target);
     del(render_resources_.prez_render_target);
-    del(render_resources_.pp_bloom_extract_rt);
-    for (auto& h : render_resources_.pp_bloom_mip_rts) d.DeleteRenderTarget(h);
-    render_resources_.pp_bloom_mip_rts.clear();
-    del(render_resources_.pp_ssao_rt);
-    del(render_resources_.pp_ssao_blur_rt);
-    del(render_resources_.pp_contact_shadow_rt);
-    del(render_resources_.pp_fxaa_rt);
+    // 帧内一次性后处理 RT 已移交 RenderGraph 瞬态管理，此处不销毁
     del(render_resources_.pp_taa_rt);
-    del(render_resources_.pp_dof_rt);
-    del(render_resources_.pp_ssr_rt);
-    del(render_resources_.pp_motion_vector_rt);
-    del(render_resources_.pp_outline_rt);
-    del(render_resources_.pp_fog_rt);
-    del(render_resources_.pp_cloud_rt);
-    del(render_resources_.wboit_accum_rt);
-    del(render_resources_.wboit_reveal_rt);
-    del(render_resources_.pp_sss_temp_rt);
     if (render_resources_.hiz_texture) {
         d.DeleteHiZTexture(render_resources_.hiz_texture);
         render_resources_.hiz_texture = {};
@@ -1061,22 +1014,8 @@ void FramePipeline::SyncRenderPassContextTargets() {
     render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;
     render_pass_context_.render_targets.ui       = render_resources_.ui_render_target;
     render_pass_context_.render_targets.prez     = render_resources_.prez_render_target;
-    render_pass_context_.render_targets.bloom_extract = render_resources_.pp_bloom_extract_rt;
-    render_pass_context_.render_targets.bloom_mips    = render_resources_.pp_bloom_mip_rts;
-    render_pass_context_.render_targets.ssao      = render_resources_.pp_ssao_rt;
-    render_pass_context_.render_targets.ssao_blur = render_resources_.pp_ssao_blur_rt;
-    render_pass_context_.render_targets.contact_shadow = render_resources_.pp_contact_shadow_rt;
-    render_pass_context_.render_targets.fxaa      = render_resources_.pp_fxaa_rt;
+    // 帧内一次性后处理 RT 由 BuildRenderGraphInternal 编译后从 RenderGraph 发布
     render_pass_context_.render_targets.taa       = render_resources_.pp_taa_rt;
-    render_pass_context_.render_targets.dof       = render_resources_.pp_dof_rt;
-    render_pass_context_.render_targets.ssr       = render_resources_.pp_ssr_rt;
-    render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
-    render_pass_context_.render_targets.outline = render_resources_.pp_outline_rt;
-    render_pass_context_.render_targets.fog    = render_resources_.pp_fog_rt;
-    render_pass_context_.render_targets.cloud  = render_resources_.pp_cloud_rt;
-    render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
-    render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
-    render_pass_context_.render_targets.sss_temp = render_resources_.pp_sss_temp_rt;
     render_pass_context_.render_targets.hiz_texture = render_resources_.hiz_texture;
     render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
     render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
@@ -1319,13 +1258,13 @@ RenderTargetReadback FramePipeline::ReadMainColorRgba8WithSize() const {
 }
 
 RenderTargetReadback FramePipeline::ReadBloomMip0Rgba8WithSize() const {
-    if (!runtime_context_.rhi_device || render_resources_.pp_bloom_mip_rts.empty()) return {};
-    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.pp_bloom_mip_rts[0]);
+    if (!runtime_context_.rhi_device || render_pass_context_.render_targets.bloom_mips.empty()) return {};
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_pass_context_.render_targets.bloom_mips[0]);
 }
 
 RenderTargetReadback FramePipeline::ReadBloomExtractRgba8WithSize() const {
-    if (!runtime_context_.rhi_device || !render_resources_.pp_bloom_extract_rt) return {};
-    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_resources_.pp_bloom_extract_rt);
+    if (!runtime_context_.rhi_device || !render_pass_context_.render_targets.bloom_extract) return {};
+    return runtime_context_.rhi_device->ReadRenderTargetColorRgba8WithSize(render_pass_context_.render_targets.bloom_extract);
 }
 
 void FramePipeline::SetWindowTitleSetter(std::function<void(const std::string&)> setter) {

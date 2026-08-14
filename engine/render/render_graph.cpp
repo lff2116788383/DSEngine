@@ -17,6 +17,10 @@ namespace render {
 // 资源声明
 // ============================================================
 
+RenderGraph::~RenderGraph() {
+    ReleaseCachedTransientResources();
+}
+
 RenderResourceHandle RenderGraph::DeclareResource(const std::string& name) {
     auto it = resource_by_name_.find(name);
     if (it != resource_by_name_.end()) {
@@ -192,6 +196,36 @@ RenderPassHandle RenderGraph::AddPass(const std::string& name,
     }
     PassSetExecute(handle, std::move(execute));
     return handle;
+}
+
+void RenderGraph::PassWriteNoState(RenderPassHandle pass, RenderResourceHandle resource) {
+    if (!pass.is_valid() || !resource.is_valid()) return;
+    is_compiled_ = false;
+
+    // 仅添加到 Pass 的写入列表（不设置 resource_states —— 无状态追踪/无自动绑定）
+    for (auto& p : passes_) {
+        if (p.id == pass.id) {
+            for (auto& w : p.writes) {
+                if (w.id == resource.id) return;
+            }
+            p.writes.push_back(resource);
+            break;
+        }
+    }
+
+    // 添加到资源的写入者列表
+    for (auto& res : resources_) {
+        if (res.id == resource.id) {
+            bool found = false;
+            for (auto& w : res.writers) {
+                if (w.id == pass.id) { found = true; break; }
+            }
+            if (!found) {
+                res.writers.push_back(pass);
+            }
+            break;
+        }
+    }
 }
 
 void RenderGraph::PassReadWithState(RenderPassHandle pass, RenderResourceHandle resource, ResourceState state) {
@@ -420,6 +454,18 @@ bool RenderGraph::Compile() {
         };
         std::vector<FreeSlot> free_pool;
 
+        // 跨帧缓存池取用：desc 匹配即复用（取出即从池移除，帧末 Reset 归还）
+        auto take_cached = [&](const RenderTargetDesc& desc) -> RenderTargetHandle {
+            for (auto it = cached_transient_rts_.begin(); it != cached_transient_rts_.end(); ++it) {
+                if (it->desc == desc) {
+                    RenderTargetHandle h = it->rt_handle;
+                    cached_transient_rts_.erase(it);
+                    return h;
+                }
+            }
+            return {};
+        };
+
         for (size_t idx : transient_indices) {
             auto& res = resources_[idx];
             // 尝试从空闲池中找到 desc 匹配且已释放的 RT
@@ -434,7 +480,11 @@ bool RenderGraph::Compile() {
                 }
             }
             if (!reused) {
-                res.rt_handle = rhi_device_->CreateRenderTarget(res.desc);
+                // 帧内无可用 → 复用跨帧缓存池（desc 匹配），否则新建
+                res.rt_handle = take_cached(res.desc);
+                if (!res.rt_handle) {
+                    res.rt_handle = rhi_device_->CreateRenderTarget(res.desc);
+                }
                 free_pool.push_back({res.rt_handle, res.desc, res.last_use});
             }
         }
@@ -633,14 +683,15 @@ size_t RenderGraph::culled_pass_count() const {
 }
 
 void RenderGraph::Reset() {
-    // 释放 Transient 类型资源的物理 RT
+    // 瞬态 RT 归还跨帧缓存池（不销毁）：desc 匹配的后续帧 Compile 直接复用，
+    // 避免每帧 Reset+Compile 的图每帧创建/销毁 GPU RT。
     if (rhi_device_) {
         // 收集去重的 transient RT handle（alias 复用时多个资源共享同一 handle）
-        std::unordered_set<RenderTargetHandle> freed;
+        std::unordered_set<uint32_t> seen;
         for (const auto& res : resources_) {
             if (res.type == ResourceType::Transient && res.rt_handle) {
-                if (freed.insert(res.rt_handle).second) {
-                    rhi_device_->DeleteRenderTarget(res.rt_handle);
+                if (seen.insert(res.rt_handle.raw()).second) {
+                    cached_transient_rts_.push_back({res.rt_handle, res.desc});
                 }
             }
         }
@@ -654,6 +705,15 @@ void RenderGraph::Reset() {
     next_resource_id_ = 1;
     next_pass_id_ = 1;
     is_compiled_ = false;
+}
+
+void RenderGraph::ReleaseCachedTransientResources() {
+    if (rhi_device_) {
+        for (const auto& c : cached_transient_rts_) {
+            rhi_device_->DeleteRenderTarget(c.rt_handle);
+        }
+    }
+    cached_transient_rts_.clear();
 }
 
 } // namespace render

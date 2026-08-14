@@ -486,6 +486,38 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.MarkOutput(mb_color);
     render_graph_dag_.MarkOutput(outline_color);
 
+    // ---- 帧内一次性后处理 RT：RenderGraph 瞬态管理 ----
+    // 由 Compile 按 first_use/last_use 做帧内别名复用（同 desc 不同时存活共享显存），
+    // 帧末 Reset 归还跨帧缓存池（desc 匹配复用，避免每帧创建/销毁 GPU RT）。
+    // 跨帧资源（taa resolve / lum / shadow atlas 等）仍由 FramePipeline 常驻管理。
+    const int t_width  = Screen::render_width()  > 0 ? Screen::render_width()  : (Screen::width()  > 0 ? Screen::width()  : 1280);
+    const int t_height = Screen::render_height() > 0 ? Screen::render_height() : (Screen::height() > 0 ? Screen::height() : 720);
+    auto t_bloom_extract = render_graph_dag_.DeclareTransient("pp_bloom_extract", {t_width, t_height, true, false, false});
+    std::vector<dse::render::RenderResourceHandle> t_bloom_mips;
+    {
+        int mip_w = t_width / 2, mip_h = t_height / 2;
+        for (int i = 0; i < 5; ++i) {
+            RenderTargetDesc d{}; d.width = mip_w; d.height = mip_h;
+            d.has_color = true; d.allow_uav = true;
+            t_bloom_mips.push_back(render_graph_dag_.DeclareTransient("pp_bloom_mip" + std::to_string(i), d));
+            mip_w = (std::max)(1, mip_w / 2);
+            mip_h = (std::max)(1, mip_h / 2);
+        }
+    }
+    auto t_ssao           = render_graph_dag_.DeclareTransient("pp_ssao", {t_width/2, t_height/2, true, false, false});
+    auto t_ssao_blur      = render_graph_dag_.DeclareTransient("pp_ssao_blur", {t_width/2, t_height/2, true, false, false});
+    auto t_contact_shadow = render_graph_dag_.DeclareTransient("pp_contact_shadow", {t_width/2, t_height/2, true, false, false});
+    auto t_fxaa           = render_graph_dag_.DeclareTransient("pp_fxaa", {t_width, t_height, true, false, false});
+    auto t_dof            = render_graph_dag_.DeclareTransient("pp_dof", {t_width, t_height, true, false, false});
+    auto t_ssr            = render_graph_dag_.DeclareTransient("pp_ssr", {t_width/2, t_height/2, true, false, false});
+    auto t_motion_vector  = render_graph_dag_.DeclareTransient("pp_motion_vector", {t_width, t_height, true, false, false});
+    auto t_outline        = render_graph_dag_.DeclareTransient("pp_outline", {t_width, t_height, true, false, false});
+    auto t_fog            = render_graph_dag_.DeclareTransient("pp_fog", {t_width/2, t_height/2, true, false, false});
+    auto t_cloud          = render_graph_dag_.DeclareTransient("pp_cloud", {t_width/2, t_height/2, true, false, false});
+    auto t_wboit_accum    = render_graph_dag_.DeclareTransient("pp_wboit_accum", {t_width, t_height, true, false, false});
+    auto t_wboit_reveal   = render_graph_dag_.DeclareTransient("pp_wboit_reveal", {t_width, t_height, true, false, false});
+    auto t_sss_temp       = render_graph_dag_.DeclareTransient("pp_sss_temp", {t_width, t_height, true, false, false});
+
     taa_pass_ = nullptr;
     const auto& registry = dse::render::BuiltinRenderPipelineRegistry();
     dse::render::RenderPipelineValidationContext prune_ctx{};
@@ -539,10 +571,30 @@ void FramePipeline::BuildRenderGraphInternal() {
         pass->Setup(render_graph_dag_);
     }
 
-    // 编译 DAG（拓扑排序 + 无用 Pass 剔除）
+    // 编译 DAG（拓扑排序 + 无用 Pass 剔除 + 瞬态 RT 分配）
     if (!render_graph_dag_.Compile()) {
         DEBUG_LOG_ERROR("RenderGraph 编译失败：检测到循环依赖");
     }
+
+    // ---- 发布瞬态 RT 到 Pass 上下文（Compile 完成后句柄才有效）----
+    render_pass_context_.render_targets.bloom_extract = render_graph_dag_.GetResourceRT(t_bloom_extract);
+    render_pass_context_.render_targets.bloom_mips.clear();
+    for (const auto& h : t_bloom_mips) {
+        render_pass_context_.render_targets.bloom_mips.push_back(render_graph_dag_.GetResourceRT(h));
+    }
+    render_pass_context_.render_targets.ssao           = render_graph_dag_.GetResourceRT(t_ssao);
+    render_pass_context_.render_targets.ssao_blur      = render_graph_dag_.GetResourceRT(t_ssao_blur);
+    render_pass_context_.render_targets.contact_shadow = render_graph_dag_.GetResourceRT(t_contact_shadow);
+    render_pass_context_.render_targets.fxaa           = render_graph_dag_.GetResourceRT(t_fxaa);
+    render_pass_context_.render_targets.dof            = render_graph_dag_.GetResourceRT(t_dof);
+    render_pass_context_.render_targets.ssr            = render_graph_dag_.GetResourceRT(t_ssr);
+    render_pass_context_.render_targets.motion_vector  = render_graph_dag_.GetResourceRT(t_motion_vector);
+    render_pass_context_.render_targets.outline        = render_graph_dag_.GetResourceRT(t_outline);
+    render_pass_context_.render_targets.fog            = render_graph_dag_.GetResourceRT(t_fog);
+    render_pass_context_.render_targets.cloud          = render_graph_dag_.GetResourceRT(t_cloud);
+    render_pass_context_.render_targets.wboit_accum    = render_graph_dag_.GetResourceRT(t_wboit_accum);
+    render_pass_context_.render_targets.wboit_reveal   = render_graph_dag_.GetResourceRT(t_wboit_reveal);
+    render_pass_context_.render_targets.sss_temp       = render_graph_dag_.GetResourceRT(t_sss_temp);
 }
 
 

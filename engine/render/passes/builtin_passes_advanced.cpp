@@ -42,6 +42,8 @@ void VolumetricFogPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, fog_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_fog", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -136,6 +138,8 @@ void VolumetricCloudPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, scene_color);
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, cloud_color);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_cloud", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -226,6 +230,9 @@ void WBOITPass::Setup(RenderGraph& graph) {
     graph.PassRead(pass, prez_depth);
     graph.PassWrite(pass, wboit_accum);
     graph.PassWrite(pass, wboit_reveal);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_wboit_accum", {}));
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_wboit_reveal", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
@@ -954,6 +961,8 @@ void SSSBlurPass::Setup(RenderGraph& graph) {
     auto pass = graph.AddPass(GetName());
     graph.PassRead(pass, scene_color);
     graph.PassWrite(pass, sss_output);
+    // 帧内瞬态 RT：无状态写声明仅进拓扑（生命周期分配），Execute 自行 BeginRenderPass
+    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_sss_temp", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }
 
