@@ -157,7 +157,7 @@ EngineInstance（生命周期）
 ```
 
 - 核心服务统一通过 [`ServiceLocator`](engine/core/service_locator.h) 注册/获取；生命周期由 [`EngineInstance`](engine/runtime/engine_app.h) 管理（`RegisterRuntimeServices()` / `ResetRuntimeServices()`）。**禁止新增不受控全局单例**；兼容入口可留，但新逻辑走运行时注入。
-- Lua 绑定为**裸 Lua C API + codegen 生成**（`engine/scripting/lua/bindings/` 下 16 手写 + 93 个 `*.gen.cpp`；`tools/codegen/` 从 `binding_defs.json` 生成，非 sol2——`depends/sol2-3.2.2` 已签入但未使用，待清理）；对外 Lua API 变更同步检查 [`docs/LUA_API.md`](docs/LUA_API.md)。
+- Lua 绑定为**裸 Lua C API + codegen 生成**（`engine/scripting/lua/bindings/` 下 16 手写 + 93 个 `*.gen.cpp`；`tools/codegen/` 从 `binding_defs.json` 生成，非 sol2——sol2 依赖树已移除）；对外 Lua API 变更同步检查 [`docs/LUA_API.md`](docs/LUA_API.md)。
 - 关键文件索引见 [`.trae/rules/project_rules.md`](.trae/rules/project_rules.md) 第 7.2 节。
 
 ---
