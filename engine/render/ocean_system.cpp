@@ -219,9 +219,62 @@ void OceanSystem::ComputeFFT(float time) {
     tile_data_.jacobian_min = max_h;
 }
 
+namespace {
+
+/// 一维迭代 FFT（radix-2 Cooley-Tukey，n 必须是 2 的幂）。
+/// inverse=true：IDFT 归一化 1/n；否则 DFT（与 DFT2D 的符号约定一致）。
+void FFT1D(std::complex<float>* data, int n, bool inverse) {
+    // bit-reversal 置换
+    for (int i = 1, j = 0; i < n; ++i) {
+        int bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) std::swap(data[i], data[j]);
+    }
+    for (int len = 2; len <= n; len <<= 1) {
+        const float ang = (inverse ? 1.0f : -1.0f) * TWO_PI / static_cast<float>(len);
+        const std::complex<float> wlen(std::cos(ang), std::sin(ang));
+        for (int i = 0; i < n; i += len) {
+            std::complex<float> w(1.0f, 0.0f);
+            for (int j = 0; j < len / 2; ++j) {
+                const std::complex<float> u = data[i + j];
+                const std::complex<float> v = data[i + j + len / 2] * w;
+                data[i + j] = u + v;
+                data[i + j + len / 2] = u - v;
+                w *= wlen;
+            }
+        }
+    }
+    if (inverse) {
+        const float inv_n = 1.0f / static_cast<float>(n);
+        for (int i = 0; i < n; ++i) data[i] *= inv_n;
+    }
+}
+
+/// n 是否为 2 的幂
+bool IsPowerOfTwo(int n) { return n > 0 && (n & (n - 1)) == 0; }
+
+} // namespace
+
 void OceanSystem::DFT2D(std::vector<std::complex<float>>& data, int N, bool inverse) {
-    // Simplified row/column DFT (O(N²) per row; for real usage, use FFT)
-    // For test/demo purposes, we use a downsampled approach
+    // FFT 路径（O(N² log N)）：行列分离变换，逐维归一化 1/N（2D IDFT 总计 1/N²，
+    // 与原 DFT 实现的行列各乘 1/N 等价）。要求 N 为 2 的幂（fft_resolution 默认 256）。
+    if (IsPowerOfTwo(N)) {
+        // 行变换
+        for (int row = 0; row < N; ++row) {
+            FFT1D(data.data() + row * N, N, inverse);
+        }
+        // 列变换
+        std::vector<std::complex<float>> col(N);
+        for (int c = 0; c < N; ++c) {
+            for (int r = 0; r < N; ++r) col[r] = data[r * N + c];
+            FFT1D(col.data(), N, inverse);
+            for (int r = 0; r < N; ++r) data[r * N + c] = col[r];
+        }
+        return;
+    }
+
+    // 非 2 幂回退：原 O(N³) 行列 DFT
     std::vector<std::complex<float>> temp(N);
     float sign = inverse ? 1.0f : -1.0f;
     float scale = inverse ? 1.0f / N : 1.0f;
