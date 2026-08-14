@@ -216,32 +216,11 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterPlayerControllerComponentGenBindings(L);
     RegisterJiggleBoneComponentGenBindings(L);
     lua_pop(L, 1); // pop ecs table
+    // 尾部仅保留 ECS 域独有注册：其余模块（Audio/DSSL/Font/Localization/Meshlet/
+    // Navigation/OpenWorld/OpenWorldP2P5/Spine/Streaming/UI、渲染六子域、FreeFn_*）
+    // 均由 RegisterPhase1LuaApi（lua_binding_registry.cpp）统一注册——此前在此重复
+    // 调用造成"新增模块需两处同步"的维护陷阱，已收敛（幂等覆盖改为单源注册）。
     RegisterFreeGapBindings(L);
-    RegisterAudioBindings(L);
-    RegisterDSSLBindings(L);
-    RegisterEcsRenderingCameraBindings(L);
-    RegisterEcsRenderingFxBindings(L);
-    RegisterEcsRenderingLightBindings(L);
-    RegisterEcsRenderingMeshBindings(L);
-    RegisterEcsRenderingPostBindings(L);
-    RegisterEcsRenderingTerrainBindings(L);
-    RegisterFontBindings(L);
-    RegisterLocalizationBindings(L);
-    RegisterMeshletBindings(L);
-#ifdef DSE_ENABLE_NAVMESH
-    RegisterNavigationBindings(L);
-#endif
-    RegisterOpenWorldBindings(L);
-    RegisterOpenWorldP2P5Bindings(L);
-    RegisterSpineBindings(L);
-    RegisterStreamingBindings(L);
-    RegisterUiBindings(L);
-    RegisterFreeFn_ui(L);
-    RegisterFreeFn_localization(L);
-    RegisterFreeFn_ecs_gap(L);
-    RegisterFreeFn_audio(L);
-    RegisterFreeFn_app(L);
-    RegisterFreeFn_api_core(L);
     lua_settop(L, _top);
 }
 
