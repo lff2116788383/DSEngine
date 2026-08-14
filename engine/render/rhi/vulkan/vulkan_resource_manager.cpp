@@ -1927,6 +1927,38 @@ void VulkanResourceManager::ResetDescriptorPool(uint32_t frame_index) {
             vkResetDescriptorPool(device_, pool, 0);
         }
     }
+    // 池重置后其中所有 set 失效，帧内描述符缓存必须同步清空
+    descriptor_set_cache_.clear();
+}
+
+VkDescriptorSet VulkanResourceManager::GetOrUpdateDescriptorSet(VkDescriptorSetLayout layout,
+                                                                uint64_t content_hash,
+                                                                const VkWriteDescriptorSet* writes,
+                                                                uint32_t write_count) {
+    // key = layout 地址哈希 ^ 内容指纹（帧首已清空缓存，无需帧号隔离）
+    const uint64_t key = (reinterpret_cast<uintptr_t>(layout) * 0x9E3779B97F4A7C15ull) ^ content_hash;
+    auto it = descriptor_set_cache_.find(key);
+    if (it != descriptor_set_cache_.end()) {
+        return it->second;
+    }
+
+    VkDescriptorSet set = AllocateDescriptorSet(layout);
+    if (set == VK_NULL_HANDLE) {
+        return VK_NULL_HANDLE;
+    }
+    if (writes && write_count > 0) {
+        // 调用方构造 writes 时不知道最终 set 句柄，此处统一填充 dstSet
+        std::vector<VkWriteDescriptorSet> filled(writes, writes + write_count);
+        for (auto& w : filled) w.dstSet = set;
+        vkUpdateDescriptorSets(device_, write_count, filled.data(), 0, nullptr);
+    }
+
+    // 防异常膨胀：超过上限整体清空（下帧重新填充，仅损失缓存收益）
+    if (descriptor_set_cache_.size() >= kMaxDescriptorCacheEntries) {
+        descriptor_set_cache_.clear();
+    }
+    descriptor_set_cache_[key] = set;
+    return set;
 }
 
 VkDescriptorSet VulkanResourceManager::AllocateDescriptorSet(VkDescriptorSetLayout layout) {

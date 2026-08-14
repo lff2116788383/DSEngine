@@ -177,6 +177,14 @@ public:
     /// @return 新分配的 VkDescriptorSet（VK_NULL_HANDLE 表示失败）
     VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout layout);
 
+    /// 帧内描述符集缓存：同 (layout, 内容指纹) 复用已填充 set。
+    /// 减少每 draw 的 vkAllocateDescriptorSets + vkUpdateDescriptorSets 开销
+    /// （Set 0/1 每帧内容固定，Set 2 同材质同纹理帧内命中）。
+    /// @param writes 写描述（dstSet 字段会被忽略/覆写），可传 nullptr
+    /// @return 缓存的 set（miss 时分配并填充）
+    VkDescriptorSet GetOrUpdateDescriptorSet(VkDescriptorSetLayout layout, uint64_t content_hash,
+                                             const VkWriteDescriptorSet* writes, uint32_t write_count);
+
     /// 重置指定帧的 DescriptorPool（fence 等待后调用，仅释放该帧的 DescriptorSet）
     void ResetDescriptorPool(uint32_t frame_index);
 
@@ -243,6 +251,11 @@ private:
     std::vector<VkDescriptorPool> descriptor_pools_[kMaxFramesInFlight];
     uint32_t current_pool_index_ = 0;
     size_t active_pool_slot_ = 0;
+
+    // 帧内描述符集缓存：key = layout ^ 内容指纹；帧首 ResetDescriptorPool 清空
+    // （池被 vkResetDescriptorPool 后其中 set 全部失效，缓存必须同步失效）。
+    static constexpr size_t kMaxDescriptorCacheEntries = 8192;
+    std::unordered_map<uint64_t, VkDescriptorSet> descriptor_set_cache_;
 
     // 资源存储
     std::unordered_map<unsigned int, VulkanTexture> textures_;

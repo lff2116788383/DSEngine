@@ -43,6 +43,38 @@ static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<s
 
 namespace {
 
+/// 从 VkWriteDescriptorSet 数组计算内容指纹（FNV-1a 64）：
+/// 提取 buffer/image 句柄、offset/range、binding/type/count——同内容必同指纹。
+/// 供帧内描述符集缓存使用（内容含全部绑定状态，缓存失效风险=64 位哈希碰撞，可忽略）。
+uint64_t DescriptorContentHash(const VkWriteDescriptorSet* writes, uint32_t count) {
+    uint64_t h = 14695981039346656037ull;
+    constexpr uint64_t kPrime = 1099511628211ull;
+    for (uint32_t i = 0; i < count; ++i) {
+        const auto& w = writes[i];
+        h = (h ^ static_cast<uint64_t>(w.dstBinding)) * kPrime;
+        h = (h ^ static_cast<uint64_t>(w.dstArrayElement)) * kPrime;
+        h = (h ^ static_cast<uint64_t>(w.descriptorCount)) * kPrime;
+        h = (h ^ static_cast<uint64_t>(w.descriptorType)) * kPrime;
+        if (w.pBufferInfo) {
+            for (uint32_t j = 0; j < w.descriptorCount; ++j) {
+                const auto& b = w.pBufferInfo[j];
+                h = (h ^ reinterpret_cast<uint64_t>(b.buffer)) * kPrime;
+                h = (h ^ static_cast<uint64_t>(b.offset)) * kPrime;
+                h = (h ^ static_cast<uint64_t>(b.range)) * kPrime;
+            }
+        }
+        if (w.pImageInfo) {
+            for (uint32_t j = 0; j < w.descriptorCount; ++j) {
+                const auto& im = w.pImageInfo[j];
+                h = (h ^ reinterpret_cast<uint64_t>(im.sampler)) * kPrime;
+                h = (h ^ reinterpret_cast<uint64_t>(im.imageView)) * kPrime;
+                h = (h ^ static_cast<uint64_t>(im.imageLayout)) * kPrime;
+            }
+        }
+    }
+    return h;
+}
+
 /// 创建 Vulkan 缓冲区（host-visible，用于动态更新）
 bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
                         VkDeviceSize size, VkBufferUsageFlags usage,
@@ -554,16 +586,13 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         return VK_NULL_HANDLE;
     }
 
-    // 为每个 set 分配一个 DescriptorSet（最多 4 个）
+    // 为每个 set 构造写描述并经帧内缓存获取（同内容复用 set，省 Allocate+Update）
     VkDescriptorSet sets[4] = {};
     const int set_count = static_cast<int>(program->descriptor_set_layouts.size());
-    for (int s = 0; s < set_count; ++s) {
-        sets[s] = resource_mgr.AllocateDescriptorSet(program->descriptor_set_layouts[s]);
-        if (sets[s] == VK_NULL_HANDLE) {
-            DEBUG_LOG_WARN("Failed to allocate descriptor set for set {}", s);
-            return VK_NULL_HANDLE;
-        }
-    }
+    std::vector<VkWriteDescriptorSet> set0_writes;
+    std::vector<VkWriteDescriptorSet> set1_writes;
+    std::vector<VkWriteDescriptorSet> set2_writes;
+    std::vector<VkWriteDescriptorSet> set3_writes;
 
     // 反射检查：仅写入 shader 实际声明的 descriptor bindings
     auto has_binding = [&](uint32_t set, uint32_t binding, VkDescriptorType type) -> bool {
@@ -595,7 +624,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         write.descriptorCount = 1;
         write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         write.pBufferInfo = &buf_info;
-        vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+        set0_writes.push_back(write);
     }
 
     // --- Set 1: PerScene UBO (binding 0) ---
@@ -612,7 +641,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         write.descriptorCount = 1;
         write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         write.pBufferInfo = &buf_info;
-        vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+        set1_writes.push_back(write);
     }
 
     // --- Set 1 binding 1+: PBR 专用 SSBO/UBO（GBuffer 模式跳过）---
@@ -643,7 +672,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         pl_write.descriptorCount = 1;
         pl_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         pl_write.pBufferInfo     = &pl_buf;
-        vkUpdateDescriptorSets(device, 1, &pl_write, 0, nullptr);
+        set1_writes.push_back(pl_write);
     }
 
     // --- Set 1 binding 2: SpotLights SSBO ---
@@ -670,7 +699,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         sl_write.descriptorCount = 1;
         sl_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         sl_write.pBufferInfo     = &sl_buf;
-        vkUpdateDescriptorSets(device, 1, &sl_write, 0, nullptr);
+        set1_writes.push_back(sl_write);
     }
 
     // --- Set 1 binding 3: ClusterInfo SSBO ---
@@ -697,7 +726,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         ci_write.descriptorCount = 1;
         ci_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         ci_write.pBufferInfo     = &ci_buf;
-        vkUpdateDescriptorSets(device, 1, &ci_write, 0, nullptr);
+        set1_writes.push_back(ci_write);
     }
 
     // --- Set 1 binding 4: LightIndex SSBO ---
@@ -724,7 +753,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         li_write.descriptorCount = 1;
         li_write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         li_write.pBufferInfo     = &li_buf;
-        vkUpdateDescriptorSets(device, 1, &li_write, 0, nullptr);
+        set1_writes.push_back(li_write);
     }
 
     // --- Set 1 binding 5: LightProbeData UBO ---
@@ -750,7 +779,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         lp_write.descriptorCount = 1;
         lp_write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         lp_write.pBufferInfo     = &lp_buf;
-        vkUpdateDescriptorSets(device, 1, &lp_write, 0, nullptr);
+        set1_writes.push_back(lp_write);
     }
 
     } // !gbuffer_mode — Set 1 PBR 专用绑定结束
@@ -776,7 +805,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             tex_write.descriptorCount = 1;
             tex_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             tex_write.pImageInfo = &img_info;
-            vkUpdateDescriptorSets(device, 1, &tex_write, 0, nullptr);
+            set2_writes.push_back(tex_write);
         }
     } else {
         // PerMaterial UBO (binding 0)
@@ -1070,11 +1099,11 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         for (int i = 0; i < 2; ++i) {
             if (ibl_writes[i].sType != 0) all_writes.push_back(ibl_writes[i]);
         }
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(all_writes.size()), all_writes.data(), 0, nullptr);
+        set2_writes = std::move(all_writes);
     } // else (PBR mode Set 2)
 
     // --- Set 3 binding 0: 点光源立方体阴影贴图 (u_point_shadow_maps[4]) ---
-    if (!gbuffer_mode && set_count >= 4 && sets[3] != VK_NULL_HANDLE
+    if (!gbuffer_mode && set_count >= 4
         && has_binding(3, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
         VkDescriptorImageInfo point_shadow_infos[4] = {};
         VkWriteDescriptorSet  point_shadow_write{};
@@ -1103,7 +1132,35 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             point_shadow_write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             point_shadow_write.pImageInfo      = point_shadow_infos;
         }
-        vkUpdateDescriptorSets(device, 1, &point_shadow_write, 0, nullptr);
+        set3_writes.push_back(point_shadow_write);
+    }
+
+    // ---- 经帧内缓存获取各 DescriptorSet（写内容不含 dstSet，由缓存统一填充）----
+    if (set_count >= 1) {
+        sets[0] = resource_mgr.GetOrUpdateDescriptorSet(program->descriptor_set_layouts[0],
+            DescriptorContentHash(set0_writes.data(), static_cast<uint32_t>(set0_writes.size())),
+            set0_writes.data(), static_cast<uint32_t>(set0_writes.size()));
+    }
+    if (set_count >= 2) {
+        sets[1] = resource_mgr.GetOrUpdateDescriptorSet(program->descriptor_set_layouts[1],
+            DescriptorContentHash(set1_writes.data(), static_cast<uint32_t>(set1_writes.size())),
+            set1_writes.data(), static_cast<uint32_t>(set1_writes.size()));
+    }
+    if (set_count >= 3) {
+        sets[2] = resource_mgr.GetOrUpdateDescriptorSet(program->descriptor_set_layouts[2],
+            DescriptorContentHash(set2_writes.data(), static_cast<uint32_t>(set2_writes.size())),
+            set2_writes.data(), static_cast<uint32_t>(set2_writes.size()));
+    }
+    if (set_count >= 4) {
+        sets[3] = resource_mgr.GetOrUpdateDescriptorSet(program->descriptor_set_layouts[3],
+            DescriptorContentHash(set3_writes.data(), static_cast<uint32_t>(set3_writes.size())),
+            set3_writes.data(), static_cast<uint32_t>(set3_writes.size()));
+    }
+    for (int s = 0; s < set_count; ++s) {
+        if (sets[s] == VK_NULL_HANDLE) {
+            DEBUG_LOG_WARN("Failed to allocate descriptor set for set {}", s);
+            return VK_NULL_HANDLE;
+        }
     }
 
     // 绑定所有 DescriptorSet
