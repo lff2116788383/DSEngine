@@ -56,11 +56,10 @@ option(DSE_WEB_ENABLE_3D "Keep the 3D forward path on Web/Emscripten builds (M5 
 # 同步执行，现有 web-release-3d 构建零改动）。运行需宿主发 COOP/COEP 跨源隔离头以启用
 # SharedArrayBuffer（harness server 已发；静态部署见 docs §7.4）。
 option(DSE_WEB_ENABLE_THREADS "Enable Emscripten pthreads (SharedArrayBuffer + worker pool) on Web builds" OFF)
-# Spine（2D 骨骼动画运行时）与 Assimp（FBX/OBJ 等模型导入）默认关闭以缩小 SDK 包体；
-# 需要时按需开启：-DDSE_ENABLE_SPINE=ON / -DDSE_ENABLE_ASSIMP=ON。
+# Spine（2D 骨骼动画运行时）与 Assimp（FBX/OBJ 等模型导入）为 v1 默认开启；
+# 需缩小包体时按需关闭：-DDSE_ENABLE_SPINE=OFF / -DDSE_ENABLE_ASSIMP=OFF。
 # 关闭 Spine 时 SpineRendererComponent 与 dse.spine.* 绑定仍在（纯数据/ECS），仅不编译 spine-cpp 运行时与 SpineSystem。
 # 关闭 Assimp 时 glTF 导入（tinygltf）不受影响，仅 FBX/OBJ 等 Assimp 格式不可用。
-# 编辑器构建默认开启 Assimp 以支持 FBX/OBJ/Blender 等格式导入；
 # 纯运行时/SDK 构建可 -DDSE_ENABLE_ASSIMP=OFF 缩小包体。
 # v1 必备功能：默认开启（Spine/Net/HTTP/C#）。Web/Emscripten 交叉构建里由下方 if(EMSCRIPTEN)
 # 按平台能力强制关闭不适用者（Net/HTTP/C# 无对应 Web 后端）。
@@ -324,8 +323,9 @@ if(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
     add_definitions(-D DSE_ENABLE_JOLT)
 endif()
 
-# 网络层 (GameNetworkingSockets)。默认 OFF：OFF 路径完全不引入网络依赖，
-# 现有三端构建零影响。ON 时由 cmake/CMakeLists.txt.gns 负责按平台分流加密后端
+# 网络层 (GameNetworkingSockets)。桌面默认 ON（v1 必备）；Android/iOS/OHOS/Web 交叉构建
+# 在下方平台分支强制 OFF。OFF 路径完全不引入网络依赖，现有构建零影响。
+# ON 时由 cmake/CMakeLists.txt.gns 负责按平台分流加密后端
 # (桌面 libsodium / 移动 OpenSSL) 并接入 protobuf + GNS 静态库。
 if(DSE_ENABLE_NET)
     include(cmake/CMakeLists.txt.gns)
@@ -334,9 +334,10 @@ if(DSE_ENABLE_NET)
     endif()
 endif()
 
-# 通用异步 HTTP(S) 客户端 (IXWebSocket + OpenSSL)。默认 OFF：OFF 路径完全不引入
-# IXWebSocket/OpenSSL 依赖，现有构建零影响。ON 时由 cmake/CMakeLists.txt.http
-# 编出 dse_http 静态库并定义 DSE_ENABLE_HTTP（供 engine/http 与 Lua 绑定启用）。
+# 通用异步 HTTP(S) 客户端 (IXWebSocket + OpenSSL)。桌面默认 ON（v1 必备）；交叉构建强制 OFF。
+# OFF 路径完全不引入 IXWebSocket/OpenSSL 依赖，现有构建零影响。
+# ON 时由 cmake/CMakeLists.txt.http 编出 dse_http 静态库并定义 DSE_ENABLE_HTTP
+# （供 engine/http 与 Lua 绑定启用）。
 if(DSE_ENABLE_HTTP)
     include(cmake/CMakeLists.txt.http)
     if(DSE_HAS_HTTP)
@@ -931,11 +932,12 @@ if (MSVC)
     # Workaround: CMake 4.3 VS generator 在非 Debug 配置下可能不生成 objects.txt，
     # 导致 WINDOWS_EXPORT_ALL_SYMBOLS 的 __create_def PreLinkEvent 失败。
     # 此自定义 PRE_LINK 命令在 __create_def 之前运行，确保 objects.txt 存在。
+    # 对象目录随生成器而异：多配置（VS）= dse_engine.dir/$<CONFIG>；单配置（Ninja）= CMakeFiles/dse_engine.dir。
     add_custom_command(TARGET dse_engine PRE_LINK
         COMMAND ${CMAKE_COMMAND} -E remove -f
             ${CMAKE_BINARY_DIR}/dse_engine.dir/$<CONFIG>/exports.def
         COMMAND ${CMAKE_COMMAND}
-            -DOBJ_DIR=${CMAKE_BINARY_DIR}/dse_engine.dir/$<CONFIG>
+            -DOBJ_DIR=${CMAKE_BINARY_DIR}/$<IF:$<BOOL:${CMAKE_CONFIGURATION_TYPES}>,dse_engine.dir/$<CONFIG>,CMakeFiles/dse_engine.dir>
             -P ${CMAKE_SOURCE_DIR}/cmake/write_objects_txt.cmake
         COMMENT "Generating objects.txt for WINDOWS_EXPORT_ALL_SYMBOLS"
         VERBATIM
@@ -1151,6 +1153,15 @@ if(TARGET dse_blueprint_smoke)
         LABELS "smoke;blueprint"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         TIMEOUT 30)
+endif()
+
+# 自描述二进制序列化 (dse.serialize) 无头往返冒烟——此前只构建未注册 ctest，漏检。
+if(TARGET dse_serialize_smoke)
+    add_test(NAME dse_serialize_smoke COMMAND dse_serialize_smoke)
+    set_tests_properties(dse_serialize_smoke PROPERTIES
+        LABELS "smoke;serialize"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 60)
 endif()
 
 foreach(_smoke_target

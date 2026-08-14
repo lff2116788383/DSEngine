@@ -114,7 +114,8 @@ bool ScaffoldPlatformerTemplate(const fs::path& root, std::string& error) {
 }
 
 // 3D 俯视角动作模板：从 repo 的 templates/topdown_3d 拷贝素材（三国题材逆向资源）
-// 到项目 assets/，并写入完整游戏脚本（武将移动/攻击、怪物AI、HUD、掉落、BGM/SFX）。
+// 到项目 assets/，并拷贝完整游戏脚本目录 scripts/（main.lua + 16 个功能模块：
+// 武将移动/攻击、怪物AI、HUD、掉落、BGM/SFX、存档/剧情/商店等）。
 bool ScaffoldTopDownTemplate(const fs::path& root, std::string& error) {
     std::error_code ec;
     const std::string engine_root = FindEngineRoot(fs::current_path(ec).string());
@@ -137,12 +138,21 @@ bool ScaffoldTopDownTemplate(const fs::path& root, std::string& error) {
         return false;
     }
 
-    // 2) 写入完整游戏脚本
-    std::string body;
-    if (!ReadTextFile(tpl / "scripts" / "main.lua", body, error)) {
+    // 2) 拷贝完整游戏脚本目录：main.lua 无条件 require 16 个功能模块
+    //    （database/state/ai_system/ui_system/skill_system/...），只拷入口文件
+    //    会导致生成工程启动即崩（module not found）。递归拷贝整个 scripts/。
+    const fs::path tpl_scripts = tpl / "scripts";
+    if (!fs::exists(tpl_scripts, ec) || !fs::is_directory(tpl_scripts, ec)) {
+        error = "俯视角模板脚本目录缺失: " + tpl_scripts.string();
         return false;
     }
-    return WriteTextFile(root / "scripts" / "main.lua", body, error);
+    fs::copy(tpl_scripts, root / "scripts",
+             fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+        error = "复制俯视角模板脚本失败: " + ec.message();
+        return false;
+    }
+    return true;
 }
 
 std::string BuildProjectDescriptor(const std::string& name,

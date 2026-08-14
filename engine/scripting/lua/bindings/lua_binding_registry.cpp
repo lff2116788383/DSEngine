@@ -37,6 +37,14 @@ void RegisterPhase1LuaApi(lua_State* L) {
     RegisterSerializeBindings(L);
     lua_setfield(L, -2, "serialize");
 
+#ifdef DSE_NET_ENABLED
+    // dse.repl 复制层（server/client/RPC）：实现完整但此前注册链从未调用，
+    // 导致 LUA_API.md §17.5 文档化 API 运行时不可达。随网络模块一并激活。
+    // 注意：RegisterReplBindings 仅把模块表压栈（不做 setfield），由调用方挂到 dse 下。
+    RegisterReplBindings(L);
+    lua_setfield(L, -2, "repl");
+#endif
+
     lua_setglobal(L, "dse");
 
     // --- Codegen modules (self-managing stack via lua_getglobal/lua_pop) ---

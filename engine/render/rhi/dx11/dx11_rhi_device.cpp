@@ -288,6 +288,8 @@ void DX11RhiDevice::Shutdown() {
 }
 
 void DX11RhiDevice::BeginFrame() {
+    if (!initialized_) return;  // 未初始化设备的安全退出（含空设备单测）
+
     frame_ctx_lock_ = std::unique_lock<std::recursive_mutex>(context_.immediate_context_mutex());
     current_frame_stats_ = RenderStats{};
     resource_mgr_.FlushPendingUploads();
@@ -736,6 +738,7 @@ BufferHandle DX11RhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const voi
 }
 
 void DX11RhiDevice::UpdateBuffer(BufferHandle handle, size_t offset, size_t size, const void* data, bool is_index) {
+    if (!initialized_) return;  // 未初始化设备的安全退出（含空设备单测）
     resource_mgr_.UpdateBuffer(handle.raw(), offset, size, data, is_index);
 }
 

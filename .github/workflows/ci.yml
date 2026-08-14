@@ -465,9 +465,13 @@ jobs:
 
       - name: Configure (emcmake) + build dse_web_host
         run: |
+          # 必须 DSE_WEB_ENABLE_3D=ON：本作业后续跑 web3d/web3d_wgpu 视觉回归 +
+          # WebGPU selftest，而 EMSCRIPTEN 分支在未置该选项时强制 DSE_ENABLE_3D=OFF、
+          # DSE_ENABLE_WEBGPU=OFF（2D MVP），会导致回归目标与构建产物错位。
           emcmake cmake -S . -B build_web -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_WEB_ENABLE_3D=ON \
             -DDSE_HOST_SHADER_COMPILER="$PWD/bin/dse_shader_compiler"
           cmake --build build_web --target dse_web_host -j "$(nproc)"
 
@@ -514,10 +518,12 @@ jobs:
       # T5-6 point-light cube true-shadow occlusion result.
       - name: Configure (emcmake) + build self-test harness (DSE_WEBGPU_SELFTEST=ON)
         run: |
+          # 同样必须 DSE_WEB_ENABLE_3D=ON：WebGPU 后端仅在置该选项时编入（EMSCRIPTEN 分支）。
           emcmake cmake -S . -B build_web_selftest -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DDSE_WEBGPU_SELFTEST=ON \
+            -DDSE_WEB_ENABLE_3D=ON \
             -DDSE_HOST_SHADER_COMPILER="$PWD/bin/dse_shader_compiler"
           cmake --build build_web_selftest --target dse_web_host -j "$(nproc)"
 

@@ -433,8 +433,8 @@ unsigned int DX11ResourceManager::CreateConstantBuffer(size_t size, const void* 
 }
 
 void DX11ResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool /*is_index*/) {
+    if (!context_ || !device_) return;  // 未初始化设备的安全退出（含空设备单测）
     std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
-    if (!device_) return;
     auto it = buffers_.find(handle);
     if (it == buffers_.end()) return;
     auto& buf = it->second;
@@ -522,9 +522,10 @@ unsigned int DX11ResourceManager::CreateSSBO(size_t size, const void* data) {
 }
 
 void DX11ResourceManager::UpdateSSBO(unsigned int handle, size_t offset, size_t size, const void* data) {
+    if (!context_ || !dc_ || !data || size == 0) return;  // 未初始化设备的安全退出
     std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     auto it = ssbos_.find(handle);
-    if (it == ssbos_.end() || !data || size == 0) return;
+    if (it == ssbos_.end()) return;
 
     if (offset == 0 && size == it->second.size) {
         dc_->UpdateSubresource(it->second.buffer.Get(), 0, nullptr, data, 0, 0);
@@ -836,8 +837,9 @@ unsigned int DX11ResourceManager::GetRenderTargetDepthTextureHandle(unsigned int
 }
 
 DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(unsigned int handle) const {
-    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     ReadbackResult result;
+    if (!context_) return result;  // 未初始化设备的安全退出
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     auto it = render_targets_.find(handle);
     if (it == render_targets_.end() || !it->second.color_texture) return result;
 
@@ -891,8 +893,9 @@ DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(u
 }
 
 DX11ResourceManager::DepthReadbackResult DX11ResourceManager::ReadRenderTargetDepth(unsigned int handle) const {
-    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     DepthReadbackResult result;
+    if (!context_) return result;  // 未初始化设备的安全退出
+    std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
     auto it = render_targets_.find(handle);
     if (it == render_targets_.end() || !it->second.has_depth || !it->second.depth_texture) return result;
 
@@ -1027,8 +1030,8 @@ void DX11ResourceManager::QueueTextureUpload(unsigned int handle, int width, int
 }
 
 void DX11ResourceManager::FlushPendingUploads() {
+    if (!context_ || !dc_) return;  // 未初始化设备的安全退出
     std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
-    if (!dc_) return;
 
     std::lock_guard<std::mutex> lock(pending_uploads_mutex_);
     while (!pending_uploads_.empty()) {
@@ -1076,8 +1079,8 @@ unsigned int DX11ResourceManager::CreateIndirectBuffer(size_t size, const void* 
 void DX11ResourceManager::UpdateIndirectBuffer(unsigned int handle,
                                                 size_t offset, size_t size,
                                                 const void* data) {
+    if (!context_ || !dc_ || !data) return;  // 未初始化设备的安全退出
     std::lock_guard<std::recursive_mutex> ctx_lk(context_->immediate_context_mutex());
-    if (!dc_ || !data) return;
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end() || !it->second.buffer) return;
     // DEFAULT 用法须经 UpdateSubresource 局部更新；box 覆盖 [offset, offset+size)。

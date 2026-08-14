@@ -20,7 +20,9 @@ struct DynamicObstacleComponent {
     float cylinder_radius = 1.0f;
     float cylinder_height = 2.0f;
 
-    // Runtime state (managed by NavMeshSystem)
+    // Runtime state（预留字段：dtTileCache obstacle 引用）
+    // TODO: [2026-08-14] 当前无运行时系统消费本组件（dtTileCache 未启用）——
+    // 仅编辑器增删/序列化/反射/复制层可用，动态障碍刻入 NavMesh 的行为尚未实现。
     unsigned int obstacle_ref_ = 0;  ///< dtTileCache obstacle reference
     bool dirty_ = true;              ///< needs add/update in tile cache
 };
@@ -45,7 +47,9 @@ struct NavMeshAutoRebakeComponent {
     float cell_size = 0.3f;
     float cell_height = 0.2f;
 
-    // Runtime state
+    // Runtime state（预留字段：自动重烘焙调度状态）
+    // TODO: [2026-08-14] 当前无运行时系统消费本组件——自动重烘焙行为尚未实现，
+    // 字段仅供编辑器配置/序列化往返；接入需启用 dtTileCache + 重烘焙调度。
     float cooldown_timer_ = 0.0f;
     bool needs_full_rebake_ = true;
     int baked_tile_count_ = 0;

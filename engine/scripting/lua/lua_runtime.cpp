@@ -437,6 +437,36 @@ void UpdateScriptComponents(float delta_time) {
         }
         CallScriptTableMethod(state.state, instance.table_ref, "OnUpdate", static_cast<int>(entity_key), delta_time, true);
     }
+
+    // LuaScriptComponent：编辑器/旧路径挂载（README 文档化的拖拽挂载）兼容驱动。
+    // 该组件无 enabled 字段（视为始终启用）；同一实体同时挂 ScriptComponent 时
+    // 以 ScriptComponent 为准（共享 script_instances 实例表，避免键冲突覆盖）。
+    auto lua_view = registry.view<LuaScriptComponent>();
+    for (auto entity : lua_view) {
+        if (registry.all_of<ScriptComponent>(entity)) continue;
+        auto& script_component = lua_view.get<LuaScriptComponent>(entity);
+        std::uint32_t entity_key = EntityToKey(entity);
+        active_keys[entity_key] = true;
+        auto instance_it = state.script_instances.find(entity_key);
+        if (script_component.script_path.empty()) {
+            if (instance_it != state.script_instances.end()) {
+                DestroyScriptInstance(state.state, static_cast<int>(entity_key), instance_it->second);
+            }
+            continue;
+        }
+        if (instance_it == state.script_instances.end()) {
+            instance_it = state.script_instances.emplace(entity_key, RuntimeState::ScriptInstance{}).first;
+        }
+        auto& instance = instance_it->second;
+        if (!EnsureScriptInstanceLoaded(state.state, static_cast<int>(entity_key), script_component.script_path, instance)) {
+            continue;
+        }
+        if (!instance.awake_called) {
+            CallScriptTableMethod(state.state, instance.table_ref, "OnAwake", static_cast<int>(entity_key), 0.0f, false);
+            instance.awake_called = true;
+        }
+        CallScriptTableMethod(state.state, instance.table_ref, "OnUpdate", static_cast<int>(entity_key), delta_time, true);
+    }
     std::vector<std::uint32_t> stale_keys;
     for (const auto& pair : state.script_instances) {
         auto it = active_keys.find(pair.first);
@@ -637,6 +667,24 @@ int PumpLuaScriptHotReloads() {
     for (auto entity : view) {
         auto& sc = view.get<ScriptComponent>(entity);
         if (!sc.enabled || sc.script_path.empty()) continue;
+        std::uint32_t key = EntityToKey(entity);
+        auto it = state.script_instances.find(key);
+        if (it == state.script_instances.end()) continue;
+        auto& instance = it->second;
+        std::filesystem::file_time_type wt;
+        if (!QueryScriptFileWriteTime(instance.script_path, wt)) continue;
+        if (!instance.has_last_write_time || wt == instance.last_write_time) continue;
+        // File changed — reload
+        if (EnsureScriptInstanceLoaded(state.state, static_cast<int>(key), sc.script_path, instance)) {
+            ++reloaded;
+        }
+    }
+    // LuaScriptComponent 挂载的脚本同样参与热重载（与 UpdateScriptComponents 双轨一致）。
+    auto lua_view = registry.view<LuaScriptComponent>();
+    for (auto entity : lua_view) {
+        if (registry.all_of<ScriptComponent>(entity)) continue;
+        auto& sc = lua_view.get<LuaScriptComponent>(entity);
+        if (sc.script_path.empty()) continue;
         std::uint32_t key = EntityToKey(entity);
         auto it = state.script_instances.find(key);
         if (it == state.script_instances.end()) continue;
