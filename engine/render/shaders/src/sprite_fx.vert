@@ -20,7 +20,7 @@ layout(std140, set = 0, binding = 0) uniform SpriteFx {
     mat4 vp;
     vec4 p0;  // SDF: (threshold, smoothing, outline_width, shadow_softness)
               // VFX: gradient_start (rgba)
-    vec4 p1;  // VFX: gradient_end (rgba)
+    vec4 p1;  // SDF: outline_color (rgba)；VFX: gradient_end (rgba)
     vec4 p2;  // VFX: (rect_w, rect_h, corner_radius, gradient_dir)
     vec4 p3;  // VFX: (blur_radius, blur_intensity, _, _)
 };

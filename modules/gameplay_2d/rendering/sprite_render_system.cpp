@@ -204,6 +204,7 @@ void UIRenderSystem::ExtractFrameRenderData(World& world, int screen_width, int 
             base_item.sdf_smoothing = ui.sdf_smoothing;
             base_item.sdf_outline_width = ui.sdf_outline_width;
             base_item.sdf_shadow_softness = ui.sdf_shadow_softness;
+            base_item.sdf_outline_color = ui.sdf_outline_color;
             Expand9SliceItems(base_item, final_pos, ui.size, ui.uv, ui.nine_slice_border, ui.nine_slice_src_size, items);
         } else {
             SpriteDrawItem item;
@@ -219,6 +220,7 @@ void UIRenderSystem::ExtractFrameRenderData(World& world, int screen_width, int 
             item.sdf_smoothing = ui.sdf_smoothing;
             item.sdf_outline_width = ui.sdf_outline_width;
             item.sdf_shadow_softness = ui.sdf_shadow_softness;
+            item.sdf_outline_color = ui.sdf_outline_color;
             items.push_back(item);
         }
     }

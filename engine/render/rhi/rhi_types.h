@@ -374,6 +374,7 @@ struct SpriteDrawItem {
     float sdf_smoothing = 0.1f;
     float sdf_outline_width = 0.0f;
     float sdf_shadow_softness = 0.0f;
+    glm::vec4 sdf_outline_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);  ///< 描边颜色 RGBA（默认黑，与原硬编码一致）
 };
 
 /// 批量渲染顶点格式

@@ -23,6 +23,8 @@ void main() {
     float u_sdf_threshold = p0.x;
     float u_sdf_smoothing = p0.y;
     float u_outline_width = p0.z;
+    // 描边颜色由 p1 提供（RGBA；CPU 侧 SDF 路径填充 sdf_outline_color）
+    vec4 u_outline_color = p1;
 
     float distance = texture(u_texture, vTexCoord).a;
 
@@ -40,7 +42,7 @@ void main() {
         float outline_alpha = smoothstep(outline_min - aa,
                                          outline_min + aa,
                                          distance);
-        vec4 outline_color = vec4(0.0, 0.0, 0.0, 1.0);
+        vec4 outline_color = u_outline_color;
         final_color = mix(outline_color, vColor, alpha);
         alpha = outline_alpha;
     }

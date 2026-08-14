@@ -240,6 +240,7 @@ public:
         int sdf_smoothing = -1;
         int outline_width = -1;
         int shadow_softness = -1;
+        int outline_color = -1;
     };
     void InitTextSdfShader();
     const TextSdfLocations& text_sdf_locations() const { return text_sdf_locations_; }

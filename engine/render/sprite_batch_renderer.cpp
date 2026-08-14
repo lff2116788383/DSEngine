@@ -90,7 +90,8 @@ bool SameState(const SpriteDrawItem& a, const SpriteDrawItem& b) {
         return false;
     }
     if (a.sdf_threshold != b.sdf_threshold || a.sdf_smoothing != b.sdf_smoothing ||
-        a.sdf_outline_width != b.sdf_outline_width || a.sdf_shadow_softness != b.sdf_shadow_softness) {
+        a.sdf_outline_width != b.sdf_outline_width || a.sdf_shadow_softness != b.sdf_shadow_softness ||
+        a.sdf_outline_color != b.sdf_outline_color) {
         return false;
     }
     const SpriteVisualEffect& va = Vfx(a);
@@ -298,6 +299,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                 if (path == 1) {  // SDF
                     fx.p0 = glm::vec4(rep.sdf_threshold, rep.sdf_smoothing,
                                       rep.sdf_outline_width, rep.sdf_shadow_softness);
+                    fx.p1 = rep.sdf_outline_color;  // 描边颜色（sprite_fx_sdf.frag 从 p1 读取）
                 } else {          // VFX
                     const SpriteVisualEffect& ve = rep.visual_effect;
                     fx.p0 = ve.gradient_start;

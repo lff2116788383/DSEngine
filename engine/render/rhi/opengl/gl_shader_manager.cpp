@@ -1137,6 +1137,7 @@ void GLShaderManager::InitTextSdfShader() {
     text_sdf_locations_.sdf_smoothing = glGetUniformLocation(text_sdf_shader_handle_, "u_sdf_smoothing");
     text_sdf_locations_.outline_width = glGetUniformLocation(text_sdf_shader_handle_, "u_outline_width");
     text_sdf_locations_.shadow_softness = glGetUniformLocation(text_sdf_shader_handle_, "u_shadow_softness");
+    text_sdf_locations_.outline_color = glGetUniformLocation(text_sdf_shader_handle_, "u_outline_color");
 }
 
 // ============================================================

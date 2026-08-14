@@ -17,6 +17,7 @@ layout(push_constant) uniform PushConstants {
     float u_sdf_smoothing;    // offset 132 — 平滑宽度 (默认 0.1)
     float u_outline_width;    // offset 136 — 描边宽度 (0 = 无描边)
     float u_shadow_softness;  // offset 140 — 阴影柔软度 (0 = 无阴影)
+    vec4 u_outline_color;     // offset 144 — 描边颜色 RGBA (默认黑)
 } pc;
 
 void main() {
@@ -39,8 +40,8 @@ void main() {
         float outline_alpha = smoothstep(outline_min - aa,
                                          outline_min + aa,
                                          distance);
-        // 描边颜色固定为黑色，可后续扩展
-        vec4 outline_color = vec4(0.0, 0.0, 0.0, 1.0);
+        // 描边颜色由 u_outline_color 控制（此前硬编码黑色）
+        vec4 outline_color = pc.u_outline_color;
         final_color = mix(outline_color, vColor, alpha);
         alpha = outline_alpha;
     }

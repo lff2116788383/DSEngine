@@ -72,7 +72,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_material_cb_ = CreateConstantBuffer(sizeof(DX11PerMaterialCB));
     prim_push_cb_          = CreateConstantBuffer(DX11DrawExecutor::kPrimPushMaxBytes); // 通用 push cbuffer（b0）
     sprite_push_cb_        = CreateConstantBuffer(128); // [model(64B) | vp(64B)] for sprite.vert
-    sdf_ps_cb_             = CreateConstantBuffer(144); // [model(64B) | vp(64B) | sdf_params(16B)] for text_sdf.frag
+    sdf_ps_cb_             = CreateConstantBuffer(160); // [model(64B) | vp(64B) | sdf_params(16B) | outline_color(16B)] for text_sdf.frag
     vfx_ps_cb_             = CreateConstantBuffer(64);  // [gradient_start | gradient_end | rect_size_and_radius | blur_params]
     per_point_lights_cb_   = CreateConstantBuffer(sizeof(DX11PointLightsCB));
     per_spot_lights_cb_    = CreateConstantBuffer(sizeof(DX11SpotLightsCB));

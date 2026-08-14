@@ -65,6 +65,7 @@ struct UIRendererComponent {
     float sdf_smoothing = 0.1f;                          ///< SDF 抗锯齿平滑宽度
     float sdf_outline_width = 0.0f;                      ///< SDF 描边宽度 (0=无描边)
     float sdf_shadow_softness = 0.0f;                    ///< SDF 阴影柔软度 (0=无阴影)
+    glm::vec4 sdf_outline_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);  ///< SDF 描边颜色 RGBA（默认黑）
 
     // Runtime computed layout
     glm::mat4 runtime_model = glm::mat4(1.0f);           ///< 运行时计算出的绝对变换矩阵
