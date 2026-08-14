@@ -2,6 +2,7 @@
 #define DSE_PHYSICS3D_SYSTEM_H
 
 #include "engine/physics/physics3d/i_physics3d_system.h"
+#include <entt/entt.hpp>
 #include <memory>
 #include <vector>
 #include <map>
@@ -114,6 +115,10 @@ private:
     void SyncPhysicsToTransforms(World& world);
     void SyncCharacterControllers(World& world, float fixed_delta_time);
     void CreateCharacterActor(World& world, entt::entity entity, CharacterController3DComponent& cc, const ::TransformComponent& transform);
+
+    // 实体销毁时释放 PxActor（对齐 Jolt 后端的 on_destroy 连接，避免 actor 泄漏）
+    void OnRigidBody3DDestroyed(entt::registry& reg, entt::entity entity);
+    std::vector<entt::scoped_connection> destroy_connections_;
 };
 
 } // namespace physics3d

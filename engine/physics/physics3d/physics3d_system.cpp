@@ -219,11 +219,22 @@ bool Physics3DSystem::Init(World& world) {
         DEBUG_LOG_ERROR("PxCreateCooking failed!");
     }
 
+    // 实体销毁时释放 PxActor，避免 actor 泄漏（对齐 Jolt 后端）。
+    destroy_connections_.push_back(
+        world.registry().on_destroy<RigidBody3DComponent>().connect<&Physics3DSystem::OnRigidBody3DDestroyed>(this));
+
     return true;
+}
+
+void Physics3DSystem::OnRigidBody3DDestroyed(entt::registry&, entt::entity entity) {
+    RemoveActor(entity);
 }
 
 void Physics3DSystem::Shutdown() {
     DEBUG_LOG_INFO("Physics3DSystem Shutdown");
+
+    // 先断开 on_destroy 连接，避免 Shutdown 清理期间回调重入
+    destroy_connections_.clear();
 
     if (scene_ && world_cache_) {
         // Release joints (Task 5)

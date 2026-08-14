@@ -267,6 +267,10 @@ struct Physics3DSystem::Impl {
     // Joint: entity_id → Constraint*
     std::unordered_map<uint32_t, Constraint*> entity_to_constraint;
 
+    // 最近一次 FixedUpdate 的固定步长（MoveKinematic 需要真实 dt 计算目标速度；
+    // 默认 0.02 与引擎固定步长一致，避免硬编码 1/60 造成运动学体 20% 过冲）。
+    float last_fixed_delta_time = 0.02f;
+
     // MeshCollider 缓存
     std::unordered_map<std::string, ShapeRefC> convex_mesh_cache;
     std::unordered_map<std::string, ShapeRefC> triangle_mesh_cache;
@@ -389,6 +393,7 @@ static inline glm::quat ToGlm(const Quat& q) { return glm::quat(q.GetW(), q.GetX
 void Physics3DSystem::FixedUpdate(World& world, float fixed_delta_time) {
     if (!impl_) return;
 
+    impl_->last_fixed_delta_time = fixed_delta_time;
     SyncTransformsToPhysics(world);
     SyncJoints(world);
 
@@ -570,7 +575,9 @@ void Physics3DSystem::SyncTransformsToPhysics(World& world) {
             if (rb.type == RigidBody3DType::Kinematic) {
                 BodyID body_id = impl_->entity_to_body[eid];
                 RVec3 pos(transform.position.x, transform.position.y, transform.position.z);
-                bi.MoveKinematic(body_id, pos, ToJolt(transform.rotation), 1.0f / 60.0f);
+                // MoveKinematic 以 dt 反推目标速度；用真实固定步长而非硬编码 1/60
+                // （1/60=0.0167 < 0.02 会让运动学体每步过冲约 20%）。
+                bi.MoveKinematic(body_id, pos, ToJolt(transform.rotation), impl_->last_fixed_delta_time);
             }
 
             // MeshCollider 动态更新检查
@@ -675,7 +682,11 @@ CharacterMoveResult Physics3DSystem::MoveCharacter(entt::entity entity, const gl
     Vec3 desired_velocity = ToJolt(displacement) / delta_time;
 
     CharacterVirtual::ExtendedUpdateSettings update_settings;
-    character->ExtendedUpdate(delta_time, -impl_->physics_system->GetGravity(),
+    // 角色控制器为运动学契约：位移完全由调用方（Lua/游戏逻辑，见 3d_character_controller.lua
+    // 自行积分重力）逐帧提供，随后 SetLinearVelocity 覆盖速度。此处必须传零重力——
+    // 传 -GetGravity()（原实现）会让 ExtendedUpdate 的内部速度积分方向反转（向上），
+    // 空中角色每帧被额外推高 ~0.2m/s 且与 PhysX 后端行为不对称。
+    character->ExtendedUpdate(delta_time, Vec3::sZero(),
         update_settings,
         impl_->physics_system->GetDefaultBroadPhaseLayerFilter(Layers::MOVING),
         impl_->physics_system->GetDefaultLayerFilter(Layers::MOVING),
