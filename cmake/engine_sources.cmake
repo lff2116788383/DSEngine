@@ -135,9 +135,10 @@ if(NOT _HAS_ANY_PHYSICS3D)
     list(APPEND engine_cpp "${CMAKE_SOURCE_DIR}/engine/physics/physics3d/physics_lod.cpp")
 endif()
 
-# NavMesh 禁用时排除 navigation 源文件
+# NavMesh 禁用时排除 3D navigation 源文件
+# 但保留 2D grid_pathfinding（不依赖 Recast/Detour）
 if(NOT DSE_ENABLE_NAVMESH)
-    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/navigation/.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/navigation/nav_mesh.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_3d/ai/nav_.*\\.cpp$")
 endif()
 

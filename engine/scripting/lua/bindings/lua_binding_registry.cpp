@@ -45,6 +45,14 @@ void RegisterPhase1LuaApi(lua_State* L) {
     lua_setfield(L, -2, "repl");
 #endif
 
+    // 2D 网格寻路 — dse.pathfinding
+    RegisterGridPathfindingBindings(L);
+    lua_setfield(L, -2, "pathfinding");
+
+    // 增强版瓦片地图 — dse.tilemap
+    RegisterTilemapBindings(L);
+    lua_setfield(L, -2, "tilemap");
+
     lua_setglobal(L, "dse");
 
     // --- Codegen modules (self-managing stack via lua_getglobal/lua_pop) ---

@@ -46,11 +46,13 @@ void RegisterDSSLBindings(lua_State* L);
 #ifdef DSE_ENABLE_NAVMESH
 void RegisterNavigationBindings(lua_State* L);
 #endif
+void RegisterGridPathfindingBindings(lua_State* L);  // dse.pathfinding 2D 网格寻路
 void RegisterStreamingBindings(lua_State* L);
 void RegisterLocalizationBindings(lua_State* L);
 void RegisterFloatingOriginBindings(lua_State* L);
 void RegisterFontBindings(lua_State* L);
 void RegisterSerializeBindings(lua_State* L);  // dse.serialize 自描述二进制序列化（编解码 Lua 值/表）
+void RegisterTilemapBindings(lua_State* L);  // dse.tilemap 增强版瓦片地图（多层/动画/属性/序列化）
 #ifdef DSE_ENABLE_HTTP
 void RegisterHttpBindings(lua_State* L);        // dse.http 低层 C ABI 绑定（codegen 生成）
 void RegisterHttpRequestBinding(lua_State* L);  // dse.http.request{...on_done} 高层回调式请求（手写）

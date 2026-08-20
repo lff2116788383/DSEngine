@@ -550,6 +550,20 @@ if(DSE_ENABLE_NET AND DSE_HAS_NET)
             target_compile_options(dse_net_lua_smoke PRIVATE /utf-8)
         endif()
     endif()
+    # 无头验证 Lua 绑定 dse.repl（复制层 + RPC API 可达性）。
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/repl_lua_smoke.cpp")
+        add_executable(dse_repl_lua_smoke "${CMAKE_SOURCE_DIR}/tests/net/repl_lua_smoke.cpp")
+        target_link_libraries(dse_repl_lua_smoke PRIVATE dse_engine dse_net)
+        target_include_directories(dse_repl_lua_smoke PRIVATE
+            "${CMAKE_SOURCE_DIR}"
+            "${CMAKE_SOURCE_DIR}/depends/lua")
+        target_compile_features(dse_repl_lua_smoke PRIVATE cxx_std_17)
+        if(MSVC)
+            set_property(TARGET dse_repl_lua_smoke PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            target_compile_options(dse_repl_lua_smoke PRIVATE /utf-8)
+        endif()
+    endif()
 endif()
 # --- 自描述二进制序列化 (dse.serialize) Lua 绑定 ---
 # 绑定 engine/scripting/.../lua_binding_serialize.cpp 随 dse_engine 编译（无外部依赖、
@@ -937,7 +951,7 @@ if (MSVC)
         COMMAND ${CMAKE_COMMAND} -E remove -f
             ${CMAKE_BINARY_DIR}/dse_engine.dir/$<CONFIG>/exports.def
         COMMAND ${CMAKE_COMMAND}
-            -DOBJ_DIR=${CMAKE_BINARY_DIR}/$<IF:$<BOOL:${CMAKE_CONFIGURATION_TYPES}>,dse_engine.dir/$<CONFIG>,CMakeFiles/dse_engine.dir>
+            -DOBJ_DIR=${CMAKE_BINARY_DIR}/dse_engine.dir/$<CONFIG>
             -P ${CMAKE_SOURCE_DIR}/cmake/write_objects_txt.cmake
         COMMENT "Generating objects.txt for WINDOWS_EXPORT_ALL_SYMBOLS"
         VERBATIM
@@ -1170,7 +1184,8 @@ foreach(_smoke_target
         dse_net_smoke
         dse_net_capi_smoke
         dse_net_lua_smoke
-        dse_repl_smoke)
+        dse_repl_smoke
+        dse_repl_lua_smoke)
     if(TARGET ${_smoke_target})
         add_test(NAME ${_smoke_target} COMMAND ${_smoke_target})
         set_tests_properties(${_smoke_target} PROPERTIES
