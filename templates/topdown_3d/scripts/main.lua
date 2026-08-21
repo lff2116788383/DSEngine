@@ -247,6 +247,11 @@ local function LoadTextures()
   TEX.basecamp = T("basecamp.png")
   TEX.tank     = T("tank.png")
   TEX.cart     = T("cart.png")
+  TEX.tower     = T("tower_arrow.png")
+  TEX.barricade = T("shadow_barricate.png")
+  TEX.horse1 = T("horse1.png")
+  TEX.horse2 = T("horse2.png")
+  TEX.shadow_cha = T("shadow_cha.png")
   TEX.map = {}
   for i = 1, 5 do
     TEX.map[i] = T(string.format("map%02d.png", i))
@@ -288,13 +293,24 @@ end
 local function base_scale(mesh)
   return MODEL_SCALE[mesh_key(mesh)] or 1
 end
-local function spawn_model(mesh, x, y, z, sx, sy, sz, tex)
+-- 材质预设 (匹配原版 Mobile-Diffuse 风格: 低金属度, 中高粗糙度)
+local MAT = {
+  character = {metallic=0.0, roughness=0.65, ao=1.0},
+  monster   = {metallic=0.0, roughness=0.75, ao=1.0},
+  boss      = {metallic=0.1, roughness=0.55, ao=1.0},
+  building  = {metallic=0.0, roughness=0.85, ao=1.0},
+  weapon    = {metallic=0.3, roughness=0.35, ao=1.0},
+  effect    = {metallic=0.0, roughness=0.3,  ao=1.0},
+  ground    = {metallic=0.0, roughness=0.90, ao=1.0},
+}
+local function spawn_model(mesh, x, y, z, sx, sy, sz, tex, mat_preset)
   local bs = base_scale(mesh)
   local e = dse.ecs.create_entity()
   dse.ecs.add_transform(e, x, y, z, (sx or 1) * bs, (sy or 1) * bs, (sz or 1) * bs)
   dse.ecs.mesh_renderer_add(e, mesh)
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
-  dse.ecs.set_mesh_material(e, 0.0, 0.7, 1.0, 0, 0, 0, 1.0, true, false)
+  local mp = mat_preset or MAT.character
+  dse.ecs.set_mesh_material(e, mp.metallic, mp.roughness, mp.ao, 0, 0, 0, 1.0, true, false)
   if tex then dse.ecs.set_mesh_texture(e, "albedo", tex) end
   return e, bs
 end
@@ -306,7 +322,7 @@ local function spawn_ground_plane(scale, r, g, b)
   local indices = {0,1,2, 2,3,0}
   dse.ecs.add_mesh_renderer(e, r or 0.35, g or 0.40, b or 0.30, 1.0, verts, indices)
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
-  dse.ecs.set_mesh_material(e, 0.0, 0.85, 1.0, 0, 0, 0, 1.0, true, true)
+  dse.ecs.set_mesh_material(e, 0.0, 0.90, 1.0, 0, 0, 0, 1.0, true, true)
   return e
 end
 
@@ -1568,7 +1584,7 @@ local function CreateEnemy(enemykind, x, z)
   if not data then return nil end
   local model = MON_MODELS[enemykind + 1] or MON_MODELS[1]
   local mon_tex = TEX.mon and TEX.mon[enemykind + 1]
-  local e = spawn_model(model_path(model), x, 0, z, 1, 1, 1, mon_tex)
+  local e = spawn_model(model_path(model), x, 0, z, 1, 1, 1, mon_tex, MAT.monster)
   local scale = 1.0
   if data.sizekind == 20 then scale = 1.2
   elseif data.sizekind == 24 then scale = 1.5 end
@@ -2560,7 +2576,7 @@ local function CreateBoss(bosskind, x, z)
   else
     boss_tex = TEX.bosssp or TEX.finalboss
   end
-  local e = spawn_model(model_path(model), x, 0, z, 2.0, 2.0, 2.0, boss_tex)
+  local e = spawn_model(model_path(model), x, 0, z, 2.0, 2.0, 2.0, boss_tex, MAT.boss)
 
   local m1 = data.matk1 or {0,0}
   local m2 = data.matk2 or {0,0}
@@ -3595,12 +3611,12 @@ local function BuildStage()
 
   -- 地图装饰 (原版 map + 天空地面贴图)
   local map_tex = TEX.map and TEX.map[map_idx + 1]
-  local map_e = spawn_model(model_path(map_model), 0, 0, 0, 2.0, 2.0, 2.0, map_tex)
+  local map_e = spawn_model(model_path(map_model), 0, 0, 0, 2.0, 2.0, 2.0, map_tex, MAT.ground)
   table.insert(Entities.decor, map_e)
 
   -- 建筑 (原版贴图)
   local struct_tex_map = {
-    barrack = TEX.barrack, tower = TEX.tower, barricade = nil,
+    barrack = TEX.barrack, tower = TEX.tower, barricade = TEX.barricade,
     basecamp = TEX.basecamp, tank = TEX.tank, cart = TEX.cart,
   }
   for i = 1, 3 do
@@ -3608,12 +3624,12 @@ local function BuildStage()
     local bx = math.cos(angle) * 15
     local bz = math.sin(angle) * 15
     local struct_type = (i == 1) and "barrack" or (i == 2) and "tower" or "barricade"
-    local se = spawn_model(model_path(STRUCT_MODELS[struct_type]), bx, 0, bz, 1, 1, 1, struct_tex_map[struct_type])
+    local se = spawn_model(model_path(STRUCT_MODELS[struct_type]), bx, 0, bz, 1, 1, 1, struct_tex_map[struct_type], MAT.building)
     table.insert(Entities.structures, {e = se, x = bx, z = bz, type = struct_type})
   end
 
   -- 玩家 (原版 cha01_01 + costume01)
-  local pe = spawn_model(model_path(CHA_MODELS[1]), 0, 0, 0, 1, 1, 1, TEX.costume and TEX.costume[1])
+  local pe = spawn_model(model_path(CHA_MODELS[1]), 0, 0, 0, 1, 1, 1, TEX.costume and TEX.costume[1], MAT.character)
   G.player_e = pe
 
   -- 重置玩家
@@ -4111,18 +4127,20 @@ function Awake()
   -- 3D 相机
   local cam = dse.ecs.create_entity()
   dse.ecs.add_transform(cam, 0, 18, 8, 1, 1, 1)
-  dse.ecs.add_camera_3d(cam, 55, 0)
+  dse.ecs.set_transform_rotation(cam, -50, 0, 0)
+  dse.ecs.add_camera_3d(cam, 35, 0)
   G.cam = cam
 
   -- 方向光
   local light = dse.ecs.create_entity()
   dse.ecs.add_transform(light, 0, 20, 0, 1, 1, 1)
   dse.ecs.add_directional_light_3d(light, 0.5, -0.8, 0.3, 1.0, 0.95, 0.85, 1.5, 0.3, 0.0)
+  dse.ecs.set_directional_light_shadow(light, true, 0.6, 15.0, 40.0, 100.0, 0.75)
 
   -- 环境光
   local ambient = dse.ecs.create_entity()
   dse.ecs.add_transform(ambient, 0, 15, 0, 1, 1, 1)
-  dse.ecs.add_point_light_3d(ambient, 0.4, 0.4, 0.5, 0.5, 30.0)
+  dse.ecs.add_point_light_3d(ambient, 0.45, 0.45, 0.5, 0.6, 35.0)
 
   -- HUD (ui_system 完整 HUD: gauge 条 + 文本)
   UISystem.build()
@@ -4183,7 +4201,7 @@ function Awake()
   end
   UISystem.on_fov_change = function(fov)
     if G.cam then
-      local new_fov = 55 - fov * 2
+      local new_fov = 35 - fov * 2
       dse.ecs.set_camera_fov(G.cam, new_fov)
     end
   end

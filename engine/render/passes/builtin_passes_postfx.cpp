@@ -761,7 +761,7 @@ void MotionBlurPass::Setup(RenderGraph& graph) {
     graph.PassWrite(pass, mb_color);
     // 读取/写入帧内瞬态 RT（复用 dof RT 做模糊输出），扩展其生命周期
     graph.PassRead(pass, graph.DeclareTransient("pp_motion_vector", {}));
-    graph.PassWriteNoState(pass, graph.DeclareTransient("pp_dof", {}));
+    // pp_dof 由 DOFPass 写入；MotionBlur 仅读取以扩展其生命周期，不再声明写入（避免 WAW 冲突）
     graph.PassRead(pass, graph.DeclareTransient("pp_dof", {}));
     graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
 }

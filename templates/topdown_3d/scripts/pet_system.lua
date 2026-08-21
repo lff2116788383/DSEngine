@@ -231,7 +231,7 @@ function Eagle.OnEnable()
     local bs = S.base_scale("assets/models/ball.dmesh")
     dse.ecs.add_transform(Eagle.shadow_e, Eagle.x, 0.002, Eagle.z, 0.3 * bs, 0.02, 0.3 * bs)
     pcall(dse.ecs.mesh_renderer_add, Eagle.shadow_e, "assets/models/ball.dmesh")
-    dse.ecs.set_mesh_shader_variant(Eagle.shadow_e, "MESH_LIT")
+    dse.ecs.set_mesh_shader_variant(Eagle.shadow_e, "MESH_UNLIT")
     dse.ecs.set_mesh_color(Eagle.shadow_e, 0, 0, 0, 0.3)
   end
 end
@@ -502,7 +502,7 @@ function Horse.SkillOn()
     local bs = S.base_scale("assets/models/ball.dmesh")
     dse.ecs.add_transform(Horse.shadow_e, Horse.x, 0.002, Horse.z, bs, 0.02, bs)
     pcall(dse.ecs.mesh_renderer_add, Horse.shadow_e, "assets/models/ball.dmesh")
-    dse.ecs.set_mesh_shader_variant(Horse.shadow_e, "MESH_LIT")
+    dse.ecs.set_mesh_shader_variant(Horse.shadow_e, "MESH_UNLIT")
     dse.ecs.set_mesh_color(Horse.shadow_e, 0, 0, 0, 0.3)
   end
 end

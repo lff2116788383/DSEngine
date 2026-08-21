@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- monster_efs.lua — 特效系统 (Monster_efs.cs / Hp_bar.cs / WeaponDrop.cs 完整移植)
 -- 伤害数字池 / 血溅特效池 / 影子池 / 掉落物池 / 血条 / 挥砍 / 粒子
 -- ============================================================================
@@ -121,6 +121,7 @@ local function GetItemBoxEntity()
   dse.ecs.add_transform(te, 0, 0.5, 0, 0.4 * bs, 0.4 * bs, 0.4 * bs)
   dse.ecs.mesh_renderer_add(te, State.resolve_path("assets/models/giftbox.dmesh"))
   dse.ecs.set_mesh_shader_variant(te, "MESH_LIT")
+  dse.ecs.set_mesh_material(te, 0.0, 0.5, 1.0, 0, 0, 0, 1.0, true, false)  -- 礼品盒: 半光滑
   if State.TEX and State.TEX.giftbox then
     dse.ecs.set_mesh_texture(te, "albedo", State.TEX.giftbox)
   end
@@ -291,6 +292,7 @@ local function spawn_weapon_drop(x, z, yaw)
   dse.ecs.add_transform(e, x, 0.3, z, 1.2 * bs, 1.2 * bs, 1.2 * bs)
   dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_s01.dmesh"))
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
+  dse.ecs.set_mesh_material(e, 0.3, 0.35, 1.0, 0, 0, 0, 1.0, true, false)  -- 金属武器材质
   table.insert(Entities.drops, {
     e = e, x = x, z = z, y = 0.3,
     maxy = 1.7, drop = true, life = 2.5, t = 0, spin = 0,

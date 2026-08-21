@@ -16,10 +16,10 @@ local CAM = {
   z_speed = 0,               -- 缩放速度 (C# z_speed, -1=瞬时)
   z_time = 0,                -- 缩放持续时间 (C# z_time)
   zoomdelay = 0,             -- 缩放累计时间 (C# zoomdelay)
-  fov = 55,                  -- 当前目标 FOV (C# fov)
-  originfov = 55,            -- 原始 FOV (C# originfov)
+  fov = 35,                  -- 当前目标 FOV (原版 fov=30, DSE 放宽至 35)
+  originfov = 35,            -- 原始 FOV (C# originfov)
   target_e = nil,            -- 跟随目标实体 (nil=玩家, C# target)
-  distancetarget = {0, 18, 8}, -- 相机相对目标偏移 (C# distancetarget)
+  distancetarget = {0, 18, 8}, -- 相机相对目标偏移 (C# distancetarget=(0,1.3,-1.04) 按比例放大)
   boundfactor = 1,           -- 边界缩放系数 (C# boundfactor)
   resetcam_delay = 0,        -- 复位延迟 (C# resetcam_delay)
   resetstart = false,        -- 延迟复位进行中 (C# resetstart)
@@ -33,7 +33,7 @@ local CAM = {
   movespeed = 10,            -- 跟随速度 (C# movespeed)
   hit_shake1 = {0.8, 0, 0.4},-- C# hit_shake1=(0.06,0,0.03) 按相机距离放大
   hit_shake2 = {0, 0.4, 0.3},-- C# hit_shake2=(0,0.03,0.02)
-  pitch = -55,               -- 相机俯仰角 (C# prefab 固定旋转)
+  pitch = -50,               -- 相机俯仰角 (原版 listener 四元数反推约 50°)
 }
 
 -- 相机复位 (C# ResetCam)
@@ -178,9 +178,9 @@ local function UpdateCamera(dt)
   if CAM.topviewon > 0 then
     CAM.topviewdelay = CAM.topviewdelay - dt
     if CAM.topviewon == 1 then
-      CAM.pitch = lerp(CAM.pitch, -80, clamp(dt * 5, 0, 1))
+      CAM.pitch = lerp(CAM.pitch, -70, clamp(dt * 5, 0, 1))
       local cf = dse.ecs.get_camera3d_fov(G.cam) or CAM.originfov
-      dse.ecs.set_camera3d_fov(G.cam, lerp(cf, 40, clamp(dt * 3, 0, 1)))
+      dse.ecs.set_camera3d_fov(G.cam, lerp(cf, 25, clamp(dt * 3, 0, 1)))
       if CAM.topviewdelay < 1.5 then
         CAM.distancetarget = {0, 18, 8}
         CAM.topviewon = 2

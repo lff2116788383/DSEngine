@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- weapon_damage.lua — Boss 武器系统 (WeaponDamage.cs + AI_Boss01 武器生成)
 -- clone_weapon 生命周期: colliderofftime / destroytime / impactDestroy
 -- 距离检测代替 OnTriggerEnter, 对玩家伤害经 main.lua 注入 (打破循环 require)
@@ -25,6 +25,7 @@ local function BossWeaponCreate(boss, atk_index)
   dse.ecs.add_transform(e, 0, 0, 0, bs, bs, bs)
   dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_n01.dmesh"))
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
+  dse.ecs.set_mesh_material(e, 0.3, 0.35, 1.0, 0, 0, 0, 1.0, true, false)  -- 金属武器材质
   dse.ecs.set_mesh_visible(e, false)
   local w = {
     e = e, boss = boss, index = atk_index,
@@ -102,6 +103,7 @@ local function BossSecondWeaponCreate(boss)
   dse.ecs.add_transform(e, 0, 0, 0, 1.3 * bs, 1.3 * bs, 1.3 * bs)
   dse.ecs.mesh_renderer_add(e, State.resolve_path("assets/models/blade_s01.dmesh"))
   dse.ecs.set_mesh_shader_variant(e, "MESH_LIT")
+  dse.ecs.set_mesh_material(e, 0.3, 0.35, 1.0, 0, 0, 0, 1.0, true, false)  -- 金属武器材质
   dse.ecs.set_mesh_visible(e, false)
   boss.ef_secondweapon = {
     e = e, boss = boss, active = false,
