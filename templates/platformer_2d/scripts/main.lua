@@ -210,6 +210,12 @@ local function LoadAssets()
     S.bgm    = audio_path("assets/audio/bgm.wav")
 end
 
+-- play_sfx 的第三个参数 loop 在引擎侧是 int（luaL_checkinteger），
+-- 不能传布尔值 false/true，必须传 0/1。
+local function play_sfx(path, vol)
+    if path then dse.audio.play_sfx(path, vol, 0) end
+end
+
 -- ── 运行时状态 ─────────────────────────────────────────────────────────────
 local state = {
     mode = "play",          -- play / level_complete / game_over / win
@@ -448,7 +454,7 @@ local function DamagePlayer(from_x)
     state.lives = state.lives - 1
     player.invuln = 1.5
     player.hurt_flash = 0.5
-    if S.hurt then dse.audio.play_sfx(S.hurt, 1.0, false) end
+    play_sfx(S.hurt, 1.0)
     -- 击退：远离伤害来源
     local dir = 1.0
     if from_x then dir = (player.x < from_x) and -1.0 or 1.0 end
@@ -483,7 +489,7 @@ end
 local function AdvanceLevel()
     if state.level_index >= #LEVELS then
         state.mode = "win"
-        if S.win then dse.audio.play_sfx(S.win, 1.0, false) end
+        play_sfx(S.win, 1.0)
         return
     end
     state.level_index = state.level_index + 1
@@ -567,7 +573,7 @@ end
 -- ============================================================================
 -- 交互（金币 / 敌人 / 尖刺 / 弹簧 / 旗帜）
 -- ============================================================================
-local function UpdateInteractions()
+local function UpdateInteractions(dt)
     -- 金币
     for _, c in ipairs(level_entities.coins) do
         if not c.collected and aabb(player.x, player.y, PW, PH, c.x, c.y, 0.4, 0.4) then
@@ -575,7 +581,7 @@ local function UpdateInteractions()
             if c.e then pcall(dse.ecs.destroy_entity, c.e) end
             c.e = nil
             state.coins = state.coins + 1
-            if S.coin then dse.audio.play_sfx(S.coin, 1.0, false) end
+            play_sfx(S.coin, 1.0)
         end
     end
     -- 宝石（+2 金币）
@@ -585,7 +591,7 @@ local function UpdateInteractions()
             if g.e then pcall(dse.ecs.destroy_entity, g.e) end
             g.e = nil
             state.coins = state.coins + 2
-            if S.coin then dse.audio.play_sfx(S.coin, 1.0, false) end
+            play_sfx(S.coin, 1.0)
         end
     end
 
@@ -595,7 +601,7 @@ local function UpdateInteractions()
             player.vy = SPRING_BOOST
             player.on_ground = false
             if sp.e then pcall(dse.ecs.play_animation, sp.e, "bounce") end
-            if S.spring then dse.audio.play_sfx(S.spring, 1.0, false) end
+            play_sfx(S.spring, 1.0)
             spawn_dust(player.x, player.y - PH, 6)
         end
     end
@@ -610,7 +616,7 @@ local function UpdateInteractions()
                 en.dead = true
                 player.vy = ENEMY_STOMP_BOUNCE
                 player.on_ground = false
-                if S.stomp then dse.audio.play_sfx(S.stomp, 1.0, false) end
+                play_sfx(S.stomp, 1.0)
                 if en.e then pcall(dse.ecs.play_animation, en.e, "dead") end
                 en.death_timer = 0.4
             else
@@ -618,7 +624,7 @@ local function UpdateInteractions()
             end
         end
         if en.death_timer then
-            en.death_timer = en.death_timer - 0.016
+            en.death_timer = en.death_timer - dt
             if en.death_timer <= 0.0 and en.e then
                 pcall(dse.ecs.destroy_entity, en.e)
                 en.e = nil
@@ -642,7 +648,7 @@ local function UpdateInteractions()
         if aabb(player.x, player.y, PW, PH,
                 level_entities.flag_x, level_entities.flag_y + 1.1, 0.6, 1.5) then
             state.mode = "level_complete"
-            if S.win then dse.audio.play_sfx(S.win, 1.0, false) end
+            play_sfx(S.win, 1.0)
         end
     end
 end
@@ -696,7 +702,7 @@ local function UpdatePlayer(dt)
         player.on_ground = false
         player.coyote = 0.0
         player.buffer = 0.0
-        if S.jump then dse.audio.play_sfx(S.jump, 1.0, false) end
+        play_sfx(S.jump, 1.0)
         spawn_dust(player.x, player.y - PH, 5)
     end
     -- 松开空格截断上升（可变跳跃高度）
@@ -731,7 +737,7 @@ local function UpdatePlayer(dt)
     dse.ecs.set_transform_scale(level_entities.player, sx, P_SCALE, 1.0)
     dse.ecs.set_transform_position(level_entities.player, player.x, player.y, 0.0)
 
-    UpdateInteractions()
+    UpdateInteractions(dt)
 
     -- 掉落
     if player.y < level.bounds[2] - 4.0 then
