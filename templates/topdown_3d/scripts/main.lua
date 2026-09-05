@@ -4036,7 +4036,6 @@ end
 -- 开始新游戏 (C# UI_intro.InitStat + jumpSence): 清空存档从第 0 关开始
 local function RestartGame()
   MenuSystem.clear_all()
-  UISystem.build()
   G.stage_index = 0
   G.lives = 3
   G.score = 0
@@ -4065,8 +4064,8 @@ local function RestartGame()
   if ScenarioSystem.has_scene(0) then
     UISystem.clear()
     ScenarioSystem.on_finish = function()
-      UISystem.build()
       BuildStage()
+      UISystem.build()
       G.mode = "play"
       if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
     end
@@ -4074,6 +4073,7 @@ local function RestartGame()
     G.mode = "story"
   else
     BuildStage()
+    UISystem.build()
     G.mode = "play"
     if S.bgm_stage1 then dse.audio.play_bgm(S.bgm_stage1, 0.6, true) end
   end
@@ -4082,7 +4082,6 @@ end
 -- 从地图进入指定关卡 (C# UI_map 选关 → Loading)
 local function StartStageInternal(stage_idx)
   MenuSystem.clear_all()
-  UISystem.build()
   G.stage_index = stage_idx
   ResetPower()
   Player.maxhp = 95 + Player.level * 5
@@ -4091,6 +4090,7 @@ local function StartStageInternal(stage_idx)
   Player.life = true
   PetSystem.clear()
   BuildStage()
+  UISystem.build()
   G.mode = "play"
   local bgm = {S.bgm_stage1, S.bgm_stage2, S.bgm_stage3}
   local bgm_idx = (G.stage_index % 3) + 1

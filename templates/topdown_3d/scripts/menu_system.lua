@@ -90,7 +90,7 @@ end
 local function build_intro()
   clear()
   ui.ready_at = (G.time or 0) + 0.5
-  add(make_quad(0, 0, 1280, 720, 0.05, 0.05, 0.1, 1.0, 960))
+  add(make_quad(0, 0, 1280, 720, 0.05, 0.05, 0.1, 1.0, -100))
   add(make_text("亡灵杀手", 0, 200, 1.0, 0.9, 0.3, 48, 64))
   add(make_text("Topdown 3D Port", 0, 130, 0.6, 0.6, 0.6, 18, 24))
   add(make_text("WASD 移动  J 攻击  K 技能  L 闪避  P 抓取  ESC 暂停", 0, -360, 0.5, 0.5, 0.5, 12, 16))
@@ -129,7 +129,7 @@ end
 local function build_map()
   clear()
   ui.ready_at = (G.time or 0) + 0.5
-  add(make_quad(0, 0, 1280, 720, 0.06, 0.05, 0.08, 1.0, 960))
+  add(make_quad(0, 0, 1280, 720, 0.06, 0.05, 0.08, 1.0, -100))
   add(make_text("世界地图", 0, 315, 1.0, 0.9, 0.4, 30, 40))
   build_status_bar()
 
@@ -181,7 +181,7 @@ end
 local function build_shop()
   clear()
   ui.ready_at = (G.time or 0) + 0.5
-  add(make_quad(0, 0, 1280, 720, 0.06, 0.05, 0.08, 1.0, 960))
+  add(make_quad(0, 0, 1280, 720, 0.06, 0.05, 0.08, 1.0, -100))
   add(make_text("技能商店", 0, 315, 1.0, 0.9, 0.4, 30, 40))
   build_status_bar()
 

@@ -242,7 +242,7 @@ end
 -- ============================================================================
 function M._build_pause_menu()
   -- 半透明背景遮罩
-  pause_menu.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.7, 970)
+  pause_menu.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.7, -100)
   ui_set_visible(pause_menu.bg, false)
 
   -- 三个按钮: 继续游戏 / 选项 / 退出
@@ -306,7 +306,7 @@ end
 -- ============================================================================
 function M._build_result_screen()
   -- 半透明背景
-  result_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.5, 970)
+  result_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.5, -100)
   ui_set_visible(result_ui.bg, false)
 
   -- 结果标题
@@ -353,7 +353,7 @@ end
 -- ============================================================================
 function M._build_chance_screen()
   -- 半透明黑色背景 (渐变)
-  chance_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.8, 975)
+  chance_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.8, -100)
   ui_set_visible(chance_ui.bg, false)
 
   -- 倒计时文字
