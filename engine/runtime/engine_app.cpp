@@ -556,8 +556,10 @@ bool EngineInstance::Init() {
     splash_.SetStatus("正在初始化渲染管线…");
     if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
-        CleanupOnInitFailure();
-        return false;
+        // P5：此时子系统处于半初始化状态，CleanupOnInitFailure() 会触发 segfault(exit 139)，
+        // 直接以非零码退出更安全（日志已 flush）。
+        std::fflush(stderr);
+        std::_Exit(1);
     }
     pipeline_->SetInitKeepAlive(nullptr);
     splash_.SetStatus("正在加载场景…");

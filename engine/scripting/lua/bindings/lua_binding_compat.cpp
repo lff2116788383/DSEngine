@@ -10,6 +10,10 @@
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/native_api/dse_api_core.h"
 #include "engine/scripting/native_api/dse_api_render.h"
+#include "engine/scripting/native_api/dse_api_internal.h"
+#include "engine/ecs/world.h"
+#include "engine/ecs/tilemap.h"
+#include "engine/render/rhi/rhi_handle.h"
 
 extern "C" {
 #include "depends/lua/lua.h"
@@ -104,6 +108,42 @@ int L_LoadTextureEx(lua_State* L) {
     return 1;
 }
 
+
+//  P3：瓦片地图可用化 
+// ecs.add_tilemap 的生成绑定不设置 tileset_cols/rows（默认 1x1）且 tiles 初值为 -1，
+// 导致整张图集被压进每个格子且 set_tile 语义异常。这里提供显式行列版本：
+//   ecs.add_tilemap_ex(e, w, h, tile_size, tex_handle, cols, rows)
+int L_AddTilemapEx(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    const auto e = dse_api_internal::TE(static_cast<uint32_t>(luaL_checkinteger(L, 1)));
+    if (!world->registry().valid(e)) return 0;
+    auto& tm = world->registry().emplace_or_replace<TilemapComponent>(e);
+    tm.width = static_cast<int>(luaL_checkinteger(L, 2));
+    tm.height = static_cast<int>(luaL_checkinteger(L, 3));
+    tm.tile_size = static_cast<float>(luaL_checknumber(L, 4));
+    tm.tileset_handle = dse::render::TextureHandle::from_raw(
+        static_cast<uint32_t>(luaL_checkinteger(L, 5)));
+    tm.tileset_cols = static_cast<int>(luaL_optinteger(L, 6, 1));
+    tm.tileset_rows = static_cast<int>(luaL_optinteger(L, 7, 1));
+    tm.tiles.assign(static_cast<size_t>(tm.width) * static_cast<size_t>(tm.height), 0);
+    tm.dirty = true;
+    return 0;
+}
+
+// ecs.tilemap_set_colliders(e, enabled, tile_min)：为 >= tile_min 的格子生成 Box2D 静态碰撞体
+int L_TilemapSetColliders(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    auto* tm = world->registry().try_get<TilemapComponent>(
+        dse_api_internal::TE(static_cast<uint32_t>(luaL_checkinteger(L, 1))));
+    if (!tm) return 0;
+    tm->generate_colliders = ToBoolish(L, 2, false);
+    tm->collider_tile_min = static_cast<int>(luaL_optinteger(L, 3, 1));
+    tm->dirty = true;
+    return 0;
+}
+
 void Override(lua_State* L, const char* table, const char* name, lua_CFunction fn) {
     lua_getglobal(L, "dse");
     if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
@@ -126,6 +166,8 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "ecs", "set_sprite_shader_variant", L_SpriteSetShaderVariant);
     Override(L, "ecs", "set_sprite_blend_mode", L_SpriteSetBlendMode);
     Override(L, "assets", "load_texture_ex", L_LoadTextureEx);
+    Override(L, "ecs", "add_tilemap_ex", L_AddTilemapEx);
+    Override(L, "ecs", "tilemap_set_colliders", L_TilemapSetColliders);
 }
 
 }  // namespace dse::runtime::lua_binding

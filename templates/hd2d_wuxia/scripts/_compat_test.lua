@@ -18,6 +18,18 @@ function Awake()
     dse.ecs.set_sprite_shader_variant(sp, "SPRITE_UNLIT")
     dse.ecs.set_sprite_blend_mode(sp, "add")
     dse.ecs.set_sprite_blend_mode(sp, 0)
-    print("[compat] OK: P1 bool/number + P2 精灵 API(uv_rect/sorting_layer/variant/blend/load_texture_ex)")
+    -- P3：瓦片地图（显式行列 + 碰撞开关 + set_tile/get_tile 语义）
+    local tmx = dse.ecs.create_entity()
+    dse.ecs.add_transform(tmx, 0, 0, 0, 1, 1, 1)
+    dse.ecs.add_tilemap_ex(tmx, 8, 6, 1.0, tex, 4, 4)
+    dse.ecs.set_tile(tmx, 1, 1, 3)
+    dse.ecs.tilemap_set_colliders(tmx, true, 1)
+    local got = dse.ecs.get_tile(tmx, 1, 1)
+    -- P4：中文字形覆盖（"青溪问剑"等此前会缺字）
+    dse.font.load_cjk("main", "templates/topdown_3d/assets/font/SimHei.ttf")
+    dse.font.set_default("main")
+    local w1 = dse.font.measure("青溪问剑 寨主 剑法 内力 铜钱", "main", 24)
+    print(string.format("[compat] tilemap get_tile=%s font_width=%.1f", tostring(got), w1))
+    print("[compat] OK: P1 bool/number + P2 精灵 API + P3 tilemap_ex + P4 中文字表")
 end
 function Update(dt) end
