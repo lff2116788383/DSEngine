@@ -144,6 +144,23 @@ int L_TilemapSetColliders(lua_State* L) {
     return 0;
 }
 
+
+// ecs.get_tile(e, x, y)：生成绑定未导出，补上（配合 add_tilemap_ex 形成完整读写闭环）
+int L_GetTile(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) { lua_pushinteger(L, 0); return 1; }
+    auto* tm = world->registry().try_get<TilemapComponent>(
+        dse_api_internal::TE(static_cast<uint32_t>(luaL_checkinteger(L, 1))));
+    const int x = static_cast<int>(luaL_checkinteger(L, 2));
+    const int y = static_cast<int>(luaL_checkinteger(L, 3));
+    int v = 0;
+    if (tm && x >= 0 && y >= 0 && x < tm->width && y < tm->height && !tm->tiles.empty()) {
+        v = tm->tiles[static_cast<size_t>(y) * tm->width + x];
+    }
+    lua_pushinteger(L, v);
+    return 1;
+}
+
 void Override(lua_State* L, const char* table, const char* name, lua_CFunction fn) {
     lua_getglobal(L, "dse");
     if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
@@ -168,6 +185,7 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "assets", "load_texture_ex", L_LoadTextureEx);
     Override(L, "ecs", "add_tilemap_ex", L_AddTilemapEx);
     Override(L, "ecs", "tilemap_set_colliders", L_TilemapSetColliders);
+    Override(L, "ecs", "get_tile", L_GetTile);
 }
 
 }  // namespace dse::runtime::lua_binding
