@@ -18,6 +18,7 @@ bool Gameplay2DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     physics2d_system_.Init(world);
     // 注入 RhiDevice：2D sprite/UI/particle 渲染均经 SpriteBatchRenderer 通用原语路径。
     sprite_render_system_.SetRhiDevice(rhi_device_);
+    sprite3d_pass_.SetRhiDevice(rhi_device_);
     ui_render_system_.SetRhiDevice(rhi_device_);
     particle_system_.SetRhiDevice(rhi_device_);
 #ifdef DSE_ENABLE_SPINE
@@ -69,6 +70,7 @@ void Gameplay2DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
 
 void Gameplay2DModule::ExtractSceneRenderData2D(World& world) {
     sprite_render_system_.ExtractFrameRenderData(world);
+    sprite3d_pass_.ExtractFrameRenderData(world);
 #ifdef DSE_ENABLE_SPINE
     spine_system_.ExtractFrameRenderData(world);
 #endif
@@ -87,6 +89,10 @@ void Gameplay2DModule::ExtractUIRenderData2D(World& world) {
 
 void Gameplay2DModule::RenderScene2D(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, const glm::mat4& clip_correction) {
     (void)clip_correction;
+    // M1 ordering: Sprite3D is issued after all 3D opaques and before the
+    // original 2D sprite pass. Both calls now happen inside the existing
+    // ForwardScenePass render-pass scope.
+    sprite3d_pass_.Render(cmd_buffer, frame);
     sprite_render_system_.Render(cmd_buffer, frame);
 #ifdef DSE_ENABLE_SPINE
     spine_system_.Render(cmd_buffer, frame);
@@ -106,6 +112,7 @@ void Gameplay2DModule::RenderUI2D(CommandBuffer& cmd_buffer, int screen_width, i
 
 void Gameplay2DModule::OnShutdown(World& world) {
     // 释放 SpriteBatchRenderer GPU 资源（须在 rhi_device_ 置空前）。
+    sprite3d_pass_.Shutdown();
     sprite_render_system_.Shutdown();
     ui_render_system_.Shutdown();
     particle_system_.Shutdown();

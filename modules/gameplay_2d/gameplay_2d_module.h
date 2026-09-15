@@ -5,6 +5,7 @@
 #include "engine/scene/transform_system.h"
 #include "engine/physics/physics2d/physics2d_system.h"
 #include "modules/gameplay_2d/rendering/sprite_render_system.h"
+#include "engine/render/passes/sprite3d_pass.h"
 #include "modules/gameplay_2d/camera/camera_system.h"
 #include "modules/gameplay_2d/ui/ui_system.h"
 #include "engine/audio/audio_system.h"
@@ -74,6 +75,7 @@ private:
     TransformSystem transform_system_;
     CameraSystem camera_system_;
     SpriteRenderSystem sprite_render_system_;
+    dse::render::Sprite3DPass sprite3d_pass_;
     UIRenderSystem ui_render_system_;
     Physics2DSystem physics2d_system_;
     AnimationSystem animation_system_;

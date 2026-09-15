@@ -11,6 +11,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <functional>
 #include <string>
@@ -51,6 +52,46 @@ struct SpriteFxUBO {
     glm::vec4 p3;
 };
 static_assert(sizeof(SpriteFxUBO) == 128, "SpriteFxUBO std140 layout = 128 bytes");
+
+// Sprite3D 的 PerFrame UBO（std140，160B）。比 2D 版少 foliage，但多一个 viewport 字段，
+// 因为 Screen billboard 模式在裁剪空间做像素偏移需要视口尺寸。
+struct Sprite3DPerFrameUBO {
+    glm::mat4 vp;
+    glm::mat4 view;
+    glm::vec4 camera_pos;
+    glm::vec4 viewport;  // xy = width/height, zw = reserved
+};
+static_assert(sizeof(Sprite3DPerFrameUBO) == 160, "Sprite3DPerFrameUBO std140 layout = 160 bytes");
+
+// Sprite3D 顶点：CPU 只做去 camera_offset 和打包，billboard 展开在顶点着色器中完成。
+// 属性 location 必须与 shaders/src/sprite3d.vert 保持一致。
+struct Sprite3DVertex {
+    float px, py, pz;      // world position (already camera-relative), location 0
+    float cx, cy;          // local quad corner: x in [-0.5,0.5], y in [0,1], location 1
+    float sw, sh;          // world size, location 2
+    float anchor;          // anchor_y, location 3
+    float billboard;       // 0=None 1=Yaw 2=YawPitch 3=Screen, location 4
+    float r, g, b, a;      // tint * opacity, location 5
+    float u, v;            // UV, location 6
+    float ax, ay, az;      // None-mode local right axis, location 7
+    float bx, by, bz;      // None-mode local up axis, location 8
+    float zoff;            // world-space z offset, location 9
+};
+static_assert(sizeof(Sprite3DVertex) == 88, "Sprite3DVertex must be tightly packed (22 floats)");
+
+const glm::vec2 kSprite3DCorner[4] = {
+    {-0.5f, 0.0f},
+    { 0.5f, 0.0f},
+    { 0.5f, 1.0f},
+    {-0.5f, 1.0f},
+};
+
+struct Batch3D {
+    size_t start_quad = 0;
+    size_t quad_count = 0;
+    TextureHandle texture;
+    unsigned int blend_mode = 0;
+};
 
 // 着色器变体 key（与 sprite_render_system / draw_executor 一致）。
 const unsigned int kSdfVariantKey =
@@ -187,6 +228,36 @@ PipelineHandle SpriteBatchRenderer::PsoForBlend(RhiDevice& device, unsigned int 
         pso_alpha_ = device.CreatePipelineState(desc);
     }
     return pso_alpha_;
+}
+
+PipelineHandle SpriteBatchRenderer::PsoForBlend3D(RhiDevice& device, unsigned int blend_mode) {
+    auto make = [&](BlendFactor src, BlendFactor dst) {
+        PipelineStateDesc desc{};
+        desc.blend_enabled = true;
+        desc.blend_src = src;
+        desc.blend_dst = dst;
+        desc.alpha_blend_src = src;
+        desc.alpha_blend_dst = dst;
+        desc.depth_test_enabled = true;
+        desc.depth_write_enabled = true;
+        desc.depth_func = CompareFunc::Less;
+        desc.culling_enabled = false;
+        return device.CreatePipelineState(desc);
+    };
+    if (blend_mode == 1u) {  // additive
+        if (!pso3d_additive_) pso3d_additive_ = make(BlendFactor::SrcAlpha, BlendFactor::One);
+        return pso3d_additive_;
+    }
+    if (blend_mode == 2u) {  // multiply
+        if (!pso3d_multiply_) pso3d_multiply_ = make(BlendFactor::DstColor, BlendFactor::Zero);
+        return pso3d_multiply_;
+    }
+    // Alpha-test default. SrcAlpha/OneMinusSrcAlpha per M1 task; transparent
+    // pixels are discarded in the fragment shader so they do not write depth.
+    if (!pso3d_alpha_) {
+        pso3d_alpha_ = make(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+    }
+    return pso3d_alpha_;
 }
 
 void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
@@ -327,9 +398,124 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     }
 }
 
+void SpriteBatchRenderer::DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
+                                       const std::vector<SpriteDrawItem>& items,
+                                       const glm::mat4& view, const glm::mat4& projection,
+                                       const glm::vec2& viewport_size,
+                                       const glm::vec3& camera_offset) {
+    if (items.empty()) return;
+
+    ShaderHandle sprite_prog = device.GetBuiltinProgram(BuiltinProgram::Sprite3D);
+    if (!sprite_prog) return;  // backend does not provide Sprite3D yet
+
+    EnsureResources(device, items.size());
+    if (!ibo_ || !white_tex_) return;
+
+    BufferHandle vbo = vbo3d_.Acquire(device, sizeof(Sprite3DVertex) * 4 * items.size(),
+                                      GpuBufferUsage::kVertex);
+    BufferHandle ubo = ubo3d_.Acquire(device, sizeof(Sprite3DPerFrameUBO), GpuBufferUsage::kUniform);
+    if (!vbo || !ubo) return;
+
+    std::vector<Sprite3DVertex> verts;
+    verts.reserve(items.size() * 4);
+    std::vector<Batch3D> batches;
+
+    for (size_t i = 0; i < items.size(); ++i) {
+        const SpriteDrawItem& item = items[i];
+        const TextureHandle tex = item.texture_handle ? item.texture_handle : white_tex_;
+
+        if (batches.empty() || batches.back().texture != tex ||
+            batches.back().blend_mode != item.blend_mode) {
+            Batch3D b;
+            b.start_quad = i;
+            b.quad_count = 0;
+            b.texture = tex;
+            b.blend_mode = item.blend_mode;
+            batches.push_back(b);
+        }
+        batches.back().quad_count += 1;
+
+        glm::vec3 base = glm::vec3(item.model[3]) - camera_offset;
+
+        glm::vec3 axis_x(1.0f, 0.0f, 0.0f);
+        glm::vec3 axis_y(0.0f, 1.0f, 0.0f);
+        if (item.sprite3d_billboard == 0) {
+            const glm::vec3 mx(item.model[0]);
+            const glm::vec3 my(item.model[1]);
+            const float lx = glm::length(mx);
+            const float ly = glm::length(my);
+            if (lx > 1.0e-6f) axis_x = mx / lx;
+            if (ly > 1.0e-6f) axis_y = my / ly;
+        }
+
+        const float u0 = item.uv.x;
+        const float v0 = item.uv.y;
+        const float u1 = item.uv.z;
+        const float v1 = item.uv.w;
+        const glm::vec2 uvs[4] = {
+            {u0, v0}, {u1, v0}, {u1, v1}, {u0, v1},
+        };
+
+        for (int k = 0; k < 4; ++k) {
+            Sprite3DVertex v;
+            v.px = base.x; v.py = base.y; v.pz = base.z;
+            v.cx = kSprite3DCorner[k].x;
+            v.cy = kSprite3DCorner[k].y;
+            v.sw = item.sprite3d_size.x;
+            v.sh = item.sprite3d_size.y;
+            v.anchor = item.sprite3d_anchor_y;
+            v.billboard = static_cast<float>(item.sprite3d_billboard);
+            v.r = item.color.r; v.g = item.color.g;
+            v.b = item.color.b; v.a = item.color.a;
+            v.u = uvs[k].x; v.v = uvs[k].y;
+            v.ax = axis_x.x; v.ay = axis_x.y; v.az = axis_x.z;
+            v.bx = axis_y.x; v.by = axis_y.y; v.bz = axis_y.z;
+            v.zoff = item.sprite3d_z_offset;
+            verts.push_back(v);
+        }
+    }
+
+    device.UpdateGpuBuffer(vbo, 0, verts.size() * sizeof(Sprite3DVertex), verts.data());
+
+    glm::vec2 vp = viewport_size;
+    if (vp.x <= 0.0f || vp.y <= 0.0f) vp = glm::vec2(1.0f, 1.0f);
+    Sprite3DPerFrameUBO uniforms{};
+    uniforms.vp = projection * view;
+    uniforms.view = view;
+    uniforms.camera_pos = glm::vec4(0.0f);
+    uniforms.viewport = glm::vec4(vp.x, vp.y, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(ubo, 0, sizeof(uniforms), &uniforms);
+
+    static const std::vector<VertexAttr> kAttrs3D = {
+        VertexAttr{0u, 3u, static_cast<uint32_t>(offsetof(Sprite3DVertex, px))},
+        VertexAttr{1u, 2u, static_cast<uint32_t>(offsetof(Sprite3DVertex, cx))},
+        VertexAttr{2u, 2u, static_cast<uint32_t>(offsetof(Sprite3DVertex, sw))},
+        VertexAttr{3u, 1u, static_cast<uint32_t>(offsetof(Sprite3DVertex, anchor))},
+        VertexAttr{4u, 1u, static_cast<uint32_t>(offsetof(Sprite3DVertex, billboard))},
+        VertexAttr{5u, 4u, static_cast<uint32_t>(offsetof(Sprite3DVertex, r))},
+        VertexAttr{6u, 2u, static_cast<uint32_t>(offsetof(Sprite3DVertex, u))},
+        VertexAttr{7u, 3u, static_cast<uint32_t>(offsetof(Sprite3DVertex, ax))},
+        VertexAttr{8u, 3u, static_cast<uint32_t>(offsetof(Sprite3DVertex, bx))},
+        VertexAttr{9u, 1u, static_cast<uint32_t>(offsetof(Sprite3DVertex, zoff))},
+    };
+
+    for (const Batch3D& b : batches) {
+        const PipelineHandle pso = PsoForBlend3D(device, b.blend_mode);
+        cmd.BindPipeline(device.GetGraphicsPipeline(pso, sprite_prog));
+        cmd.BindUniformBuffer(0u, ubo);
+        cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);
+        cmd.BindVertexBuffer(0u, vbo, static_cast<uint32_t>(sizeof(Sprite3DVertex)), kAttrs3D);
+        cmd.BindIndexBuffer(ibo_, IndexType::UInt16);
+        cmd.DrawIndexed(static_cast<uint32_t>(b.quad_count * 6),
+                        static_cast<uint32_t>(b.start_quad * 6), 0);
+    }
+}
+
 void SpriteBatchRenderer::Shutdown(RhiDevice& device) {
     vbo_.Shutdown(device);
     ubo_.Shutdown(device);
+    vbo3d_.Shutdown(device);
+    ubo3d_.Shutdown(device);
     for (PerInFlightBuffer& b : fx_ubos_) b.Shutdown(device);
     fx_ubos_.clear();
     if (ibo_) device.DeleteGpuBuffer(ibo_);

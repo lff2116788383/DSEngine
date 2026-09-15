@@ -11,6 +11,8 @@
 #include "engine/render/shaders/generated/embed/sprite_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_frag.gen.h"
+#include "engine/render/shaders/generated/embed/sprite3d_vert.gen.h"
+#include "engine/render/shaders/generated/embed/sprite3d_frag.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_frag.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_skinned_vert.gen.h"
@@ -82,6 +84,7 @@
 #include "engine/render/shaders/generated/embed/shadow_gpu_driven_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/sprite3d_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_skinned_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_skinned_vert_reflect.gen.h"
@@ -411,6 +414,24 @@ ID3D11InputLayout* DX11ShaderManager::GetOrCreatePrimInputLayout(
     return raw;
 }
 
+void DX11ShaderManager::InitSprite3DShader() {
+    if (sprite3d_shader_handle_ != 0) return;
+    using namespace generated_shaders;
+    sprite3d_shader_handle_ = CreateProgramFromDXBC(
+        ksprite3d_vert_dxbc, ksprite3d_vert_dxbc_size,
+        ksprite3d_frag_dxbc, ksprite3d_frag_dxbc_size);
+    if (sprite3d_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("[D3D11] Builtin Sprite3D shader creation failed");
+        return;
+    }
+    DEBUG_LOG_INFO("[D3D11] Builtin Sprite3D shader created (DXBC): {}", sprite3d_shader_handle_);
+    using namespace generated_shaders::reflect;
+    std::vector<D3D11_INPUT_ELEMENT_DESC> layout;
+    CreateInputLayoutFromReflection(ksprite3d_vert_reflection, layout);
+    CreateInputLayoutForShader(sprite3d_shader_handle_, layout.data(),
+                               static_cast<int>(layout.size()));
+}
+
 void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     using namespace generated_shaders;
     auto pulse = [&]() { if (keep_alive) keep_alive(); };
@@ -440,6 +461,7 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutForShader(sprite2d_shader_handle_, sprite2d_layout.data(),
                                    static_cast<int>(sprite2d_layout.size()));
     }
+    InitSprite3DShader();
     pulse();
 
     // ---- 静态 forward PBR 着色器 (B2b-1) ----

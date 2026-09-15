@@ -641,6 +641,9 @@ ShaderHandle DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     switch (program) {
         case BuiltinProgram::Skybox:      return shader_mgr_.skybox_shader_handle();
         case BuiltinProgram::Sprite2D:    return shader_mgr_.sprite2d_shader_handle();
+        case BuiltinProgram::Sprite3D:
+            if (!shader_mgr_.sprite3d_shader_handle()) shader_mgr_.InitSprite3DShader();
+            return shader_mgr_.sprite3d_shader_handle();
         case BuiltinProgram::SpriteFxSdf: return shader_mgr_.sprite_fx_sdf_shader_handle();
         case BuiltinProgram::SpriteFxVfx: return shader_mgr_.sprite_fx_vfx_shader_handle();
         case BuiltinProgram::ForwardPbr:  return shader_mgr_.forward_pbr_shader_handle();

@@ -99,6 +99,25 @@ struct MeshRendererComponent {
     entt::entity skeleton_entity{entt::null};
 };
 
+/// HD-2D Sprite3D component: a 2D pixel sprite rendered in the 3D scene.
+/// In M1 it is alpha-tested (frag discard) and writes depth; lit/shadows are
+/// reserved for M3. Keep the field names aligned with docs/design/HD2D_M1M2_TASK.md 2.1.
+struct Sprite3DComponent {
+    dse::render::TextureRef texture_handle;
+    glm::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};  ///< (u0, v0, u1, v1)
+    float size_w = 1.0f;
+    float size_h = 1.0f;
+    float anchor_y = 0.0f;          ///< 0 = feet at transform, 0.5 = centered
+    int billboard = 1;              ///< 0=None, 1=Yaw, 2=YawPitch, 3=Screen
+    bool lit = false;               ///< M3 lighting; false keeps the M1 unlit path
+    bool receive_shadow = false;    ///< M3
+    glm::vec3 emissive{0.0f};       ///< M3/Bloom; stored now for serialization/API
+    float opacity = 1.0f;
+    float sorting_bias = 0.0f;      ///< Smaller is in front (M2)
+    float z_offset = 0.0f;
+    glm::vec4 color_tint{1.0f, 1.0f, 1.0f, 1.0f};
+};
+
 struct LODLevelConfig {
     std::string mesh_path;
     float screen_size_threshold = 0.0f;  ///< 当 screen_size > threshold 时选此级别

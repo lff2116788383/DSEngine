@@ -34,10 +34,19 @@ class RhiDevice;
  */
 class SpriteBatchRenderer {
 public:
-    /// 绘制一批已排好序的 sprite。items 为空则直接返回。
+    /// 绘制一批已排好序的 2D sprite。items 为空则直接返回。
     void Draw(CommandBuffer& cmd, RhiDevice& device,
               const std::vector<SpriteDrawItem>& items,
               const glm::mat4& view, const glm::mat4& projection);
+
+    /// HD-2D: draw a batch of Sprite3D items. The same SpriteDrawItem container
+    /// is consumed so extraction/sorting stays on one path; this method only
+    /// adds the 3D vertex expansion and depth-writing pipeline state.
+    void DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
+                      const std::vector<SpriteDrawItem>& items,
+                      const glm::mat4& view, const glm::mat4& projection,
+                      const glm::vec2& viewport_size,
+                      const glm::vec3& camera_offset);
 
     /// 释放内部 GPU 资源（析构/重置时调用）。
     void Shutdown(RhiDevice& device);
@@ -46,17 +55,25 @@ private:
     void EnsureResources(RhiDevice& device, size_t needed_quads);
     void EnsureFxUbos(RhiDevice& device, size_t needed);
     PipelineHandle PsoForBlend(RhiDevice& device, unsigned int blend_mode);
+    PipelineHandle PsoForBlend3D(RhiDevice& device, unsigned int blend_mode);
 
     PipelineHandle pso_alpha_;
     PipelineHandle pso_additive_;
     PipelineHandle pso_multiply_;
+    PipelineHandle pso3d_alpha_;
+    PipelineHandle pso3d_additive_;
+    PipelineHandle pso3d_multiply_;
     TextureHandle white_tex_;
 
     /// 动态顶点缓冲（按需扩容）。每帧覆写 → 每在飞帧缓冲（规避 2 帧在飞下的覆写竞争，D9）。
     PerInFlightBuffer vbo_;
+    /// Sprite3D dynamic vertex buffer (per-in-flight; separate from 2D vbo_).
+    PerInFlightBuffer vbo3d_;
     BufferHandle ibo_;   ///< 静态 quad 索引（0,1,2,0,2,3 重复）；非每帧写，单缓冲即可
     /// PerFrame（std140，176B；默认 sprite2d 路径仅用 vp）。每帧覆写 → 每在飞帧缓冲。
     PerInFlightBuffer ubo_;
+    /// Sprite3D PerFrame UBO (vp/view/camera_pos/viewport; separate from 2D ubo_).
+    PerInFlightBuffer ubo3d_;
     /// SDF/VFX 批的 push-block 参数 UBO 池（SpriteFx 布局，128B/个）。每 fx 批一个独立逻辑
     /// 缓冲（参数互异），每帧覆写 → 各自每在飞帧缓冲（满足 Vulkan「提交前不可别名/覆写」约束）。
     std::vector<PerInFlightBuffer> fx_ubos_;

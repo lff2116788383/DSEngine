@@ -800,6 +800,23 @@ void RegisterJiggleBone() {
     t.field("colliders", &JiggleBoneComponent::colliders);
 }
 
+void RegisterSprite3D() {
+    using dse::Sprite3DComponent;
+    auto t = DSE_REFLECT_TYPE(Sprite3DComponent);
+    t.field("uv_rect", &Sprite3DComponent::uv_rect);
+    t.field("size_w", &Sprite3DComponent::size_w);
+    t.field("size_h", &Sprite3DComponent::size_h);
+    t.field("anchor_y", &Sprite3DComponent::anchor_y);
+    t.field("billboard", &Sprite3DComponent::billboard);
+    t.field("lit", &Sprite3DComponent::lit);
+    t.field("receive_shadow", &Sprite3DComponent::receive_shadow);
+    t.field("emissive", &Sprite3DComponent::emissive).color();
+    t.field("opacity", &Sprite3DComponent::opacity);
+    t.field("sorting_bias", &Sprite3DComponent::sorting_bias);
+    t.field("z_offset", &Sprite3DComponent::z_offset);
+    t.field("color_tint", &Sprite3DComponent::color_tint).color();
+}
+
 void RegisterGrass() {
     using dse::GrassComponent;
     auto t = DSE_REFLECT_TYPE(GrassComponent);
@@ -1394,6 +1411,7 @@ void EnsureCoreReflectionRegistered() {
     RegisterSpringArm3D();
     RegisterPlayerController();
     RegisterJiggleBone();
+    RegisterSprite3D();
     RegisterGrass();
     RegisterLODGroup();
     RegisterMorphTarget();

@@ -4560,6 +4560,26 @@
     ],
     "reflect_only_components": [
         {
+            "name": "Sprite3DComponent",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "custom_scene_codec": true,
+            "fields": [
+                { "name": "uv_rect", "type": "vec4" },
+                { "name": "size_w", "type": "float" },
+                { "name": "size_h", "type": "float" },
+                { "name": "anchor_y", "type": "float" },
+                { "name": "billboard", "type": "int" },
+                { "name": "lit", "type": "bool" },
+                { "name": "receive_shadow", "type": "bool" },
+                { "name": "emissive", "type": "vec3", "color": true },
+                { "name": "opacity", "type": "float" },
+                { "name": "sorting_bias", "type": "float" },
+                { "name": "z_offset", "type": "float" },
+                { "name": "color_tint", "type": "vec4", "color": true }
+            ]
+        },
+        {
             "name": "GrassComponent",
             "include": "engine/ecs/components_3d_foliage.h",
             "namespace": "dse",

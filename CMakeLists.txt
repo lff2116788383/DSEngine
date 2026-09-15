@@ -1118,6 +1118,15 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
         "${SHADER_SRC_DIR}/*.comp"
     )
 
+    # HD-2D Sprite3D shaders are append-listed explicitly so existing build
+    # directories reconfigure when they are added; the directory glob above
+    # is not CONFIGURE_DEPENDS. REMOVE_DUPLICATES keeps native builds clean.
+    list(APPEND SHADER_SOURCE_FILES
+        "${SHADER_SRC_DIR}/sprite3d.vert"
+        "${SHADER_SRC_DIR}/sprite3d.frag"
+    )
+    list(REMOVE_DUPLICATES SHADER_SOURCE_FILES)
+
     # 生成的 embed 头文件列表（用于依赖跟踪）
     set(GENERATED_SHADER_HEADERS "")
     foreach(_shader ${SHADER_SOURCE_FILES})

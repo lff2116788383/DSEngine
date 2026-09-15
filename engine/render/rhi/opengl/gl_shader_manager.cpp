@@ -61,6 +61,8 @@
 #include "embed/sprite_frag.gen.h"
 #include "embed/sprite2d_vert.gen.h"
 #include "embed/sprite2d_frag.gen.h"
+#include "embed/sprite3d_vert.gen.h"
+#include "embed/sprite3d_frag.gen.h"
 #include "embed/forward_pbr_vert.gen.h"
 #include "embed/forward_pbr_frag.gen.h"
 #include "embed/forward_pbr_skinned_vert.gen.h"
@@ -135,6 +137,7 @@
 #include "embed/sprite_vert_reflect.gen.h"
 #include "embed/sprite_frag_reflect.gen.h"
 #include "embed/sprite2d_vert_reflect.gen.h"
+#include "embed/sprite3d_vert_reflect.gen.h"
 #include "embed/forward_pbr_vert_reflect.gen.h"
 #include "embed/forward_pbr_frag_reflect.gen.h"
 #include "embed/forward_pbr_skinned_vert_reflect.gen.h"
@@ -727,6 +730,25 @@ void GLShaderManager::InitSprite2DShader() {
     // 路径无需知道 uniform 名即可生效（与 InitSkyboxShader 的 sampler 绑定同理）。
     if (sprite2d_locations_.texture >= 0) {
         glUniform1i(sprite2d_locations_.texture, 0);
+    }
+    glUseProgram(0);
+}
+
+void GLShaderManager::InitSprite3DShader() {
+    if (sprite3d_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite3d_shader_handle_ = CompileProgram(DSE_SL(ksprite3d_vert), DSE_SL(ksprite3d_frag));
+    if (sprite3d_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: Sprite3D shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(sprite3d_shader_handle_, ksprite3d_vert_reflection);
+    glUseProgram(sprite3d_shader_handle_);
+    const int tex = glGetUniformLocation(sprite3d_shader_handle_, "u_texture");
+    if (tex >= 0) {
+        glUniform1i(tex, 0);
     }
     glUseProgram(0);
 }

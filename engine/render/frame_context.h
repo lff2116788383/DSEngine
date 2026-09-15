@@ -20,6 +20,7 @@ namespace render {
 struct FrameContext {
     glm::mat4 view = glm::mat4(1.0f);        ///< 视图矩阵（Camera-Relative 时相机在原点）
     glm::mat4 projection = glm::mat4(1.0f);  ///< 投影矩阵（含 clip correction）
+    glm::vec3 camera_offset = glm::vec3(0.0f);  ///< Camera-Relative: CPU world-space geometry subtracts this
 };
 
 } // namespace render

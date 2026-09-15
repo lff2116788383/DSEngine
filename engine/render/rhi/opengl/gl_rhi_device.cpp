@@ -1268,6 +1268,9 @@ ShaderHandle OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::Sprite2D:
             if (!shader_mgr_.sprite2d_shader_handle()) shader_mgr_.InitSprite2DShader();
             return shader_mgr_.sprite2d_shader_handle();
+        case BuiltinProgram::Sprite3D:
+            if (!shader_mgr_.sprite3d_shader_handle()) shader_mgr_.InitSprite3DShader();
+            return shader_mgr_.sprite3d_shader_handle();
         case BuiltinProgram::SpriteFxSdf:
             if (!shader_mgr_.sprite_fx_sdf_shader_handle()) shader_mgr_.InitSpriteFxSdfShader();
             return shader_mgr_.sprite_fx_sdf_shader_handle();

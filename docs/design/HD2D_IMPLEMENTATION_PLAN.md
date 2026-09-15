@@ -160,8 +160,8 @@ ecs.set_post_process_tilt_shift(e, enabled, focus, range, blur)
 
 | 阶段 | 任务 | 关键文件 | 验收 | 估时 |
 |---|---|---|---|---|
-| **M1 精灵进 3D** | `Sprite3DComponent`+billboard shader+`Sprite3DPass`(depth test/write+alpha test)+Lua 绑定+最小 demo | `engine/ecs/components_3d_render.h`、`engine/render/shaders/src/sprite3d.*`、`engine/render/passes/`、`engine/scripting/lua/bindings/`、`tools/codegen/binding_defs.json` | 角色被 3D 房子遮挡，可绕到建筑后 | 12 周 |
-| **M2 排序/批处理** | depth bucket 排序、`sorting_bias`、前景层、纹理合批、三后端管线状态 | `sprite_render_system.cpp`/`sprite_batch_renderer.*`、三后端 executor | 1000 精灵遮挡正确、draw call < 100 | 35 天 |
+| **[~] M1 精灵进 3D** | `Sprite3DComponent`+billboard shader+`Sprite3DPass`(depth test/write+alpha test)+Lua 绑定+最小 demo | `engine/ecs/components_3d_render.h`、`engine/render/shaders/src/sprite3d.*`、`engine/render/passes/`、`engine/scripting/lua/bindings/`、`tools/codegen/binding_defs.json` | 角色被 3D 房子遮挡，可绕到建筑后；GL/llvmpipe 像素验收通过；VK/D3D11 代码同步、待桌面机验证 | 12 周 |
+| **[~] M2 排序/批处理** | depth bucket 排序、`sorting_bias`、前景层、纹理合批、三后端管线状态 | `sprite_render_system.cpp`/`sprite_batch_renderer.*`、三后端 executor | 1000 精灵遮挡正确、draw call < 100；GL/llvmpipe 1000 精灵 draw_calls=24；VK/D3D11 待桌面机验证 | 35 天 |
 | **M3 光照/阴影** | `SPRITE3D_LIT`、法线贴图、CSM 接收、点/聚光、emissiveBloom、接地阴影 | `engine/render/shaders/src/sprite3d_lit.*`、`clustered` 光路、`shadow` pass | 灯笼照亮角色与地面、树影落在角色上 | 12 周 |
 | **M4 后处理/相机** | 精灵写深度DoF、Tilt-shift、体积光适配、正交/弱透视 3D 相机 | `builtin_passes_postfx.cpp`、`camera` 组件/控制器 | 移轴景深生效且 UI 不受影响 | 1 周 |
 | **M5 资产/工具** | `.dsprite.json`、AssetBuilder、程序化 3D 地形/道具导出、编辑器预览 | `engine/assets/`、`apps/tools/asset_builder/`、`templates/hd2d_wuxia/tools/` | `dse new hd2d` 直接产出 3D 地形+精灵工程 | 1 周 |

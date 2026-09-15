@@ -98,6 +98,17 @@ void SerializeExtendedComponents(entt::registry& registry, Entity entity,
                                  rapidjson::Value& components,
                                  rapidjson::Document::AllocatorType& allocator) {
     dse::reflect::EnsureCoreReflectionRegistered();
+    if (registry.all_of<dse::Sprite3DComponent>(entity)) {
+        const auto& sprite = registry.get<dse::Sprite3DComponent>(entity);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::Sprite3DComponent>();
+        if (ti) {
+            rapidjson::Value json(rapidjson::kObjectType);
+            dse::reflect::SerializeReflected(*ti, &sprite, json, allocator);
+            dse::scene_codec_custom::SerializeExtra(sprite, json, allocator);
+            components.AddMember("Sprite3DComponent", json, allocator);
+        }
+    }
+
     if (registry.all_of<dse::PostProcessComponent>(entity)) {
         SerializePostProcess(registry.get<dse::PostProcessComponent>(entity), components, allocator);
     }
@@ -188,6 +199,14 @@ void SerializeExtendedComponents(entt::registry& registry, Entity entity,
 void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
                                    const rapidjson::Value& components) {
     dse::reflect::EnsureCoreReflectionRegistered();
+    if (components.HasMember("Sprite3DComponent") && components["Sprite3DComponent"].IsObject()) {
+        dse::Sprite3DComponent sprite;
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::Sprite3DComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &sprite, components["Sprite3DComponent"]);
+        dse::scene_codec_custom::DeserializeExtra(sprite, components["Sprite3DComponent"]);
+        registry.emplace<dse::Sprite3DComponent>(entity, std::move(sprite));
+    }
+
     if (components.HasMember("PostProcessComponent") && components["PostProcessComponent"].IsObject()) {
         registry.emplace<dse::PostProcessComponent>(
             entity, DeserializePostProcess(components["PostProcessComponent"]));

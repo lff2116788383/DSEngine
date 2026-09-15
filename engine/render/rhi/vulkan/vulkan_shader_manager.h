@@ -122,6 +122,10 @@ public:
     /// sprite2d 着色器句柄（base ShaderManagerBase 未含）
     ShaderHandle sprite2d_shader_handle() const { return ShaderHandle{sprite2d_shader_handle_}; }
 
+    /// 初始化 Sprite3D 着色器（sprite3d.vert + sprite3d.frag；PerFrame UBO@0 + u_texture@set2.b1）
+    void InitSprite3DShader();
+    ShaderHandle sprite3d_shader_handle() const { return ShaderHandle{sprite3d_shader_handle_}; }
+
     /// 初始化 SpriteBatchRenderer SDF/VFX 着色器（sprite_fx.vert + sprite_fx_{sdf,vfx}.frag）
     void InitSpriteFxSdfShader();
     void InitSpriteFxVfxShader();
@@ -274,6 +278,7 @@ private:
 
     /// 内建 sprite2d 着色器句柄（B0；base ShaderManagerBase 未含）
     unsigned int sprite2d_shader_handle_ = 0;
+    unsigned int sprite3d_shader_handle_ = 0;
     unsigned int sprite_fx_sdf_shader_handle_ = 0;
     unsigned int sprite_fx_vfx_shader_handle_ = 0;
     unsigned int forward_pbr_shader_handle_ = 0;

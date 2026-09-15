@@ -501,6 +501,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         const glm::mat4 clip_correction_2d = ctx_.rhi_device->GetProjectionCorrection();
         frame.view = snap.camera_2d.view; frame.projection = clip_correction_2d * snap.camera_2d.projection;
     }
+    frame.camera_offset = ctx_.camera_offset;
     ctx_.frame_camera = frame;
 
     if (render_3d) {

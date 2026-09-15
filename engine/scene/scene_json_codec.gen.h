@@ -1100,6 +1100,29 @@ inline void Deserialize_jiggle(entt::registry& reg, entt::entity e,
     reflect::DeserializeReflected(*ti, &c, json);
 }
 
+inline bool Serialize_Sprite3DComponent(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<dse::Sprite3DComponent>(e)) return false;
+    const auto& c = reg.get<dse::Sprite3DComponent>(e);
+    const auto* ti = reflect::Reflection::Find<dse::Sprite3DComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    dse::scene_codec_custom::SerializeExtra(c, json, alloc);
+    components.AddMember("Sprite3DComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_Sprite3DComponent(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<dse::Sprite3DComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<dse::Sprite3DComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+    dse::scene_codec_custom::DeserializeExtra(c, json);
+}
+
 inline bool Serialize_GrassComponent(const entt::registry& reg, entt::entity e,
                                     rapidjson::Value& components,
                                     rapidjson::Document::AllocatorType& alloc) {
@@ -1953,6 +1976,7 @@ inline const std::unordered_map<std::string, ComponentCodec>& GetCodecTable() {
         {"SpringArm3DComponent", {Serialize_spring_arm, Deserialize_spring_arm}},
         {"PlayerControllerComponent", {Serialize_player_controller, Deserialize_player_controller}},
         {"JiggleBoneComponent", {Serialize_jiggle, Deserialize_jiggle}},
+        {"Sprite3DComponent", {Serialize_Sprite3DComponent, Deserialize_Sprite3DComponent}},
         {"GrassComponent", {Serialize_GrassComponent, Deserialize_GrassComponent}},
         {"LODGroupComponent", {Serialize_LODGroupComponent, Deserialize_LODGroupComponent}},
         {"MorphTargetComponent", {Serialize_MorphTargetComponent, Deserialize_MorphTargetComponent}},

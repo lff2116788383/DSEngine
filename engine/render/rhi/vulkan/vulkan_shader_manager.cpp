@@ -28,6 +28,8 @@
 #include "embed/sprite_frag.gen.h"
 #include "embed/sprite2d_vert.gen.h"
 #include "embed/sprite2d_frag.gen.h"
+#include "embed/sprite3d_vert.gen.h"
+#include "embed/sprite3d_frag.gen.h"
 #include "embed/forward_pbr_vert.gen.h"
 #include "embed/forward_pbr_frag.gen.h"
 #include "embed/forward_pbr_skinned_vert.gen.h"
@@ -673,6 +675,18 @@ void VulkanShaderManager::InitSprite2DShader() {
         DEBUG_LOG_ERROR("Vulkan sprite2d shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan sprite2d shader created: handle={}", sprite2d_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitSprite3DShader() {
+    using namespace dse::render::generated_shaders;
+    sprite3d_shader_handle_ = CreateProgramFromSpirv(
+        ksprite3d_vert_spv, ksprite3d_vert_spv_size,
+        ksprite3d_frag_spv, ksprite3d_frag_spv_size);
+    if (sprite3d_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan Sprite3D shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan Sprite3D shader created: handle={}", sprite3d_shader_handle_);
     }
 }
 

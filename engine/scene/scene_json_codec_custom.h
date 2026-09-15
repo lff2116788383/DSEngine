@@ -59,6 +59,24 @@ inline void DeserializeExtra(dse::MorphTargetComponent& c,
     }
 }
 
+// Sprite3DComponent stores a TextureRef, which reflection intentionally does
+// not expose (it is a managed handle, not a POD field). Persist the raw RHI
+// handle alongside the reflected Sprite3D fields so scene JSON round-trips the
+// component without dropping texture assignment. Note: raw handles are only
+// stable within a session; a future .dsprite/asset-path field should replace
+// this when the Sprite3D asset pipeline lands (M5).
+inline void SerializeExtra(const dse::Sprite3DComponent& c,
+                           rapidjson::Value& json,
+                           rapidjson::Document::AllocatorType& alloc) {
+    json.AddMember("texture_handle", c.texture_handle.raw(), alloc);
+}
+
+inline void DeserializeExtra(dse::Sprite3DComponent& c,
+                             const rapidjson::Value& json) {
+    if (!json.HasMember("texture_handle") || !json["texture_handle"].IsUint()) return;
+    c.texture_handle = dse::render::TextureHandle::from_raw(json["texture_handle"].GetUint());
+}
+
 } // namespace dse::scene_codec_custom
 
 #endif // DSE_SCENE_JSON_CODEC_CUSTOM_H

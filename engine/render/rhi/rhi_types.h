@@ -353,6 +353,7 @@ enum class BuiltinProgram : uint8_t {
     ForwardSkinnedInstancedShaded = 15,  ///< 蒙皮 + 硬件实例化 + 高级 shading 组合（forward_shaded_skinned_instanced.vert + forward_shaded.frag；实例 SSBO\@set8.b0 + 骨骼 SSBO\@set8.b1；bone-palette 去重，配 MeshRenderer::DrawSkinnedInstancedShaded）
     GBufferMesh = 16,  ///< 延迟几何 GBuffer 输出（forward_pbr.vert + gbuffer.frag；CPU 预变换世界空间顶点 + vp，MRT 输出 gAlbedo/gNormal/gPosition，配 MeshRenderer::DrawGBuffer 与 ShadowRSMPass→DDGIUpdatePass，阶段4-M3）
     Impostor = 17,  ///< Impostor LOD billboard（impostor.vert + impostor.frag；per-instance pos/frame SSBO\@set7.b0 + atlas u_atlas\@set2.b1 + u_normal_atlas\@set2.b2 + ImpostorParams UBO\@set1.b0；alpha 混合、测深度不写深度，配 ImpostorRenderer）
+    Sprite3D = 18,  ///< HD-2D 3D billboard（sprite3d.vert/.frag；PerFrame UBO@0 + u_texture@set2.b1；alpha-test、depth test/write on）
 };
 
 /// 渲染通道描述符
@@ -412,6 +413,21 @@ struct SpriteDrawItem {
     float sdf_outline_width = 0.0f;
     float sdf_shadow_softness = 0.0f;
     glm::vec4 sdf_outline_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);  ///< 描边颜色 RGBA（默认黑，与原硬编码一致）
+
+    // ---- HD-2D Sprite3D extension (M1/M2) ----
+    // The same SpriteDrawItem container is shared with the 2D path. Sprite3D
+    // consumers read these fields only when sprite3d == true; the existing 2D
+    // renderer ignores them.
+    bool sprite3d = false;
+    glm::vec2 sprite3d_size = glm::vec2(1.0f);
+    float sprite3d_anchor_y = 0.0f;
+    int sprite3d_billboard = 1;       ///< 0=None, 1=Yaw, 2=YawPitch, 3=Screen
+    float sprite3d_z_offset = 0.0f;
+    float sprite3d_sorting_bias = 0.0f;
+    int sprite3d_depth_bucket = 0;    ///< floor((world_z + sorting_bias) * K)
+    glm::vec3 sprite3d_emissive = glm::vec3(0.0f);
+    bool sprite3d_lit = false;
+    bool sprite3d_receive_shadow = false;
 };
 
 /// 批量渲染顶点格式

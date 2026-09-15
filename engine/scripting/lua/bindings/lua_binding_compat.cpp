@@ -13,6 +13,7 @@
 #include "engine/scripting/native_api/dse_api_internal.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/tilemap.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/render/rhi/rhi_handle.h"
 
 extern "C" {
@@ -161,6 +162,144 @@ int L_GetTile(lua_State* L) {
     return 1;
 }
 
+// ============================================================
+//  HD-2D M1: Sprite3D Lua compatibility API
+//  The component lives in reflect_only_components (reflection + scene codec),
+//  while all script-facing creation/setters are implemented here directly on
+//  the ECS registry to keep the task's hand-written compatibility-layer rule.
+// ============================================================
+
+int BillboardFromName(const char* value) {
+    if (!value) return 1;
+    if (std::strcmp(value, "none") == 0) return 0;
+    if (std::strcmp(value, "yaw") == 0) return 1;
+    if (std::strcmp(value, "yaw_pitch") == 0 || std::strcmp(value, "yawpitch") == 0) return 2;
+    if (std::strcmp(value, "screen") == 0) return 3;
+    return 1;
+}
+
+Sprite3DComponent* GetSprite3D(World* world, uint32_t e) {
+    if (!world || !world->registry().valid(dse_api_internal::TE(e))) return nullptr;
+    return world->registry().try_get<Sprite3DComponent>(dse_api_internal::TE(e));
+}
+
+// ecs.add_sprite3d(e, tex, w, h, {billboard="yaw", anchor=0.0, lit=false})
+int L_AddSprite3D(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    const uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(dse_api_internal::TE(e))) return 0;
+
+    auto& c = world->registry().emplace_or_replace<Sprite3DComponent>(dse_api_internal::TE(e));
+    const uint32_t tex = static_cast<uint32_t>(luaL_optinteger(L, 2, 0));
+    c.texture_handle = dse::render::TextureRef(dse::render::TextureHandle::from_raw(tex));
+    c.size_w = static_cast<float>(luaL_checknumber(L, 3));
+    c.size_h = static_cast<float>(luaL_checknumber(L, 4));
+
+    if (lua_istable(L, 5)) {
+        lua_getfield(L, 5, "billboard");
+        if (lua_isstring(L, -1)) {
+            c.billboard = BillboardFromName(lua_tostring(L, -1));
+        } else if (lua_isnumber(L, -1)) {
+            c.billboard = static_cast<int>(lua_tointeger(L, -1));
+        }
+        lua_pop(L, 1);
+
+        lua_getfield(L, 5, "anchor");
+        if (lua_isnumber(L, -1)) c.anchor_y = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+
+        lua_getfield(L, 5, "lit");
+        if (!lua_isnoneornil(L, -1)) c.lit = ToBoolish(L, -1, false);
+        lua_pop(L, 1);
+
+        lua_getfield(L, 5, "receive_shadow");
+        if (!lua_isnoneornil(L, -1)) c.receive_shadow = ToBoolish(L, -1, false);
+        lua_pop(L, 1);
+
+        lua_getfield(L, 5, "z_offset");
+        if (lua_isnumber(L, -1)) c.z_offset = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+
+        lua_getfield(L, 5, "sorting_bias");
+        if (lua_isnumber(L, -1)) c.sorting_bias = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+    }
+    return 0;
+}
+
+int L_Sprite3DSetUvRect(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->uv_rect = glm::vec4(
+            static_cast<float>(luaL_checknumber(L, 2)),
+            static_cast<float>(luaL_checknumber(L, 3)),
+            static_cast<float>(luaL_checknumber(L, 4)),
+            static_cast<float>(luaL_checknumber(L, 5)));
+    }
+    return 0;
+}
+
+int L_Sprite3DSetBillboard(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        if (lua_isstring(L, 2)) {
+            c->billboard = BillboardFromName(lua_tostring(L, 2));
+        } else {
+            c->billboard = static_cast<int>(luaL_optinteger(L, 2, 1));
+        }
+    }
+    return 0;
+}
+
+int L_Sprite3DSetSortingBias(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->sorting_bias = static_cast<float>(luaL_checknumber(L, 2));
+    }
+    return 0;
+}
+
+int L_Sprite3DSetEmissive(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->emissive = glm::vec3(
+            static_cast<float>(luaL_checknumber(L, 2)),
+            static_cast<float>(luaL_checknumber(L, 3)),
+            static_cast<float>(luaL_checknumber(L, 4)));
+    }
+    return 0;
+}
+
+int L_Sprite3DSetSize(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->size_w = static_cast<float>(luaL_checknumber(L, 2));
+        c->size_h = static_cast<float>(luaL_checknumber(L, 3));
+    }
+    return 0;
+}
+
+int L_Sprite3DSetColorTint(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        const float r = static_cast<float>(luaL_checknumber(L, 2));
+        const float g = static_cast<float>(luaL_checknumber(L, 3));
+        const float b = static_cast<float>(luaL_checknumber(L, 4));
+        const float a = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+        c->color_tint = glm::vec4(r, g, b, a);
+    }
+    return 0;
+}
+
+int L_Sprite3DSetOpacity(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->opacity = static_cast<float>(luaL_checknumber(L, 2));
+    }
+    return 0;
+}
+
 void Override(lua_State* L, const char* table, const char* name, lua_CFunction fn) {
     lua_getglobal(L, "dse");
     if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
@@ -186,6 +325,15 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "ecs", "add_tilemap_ex", L_AddTilemapEx);
     Override(L, "ecs", "tilemap_set_colliders", L_TilemapSetColliders);
     Override(L, "ecs", "get_tile", L_GetTile);
+    // HD-2D M1 Sprite3D API
+    Override(L, "ecs", "add_sprite3d", L_AddSprite3D);
+    Override(L, "ecs", "set_sprite3d_uv_rect", L_Sprite3DSetUvRect);
+    Override(L, "ecs", "set_sprite3d_billboard", L_Sprite3DSetBillboard);
+    Override(L, "ecs", "set_sprite3d_sorting_bias", L_Sprite3DSetSortingBias);
+    Override(L, "ecs", "set_sprite3d_emissive", L_Sprite3DSetEmissive);
+    Override(L, "ecs", "set_sprite3d_size", L_Sprite3DSetSize);
+    Override(L, "ecs", "set_sprite3d_color_tint", L_Sprite3DSetColorTint);
+    Override(L, "ecs", "set_sprite3d_opacity", L_Sprite3DSetOpacity);
 }
 
 }  // namespace dse::runtime::lua_binding
