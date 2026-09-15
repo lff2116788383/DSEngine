@@ -3,7 +3,7 @@
  * @brief DSEngine headless CLI（OUTPUT 名 `dse`）。脱离编辑器完成：建项目模板 / 打包加密 / 完整 build。
  *
  * 用法：
- *   dse new <empty|2d|3d|lua|cpp|csharp|platformer|topdown|thirdperson> <dir>  # 生成项目模板
+ *   dse new <empty|2d|3d|lua|cpp|csharp|hd2d|platformer|topdown|thirdperson> <dir>  # 生成项目模板
  *   dse pack <dir> <out.bun> [--key=KEY]   # 把目录打包成（可加密）资源包
  *   dse build <project> [--out=DIR] [--key=KEY]
  *                                          # 定位运行时、拷贝 exe+dll、打包加密、生成 launch.bat
@@ -86,8 +86,8 @@ int PrintUsage(int rc = 1) {
         "\n"
         "示例:\n"
         "  dse new lua MyGame\n"
-        "  dse new hd2d MyWuxia                   # HD-2D 武侠品类模板(八向/连招/任务/存档)
-  dse new platformer MyPlatformer        # 2D 平台跳跃品类模板\n"
+        "  dse new hd2d MyWuxia                   # HD-2D 武侠品类模板(八向/连招/任务/存档)\n"
+        "  dse new platformer MyPlatformer        # 2D 平台跳跃品类模板\n"
         "  dse new MyRPG --template=topdown       # 俯视 RPG(具名选项写法)\n"
         "  dse build MyGame --out dist --key 0123456789abcdef\n"
         "  dse pack MyGame/assets assets.bun --key=0123456789abcdef\n"
@@ -207,7 +207,7 @@ int CmdNew(const std::vector<std::string>& args) {
     dse::project::ProjectTemplate tmpl;
     if (!dse::project::ParseTemplateToken(tmpl_token, tmpl)) {
         std::cerr << "错误: 未知模板 '" << tmpl_token
-                  << "' (可选: empty|2d|3d|lua|cpp|csharp|platformer|topdown|thirdperson)\n";
+                  << "' (可选: empty|2d|3d|lua|cpp|csharp|hd2d|platformer|topdown|thirdperson)\n";
         return 1;
     }
     const fs::path dir(dir_token);
