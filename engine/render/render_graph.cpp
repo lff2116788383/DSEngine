@@ -449,7 +449,7 @@ bool RenderGraph::Compile() {
         // 空闲池：{rt_handle, desc, available_after_order_idx}
         struct FreeSlot {
             RenderTargetHandle rt_handle;
-            RenderTargetDesc desc;
+            RenderTargetDesc desc{};
             int free_after;
         };
         std::vector<FreeSlot> free_pool;

@@ -227,7 +227,7 @@ private:
     /// 资源类型
     enum class ResourceType : uint8_t {
         Logical,    ///< 纯逻辑（无物理 RT，向后兼容）
-        Transient,  ///< 图内管理（Compile 时分配，Reset 时释放）
+        Transient,  ///< 图内管理（Compile 时分配，Reset 时归还跨帧缓存池，ReleaseCachedTransientResources 才真正销毁）
         Imported    ///< 外部导入（图不管理生命周期）
     };
 

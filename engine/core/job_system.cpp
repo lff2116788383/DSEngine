@@ -156,6 +156,7 @@ JobSystem::JobEntry* JobSystem::AcquireEntry() {
     }
 
     // 重置状态（该 entry 目前只有本线程可见，relaxed 即可；generation 保留自增值）
+    entry->pooled.store(false, std::memory_order_relaxed);  // 离开 freelist
     entry->pool_next = nullptr;
     entry->pending_deps.store(0, std::memory_order_relaxed);
     entry->done.store(false, std::memory_order_relaxed);
@@ -173,6 +174,18 @@ void JobSystem::RecycleEntry(JobEntry* entry) {
     if (entry->refcount.load(std::memory_order_acquire) != 0) {
         // 归零后又被 ResolvePin 重新 pin，放弃回收；待该 pin 释放时再判定。
         return;
+    }
+    // 回收必须「恰好一次」。仅靠上面的 refcount==0 复核不够：ResolvePin 允许在 refcount
+    // 已是 0 时重新 pin，于是会产生「两次 fetch_sub 都返回 1」的合法交错——
+    //   worker 执行完 ReleaseRef: 1 -> 0（准备回收）
+    //   waiter 此刻 ResolvePin 成功: 0 -> 1（re-pin，generation 尚未变故仍匹配）
+    //   waiter 见 done 直接 ReleaseRef: 1 -> 0（也准备回收）
+    // 两边的复核都会看到 refcount==0，若各自都执行回收，同一个 JobEntry 就会被压入
+    // freelist 两次（head 指向自己时形成自环），进而被 AcquireEntry 分配给两个 job：
+    // 表现为「一个 job 执行两次、相邻 job 一次都没执行」，且 Wait() 仍报告完成。
+    // pooled 标志把「已回收」变成显式状态，使回收具备幂等性。
+    if (entry->pooled.exchange(true, std::memory_order_acq_rel)) {
+        return;  // 已被（并发的）ReleaseRef 回收过，直接返回
     }
     // 自增 generation：使任何仍指向本任务的 JobHandle 在 ResolvePin 时失效。
     entry->generation.fetch_add(1, std::memory_order_release);

@@ -153,7 +153,7 @@ void SpriteBatchRenderer::EnsureFxUbos(RhiDevice& device, size_t needed) {
 
 PipelineHandle SpriteBatchRenderer::PsoForBlend(RhiDevice& device, unsigned int blend_mode) {
     auto make = [&](BlendFactor src, BlendFactor dst) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = src;
         desc.blend_dst = dst;
@@ -175,7 +175,7 @@ PipelineHandle SpriteBatchRenderer::PsoForBlend(RhiDevice& device, unsigned int 
     // alpha（默认）：分离 alpha 通道 src=One，与 DrawBatch 的
     // glBlendFuncSeparate(SRC_ALPHA, ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA) 一致。
     if (!pso_alpha_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = BlendFactor::SrcAlpha;
         desc.blend_dst = BlendFactor::OneMinusSrcAlpha;

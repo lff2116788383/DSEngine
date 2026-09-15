@@ -26,7 +26,7 @@ void MeshRenderer::EnsureResources(RhiDevice& device) {
     if (init_) return;
 
     // 不透明几何 PSO：写/测深度（Less）、背面剔除、不混合。
-    PipelineStateDesc desc;
+    PipelineStateDesc desc{};
     desc.blend_enabled = false;
     desc.depth_test_enabled = true;
     desc.depth_write_enabled = true;
@@ -68,7 +68,7 @@ void MeshRenderer::EnsureUnlit2DResources(RhiDevice& device) {
     // 无光照 2D 的三个混合 PSO（与 SpriteBatchRenderer::PsoForBlend 一致）：关深度测试/写入/剔除。
     // alpha 默认：color = SrcAlpha/OneMinusSrcAlpha，alpha 通道 One/OneMinusSrcAlpha（分离）。
     if (!pso_unlit2d_alpha_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = BlendFactor::SrcAlpha;
         desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
@@ -80,7 +80,7 @@ void MeshRenderer::EnsureUnlit2DResources(RhiDevice& device) {
         pso_unlit2d_alpha_ = device.CreatePipelineState(desc);
     }
     if (!pso_unlit2d_additive_) {  // additiveï¼šSrcAlpha/One
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = BlendFactor::SrcAlpha;
         desc.blend_dst = BlendFactor::One;
@@ -92,7 +92,7 @@ void MeshRenderer::EnsureUnlit2DResources(RhiDevice& device) {
         pso_unlit2d_additive_ = device.CreatePipelineState(desc);
     }
     if (!pso_unlit2d_multiply_) {  // multiplyï¼šDstColor/Zero
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = BlendFactor::DstColor;
         desc.blend_dst = BlendFactor::Zero;
@@ -153,7 +153,7 @@ void MeshRenderer::EnsureIndirectBuffer(RhiDevice& device) {
 void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
     // 不剔除 PSO（double-sided 用），与 pso_ 同状态但关背面剔除。
     if (!pso_no_cull_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = false;
         desc.depth_test_enabled = true;
         desc.depth_write_enabled = true;
@@ -164,7 +164,7 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
     // WBOIT accumulation PSO（B2c-4）：加性混合（color/alpha 均 ONE/ONE），深度测试开但不写、不剔除，
     // 使各透明片元贡献顺序无关地累加（着色器 wboit_mode=1 输出预乘加权 color/alpha）。
     if (!pso_wboit_accum_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = BlendFactor::One;
         desc.blend_dst = BlendFactor::One;
@@ -179,7 +179,7 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
     // WBOIT revealage PSO（B2c-4）：ZERO/ONE_MINUS_SRC_ALPHA 乘性混合（dst *= (1-srcAlpha)），
     // 深度测试开但不写、不剔除（着色器 wboit_mode=2 输出 (0,0,0,alpha)）。
     if (!pso_wboit_reveal_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = BlendFactor::Zero;
         desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
@@ -193,7 +193,7 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
     }
     // 编辑器线框视图模式 PSO（阶段4-M2）：与 pso_ 同状态（写/测深度、背面剔除、不混合），仅 wireframe=true。
     if (!pso_wireframe_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = false;
         desc.depth_test_enabled = true;
         desc.depth_write_enabled = true;
@@ -207,7 +207,7 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
     // 配合 ApplyEditorMaterialOverride 的固定低强度材质，使重叠片元以亮度叠加显示过度绘制
     //（与执行器 DX11 SetOverdrawMode / Vulkan overdraw_mode_ 语义一致）。
     if (!pso_overdraw_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = true;
         desc.blend_src = BlendFactor::One;
         desc.blend_dst = BlendFactor::One;

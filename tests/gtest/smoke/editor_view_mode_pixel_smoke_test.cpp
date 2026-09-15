@@ -82,7 +82,7 @@ enum class ViewMode { None, ForceUnlit, Wireframe, Overdraw };
 RenderTargetReadback RenderWithMode(RhiDevice& device, ViewMode mode,
                                     const std::vector<MeshVertex>& verts,
                                     const std::vector<uint16_t>& indices) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

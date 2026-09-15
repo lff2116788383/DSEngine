@@ -60,6 +60,7 @@ public:
     static D3D11_BLEND ToD3D11Blend(BlendFactor factor);
     static D3D11_COMPARISON_FUNC ToD3D11ComparisonFunc(CompareFunc func);
     static D3D11_CULL_MODE ToD3D11CullMode(CullFace face);
+    static D3D11_STENCIL_OP ToD3D11StencilOp(StencilOp op);
 
 private:
     DX11Context* context_ = nullptr;

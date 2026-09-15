@@ -15,6 +15,7 @@
 #include <rapidjson/writer.h>
 
 #include "engine/core/asset_version_envelope.h"
+#include "engine/core/asset_dto.h"
 
 namespace dse {
 namespace shadergraph {
@@ -23,71 +24,104 @@ namespace {
 
 using Alloc = rapidjson::Document::AllocatorType;
 
-rapidjson::Value Str(const std::string& s, Alloc& alloc) {
-    return rapidjson::Value(s.c_str(), static_cast<rapidjson::SizeType>(s.size()), alloc);
-}
+struct ShaderGraphDto {
+    int next_id = 100;
+};
 
-int ReadInt(const rapidjson::Value& obj, const char* key, int fallback) {
-    if (obj.HasMember(key) && obj[key].IsInt()) return obj[key].GetInt();
-    return fallback;
-}
+struct ShaderGraphPinDto {
+    int id = 0;
+    std::string name;
+    std::string type = "Float";
+    int kind = 0;
+    float default_value[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+};
 
-std::string ReadString(const rapidjson::Value& obj, const char* key) {
-    if (obj.HasMember(key) && obj[key].IsString()) return obj[key].GetString();
-    return std::string();
-}
+struct ShaderGraphNodeDto {
+    int id = 0;
+    std::string name;
+    std::string category;
+    glm::vec2 pos{0.0f, 0.0f};
+    unsigned int header_color = 0;
+};
 
-void WritePin(const PinDesc& p, rapidjson::Value& out, Alloc& alloc) {
-    out.SetObject();
-    out.AddMember("id", p.id, alloc);
-    out.AddMember("name", Str(p.name, alloc), alloc);
-    out.AddMember("type", Str(PinTypeName(p.type), alloc), alloc);
-    out.AddMember("kind", p.kind == PinKind::Input ? 0 : 1, alloc);
-    rapidjson::Value def(rapidjson::kArrayType);
-    for (float v : p.default_value) def.PushBack(v, alloc);
-    out.AddMember("default", def, alloc);
-}
+struct ShaderGraphLinkDto {
+    int id = 0;
+    int from_pin = 0;
+    int to_pin = 0;
+};
 
-PinDesc ReadPin(const rapidjson::Value& in) {
-    PinDesc p;
-    p.id = ReadInt(in, "id", 0);
-    p.name = ReadString(in, "name");
-    p.type = PinTypeFromName(ReadString(in, "type").c_str());
-    p.kind = ReadInt(in, "kind", 0) == 0 ? PinKind::Input : PinKind::Output;
-    if (in.HasMember("default") && in["default"].IsArray()) {
-        const auto& arr = in["default"];
-        for (rapidjson::SizeType i = 0; i < arr.Size() && i < 4; ++i) {
-            if (arr[i].IsNumber()) p.default_value[i] = arr[i].GetFloat();
-        }
-    }
-    return p;
-}
+constexpr dse::assets::FieldDesc kShaderGraphFields[] = {
+    {"next_id", dse::assets::FieldType::Int, offsetof(ShaderGraphDto, next_id)},
+};
+
+constexpr dse::assets::FieldDesc kShaderGraphPinFields[] = {
+    {"id", dse::assets::FieldType::Int, offsetof(ShaderGraphPinDto, id)},
+    {"name", dse::assets::FieldType::String, offsetof(ShaderGraphPinDto, name)},
+    {"type", dse::assets::FieldType::String, offsetof(ShaderGraphPinDto, type)},
+    {"kind", dse::assets::FieldType::Int, offsetof(ShaderGraphPinDto, kind)},
+    {"default", dse::assets::FieldType::FloatArray4, offsetof(ShaderGraphPinDto, default_value)},
+};
+
+constexpr dse::assets::FieldDesc kShaderGraphNodeFields[] = {
+    {"id", dse::assets::FieldType::Int, offsetof(ShaderGraphNodeDto, id)},
+    {"name", dse::assets::FieldType::String, offsetof(ShaderGraphNodeDto, name)},
+    {"category", dse::assets::FieldType::String, offsetof(ShaderGraphNodeDto, category)},
+    {"pos", dse::assets::FieldType::Vec2, offsetof(ShaderGraphNodeDto, pos)},
+    {"color", dse::assets::FieldType::UInt, offsetof(ShaderGraphNodeDto, header_color)},
+};
+
+constexpr dse::assets::FieldDesc kShaderGraphLinkFields[] = {
+    {"id", dse::assets::FieldType::Int, offsetof(ShaderGraphLinkDto, id)},
+    {"from", dse::assets::FieldType::Int, offsetof(ShaderGraphLinkDto, from_pin)},
+    {"to", dse::assets::FieldType::Int, offsetof(ShaderGraphLinkDto, to_pin)},
+};
+
 
 void WriteGraphBody(const ShaderGraphAsset& g, rapidjson::Value& out, Alloc& alloc) {
     out.SetObject();
-    out.AddMember("next_id", g.next_id, alloc);
+    ShaderGraphDto gdto;
+    gdto.next_id = g.next_id;
+    dse::assets::WriteFields(out, alloc, kShaderGraphFields,
+                             sizeof(kShaderGraphFields) / sizeof(kShaderGraphFields[0]), &gdto);
 
     rapidjson::Value nodes(rapidjson::kArrayType);
     for (const auto& n : g.nodes) {
+        ShaderGraphNodeDto ndto;
+        ndto.id = n.id;
+        ndto.name = n.name;
+        ndto.category = n.category;
+        ndto.pos = glm::vec2(n.pos[0], n.pos[1]);
+        ndto.header_color = n.header_color;
         rapidjson::Value nj(rapidjson::kObjectType);
-        nj.AddMember("id", n.id, alloc);
-        nj.AddMember("name", Str(n.name, alloc), alloc);
-        nj.AddMember("category", Str(n.category, alloc), alloc);
-        rapidjson::Value pos(rapidjson::kArrayType);
-        pos.PushBack(n.pos[0], alloc).PushBack(n.pos[1], alloc);
-        nj.AddMember("pos", pos, alloc);
-        nj.AddMember("color", n.header_color, alloc);
+        dse::assets::WriteFields(nj, alloc, kShaderGraphNodeFields,
+                                 sizeof(kShaderGraphNodeFields) / sizeof(kShaderGraphNodeFields[0]), &ndto);
+
         rapidjson::Value inputs(rapidjson::kArrayType);
         for (const auto& p : n.inputs) {
-            rapidjson::Value pj;
-            WritePin(p, pj, alloc);
+            ShaderGraphPinDto pdto;
+            pdto.id = p.id;
+            pdto.name = p.name;
+            pdto.type = PinTypeName(p.type);
+            pdto.kind = p.kind == PinKind::Input ? 0 : 1;
+            for (int i = 0; i < 4; ++i) pdto.default_value[i] = p.default_value[i];
+            rapidjson::Value pj(rapidjson::kObjectType);
+            dse::assets::WriteFields(pj, alloc, kShaderGraphPinFields,
+                                     sizeof(kShaderGraphPinFields) / sizeof(kShaderGraphPinFields[0]), &pdto);
             inputs.PushBack(pj, alloc);
         }
         nj.AddMember("inputs", inputs, alloc);
+
         rapidjson::Value outputs(rapidjson::kArrayType);
         for (const auto& p : n.outputs) {
-            rapidjson::Value pj;
-            WritePin(p, pj, alloc);
+            ShaderGraphPinDto pdto;
+            pdto.id = p.id;
+            pdto.name = p.name;
+            pdto.type = PinTypeName(p.type);
+            pdto.kind = p.kind == PinKind::Input ? 0 : 1;
+            for (int i = 0; i < 4; ++i) pdto.default_value[i] = p.default_value[i];
+            rapidjson::Value pj(rapidjson::kObjectType);
+            dse::assets::WriteFields(pj, alloc, kShaderGraphPinFields,
+                                     sizeof(kShaderGraphPinFields) / sizeof(kShaderGraphPinFields[0]), &pdto);
             outputs.PushBack(pj, alloc);
         }
         nj.AddMember("outputs", outputs, alloc);
@@ -97,10 +131,13 @@ void WriteGraphBody(const ShaderGraphAsset& g, rapidjson::Value& out, Alloc& all
 
     rapidjson::Value links(rapidjson::kArrayType);
     for (const auto& l : g.links) {
+        ShaderGraphLinkDto ldto;
+        ldto.id = l.id;
+        ldto.from_pin = l.from_pin;
+        ldto.to_pin = l.to_pin;
         rapidjson::Value lj(rapidjson::kObjectType);
-        lj.AddMember("id", l.id, alloc);
-        lj.AddMember("from", l.from_pin, alloc);
-        lj.AddMember("to", l.to_pin, alloc);
+        dse::assets::WriteFields(lj, alloc, kShaderGraphLinkFields,
+                                 sizeof(kShaderGraphLinkFields) / sizeof(kShaderGraphLinkFields[0]), &ldto);
         links.PushBack(lj, alloc);
     }
     out.AddMember("links", links, alloc);
@@ -112,7 +149,12 @@ bool ReadGraphBody(const rapidjson::Value& in, ShaderGraphAsset& out,
         diag.errors.push_back("shader graph body is not an object");
         return false;
     }
-    out.next_id = ReadInt(in, "next_id", 100);
+
+    // ADR-3: .dshadergraph read path uses unified DTO/field table.
+    ShaderGraphDto gdto;
+    dse::assets::ReadFields(in, kShaderGraphFields,
+                            sizeof(kShaderGraphFields) / sizeof(kShaderGraphFields[0]), &gdto);
+    out.next_id = gdto.next_id;
     if (out.next_id < 100) out.next_id = 100;
 
     if (in.HasMember("nodes") && in["nodes"].IsArray()) {
@@ -121,24 +163,46 @@ bool ReadGraphBody(const rapidjson::Value& in, ShaderGraphAsset& out,
                 diag.warnings.push_back("skipped non-object node entry");
                 continue;
             }
+            ShaderGraphNodeDto ndto;
+            dse::assets::ReadFields(nj, kShaderGraphNodeFields,
+                                    sizeof(kShaderGraphNodeFields) / sizeof(kShaderGraphNodeFields[0]), &ndto);
             NodeDesc n;
-            n.id = ReadInt(nj, "id", 0);
-            n.name = ReadString(nj, "name");
-            n.category = ReadString(nj, "category");
-            if (nj.HasMember("pos") && nj["pos"].IsArray() && nj["pos"].Size() >= 2) {
-                if (nj["pos"][0].IsNumber()) n.pos[0] = nj["pos"][0].GetFloat();
-                if (nj["pos"][1].IsNumber()) n.pos[1] = nj["pos"][1].GetFloat();
-            }
-            if (nj.HasMember("color") && nj["color"].IsUint()) {
-                n.header_color = nj["color"].GetUint();
-            }
+            n.id = ndto.id;
+            n.name = std::move(ndto.name);
+            n.category = std::move(ndto.category);
+            n.pos[0] = ndto.pos.x;
+            n.pos[1] = ndto.pos.y;
+            n.header_color = ndto.header_color;
+
             if (nj.HasMember("inputs") && nj["inputs"].IsArray()) {
-                for (const auto& pj : nj["inputs"].GetArray())
-                    if (pj.IsObject()) n.inputs.push_back(ReadPin(pj));
+                for (const auto& pj : nj["inputs"].GetArray()) {
+                    if (!pj.IsObject()) continue;
+                    ShaderGraphPinDto pdto;
+                    dse::assets::ReadFields(pj, kShaderGraphPinFields,
+                                            sizeof(kShaderGraphPinFields) / sizeof(kShaderGraphPinFields[0]), &pdto);
+                    PinDesc p;
+                    p.id = pdto.id;
+                    p.name = std::move(pdto.name);
+                    p.type = PinTypeFromName(pdto.type.c_str());
+                    p.kind = pdto.kind == 0 ? PinKind::Input : PinKind::Output;
+                    for (int i = 0; i < 4; ++i) p.default_value[i] = pdto.default_value[i];
+                    n.inputs.push_back(std::move(p));
+                }
             }
             if (nj.HasMember("outputs") && nj["outputs"].IsArray()) {
-                for (const auto& pj : nj["outputs"].GetArray())
-                    if (pj.IsObject()) n.outputs.push_back(ReadPin(pj));
+                for (const auto& pj : nj["outputs"].GetArray()) {
+                    if (!pj.IsObject()) continue;
+                    ShaderGraphPinDto pdto;
+                    dse::assets::ReadFields(pj, kShaderGraphPinFields,
+                                            sizeof(kShaderGraphPinFields) / sizeof(kShaderGraphPinFields[0]), &pdto);
+                    PinDesc p;
+                    p.id = pdto.id;
+                    p.name = std::move(pdto.name);
+                    p.type = PinTypeFromName(pdto.type.c_str());
+                    p.kind = pdto.kind == 0 ? PinKind::Input : PinKind::Output;
+                    for (int i = 0; i < 4; ++i) p.default_value[i] = pdto.default_value[i];
+                    n.outputs.push_back(std::move(p));
+                }
             }
             out.nodes.push_back(std::move(n));
         }
@@ -147,10 +211,13 @@ bool ReadGraphBody(const rapidjson::Value& in, ShaderGraphAsset& out,
     if (in.HasMember("links") && in["links"].IsArray()) {
         for (const auto& lj : in["links"].GetArray()) {
             if (!lj.IsObject()) continue;
+            ShaderGraphLinkDto ldto;
+            dse::assets::ReadFields(lj, kShaderGraphLinkFields,
+                                    sizeof(kShaderGraphLinkFields) / sizeof(kShaderGraphLinkFields[0]), &ldto);
             LinkDesc l;
-            l.id = ReadInt(lj, "id", 0);
-            l.from_pin = ReadInt(lj, "from", 0);
-            l.to_pin = ReadInt(lj, "to", 0);
+            l.id = ldto.id;
+            l.from_pin = ldto.from_pin;
+            l.to_pin = ldto.to_pin;
             out.links.push_back(l);
         }
     }

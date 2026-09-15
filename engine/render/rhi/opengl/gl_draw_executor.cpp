@@ -310,6 +310,7 @@ bool GLDrawExecutor::IsActiveRenderTargetAttachment(unsigned int texture_handle)
 void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
                                        GLResourceManager& resource_mgr) {
     bool has_depth = false;
+    bool has_stencil = false;
     if (!render_pass.render_target) {
         if (active_render_target_ != 0) {
             auto active_rt = resource_mgr.GetRenderTarget(active_render_target_);
@@ -333,6 +334,7 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             glViewport(0, 0, rt->desc.width, rt->desc.height);
             active_render_target_ = render_pass.render_target.raw();
             has_depth = rt->desc.has_depth;
+            has_stencil = rt->desc.has_stencil;
 #if DSE_GL_ES_RUNTIME
             // 反馈环防护仅在严格 GLES/WebGL2 上需要：桌面 GL（含 llvmpipe）容忍采样仍挂在
             // 当前 FBO 上的纹理（仅警告），而严格 WebGL2 会丢弃整个 draw → 黑屏。故此逻辑
@@ -355,8 +357,11 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             // 故每次 BeginRenderPass 按 cube_face 重新把对应面附着为深度附件，PointShadowPass 逐面绘制。
             if (render_pass.cube_face >= 0 && rt->desc.cube_map && rt->desc.has_depth &&
                 rt->depth_texture_handle != 0) {
+                // has_stencil 时附件是深度+模板合并属性，必须用同一个 attachment 点，
+                // 否则会与创建时的附件不一致。
                 glFramebufferTexture2D(
-                    GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                    GL_FRAMEBUFFER,
+                    rt->desc.has_stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT,
                     GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(render_pass.cube_face),
                     rt->depth_texture_handle, 0);
             }
@@ -382,7 +387,13 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             glDepthMask(GL_TRUE);
         }
         glClearDepth(1.0);
-        glClear(has_depth ? (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) : GL_COLOR_BUFFER_BIT);
+        GLbitfield clear_bits = has_depth ? (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) : GL_COLOR_BUFFER_BIT;
+        if (has_depth && has_stencil) {
+            // 模板面必须每 pass 清 0，否则上一 pass 的模板残留会让 stencil 测试得到不确定结果。
+            glClearStencil(0);
+            clear_bits |= GL_STENCIL_BUFFER_BIT;
+        }
+        glClear(clear_bits);
     }
 
 #ifdef DSE_VSE_1522_DIAG

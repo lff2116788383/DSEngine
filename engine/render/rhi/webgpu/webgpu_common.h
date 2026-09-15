@@ -190,6 +190,20 @@ inline WGPUCompareFunction ToCompareFunc(CompareFunc f) {
     }
 }
 
+inline WGPUStencilOperation ToStencilOp(StencilOp op) {
+    switch (op) {
+        case StencilOp::Keep:           return WGPUStencilOperation_Keep;
+        case StencilOp::Zero:           return WGPUStencilOperation_Zero;
+        case StencilOp::Replace:        return WGPUStencilOperation_Replace;
+        case StencilOp::IncrementClamp: return WGPUStencilOperation_IncrementClamp;
+        case StencilOp::DecrementClamp: return WGPUStencilOperation_DecrementClamp;
+        case StencilOp::Invert:         return WGPUStencilOperation_Invert;
+        case StencilOp::IncrementWrap:  return WGPUStencilOperation_IncrementWrap;
+        case StencilOp::DecrementWrap:  return WGPUStencilOperation_DecrementWrap;
+    }
+    return WGPUStencilOperation_Keep;
+}
+
 inline WGPUBlendFactor ToBlendFactor(BlendFactor f) {
     switch (f) {
         case BlendFactor::Zero:             return WGPUBlendFactor_Zero;

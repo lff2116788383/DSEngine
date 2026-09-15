@@ -618,7 +618,7 @@ void TAAPass::EnsureHistoryRT(int width, int height) {
     }
     // 分辨率变化或首次创建（旧 RT 由 RhiDevice 资源管理器统一回收）
     for (int i = 0; i < 2; ++i) {
-        RenderTargetDesc desc;
+        RenderTargetDesc desc{};
         desc.width = width;
         desc.height = height;
         desc.has_color = true;

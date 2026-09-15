@@ -16,6 +16,7 @@
 
 #include "engine/base/debug.h"
 #include "engine/core/asset_version_envelope.h"
+#include "engine/core/asset_dto.h"
 
 namespace dse::bp {
 
@@ -71,33 +72,120 @@ BpPinType BpPinTypeFromName(const char* name) {
 
 namespace {
 
-using Writer = rapidjson::PrettyWriter<rapidjson::StringBuffer>;
 
-void WritePin(Writer& w, const BpPin& pin) {
-    w.StartObject();
-    w.Key("id");             w.Int(pin.id);
-    w.Key("name");           w.String(pin.name.c_str());
-    w.Key("type");           w.String(BpPinTypeName(pin.type));
-    w.Key("default_float");  w.Double(static_cast<double>(pin.default_float));
-    w.Key("default_int");    w.Int(pin.default_int);
-    w.Key("default_bool");   w.Bool(pin.default_bool);
-    w.Key("default_string"); w.String(pin.default_string.c_str());
-    w.Key("default_vec");
-    w.StartArray();
-    for (int i = 0; i < 4; ++i) w.Double(static_cast<double>(pin.default_vec[i]));
-    w.EndArray();
-    w.EndObject();
-}
+struct BlueprintDto {
+    std::string name;
+    std::string description;
+    std::string author;
+};
 
-void WriteParam(Writer& w, const BpPin& pin) {
-    w.StartObject();
-    w.Key("id");   w.Int(pin.id);
-    w.Key("name"); w.String(pin.name.c_str());
-    w.Key("type"); w.String(BpPinTypeName(pin.type));
-    w.EndObject();
-}
+struct BpVariableDto {
+    std::string name;
+    std::string type = "Float";
+    std::string array_element_type = "Float";
+    bool default_bool = false;
+    int default_int = 0;
+    float default_float = 0.0f;
+    std::string default_string;
+    float default_vec[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    bool is_exposed = false;
+};
 
-// 计算图内出现过的最大 id（节点/引脚/连线），用于 legacy 迁移回填 next_id。
+struct BpGraphDto {
+    std::string name;
+    int next_id = 1;
+    bool is_pure = false;
+};
+
+struct BpNodeDto {
+    int id = 0;
+    std::string name;
+    std::string category;
+    std::string comment;
+    float pos_x = 0.0f;
+    float pos_y = 0.0f;
+};
+
+struct BpPinDto {
+    int id = 0;
+    std::string name;
+    std::string type = "Any";
+    float default_float = 0.0f;
+    int default_int = 0;
+    bool default_bool = false;
+    std::string default_string;
+    float default_vec[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+};
+
+struct BpLinkDto {
+    int id = 0;
+    int from_pin = 0;
+    int to_pin = 0;
+};
+
+struct BpParamDto {
+    int id = 0;
+    std::string name;
+    std::string type = "Any";
+};
+
+constexpr dse::assets::FieldDesc kBlueprintFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(BlueprintDto, name)},
+    {"description", dse::assets::FieldType::String, offsetof(BlueprintDto, description)},
+    {"author", dse::assets::FieldType::String, offsetof(BlueprintDto, author)},
+};
+
+constexpr dse::assets::FieldDesc kBpVariableFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(BpVariableDto, name)},
+    {"type", dse::assets::FieldType::String, offsetof(BpVariableDto, type)},
+    {"array_element_type", dse::assets::FieldType::String, offsetof(BpVariableDto, array_element_type)},
+    {"default_bool", dse::assets::FieldType::Bool, offsetof(BpVariableDto, default_bool)},
+    {"default_int", dse::assets::FieldType::Int, offsetof(BpVariableDto, default_int)},
+    {"default_float", dse::assets::FieldType::Float, offsetof(BpVariableDto, default_float)},
+    {"default_string", dse::assets::FieldType::String, offsetof(BpVariableDto, default_string)},
+    {"default_vec", dse::assets::FieldType::FloatArray4, offsetof(BpVariableDto, default_vec)},
+    {"is_exposed", dse::assets::FieldType::Bool, offsetof(BpVariableDto, is_exposed)},
+};
+
+constexpr dse::assets::FieldDesc kBpGraphFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(BpGraphDto, name)},
+    {"next_id", dse::assets::FieldType::Int, offsetof(BpGraphDto, next_id)},
+    {"is_pure", dse::assets::FieldType::Bool, offsetof(BpGraphDto, is_pure)},
+};
+
+constexpr dse::assets::FieldDesc kBpNodeFields[] = {
+    {"id", dse::assets::FieldType::Int, offsetof(BpNodeDto, id)},
+    {"name", dse::assets::FieldType::String, offsetof(BpNodeDto, name)},
+    {"category", dse::assets::FieldType::String, offsetof(BpNodeDto, category)},
+    {"comment", dse::assets::FieldType::String, offsetof(BpNodeDto, comment)},
+    {"pos_x", dse::assets::FieldType::Float, offsetof(BpNodeDto, pos_x)},
+    {"pos_y", dse::assets::FieldType::Float, offsetof(BpNodeDto, pos_y)},
+};
+
+constexpr dse::assets::FieldDesc kBpPinFields[] = {
+    {"id", dse::assets::FieldType::Int, offsetof(BpPinDto, id)},
+    {"name", dse::assets::FieldType::String, offsetof(BpPinDto, name)},
+    {"type", dse::assets::FieldType::String, offsetof(BpPinDto, type)},
+    {"default_float", dse::assets::FieldType::Float, offsetof(BpPinDto, default_float)},
+    {"default_int", dse::assets::FieldType::Int, offsetof(BpPinDto, default_int)},
+    {"default_bool", dse::assets::FieldType::Bool, offsetof(BpPinDto, default_bool)},
+    {"default_string", dse::assets::FieldType::String, offsetof(BpPinDto, default_string)},
+    {"default_vec", dse::assets::FieldType::FloatArray4, offsetof(BpPinDto, default_vec)},
+};
+
+constexpr dse::assets::FieldDesc kBpLinkFields[] = {
+    {"id", dse::assets::FieldType::Int, offsetof(BpLinkDto, id)},
+    {"from_pin", dse::assets::FieldType::Int, offsetof(BpLinkDto, from_pin)},
+    {"to_pin", dse::assets::FieldType::Int, offsetof(BpLinkDto, to_pin)},
+};
+
+constexpr dse::assets::FieldDesc kBpParamFields[] = {
+    {"id", dse::assets::FieldType::Int, offsetof(BpParamDto, id)},
+    {"name", dse::assets::FieldType::String, offsetof(BpParamDto, name)},
+    {"type", dse::assets::FieldType::String, offsetof(BpParamDto, type)},
+};
+
+
 int MaxIdInGraph(const BpFunctionGraph& g) {
     int m = 0;
     for (const auto& n : g.nodes) {
@@ -143,111 +231,144 @@ const std::set<std::string>& KnownTopLevelKeys() {
 
 void ReadPin(const rapidjson::Value& p, BpPinKind kind, BpPin& pin) {
     pin.kind = kind;
-    if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
-    if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
-    if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
-    if (p.HasMember("default_float") && p["default_float"].IsNumber()) pin.default_float = p["default_float"].GetFloat();
-    if (p.HasMember("default_int") && p["default_int"].IsInt()) pin.default_int = p["default_int"].GetInt();
-    if (p.HasMember("default_bool") && p["default_bool"].IsBool()) pin.default_bool = p["default_bool"].GetBool();
-    if (p.HasMember("default_string") && p["default_string"].IsString()) pin.default_string = p["default_string"].GetString();
-    if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
-        auto arr = p["default_vec"].GetArray();
-        for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-            if (arr[i].IsNumber()) pin.default_vec[i] = arr[i].GetFloat();
-    }
+    BpPinDto dto;
+    dse::assets::ReadFields(p, kBpPinFields,
+                            sizeof(kBpPinFields) / sizeof(kBpPinFields[0]), &dto);
+    pin.id = dto.id;
+    pin.name = std::move(dto.name);
+    pin.type = BpPinTypeFromName(dto.type.c_str());
+    pin.default_float = dto.default_float;
+    pin.default_int = dto.default_int;
+    pin.default_bool = dto.default_bool;
+    pin.default_string = std::move(dto.default_string);
+    for (int i = 0; i < 4; ++i) pin.default_vec[i] = dto.default_vec[i];
 }
 
 }  // namespace
 
 std::string SerializeBlueprintAsset(const BlueprintAsset& asset) {
-    rapidjson::StringBuffer sb;
-    Writer w(sb);
-    w.StartObject();
-    w.Key("name");        w.String(asset.name.c_str());
-    w.Key("version");     w.Int(kBlueprintSchemaVersion);
-    w.Key("description"); w.String(asset.description.c_str());
-    w.Key("author");      w.String(asset.author.c_str());
+    rapidjson::Document doc;
+    doc.SetObject();
+    auto& a = doc.GetAllocator();
+    dse::assets::WriteVersionEnvelope(doc, kBlueprintSchemaVersion, a);
 
-    w.Key("variables");
-    w.StartArray();
+    BlueprintDto bdto;
+    bdto.name = asset.name;
+    bdto.description = asset.description;
+    bdto.author = asset.author;
+    dse::assets::WriteFields(doc, a, kBlueprintFields,
+                             sizeof(kBlueprintFields) / sizeof(kBlueprintFields[0]), &bdto);
+
+    rapidjson::Value variables(rapidjson::kArrayType);
     for (const auto& var : asset.variables) {
-        w.StartObject();
-        w.Key("name");           w.String(var.name.c_str());
-        w.Key("type");           w.String(BpVarTypeName(var.type));
-        w.Key("default_bool");   w.Bool(var.default_bool);
-        w.Key("default_int");    w.Int(var.default_int);
-        w.Key("default_float");  w.Double(static_cast<double>(var.default_float));
-        w.Key("default_string"); w.String(var.default_string.c_str());
-        w.Key("default_vec");
-        w.StartArray();
-        for (int i = 0; i < 4; ++i) w.Double(static_cast<double>(var.default_vec[i]));
-        w.EndArray();
-        w.Key("array_element_type"); w.String(BpVarTypeName(var.array_element_type));
-        w.Key("is_exposed");     w.Bool(var.is_exposed);
-        w.EndObject();
+        BpVariableDto vdto;
+        vdto.name = var.name;
+        vdto.type = BpVarTypeName(var.type);
+        vdto.array_element_type = BpVarTypeName(var.array_element_type);
+        vdto.default_bool = var.default_bool;
+        vdto.default_int = var.default_int;
+        vdto.default_float = var.default_float;
+        vdto.default_string = var.default_string;
+        for (int i = 0; i < 4; ++i) vdto.default_vec[i] = var.default_vec[i];
+        vdto.is_exposed = var.is_exposed;
+        rapidjson::Value vj(rapidjson::kObjectType);
+        dse::assets::WriteFields(vj, a, kBpVariableFields,
+                                 sizeof(kBpVariableFields) / sizeof(kBpVariableFields[0]), &vdto);
+        variables.PushBack(vj, a);
     }
-    w.EndArray();
+    doc.AddMember("variables", variables, a);
 
-    w.Key("graphs");
-    w.StartArray();
+    rapidjson::Value graphs(rapidjson::kArrayType);
     for (const auto& g : asset.graphs) {
-        w.StartObject();
-        w.Key("name");    w.String(g.name.c_str());
-        w.Key("next_id"); w.Int(g.next_id);
-        w.Key("is_pure"); w.Bool(g.is_pure);
+        BpGraphDto gdto;
+        gdto.name = g.name;
+        gdto.next_id = g.next_id;
+        gdto.is_pure = g.is_pure;
+        rapidjson::Value gj(rapidjson::kObjectType);
+        dse::assets::WriteFields(gj, a, kBpGraphFields,
+                                 sizeof(kBpGraphFields) / sizeof(kBpGraphFields[0]), &gdto);
 
-        w.Key("nodes");
-        w.StartArray();
+        rapidjson::Value nodes(rapidjson::kArrayType);
         for (const auto& n : g.nodes) {
-            w.StartObject();
-            w.Key("id");       w.Int(n.id);
-            w.Key("name");     w.String(n.name.c_str());
-            w.Key("category"); w.String(n.category.c_str());
-            w.Key("pos_x");    w.Double(static_cast<double>(n.pos_x));
-            w.Key("pos_y");    w.Double(static_cast<double>(n.pos_y));
-            w.Key("comment");  w.String(n.comment.c_str());
-            w.Key("inputs");
-            w.StartArray();
-            for (const auto& p : n.inputs) WritePin(w, p);
-            w.EndArray();
-            w.Key("outputs");
-            w.StartArray();
-            for (const auto& p : n.outputs) WritePin(w, p);
-            w.EndArray();
-            w.EndObject();
-        }
-        w.EndArray();
+            BpNodeDto ndto;
+            ndto.id = n.id;
+            ndto.name = n.name;
+            ndto.category = n.category;
+            ndto.comment = n.comment;
+            ndto.pos_x = n.pos_x;
+            ndto.pos_y = n.pos_y;
+            rapidjson::Value nj(rapidjson::kObjectType);
+            dse::assets::WriteFields(nj, a, kBpNodeFields,
+                                     sizeof(kBpNodeFields) / sizeof(kBpNodeFields[0]), &ndto);
 
-        w.Key("links");
-        w.StartArray();
+            auto write_pins = [&](const std::vector<BpPin>& pins) {
+                rapidjson::Value arr(rapidjson::kArrayType);
+                for (const auto& p : pins) {
+                    BpPinDto pdto;
+                    pdto.id = p.id;
+                    pdto.name = p.name;
+                    pdto.type = BpPinTypeName(p.type);
+                    pdto.default_float = p.default_float;
+                    pdto.default_int = p.default_int;
+                    pdto.default_bool = p.default_bool;
+                    pdto.default_string = p.default_string;
+                    for (int i = 0; i < 4; ++i) pdto.default_vec[i] = p.default_vec[i];
+                    rapidjson::Value pj(rapidjson::kObjectType);
+                    dse::assets::WriteFields(pj, a, kBpPinFields,
+                                             sizeof(kBpPinFields) / sizeof(kBpPinFields[0]), &pdto);
+                    arr.PushBack(pj, a);
+                }
+                return arr;
+            };
+            nj.AddMember("inputs", write_pins(n.inputs), a);
+            nj.AddMember("outputs", write_pins(n.outputs), a);
+            nodes.PushBack(nj, a);
+        }
+        gj.AddMember("nodes", nodes, a);
+
+        rapidjson::Value links(rapidjson::kArrayType);
         for (const auto& l : g.links) {
-            w.StartObject();
-            w.Key("id");       w.Int(l.id);
-            w.Key("from_pin"); w.Int(l.from_pin);
-            w.Key("to_pin");   w.Int(l.to_pin);
-            w.EndObject();
+            BpLinkDto ldto;
+            ldto.id = l.id;
+            ldto.from_pin = l.from_pin;
+            ldto.to_pin = l.to_pin;
+            rapidjson::Value lj(rapidjson::kObjectType);
+            dse::assets::WriteFields(lj, a, kBpLinkFields,
+                                     sizeof(kBpLinkFields) / sizeof(kBpLinkFields[0]), &ldto);
+            links.PushBack(lj, a);
         }
-        w.EndArray();
+        gj.AddMember("links", links, a);
 
-        w.Key("input_params");
-        w.StartArray();
-        for (const auto& p : g.input_params) WriteParam(w, p);
-        w.EndArray();
-        w.Key("output_params");
-        w.StartArray();
-        for (const auto& p : g.output_params) WriteParam(w, p);
-        w.EndArray();
-
-        w.EndObject();
+        auto write_params = [&](const std::vector<BpPin>& params) {
+            rapidjson::Value arr(rapidjson::kArrayType);
+            for (const auto& p : params) {
+                BpParamDto pdto;
+                pdto.id = p.id;
+                pdto.name = p.name;
+                pdto.type = BpPinTypeName(p.type);
+                rapidjson::Value pj(rapidjson::kObjectType);
+                dse::assets::WriteFields(pj, a, kBpParamFields,
+                                         sizeof(kBpParamFields) / sizeof(kBpParamFields[0]), &pdto);
+                arr.PushBack(pj, a);
+            }
+            return arr;
+        };
+        gj.AddMember("input_params", write_params(g.input_params), a);
+        gj.AddMember("output_params", write_params(g.output_params), a);
+        graphs.PushBack(gj, a);
     }
-    w.EndArray();
+    doc.AddMember("graphs", graphs, a);
 
-    w.Key("interfaces");
-    w.StartArray();
-    for (const auto& iface : asset.implemented_interfaces) w.String(iface.c_str());
-    w.EndArray();
+    rapidjson::Value interfaces(rapidjson::kArrayType);
+    for (const auto& iface : asset.implemented_interfaces) {
+        rapidjson::Value s(iface.c_str(), static_cast<rapidjson::SizeType>(iface.size()), a);
+        interfaces.PushBack(s, a);
+    }
+    doc.AddMember("interfaces", interfaces, a);
 
-    w.EndObject();
+    rapidjson::StringBuffer sb;
+    rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
+    doc.Accept(writer);
     return std::string(sb.GetString(), sb.GetSize());
 }
 
@@ -271,7 +392,6 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
 
     asset = BlueprintAsset{};
 
-    // 前向兼容：记录未知顶层字段，但不失败、不静默丢弃。
     for (auto it = doc.MemberBegin(); it != doc.MemberEnd(); ++it) {
         std::string key = it->name.GetString();
         if (KnownTopLevelKeys().count(key) == 0) {
@@ -279,37 +399,36 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
         }
     }
 
-    // 版本：缺失视为 legacy(0)。字段级读取与前向兼容策略走共享信封助手；
-    // has_version 仍单独判定，仅当文件显式带 version 时才回填 asset.version。
     const bool has_version = doc.HasMember("version") && doc["version"].IsInt();
     const int source_version =
         dse::assets::ReadVersionEnvelope(doc, kBlueprintSchemaVersion, ".dbp", diag);
 
-    if (doc.HasMember("name") && doc["name"].IsString()) asset.name = doc["name"].GetString();
+    // ADR-3: .dbp read path uses unified DTO/field table.
+    BlueprintDto bdto;
+    dse::assets::ReadFields(doc, kBlueprintFields,
+                            sizeof(kBlueprintFields) / sizeof(kBlueprintFields[0]), &bdto);
+    asset.name = std::move(bdto.name);
+    asset.description = std::move(bdto.description);
+    asset.author = std::move(bdto.author);
+
     if (has_version) asset.version = source_version;
-    if (doc.HasMember("description") && doc["description"].IsString())
-        asset.description = doc["description"].GetString();
-    if (doc.HasMember("author") && doc["author"].IsString())
-        asset.author = doc["author"].GetString();
 
     if (doc.HasMember("variables") && doc["variables"].IsArray()) {
         for (auto& v : doc["variables"].GetArray()) {
             if (!v.IsObject()) continue;
+            BpVariableDto vdto;
+            dse::assets::ReadFields(v, kBpVariableFields,
+                                    sizeof(kBpVariableFields) / sizeof(kBpVariableFields[0]), &vdto);
             BpVariable var;
-            if (v.HasMember("name") && v["name"].IsString()) var.name = v["name"].GetString();
-            if (v.HasMember("type") && v["type"].IsString()) var.type = BpVarTypeFromName(v["type"].GetString());
-            if (v.HasMember("array_element_type") && v["array_element_type"].IsString())
-                var.array_element_type = BpVarTypeFromName(v["array_element_type"].GetString());
-            if (v.HasMember("default_bool") && v["default_bool"].IsBool()) var.default_bool = v["default_bool"].GetBool();
-            if (v.HasMember("default_int") && v["default_int"].IsInt()) var.default_int = v["default_int"].GetInt();
-            if (v.HasMember("default_float") && v["default_float"].IsNumber()) var.default_float = v["default_float"].GetFloat();
-            if (v.HasMember("default_string") && v["default_string"].IsString()) var.default_string = v["default_string"].GetString();
-            if (v.HasMember("default_vec") && v["default_vec"].IsArray()) {
-                auto arr = v["default_vec"].GetArray();
-                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-                    if (arr[i].IsNumber()) var.default_vec[i] = arr[i].GetFloat();
-            }
-            if (v.HasMember("is_exposed") && v["is_exposed"].IsBool()) var.is_exposed = v["is_exposed"].GetBool();
+            var.name = std::move(vdto.name);
+            var.type = BpVarTypeFromName(vdto.type.c_str());
+            var.array_element_type = BpVarTypeFromName(vdto.array_element_type.c_str());
+            var.default_bool = vdto.default_bool;
+            var.default_int = vdto.default_int;
+            var.default_float = vdto.default_float;
+            var.default_string = std::move(vdto.default_string);
+            for (int i = 0; i < 4; ++i) var.default_vec[i] = vdto.default_vec[i];
+            var.is_exposed = vdto.is_exposed;
             asset.variables.push_back(std::move(var));
         }
     }
@@ -317,21 +436,27 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
     if (doc.HasMember("graphs") && doc["graphs"].IsArray()) {
         for (auto& g : doc["graphs"].GetArray()) {
             if (!g.IsObject()) continue;
+            BpGraphDto gdto;
+            dse::assets::ReadFields(g, kBpGraphFields,
+                                    sizeof(kBpGraphFields) / sizeof(kBpGraphFields[0]), &gdto);
             BpFunctionGraph graph;
-            if (g.HasMember("name") && g["name"].IsString()) graph.name = g["name"].GetString();
-            if (g.HasMember("next_id") && g["next_id"].IsInt()) graph.next_id = g["next_id"].GetInt();
-            if (g.HasMember("is_pure") && g["is_pure"].IsBool()) graph.is_pure = g["is_pure"].GetBool();
+            graph.name = std::move(gdto.name);
+            graph.next_id = gdto.next_id;
+            graph.is_pure = gdto.is_pure;
 
             if (g.HasMember("nodes") && g["nodes"].IsArray()) {
                 for (auto& n : g["nodes"].GetArray()) {
                     if (!n.IsObject()) continue;
+                    BpNodeDto ndto;
+                    dse::assets::ReadFields(n, kBpNodeFields,
+                                            sizeof(kBpNodeFields) / sizeof(kBpNodeFields[0]), &ndto);
                     BpNode node;
-                    if (n.HasMember("id") && n["id"].IsInt()) node.id = n["id"].GetInt();
-                    if (n.HasMember("name") && n["name"].IsString()) node.name = n["name"].GetString();
-                    if (n.HasMember("category") && n["category"].IsString()) node.category = n["category"].GetString();
-                    if (n.HasMember("pos_x") && n["pos_x"].IsNumber()) node.pos_x = n["pos_x"].GetFloat();
-                    if (n.HasMember("pos_y") && n["pos_y"].IsNumber()) node.pos_y = n["pos_y"].GetFloat();
-                    if (n.HasMember("comment") && n["comment"].IsString()) node.comment = n["comment"].GetString();
+                    node.id = ndto.id;
+                    node.name = std::move(ndto.name);
+                    node.category = std::move(ndto.category);
+                    node.comment = std::move(ndto.comment);
+                    node.pos_x = ndto.pos_x;
+                    node.pos_y = ndto.pos_y;
                     if (n.HasMember("inputs") && n["inputs"].IsArray()) {
                         for (auto& p : n["inputs"].GetArray()) {
                             if (!p.IsObject()) continue;
@@ -355,10 +480,13 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
             if (g.HasMember("links") && g["links"].IsArray()) {
                 for (auto& l : g["links"].GetArray()) {
                     if (!l.IsObject()) continue;
+                    BpLinkDto ldto;
+                    dse::assets::ReadFields(l, kBpLinkFields,
+                                            sizeof(kBpLinkFields) / sizeof(kBpLinkFields[0]), &ldto);
                     BpLink link;
-                    if (l.HasMember("id") && l["id"].IsInt()) link.id = l["id"].GetInt();
-                    if (l.HasMember("from_pin") && l["from_pin"].IsInt()) link.from_pin = l["from_pin"].GetInt();
-                    if (l.HasMember("to_pin") && l["to_pin"].IsInt()) link.to_pin = l["to_pin"].GetInt();
+                    link.id = ldto.id;
+                    link.from_pin = ldto.from_pin;
+                    link.to_pin = ldto.to_pin;
                     graph.links.push_back(link);
                 }
             }
@@ -368,11 +496,14 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
                 if (!values.IsArray()) return;
                 for (auto& p : values.GetArray()) {
                     if (!p.IsObject()) continue;
+                    BpParamDto pdto;
+                    dse::assets::ReadFields(p, kBpParamFields,
+                                            sizeof(kBpParamFields) / sizeof(kBpParamFields[0]), &pdto);
                     BpPin pin;
                     pin.kind = kind;
-                    if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
-                    if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
-                    if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
+                    pin.id = pdto.id;
+                    pin.name = std::move(pdto.name);
+                    pin.type = BpPinTypeFromName(pdto.type.c_str());
                     destination.push_back(std::move(pin));
                 }
             };

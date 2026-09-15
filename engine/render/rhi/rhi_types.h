@@ -85,6 +85,40 @@ enum class CullFace : unsigned int {
     FrontAndBack = 3,
 };
 
+/// Stencil test operation (backend-neutral).
+/// Explicit values are part of the contract consumed by backend mapping functions.
+enum class StencilOp : uint8_t {
+    Keep = 0,             ///< Keep the current value (default).
+    Zero = 1,             ///< Set to zero.
+    Replace = 2,          ///< Replace with the reference value.
+    IncrementClamp = 3,   ///< Increment; clamp to max (D3D11 INCR_SAT / Vk INCREMENT_AND_CLAMP / GL_INCR).
+    DecrementClamp = 4,   ///< Decrement; clamp to zero (D3D11 DECR_SAT / Vk DECREMENT_AND_CLAMP / GL_DECR).
+    Invert = 5,           ///< Bitwise invert the value.
+    IncrementWrap = 6,    ///< Increment; wrap to zero (D3D11 INCR / Vk INCREMENT_AND_WRAP / GL_INCR_WRAP).
+    DecrementWrap = 7,    ///< Decrement; wrap to max (D3D11 DECR / Vk DECREMENT_AND_WRAP / GL_DECR_WRAP).
+};
+
+/// Stencil state for one face (front or back).
+struct StencilFaceState {
+    CompareFunc compare = CompareFunc::Always;
+    StencilOp fail_op = StencilOp::Keep;
+    StencilOp depth_fail_op = StencilOp::Keep;
+    StencilOp pass_op = StencilOp::Keep;
+};
+
+/// Backend-neutral stencil state attached to PipelineStateDesc.
+/// enabled defaults to false so existing pipelines keep their legacy path exactly.
+/// reference is stored here; DX11/WebGPU can realize it dynamically, while GL/Vulkan
+/// may bake it into the pipeline (both faces use the same common value).
+struct StencilState {
+    bool enabled = false;
+    uint32_t read_mask = 0xFF;
+    uint32_t write_mask = 0xFF;
+    uint32_t reference = 0;
+    StencilFaceState front;
+    StencilFaceState back;
+};
+
 /// 图元拓扑（管线状态的一部分）。默认三角形列表，发线状几何（如毛发）用线带。
 /// DX11→D3D11_PRIMITIVE_TOPOLOGY_* / GL→glDraw* mode / Vulkan→VkPrimitiveTopology。
 enum class PrimitiveTopology : unsigned int {
@@ -163,6 +197,7 @@ struct RenderTargetDesc {
     int height = 0;
     bool has_color = true;
     bool has_depth = false;
+    bool has_stencil = false;  ///< 深度附件是否带模板面（ADR-2 第 2 步；默认 false 保证行为不变）
     bool generate_mipmaps = false;  ///< Bloom Downsample 需要 mipmap
     bool cube_map = false;
     int msaa_samples = 1;           ///< MSAA 采样数（1 = 禁用，4 = 4x MSAA）
@@ -172,6 +207,7 @@ struct RenderTargetDesc {
     bool operator==(const RenderTargetDesc& o) const {
         return width == o.width && height == o.height &&
                has_color == o.has_color && has_depth == o.has_depth &&
+               has_stencil == o.has_stencil &&
                generate_mipmaps == o.generate_mipmaps && cube_map == o.cube_map &&
                msaa_samples == o.msaa_samples && allow_uav == o.allow_uav &&
                color_attachment_count == o.color_attachment_count;
@@ -192,6 +228,7 @@ struct PipelineStateDesc {
     CullFace cull_face = CullFace::Back;
     PrimitiveTopology topology = PrimitiveTopology::TriangleList;  ///< 图元拓扑（毛发用 LineStrip）
     bool wireframe = false;  ///< 线框填充模式（编辑器视图模式；DX11 D3D11_FILL_WIREFRAME / GL glPolygonMode(LINE) / Vulkan VK_POLYGON_MODE_LINE）
+    StencilState stencil;  ///< Backend-neutral stencil state; disabled by default (enabled=false).
 };
 
 /// 图形管线对象描述符（B5-3b：聚合 PSO 子状态 + 着色器程序，为 Metal/DX12「shader 烘进 pipeline」铺路）。

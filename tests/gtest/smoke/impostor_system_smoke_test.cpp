@@ -8,8 +8,10 @@
  *
  *   1. 空 World 调用 Update 不崩溃（无 impostor 实体）
  *   2. 带 ImpostorComponent + MeshRendererComponent 几何的实体：首帧无 atlas → 入队烘焙
- *   3. RenderOpaque（持有 GL 上下文）触发 ImpostorBaker 烘焙 atlas → 组件 atlas_loaded_
- *   4. 次帧 Update 距离判定命中 → 产出批次；RenderOpaque 正常绘制
+ *   3. RenderOpaque（渲染线程，持有 GL 上下文）触发 ImpostorBaker 烘焙 atlas，结果只写入
+ *      baked_results_ —— 渲染线程不得回写 ECS（Phase 1 契约，见 dbdbf0f2）
+ *   4. 次帧 Update（主线程）先把 baked_results_ 写回 ECS（atlas_loaded_ / 句柄就位），
+ *      再按距离判定命中 → 产出批次；RenderOpaque 正常绘制
  *   5. Shutdown 清理
  *
  * 无 GL 驱动时（CI 无显卡）自动 SKIP，不误报失败。
@@ -98,13 +100,26 @@ RenderTargetReadback RunImpostorLifecycle(RhiDevice& device) {
     }
     device.EndFrame();
 
+    // (3b) Phase 1 契约：RenderOpaque 跑在渲染线程，只允许写 baked_results_，
+    // 不得回写 ECS。故此刻组件仍应是「未加载」状态。
+    // 本用例此前在此直接断言 atlas_loaded_==true —— 那是 dbdbf0f2「渲染线程
+    // 移除 ECS 访问」之前的旧契约，导致 GPU smoke 电池长期带 1 个红灯。
+    {
+        const auto& imp_render_thread = world.registry().get<ImpostorComponent>(e);
+        EXPECT_FALSE(imp_render_thread.atlas_loaded_)
+            << "渲染线程不得回写 ECS：烘焙结果应只停留在 baked_results_";
+        EXPECT_FALSE(imp_render_thread.atlas_texture_handle_);
+    }
+
+    // (4) 次帧：主线程 Update 先把 baked_results_ 写回 ECS，再按距离产出批次；
+    //     RenderOpaque 正常绘制不崩溃。
+    sys.Update(world, glm::vec3(0.0f), device);
+
     const auto& imp_after = world.registry().get<ImpostorComponent>(e);
     EXPECT_TRUE(imp_after.atlas_loaded_)
-        << "ImpostorSystem 应在持有 GL 上下文的 RenderOpaque 中烘焙 atlas";
+        << "主线程 Update 应把渲染线程烘好的 atlas 写回 ECS";
     EXPECT_TRUE(imp_after.atlas_texture_handle_);
 
-    // (4) 次帧：atlas 已就绪 → Update 产出批次，RenderOpaque 正常绘制不崩溃。
-    sys.Update(world, glm::vec3(0.0f), device);
     device.BeginFrame();
     auto cmd2 = device.CreateCommandBuffer();
     if (cmd2) {

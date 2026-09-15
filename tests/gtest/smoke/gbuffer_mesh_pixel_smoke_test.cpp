@@ -66,7 +66,7 @@ void EnsureGeom() {
 RenderTargetReadback RenderGBufferAttachment(RhiDevice& device, int attachment) {
     EnsureGeom();
 
-    RenderTargetDesc mrt_desc;
+    RenderTargetDesc mrt_desc{};
     mrt_desc.width = kRtSize;
     mrt_desc.height = kRtSize;
     mrt_desc.has_color = true;
@@ -74,7 +74,7 @@ RenderTargetReadback RenderGBufferAttachment(RhiDevice& device, int attachment) 
     mrt_desc.color_attachment_count = 3;  // gAlbedo / gNormal / gPosition
     const auto mrt = device.CreateRenderTarget(mrt_desc);
 
-    RenderTargetDesc dst_desc;
+    RenderTargetDesc dst_desc{};
     dst_desc.width = kRtSize;
     dst_desc.height = kRtSize;
     dst_desc.has_color = true;

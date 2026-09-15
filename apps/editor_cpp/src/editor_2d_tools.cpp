@@ -16,8 +16,11 @@
 #include "stb/stb_image.h"
 
 #include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include "engine/core/asset_version_envelope.h"
+#include "engine/core/asset_dto.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,6 +38,20 @@
 #endif
 
 namespace dse::editor::tools2d {
+
+namespace {
+
+bool WriteJsonDocumentToFile(const rapidjson::Document& doc, const std::string& path) {
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    doc.Accept(writer);
+    std::ofstream f(path, std::ios::binary);
+    if (!f.is_open()) return false;
+    f.write(buffer.GetString(), static_cast<std::streamsize>(buffer.GetSize()));
+    return f.good();
+}
+
+}  // namespace
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #1 — Sprite Sheet Slicer
@@ -932,6 +949,30 @@ void DrawAnim2DEditorPanel() {
 // #4 — 9-Slice / 9-Patch Editor
 // ═══════════════════════════════════════════════════════════════════════════
 
+namespace {
+
+struct NineSliceDto {
+    std::string texture;
+    int left = 0;
+    int right = 0;
+    int top = 0;
+    int bottom = 0;
+    int width = 0;
+    int height = 0;
+};
+
+constexpr dse::assets::FieldDesc kNineSliceFields[] = {
+    {"texture", dse::assets::FieldType::String, offsetof(NineSliceDto, texture)},
+    {"left", dse::assets::FieldType::Int, offsetof(NineSliceDto, left)},
+    {"right", dse::assets::FieldType::Int, offsetof(NineSliceDto, right)},
+    {"top", dse::assets::FieldType::Int, offsetof(NineSliceDto, top)},
+    {"bottom", dse::assets::FieldType::Int, offsetof(NineSliceDto, bottom)},
+    {"width", dse::assets::FieldType::Int, offsetof(NineSliceDto, width)},
+    {"height", dse::assets::FieldType::Int, offsetof(NineSliceDto, height)},
+};
+
+}  // namespace
+
 static NineSliceEditorState s_nineslice_state;
 
 NineSliceEditorState& GetNineSliceEditorState() { return s_nineslice_state; }
@@ -942,16 +983,22 @@ bool NineSliceHasValidBorders() {
 }
 
 bool SaveNineSlice(const NineSliceData& data, const std::string& path) {
-    std::ofstream f(path);
-    if (!f.is_open()) return false;
-    f << "{\n";
-    f << "  \"version\": " << kNineSliceSchemaVersion << ",\n";
-    f << "  \"texture\": \"" << data.texture_path << "\",\n";
-    f << "  \"left\": " << data.left << ", \"right\": " << data.right << ",\n";
-    f << "  \"top\": " << data.top << ", \"bottom\": " << data.bottom << ",\n";
-    f << "  \"width\": " << data.tex_width << ", \"height\": " << data.tex_height << "\n";
-    f << "}\n";
-    return true;
+    rapidjson::Document doc;
+    doc.SetObject();
+    auto& a = doc.GetAllocator();
+    dse::assets::WriteVersionEnvelope(doc, kNineSliceSchemaVersion, a);
+
+    NineSliceDto dto;
+    dto.texture = data.texture_path;
+    dto.left = data.left;
+    dto.right = data.right;
+    dto.top = data.top;
+    dto.bottom = data.bottom;
+    dto.width = data.tex_width;
+    dto.height = data.tex_height;
+    dse::assets::WriteFields(doc, a, kNineSliceFields,
+                             sizeof(kNineSliceFields) / sizeof(kNineSliceFields[0]), &dto);
+    return WriteJsonDocumentToFile(doc, path);
 }
 
 bool LoadNineSlice(NineSliceData& data, const std::string& path,
@@ -980,15 +1027,20 @@ bool LoadNineSlice(NineSliceData& data, const std::string& path,
 
     dse::assets::ReadVersionEnvelope(doc, kNineSliceSchemaVersion, ".d9slice", diag);
 
+    // ADR-3 第一步：读路径收敛到统一 DTO + 字段元数据表。
+    // 字段缺失或类型不符时保留 DTO 默认值（等价于旧行为）。
+    NineSliceDto dto;
+    dse::assets::ReadFields(doc, kNineSliceFields,
+                            sizeof(kNineSliceFields) / sizeof(kNineSliceFields[0]), &dto);
+
     NineSliceData loaded;
-    if (doc.HasMember("texture") && doc["texture"].IsString())
-        loaded.texture_path = doc["texture"].GetString();
-    if (doc.HasMember("left") && doc["left"].IsInt()) loaded.left = doc["left"].GetInt();
-    if (doc.HasMember("right") && doc["right"].IsInt()) loaded.right = doc["right"].GetInt();
-    if (doc.HasMember("top") && doc["top"].IsInt()) loaded.top = doc["top"].GetInt();
-    if (doc.HasMember("bottom") && doc["bottom"].IsInt()) loaded.bottom = doc["bottom"].GetInt();
-    if (doc.HasMember("width") && doc["width"].IsInt()) loaded.tex_width = doc["width"].GetInt();
-    if (doc.HasMember("height") && doc["height"].IsInt()) loaded.tex_height = doc["height"].GetInt();
+    loaded.texture_path = std::move(dto.texture);
+    loaded.left = dto.left;
+    loaded.right = dto.right;
+    loaded.top = dto.top;
+    loaded.bottom = dto.bottom;
+    loaded.tex_width = dto.width;
+    loaded.tex_height = dto.height;
 
     diag.ok = true;
     data = std::move(loaded);
@@ -1274,6 +1326,64 @@ void DrawCollisionEditor2DPanel() {
 // #6 — 2D Particle Editor
 // ═══════════════════════════════════════════════════════════════════════════
 
+namespace {
+
+struct Particle2DConfigDto {
+    std::string name = "New Particle";
+    float emit_rate = 50.0f;
+    int max_particles = 500;
+    int emit_shape = static_cast<int>(Particle2DEmitShape::Point);
+    float emit_radius = 0.0f;
+    glm::vec2 emit_rect{1.0f, 1.0f};
+    float lifetime_min = 0.5f;
+    float lifetime_max = 2.0f;
+    glm::vec2 velocity_min{-50.0f, -100.0f};
+    glm::vec2 velocity_max{50.0f, -200.0f};
+    glm::vec2 gravity{0.0f, 200.0f};
+    float angular_velocity_min = -90.0f;
+    float angular_velocity_max = 90.0f;
+    float damping = 0.0f;
+    float start_size_min = 8.0f;
+    float start_size_max = 16.0f;
+    float end_size = 2.0f;
+    glm::vec4 start_color{1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4 end_color{1.0f, 1.0f, 1.0f, 0.0f};
+    int blend_mode = static_cast<int>(Particle2DBlendMode::Additive);
+    std::string texture;
+    bool trail_enabled = false;
+    int trail_length = 5;
+    float trail_width = 2.0f;
+};
+
+constexpr dse::assets::FieldDesc kParticle2DFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(Particle2DConfigDto, name)},
+    {"emit_rate", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, emit_rate)},
+    {"max_particles", dse::assets::FieldType::Int, offsetof(Particle2DConfigDto, max_particles)},
+    {"emit_shape", dse::assets::FieldType::Int, offsetof(Particle2DConfigDto, emit_shape)},
+    {"emit_radius", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, emit_radius)},
+    {"emit_rect", dse::assets::FieldType::Vec2, offsetof(Particle2DConfigDto, emit_rect)},
+    {"lifetime_min", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, lifetime_min)},
+    {"lifetime_max", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, lifetime_max)},
+    {"velocity_min", dse::assets::FieldType::Vec2, offsetof(Particle2DConfigDto, velocity_min)},
+    {"velocity_max", dse::assets::FieldType::Vec2, offsetof(Particle2DConfigDto, velocity_max)},
+    {"gravity", dse::assets::FieldType::Vec2, offsetof(Particle2DConfigDto, gravity)},
+    {"angular_velocity_min", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, angular_velocity_min)},
+    {"angular_velocity_max", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, angular_velocity_max)},
+    {"damping", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, damping)},
+    {"start_size_min", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, start_size_min)},
+    {"start_size_max", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, start_size_max)},
+    {"end_size", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, end_size)},
+    {"start_color", dse::assets::FieldType::Vec4, offsetof(Particle2DConfigDto, start_color)},
+    {"end_color", dse::assets::FieldType::Vec4, offsetof(Particle2DConfigDto, end_color)},
+    {"blend_mode", dse::assets::FieldType::Int, offsetof(Particle2DConfigDto, blend_mode)},
+    {"texture", dse::assets::FieldType::String, offsetof(Particle2DConfigDto, texture)},
+    {"trail_enabled", dse::assets::FieldType::Bool, offsetof(Particle2DConfigDto, trail_enabled)},
+    {"trail_length", dse::assets::FieldType::Int, offsetof(Particle2DConfigDto, trail_length)},
+    {"trail_width", dse::assets::FieldType::Float, offsetof(Particle2DConfigDto, trail_width)},
+};
+
+}  // namespace
+
 static Particle2DEditorState s_particle2d_state;
 
 Particle2DEditorState& GetParticle2DEditorState() { return s_particle2d_state; }
@@ -1281,72 +1391,43 @@ bool Particle2DSimulating() { return s_particle2d_state.simulating; }
 int Particle2DActiveCount() { return s_particle2d_state.active_particles; }
 
 bool SaveParticle2DConfig(const Particle2DConfig& cfg, const std::string& path) {
-    std::ofstream f(path);
-    if (!f.is_open()) return false;
-    f << "{\n";
-    f << "  \"version\": " << kParticle2DSchemaVersion << ",\n";
-    f << "  \"name\": \"" << cfg.name << "\",\n";
-    f << "  \"emit_rate\": " << cfg.emit_rate << ",\n";
-    f << "  \"max_particles\": " << cfg.max_particles << ",\n";
-    f << "  \"emit_shape\": " << static_cast<int>(cfg.emit_shape) << ",\n";
-    f << "  \"emit_radius\": " << cfg.emit_radius << ",\n";
-    f << "  \"emit_rect\": [" << cfg.emit_rect.x << ", " << cfg.emit_rect.y << "],\n";
-    f << "  \"lifetime_min\": " << cfg.lifetime_min << ",\n";
-    f << "  \"lifetime_max\": " << cfg.lifetime_max << ",\n";
-    f << "  \"velocity_min\": [" << cfg.velocity_min.x << ", " << cfg.velocity_min.y << "],\n";
-    f << "  \"velocity_max\": [" << cfg.velocity_max.x << ", " << cfg.velocity_max.y << "],\n";
-    f << "  \"gravity\": [" << cfg.gravity.x << ", " << cfg.gravity.y << "],\n";
-    f << "  \"angular_velocity_min\": " << cfg.angular_velocity_min << ",\n";
-    f << "  \"angular_velocity_max\": " << cfg.angular_velocity_max << ",\n";
-    f << "  \"damping\": " << cfg.damping << ",\n";
-    f << "  \"start_size_min\": " << cfg.start_size_min << ",\n";
-    f << "  \"start_size_max\": " << cfg.start_size_max << ",\n";
-    f << "  \"end_size\": " << cfg.end_size << ",\n";
-    f << "  \"start_color\": [" << cfg.start_color.x << ", " << cfg.start_color.y << ", "
-      << cfg.start_color.z << ", " << cfg.start_color.w << "],\n";
-    f << "  \"end_color\": [" << cfg.end_color.x << ", " << cfg.end_color.y << ", "
-      << cfg.end_color.z << ", " << cfg.end_color.w << "],\n";
-    f << "  \"blend_mode\": " << static_cast<int>(cfg.blend_mode) << ",\n";
-    f << "  \"texture\": \"" << cfg.texture_path << "\",\n";
-    f << "  \"trail_enabled\": " << (cfg.trail_enabled ? "true" : "false") << ",\n";
-    f << "  \"trail_length\": " << cfg.trail_length << ",\n";
-    f << "  \"trail_width\": " << cfg.trail_width << "\n";
-    f << "}\n";
-    return true;
+    rapidjson::Document doc;
+    doc.SetObject();
+    auto& a = doc.GetAllocator();
+    dse::assets::WriteVersionEnvelope(doc, kParticle2DSchemaVersion, a);
+
+    Particle2DConfigDto dto;
+    dto.name = cfg.name;
+    dto.emit_rate = cfg.emit_rate;
+    dto.max_particles = cfg.max_particles;
+    dto.emit_shape = static_cast<int>(cfg.emit_shape);
+    dto.emit_radius = cfg.emit_radius;
+    dto.emit_rect = cfg.emit_rect;
+    dto.lifetime_min = cfg.lifetime_min;
+    dto.lifetime_max = cfg.lifetime_max;
+    dto.velocity_min = cfg.velocity_min;
+    dto.velocity_max = cfg.velocity_max;
+    dto.gravity = cfg.gravity;
+    dto.angular_velocity_min = cfg.angular_velocity_min;
+    dto.angular_velocity_max = cfg.angular_velocity_max;
+    dto.damping = cfg.damping;
+    dto.start_size_min = cfg.start_size_min;
+    dto.start_size_max = cfg.start_size_max;
+    dto.end_size = cfg.end_size;
+    dto.start_color = cfg.start_color;
+    dto.end_color = cfg.end_color;
+    dto.blend_mode = static_cast<int>(cfg.blend_mode);
+    dto.texture = cfg.texture_path;
+    dto.trail_enabled = cfg.trail_enabled;
+    dto.trail_length = cfg.trail_length;
+    dto.trail_width = cfg.trail_width;
+    dse::assets::WriteFields(doc, a, kParticle2DFields,
+                             sizeof(kParticle2DFields) / sizeof(kParticle2DFields[0]), &dto);
+    return WriteJsonDocumentToFile(doc, path);
 }
 
 namespace {
 
-bool ReadVec2(const rapidjson::Value& v, const char* key, glm::vec2& out) {
-    if (!v.HasMember(key) || !v[key].IsArray() || v[key].Size() < 2) return false;
-    const auto& a = v[key];
-    if (!a[0].IsNumber() || !a[1].IsNumber()) return false;
-    out.x = a[0].GetFloat();
-    out.y = a[1].GetFloat();
-    return true;
-}
-
-bool ReadVec3(const rapidjson::Value& v, const char* key, glm::vec3& out) {
-    if (!v.HasMember(key) || !v[key].IsArray() || v[key].Size() < 3) return false;
-    const auto& a = v[key];
-    if (!a[0].IsNumber() || !a[1].IsNumber() || !a[2].IsNumber()) return false;
-    out.x = a[0].GetFloat();
-    out.y = a[1].GetFloat();
-    out.z = a[2].GetFloat();
-    return true;
-}
-
-bool ReadVec4(const rapidjson::Value& v, const char* key, glm::vec4& out) {
-    if (!v.HasMember(key) || !v[key].IsArray() || v[key].Size() < 4) return false;
-    const auto& a = v[key];
-    for (int i = 0; i < 4; ++i)
-        if (!a[i].IsNumber()) return false;
-    out.x = a[0].GetFloat();
-    out.y = a[1].GetFloat();
-    out.z = a[2].GetFloat();
-    out.w = a[3].GetFloat();
-    return true;
-}
 
 }  // namespace
 
@@ -1377,31 +1458,36 @@ bool LoadParticle2DConfig(Particle2DConfig& cfg, const std::string& path,
     const int version = dse::assets::ReadVersionEnvelope(
         doc, kParticle2DSchemaVersion, ".dparticle2d", diag);
 
+    // ADR-3：.dparticle2d 读取路径收敛到统一 DTO/字段表。
+    Particle2DConfigDto dto;
+    dse::assets::ReadFields(doc, kParticle2DFields,
+                            sizeof(kParticle2DFields) / sizeof(kParticle2DFields[0]), &dto);
+
     Particle2DConfig loaded;
-    if (doc.HasMember("name") && doc["name"].IsString()) loaded.name = doc["name"].GetString();
-    if (doc.HasMember("emit_rate") && doc["emit_rate"].IsNumber()) loaded.emit_rate = doc["emit_rate"].GetFloat();
-    if (doc.HasMember("max_particles") && doc["max_particles"].IsInt()) loaded.max_particles = doc["max_particles"].GetInt();
-    if (doc.HasMember("emit_shape") && doc["emit_shape"].IsInt()) loaded.emit_shape = static_cast<Particle2DEmitShape>(doc["emit_shape"].GetInt());
-    if (doc.HasMember("emit_radius") && doc["emit_radius"].IsNumber()) loaded.emit_radius = doc["emit_radius"].GetFloat();
-    ReadVec2(doc, "emit_rect", loaded.emit_rect);
-    if (doc.HasMember("lifetime_min") && doc["lifetime_min"].IsNumber()) loaded.lifetime_min = doc["lifetime_min"].GetFloat();
-    if (doc.HasMember("lifetime_max") && doc["lifetime_max"].IsNumber()) loaded.lifetime_max = doc["lifetime_max"].GetFloat();
-    ReadVec2(doc, "velocity_min", loaded.velocity_min);
-    ReadVec2(doc, "velocity_max", loaded.velocity_max);
-    ReadVec2(doc, "gravity", loaded.gravity);
-    if (doc.HasMember("angular_velocity_min") && doc["angular_velocity_min"].IsNumber()) loaded.angular_velocity_min = doc["angular_velocity_min"].GetFloat();
-    if (doc.HasMember("angular_velocity_max") && doc["angular_velocity_max"].IsNumber()) loaded.angular_velocity_max = doc["angular_velocity_max"].GetFloat();
-    if (doc.HasMember("damping") && doc["damping"].IsNumber()) loaded.damping = doc["damping"].GetFloat();
-    if (doc.HasMember("start_size_min") && doc["start_size_min"].IsNumber()) loaded.start_size_min = doc["start_size_min"].GetFloat();
-    if (doc.HasMember("start_size_max") && doc["start_size_max"].IsNumber()) loaded.start_size_max = doc["start_size_max"].GetFloat();
-    if (doc.HasMember("end_size") && doc["end_size"].IsNumber()) loaded.end_size = doc["end_size"].GetFloat();
-    ReadVec4(doc, "start_color", loaded.start_color);
-    ReadVec4(doc, "end_color", loaded.end_color);
-    if (doc.HasMember("blend_mode") && doc["blend_mode"].IsInt()) loaded.blend_mode = static_cast<Particle2DBlendMode>(doc["blend_mode"].GetInt());
-    if (doc.HasMember("texture") && doc["texture"].IsString()) loaded.texture_path = doc["texture"].GetString();
-    if (doc.HasMember("trail_enabled") && doc["trail_enabled"].IsBool()) loaded.trail_enabled = doc["trail_enabled"].GetBool();
-    if (doc.HasMember("trail_length") && doc["trail_length"].IsInt()) loaded.trail_length = doc["trail_length"].GetInt();
-    if (doc.HasMember("trail_width") && doc["trail_width"].IsNumber()) loaded.trail_width = doc["trail_width"].GetFloat();
+    loaded.name = std::move(dto.name);
+    loaded.emit_rate = dto.emit_rate;
+    loaded.max_particles = dto.max_particles;
+    loaded.emit_shape = static_cast<Particle2DEmitShape>(dto.emit_shape);
+    loaded.emit_radius = dto.emit_radius;
+    loaded.emit_rect = dto.emit_rect;
+    loaded.lifetime_min = dto.lifetime_min;
+    loaded.lifetime_max = dto.lifetime_max;
+    loaded.velocity_min = dto.velocity_min;
+    loaded.velocity_max = dto.velocity_max;
+    loaded.gravity = dto.gravity;
+    loaded.angular_velocity_min = dto.angular_velocity_min;
+    loaded.angular_velocity_max = dto.angular_velocity_max;
+    loaded.damping = dto.damping;
+    loaded.start_size_min = dto.start_size_min;
+    loaded.start_size_max = dto.start_size_max;
+    loaded.end_size = dto.end_size;
+    loaded.start_color = dto.start_color;
+    loaded.end_color = dto.end_color;
+    loaded.blend_mode = static_cast<Particle2DBlendMode>(dto.blend_mode);
+    loaded.texture_path = std::move(dto.texture);
+    loaded.trail_enabled = dto.trail_enabled;
+    loaded.trail_length = dto.trail_length;
+    loaded.trail_width = dto.trail_width;
 
     if (version < kParticle2DSchemaVersion) {
         diag.migrated = true;
@@ -1507,6 +1593,46 @@ void DrawParticle2DEditorPanel() {
 // #7 — Parallax Layer Editor
 // ═══════════════════════════════════════════════════════════════════════════
 
+namespace {
+
+struct ParallaxLayerDto {
+    std::string name;
+    std::string texture;
+    float scroll_factor_x = 1.0f;
+    float scroll_factor_y = 1.0f;
+    float offset_y = 0.0f;
+    bool repeat_x = true;
+    bool repeat_y = false;
+    int sort_order = 0;
+    float opacity = 1.0f;
+    glm::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+};
+
+struct ParallaxConfigDto {
+    std::string name;
+    float base_speed = 1.0f;
+};
+
+constexpr dse::assets::FieldDesc kParallaxConfigFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(ParallaxConfigDto, name)},
+    {"base_speed", dse::assets::FieldType::Float, offsetof(ParallaxConfigDto, base_speed)},
+};
+
+constexpr dse::assets::FieldDesc kParallaxLayerFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(ParallaxLayerDto, name)},
+    {"texture", dse::assets::FieldType::String, offsetof(ParallaxLayerDto, texture)},
+    {"scroll_factor_x", dse::assets::FieldType::Float, offsetof(ParallaxLayerDto, scroll_factor_x)},
+    {"scroll_factor_y", dse::assets::FieldType::Float, offsetof(ParallaxLayerDto, scroll_factor_y)},
+    {"offset_y", dse::assets::FieldType::Float, offsetof(ParallaxLayerDto, offset_y)},
+    {"repeat_x", dse::assets::FieldType::Bool, offsetof(ParallaxLayerDto, repeat_x)},
+    {"repeat_y", dse::assets::FieldType::Bool, offsetof(ParallaxLayerDto, repeat_y)},
+    {"sort_order", dse::assets::FieldType::Int, offsetof(ParallaxLayerDto, sort_order)},
+    {"opacity", dse::assets::FieldType::Float, offsetof(ParallaxLayerDto, opacity)},
+    {"tint", dse::assets::FieldType::Vec4, offsetof(ParallaxLayerDto, tint)},
+};
+
+}  // namespace
+
 static ParallaxEditorState s_parallax_state;
 
 ParallaxEditorState& GetParallaxEditorState() { return s_parallax_state; }
@@ -1521,29 +1647,37 @@ void AddParallaxLayer(const std::string& name) {
 }
 
 bool SaveParallaxConfig(const ParallaxConfig& cfg, const std::string& path) {
-    std::ofstream f(path);
-    if (!f.is_open()) return false;
-    f << "{\n";
-    f << "  \"version\": " << kParallaxSchemaVersion << ",\n";
-    f << "  \"name\": \"" << cfg.name << "\",\n";
-    f << "  \"base_speed\": " << cfg.base_speed << ",\n";
-    f << "  \"layers\": [\n";
-    for (size_t i = 0; i < cfg.layers.size(); ++i) {
-        const auto& l = cfg.layers[i];
-        f << "    { \"name\": \"" << l.name << "\", \"texture\": \"" << l.texture_path
-          << "\", \"scroll_factor_x\": " << l.scroll_factor_x
-          << ", \"scroll_factor_y\": " << l.scroll_factor_y
-          << ", \"offset_y\": " << l.offset_y
-          << ", \"repeat_x\": " << (l.repeat_x ? "true" : "false")
-          << ", \"repeat_y\": " << (l.repeat_y ? "true" : "false")
-          << ", \"sort_order\": " << l.sort_order << ", \"opacity\": " << l.opacity
-          << ", \"tint\": [" << l.tint.x << ", " << l.tint.y << ", " << l.tint.z << ", " << l.tint.w << "]"
-          << " }";
-        if (i + 1 < cfg.layers.size()) f << ",";
-        f << "\n";
+    rapidjson::Document doc;
+    doc.SetObject();
+    auto& a = doc.GetAllocator();
+    dse::assets::WriteVersionEnvelope(doc, kParallaxSchemaVersion, a);
+
+    ParallaxConfigDto config_dto;
+    config_dto.name = cfg.name;
+    config_dto.base_speed = cfg.base_speed;
+    dse::assets::WriteFields(doc, a, kParallaxConfigFields,
+                             sizeof(kParallaxConfigFields) / sizeof(kParallaxConfigFields[0]), &config_dto);
+
+    rapidjson::Value layers(rapidjson::kArrayType);
+    for (const auto& l : cfg.layers) {
+        ParallaxLayerDto dto;
+        dto.name = l.name;
+        dto.texture = l.texture_path;
+        dto.scroll_factor_x = l.scroll_factor_x;
+        dto.scroll_factor_y = l.scroll_factor_y;
+        dto.offset_y = l.offset_y;
+        dto.repeat_x = l.repeat_x;
+        dto.repeat_y = l.repeat_y;
+        dto.sort_order = l.sort_order;
+        dto.opacity = l.opacity;
+        dto.tint = l.tint;
+        rapidjson::Value lj(rapidjson::kObjectType);
+        dse::assets::WriteFields(lj, a, kParallaxLayerFields,
+                                 sizeof(kParallaxLayerFields) / sizeof(kParallaxLayerFields[0]), &dto);
+        layers.PushBack(lj, a);
     }
-    f << "  ]\n}\n";
-    return true;
+    doc.AddMember("layers", layers, a);
+    return WriteJsonDocumentToFile(doc, path);
 }
 
 bool LoadParallaxConfig(ParallaxConfig& cfg, const std::string& path,
@@ -1574,38 +1708,49 @@ bool LoadParallaxConfig(ParallaxConfig& cfg, const std::string& path,
         doc, kParallaxSchemaVersion, ".dparallax", diag);
     bool migrated_keys = false;
 
+    // ADR-3：.dparallax 顶层 + layer 读取路径收敛到统一 DTO/字段表；
+    // 旧版 scroll_x/scroll_y 仅在当前键缺失时作为迁移回退。
+    ParallaxConfigDto config_dto;
+    dse::assets::ReadFields(doc, kParallaxConfigFields,
+                            sizeof(kParallaxConfigFields) / sizeof(kParallaxConfigFields[0]),
+                            &config_dto);
+
     ParallaxConfig loaded;
-    if (doc.HasMember("name") && doc["name"].IsString()) loaded.name = doc["name"].GetString();
-    if (doc.HasMember("base_speed") && doc["base_speed"].IsNumber()) loaded.base_speed = doc["base_speed"].GetFloat();
+    loaded.name = std::move(config_dto.name);
+    loaded.base_speed = config_dto.base_speed;
 
     if (doc.HasMember("layers") && doc["layers"].IsArray()) {
         for (const auto& lj : doc["layers"].GetArray()) {
             if (!lj.IsObject()) continue;
+            ParallaxLayerDto dto;
+            dse::assets::ReadFields(lj, kParallaxLayerFields,
+                                    sizeof(kParallaxLayerFields) / sizeof(kParallaxLayerFields[0]),
+                                    &dto);
+
+            if (!lj.HasMember("scroll_factor_x") &&
+                lj.HasMember("scroll_x") && lj["scroll_x"].IsNumber()) {
+                dto.scroll_factor_x = lj["scroll_x"].GetFloat();
+                migrated_keys = true;
+            }
+            if (!lj.HasMember("scroll_factor_y") &&
+                lj.HasMember("scroll_y") && lj["scroll_y"].IsNumber()) {
+                dto.scroll_factor_y = lj["scroll_y"].GetFloat();
+                migrated_keys = true;
+            }
+
             ParallaxLayer l;
-            if (lj.HasMember("name") && lj["name"].IsString()) l.name = lj["name"].GetString();
-            if (lj.HasMember("texture") && lj["texture"].IsString()) l.texture_path = lj["texture"].GetString();
+            l.name = std::move(dto.name);
+            l.texture_path = std::move(dto.texture);
+            l.scroll_factor_x = dto.scroll_factor_x;
+            l.scroll_factor_y = dto.scroll_factor_y;
+            l.offset_y = dto.offset_y;
+            l.repeat_x = dto.repeat_x;
+            l.repeat_y = dto.repeat_y;
+            l.sort_order = dto.sort_order;
+            l.opacity = dto.opacity;
+            l.tint = dto.tint;
 
-            if (lj.HasMember("scroll_factor_x") && lj["scroll_factor_x"].IsNumber()) {
-                l.scroll_factor_x = lj["scroll_factor_x"].GetFloat();
-            } else if (lj.HasMember("scroll_x") && lj["scroll_x"].IsNumber()) {
-                l.scroll_factor_x = lj["scroll_x"].GetFloat();
-                migrated_keys = true;
-            }
-            if (lj.HasMember("scroll_factor_y") && lj["scroll_factor_y"].IsNumber()) {
-                l.scroll_factor_y = lj["scroll_factor_y"].GetFloat();
-            } else if (lj.HasMember("scroll_y") && lj["scroll_y"].IsNumber()) {
-                l.scroll_factor_y = lj["scroll_y"].GetFloat();
-                migrated_keys = true;
-            }
-
-            if (lj.HasMember("offset_y") && lj["offset_y"].IsNumber()) l.offset_y = lj["offset_y"].GetFloat();
-            if (lj.HasMember("repeat_x") && lj["repeat_x"].IsBool()) l.repeat_x = lj["repeat_x"].GetBool();
-            if (lj.HasMember("repeat_y") && lj["repeat_y"].IsBool()) l.repeat_y = lj["repeat_y"].GetBool();
-            if (lj.HasMember("sort_order") && lj["sort_order"].IsInt()) l.sort_order = lj["sort_order"].GetInt();
-            if (lj.HasMember("opacity") && lj["opacity"].IsNumber()) l.opacity = lj["opacity"].GetFloat();
-            ReadVec4(lj, "tint", l.tint);
-
-            loaded.layers.push_back(l);
+            loaded.layers.push_back(std::move(l));
         }
     }
 
@@ -1723,6 +1868,54 @@ void DrawParallaxEditorPanel() {
 // #8 — 2D Lighting Editor
 // ═══════════════════════════════════════════════════════════════════════════
 
+namespace {
+
+struct Light2DSceneDto {
+    glm::vec3 ambient_color{0.1f, 0.1f, 0.15f};
+    float ambient_intensity = 0.3f;
+};
+
+struct Light2DConfigDto {
+    std::string name = "Light2D";
+    int type = static_cast<int>(Light2DType::Point);
+    glm::vec2 position{0.0f, 0.0f};
+    glm::vec3 color{1.0f, 1.0f, 1.0f};
+    float intensity = 1.0f;
+    float range = 200.0f;
+    float falloff = 2.0f;
+    float spot_angle = 45.0f;
+    float spot_direction = 0.0f;
+    int shadow_mode = static_cast<int>(Light2DShadowMode::None);
+    float shadow_softness = 1.0f;
+    int shadow_rays = 64;
+    bool use_normal_map = false;
+    float normal_strength = 1.0f;
+};
+
+constexpr dse::assets::FieldDesc kLight2DSceneFields[] = {
+    {"ambient_color", dse::assets::FieldType::Vec3, offsetof(Light2DSceneDto, ambient_color)},
+    {"ambient_intensity", dse::assets::FieldType::Float, offsetof(Light2DSceneDto, ambient_intensity)},
+};
+
+constexpr dse::assets::FieldDesc kLight2DConfigFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(Light2DConfigDto, name)},
+    {"type", dse::assets::FieldType::Int, offsetof(Light2DConfigDto, type)},
+    {"position", dse::assets::FieldType::Vec2, offsetof(Light2DConfigDto, position)},
+    {"color", dse::assets::FieldType::Vec3, offsetof(Light2DConfigDto, color)},
+    {"intensity", dse::assets::FieldType::Float, offsetof(Light2DConfigDto, intensity)},
+    {"range", dse::assets::FieldType::Float, offsetof(Light2DConfigDto, range)},
+    {"falloff", dse::assets::FieldType::Float, offsetof(Light2DConfigDto, falloff)},
+    {"spot_angle", dse::assets::FieldType::Float, offsetof(Light2DConfigDto, spot_angle)},
+    {"spot_direction", dse::assets::FieldType::Float, offsetof(Light2DConfigDto, spot_direction)},
+    {"shadow_mode", dse::assets::FieldType::Int, offsetof(Light2DConfigDto, shadow_mode)},
+    {"shadow_softness", dse::assets::FieldType::Float, offsetof(Light2DConfigDto, shadow_softness)},
+    {"shadow_rays", dse::assets::FieldType::Int, offsetof(Light2DConfigDto, shadow_rays)},
+    {"use_normal_map", dse::assets::FieldType::Bool, offsetof(Light2DConfigDto, use_normal_map)},
+    {"normal_strength", dse::assets::FieldType::Float, offsetof(Light2DConfigDto, normal_strength)},
+};
+
+}  // namespace
+
 static Light2DEditorState s_light2d_state;
 
 Light2DEditorState& GetLight2DEditorState() { return s_light2d_state; }
@@ -1737,32 +1930,41 @@ void AddLight2D(Light2DType type) {
 }
 
 bool SaveLight2DScene(const Light2DEditorState& state, const std::string& path) {
-    std::ofstream f(path);
-    if (!f.is_open()) return false;
-    f << "{\n";
-    f << "  \"version\": " << kLight2DSchemaVersion << ",\n";
-    f << "  \"ambient_color\": [" << state.ambient_color.x << ", " << state.ambient_color.y << ", " << state.ambient_color.z << "],\n";
-    f << "  \"ambient_intensity\": " << state.ambient_intensity << ",\n";
-    f << "  \"lights\": [\n";
-    for (size_t i = 0; i < state.lights.size(); ++i) {
-        const auto& l = state.lights[i];
-        f << "    { \"name\": \"" << l.name << "\", \"type\": " << static_cast<int>(l.type)
-          << ", \"position\": [" << l.position.x << ", " << l.position.y << "]"
-          << ", \"color\": [" << l.color.x << ", " << l.color.y << ", " << l.color.z << "]"
-          << ", \"intensity\": " << l.intensity << ", \"range\": " << l.range
-          << ", \"falloff\": " << l.falloff
-          << ", \"spot_angle\": " << l.spot_angle
-          << ", \"spot_direction\": " << l.spot_direction
-          << ", \"shadow_mode\": " << static_cast<int>(l.shadow_mode)
-          << ", \"shadow_softness\": " << l.shadow_softness
-          << ", \"shadow_rays\": " << l.shadow_rays
-          << ", \"use_normal_map\": " << (l.use_normal_map ? "true" : "false")
-          << ", \"normal_strength\": " << l.normal_strength << " }";
-        if (i + 1 < state.lights.size()) f << ",";
-        f << "\n";
+    rapidjson::Document doc;
+    doc.SetObject();
+    auto& a = doc.GetAllocator();
+    dse::assets::WriteVersionEnvelope(doc, kLight2DSchemaVersion, a);
+
+    Light2DSceneDto scene_dto;
+    scene_dto.ambient_color = state.ambient_color;
+    scene_dto.ambient_intensity = state.ambient_intensity;
+    dse::assets::WriteFields(doc, a, kLight2DSceneFields,
+                             sizeof(kLight2DSceneFields) / sizeof(kLight2DSceneFields[0]), &scene_dto);
+
+    rapidjson::Value lights(rapidjson::kArrayType);
+    for (const auto& l : state.lights) {
+        Light2DConfigDto dto;
+        dto.name = l.name;
+        dto.type = static_cast<int>(l.type);
+        dto.position = l.position;
+        dto.color = l.color;
+        dto.intensity = l.intensity;
+        dto.range = l.range;
+        dto.falloff = l.falloff;
+        dto.spot_angle = l.spot_angle;
+        dto.spot_direction = l.spot_direction;
+        dto.shadow_mode = static_cast<int>(l.shadow_mode);
+        dto.shadow_softness = l.shadow_softness;
+        dto.shadow_rays = l.shadow_rays;
+        dto.use_normal_map = l.use_normal_map;
+        dto.normal_strength = l.normal_strength;
+        rapidjson::Value lj(rapidjson::kObjectType);
+        dse::assets::WriteFields(lj, a, kLight2DConfigFields,
+                                 sizeof(kLight2DConfigFields) / sizeof(kLight2DConfigFields[0]), &dto);
+        lights.PushBack(lj, a);
     }
-    f << "  ]\n}\n";
-    return true;
+    doc.AddMember("lights", lights, a);
+    return WriteJsonDocumentToFile(doc, path);
 }
 
 bool LoadLight2DScene(Light2DEditorState& state, const std::string& path,
@@ -1792,31 +1994,41 @@ bool LoadLight2DScene(Light2DEditorState& state, const std::string& path,
     const int version = dse::assets::ReadVersionEnvelope(
         doc, kLight2DSchemaVersion, ".dlight2d", diag);
 
+    // ADR-3：场景顶层 + 每个 light 都改走统一 DTO/字段表，旧文件缺字段时保留声明的默认值。
+    Light2DSceneDto scene_dto;
+    dse::assets::ReadFields(doc, kLight2DSceneFields,
+                            sizeof(kLight2DSceneFields) / sizeof(kLight2DSceneFields[0]),
+                            &scene_dto);
+
     Light2DEditorState loaded;
-    ReadVec3(doc, "ambient_color", loaded.ambient_color);
-    if (doc.HasMember("ambient_intensity") && doc["ambient_intensity"].IsNumber())
-        loaded.ambient_intensity = doc["ambient_intensity"].GetFloat();
+    loaded.ambient_color = scene_dto.ambient_color;
+    loaded.ambient_intensity = scene_dto.ambient_intensity;
 
     if (doc.HasMember("lights") && doc["lights"].IsArray()) {
         for (const auto& lj : doc["lights"].GetArray()) {
             if (!lj.IsObject()) continue;
-            Light2DConfig l;
-            if (lj.HasMember("name") && lj["name"].IsString()) l.name = lj["name"].GetString();
-            if (lj.HasMember("type") && lj["type"].IsInt()) l.type = static_cast<Light2DType>(lj["type"].GetInt());
-            ReadVec2(lj, "position", l.position);
-            ReadVec3(lj, "color", l.color);
-            if (lj.HasMember("intensity") && lj["intensity"].IsNumber()) l.intensity = lj["intensity"].GetFloat();
-            if (lj.HasMember("range") && lj["range"].IsNumber()) l.range = lj["range"].GetFloat();
-            if (lj.HasMember("falloff") && lj["falloff"].IsNumber()) l.falloff = lj["falloff"].GetFloat();
-            if (lj.HasMember("spot_angle") && lj["spot_angle"].IsNumber()) l.spot_angle = lj["spot_angle"].GetFloat();
-            if (lj.HasMember("spot_direction") && lj["spot_direction"].IsNumber()) l.spot_direction = lj["spot_direction"].GetFloat();
-            if (lj.HasMember("shadow_mode") && lj["shadow_mode"].IsInt()) l.shadow_mode = static_cast<Light2DShadowMode>(lj["shadow_mode"].GetInt());
-            if (lj.HasMember("shadow_softness") && lj["shadow_softness"].IsNumber()) l.shadow_softness = lj["shadow_softness"].GetFloat();
-            if (lj.HasMember("shadow_rays") && lj["shadow_rays"].IsInt()) l.shadow_rays = lj["shadow_rays"].GetInt();
-            if (lj.HasMember("use_normal_map") && lj["use_normal_map"].IsBool()) l.use_normal_map = lj["use_normal_map"].GetBool();
-            if (lj.HasMember("normal_strength") && lj["normal_strength"].IsNumber()) l.normal_strength = lj["normal_strength"].GetFloat();
+            Light2DConfigDto dto;
+            dse::assets::ReadFields(lj, kLight2DConfigFields,
+                                    sizeof(kLight2DConfigFields) / sizeof(kLight2DConfigFields[0]),
+                                    &dto);
 
-            loaded.lights.push_back(l);
+            Light2DConfig l;
+            l.name = std::move(dto.name);
+            l.type = static_cast<Light2DType>(dto.type);
+            l.position = dto.position;
+            l.color = dto.color;
+            l.intensity = dto.intensity;
+            l.range = dto.range;
+            l.falloff = dto.falloff;
+            l.spot_angle = dto.spot_angle;
+            l.spot_direction = dto.spot_direction;
+            l.shadow_mode = static_cast<Light2DShadowMode>(dto.shadow_mode);
+            l.shadow_softness = dto.shadow_softness;
+            l.shadow_rays = dto.shadow_rays;
+            l.use_normal_map = dto.use_normal_map;
+            l.normal_strength = dto.normal_strength;
+
+            loaded.lights.push_back(std::move(l));
         }
     }
 

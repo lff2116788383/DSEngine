@@ -23,7 +23,7 @@ void SkyboxRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, TextureHandle c
 
     // 天空盒专用管线状态：深度 LEQUAL、不写深度、不剔除、不混合。
     if (!pso_init_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = false;
         desc.depth_test_enabled = true;
         desc.depth_write_enabled = false;

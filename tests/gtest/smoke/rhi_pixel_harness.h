@@ -46,6 +46,15 @@ BackendResult RunOpenGL(const RenderFn& fn);
 BackendResult RunD3D11(const RenderFn& fn);
 BackendResult RunVulkan(const RenderFn& fn);
 
+// 让「本用例」使用一次性设备（不复用长驻会话），调用后自动复位，不影响其他用例。
+//
+// 长驻会话把单次 Run* 的固定开销从 18~322 ms 降到约 0，smoke 电池整体快 4 倍；代价是
+// 隔离性：前一个用例留在设备上的状态会被后一个用例继承。个别用例在共享设备上会互相
+// 影响（例如本仓库 HairPixelSmokeTest.VulkanDrawsHairLine 在前一个建/销过同形状 RT 的
+// 用例之后画不出东西已定位到跨用例的资源句柄/状态问题，尚未根治）。
+// 这类用例在测试体开头调用本函数，即可拿到干净设备，同时其余用例仍享受复用。
+void RequestFreshDeviceForThisTest();
+
 // 指向 (x,y) 处 RGBA8 texel 的指针；越界/空返回 nullptr。
 const unsigned char* PixelAt(const ::RenderTargetReadback& rb, int x, int y);
 

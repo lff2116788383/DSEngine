@@ -952,7 +952,7 @@ bool WebGPUShaderManager::EnsureGpuDrivenPBRShader() {
         }
     }
     if (!gpu_driven_pbr_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = true;
         d.depth_write_enabled = true;

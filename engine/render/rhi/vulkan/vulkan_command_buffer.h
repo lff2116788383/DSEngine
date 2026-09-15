@@ -10,6 +10,7 @@
 #define DSE_VULKAN_COMMAND_BUFFER_H
 
 #include "engine/render/rhi/forwarding_command_buffer.h"
+#include "engine/render/rhi/vulkan/vulkan_command_state.h"
 #include <vulkan/vulkan.h>
 
 namespace dse {
@@ -69,9 +70,14 @@ public:
     /// 设置所属设备（由 VulkanRhiDevice::CreateCommandBuffer 注入）
     void SetDevice(VulkanRhiDevice* device);
 
+    /// ADR-1：本命令缓冲独占的录制状态，不再借用 executor 全局成员。
+    VulkanCommandState& state() { return state_; }
+    const VulkanCommandState& state() const { return state_; }
+
 private:
     VkCommandBuffer vk_command_buffer_ = VK_NULL_HANDLE;
     VulkanRhiDevice* device_ = nullptr;
+    VulkanCommandState state_;
 };
 
 } // namespace render

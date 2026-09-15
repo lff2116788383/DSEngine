@@ -3900,7 +3900,7 @@ bool WebGpuSelfTestHarness::RecordMultiDrawIndirectSelfTest() {
 
     // 离屏 RT（引擎 CreateRenderTarget：RGBA16Float 颜色 + CopySrc，无深度）。
     if (!t41_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT41RtSize);
         d.height = static_cast<int>(kT41RtSize);
         d.has_color = true;
@@ -3919,7 +3919,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
         t41_program_ = dev_->CreateShaderProgram(kWGSL, "");
     }
     if (!t41_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -4038,7 +4038,7 @@ bool WebGpuSelfTestHarness::RecordMegaVaoSelfTest() {
     if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     if (!t42_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT42RtSize);
         d.height = static_cast<int>(kT42RtSize);
         d.has_color = true;
@@ -4067,7 +4067,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
         t42_program_ = dev_->CreateShaderProgram(kWGSL, "");
     }
     if (!t42_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -4169,7 +4169,7 @@ bool WebGpuSelfTestHarness::RecordGpuDrivenPBRSelfTest() {
     }
     // 离屏 RT（颜色 RGBA16Float + 深度，CopySrc）。带深度以匹配 PBR PSO 的 depth test/write 状态。
     if (!t43_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT43RtSize);
         d.height = static_cast<int>(kT43RtSize);
         d.has_color = true;
@@ -4302,7 +4302,7 @@ bool WebGpuSelfTestHarness::RecordCSMShadowSelfTest() {
 
     // shadow atlas RT（颜色 RGBA16Float 占位 + Depth32 深度附件，深度可作 texture_depth_2d 采样）。
     if (!t51_shadow_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT51AtlasDim);
         d.height = static_cast<int>(kT51AtlasDim);
         d.has_color = true;
@@ -4311,7 +4311,7 @@ bool WebGpuSelfTestHarness::RecordCSMShadowSelfTest() {
     }
     // 离屏 color RT（RGBA16Float + CopySrc）。
     if (!t51_color_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT51RtSize);
         d.height = static_cast<int>(kT51RtSize);
         d.has_color = true;
@@ -4330,7 +4330,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         t51_occ_program_ = dev_->CreateShaderProgram(kOccWGSL, "");
     }
     if (!t51_occ_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = true;
         d.depth_write_enabled = true;
@@ -4373,7 +4373,7 @@ fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
         t51_recv_program_ = dev_->CreateShaderProgram(kRecvWGSL, "");
     }
     if (!t51_recv_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -4492,7 +4492,7 @@ bool WebGpuSelfTestHarness::RecordPointShadowSelfTest() {
 
     // 点光 cube 阴影 RT（颜色 RGBA16Float cube 占位 + Depth32 cube 深度附件，逐面可附着/可作 texture_depth_cube 采样）。
     if (!t56_cube_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT56CubeDim);
         d.height = static_cast<int>(kT56CubeDim);
         d.has_color = true;
@@ -4502,7 +4502,7 @@ bool WebGpuSelfTestHarness::RecordPointShadowSelfTest() {
     }
     // 离屏 color RT（RGBA16Float + CopySrc）。
     if (!t56_color_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT56RtSize);
         d.height = static_cast<int>(kT56RtSize);
         d.has_color = true;
@@ -4524,7 +4524,7 @@ struct FsOut { @location(0) color : vec4<f32>, @builtin(frag_depth) depth : f32,
         t56_occ_program_ = dev_->CreateShaderProgram(kOccWGSL, "");
     }
     if (!t56_occ_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = true;
         d.depth_write_enabled = true;
@@ -4558,7 +4558,7 @@ fn PointShadow(dir : vec3<f32>, cur : f32, radius : f32) -> f32 {
         t56_recv_program_ = dev_->CreateShaderProgram(kRecvWGSL, "");
     }
     if (!t56_recv_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -4681,7 +4681,7 @@ bool WebGpuSelfTestHarness::RecordDeferredSelfTest() {
 
     // gbuffer RT（3 个 RGBA16Float 颜色附件 albedo/normal/position，无深度；附件均 TextureBinding 可采样）。
     if (!t52_gbuffer_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT52RtSize);
         d.height = static_cast<int>(kT52RtSize);
         d.has_color = true;
@@ -4691,7 +4691,7 @@ bool WebGpuSelfTestHarness::RecordDeferredSelfTest() {
     }
     // 离屏 color RT（RGBA16Float + CopySrc）。
     if (!t52_color_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT52RtSize);
         d.height = static_cast<int>(kT52RtSize);
         d.has_color = true;
@@ -4721,7 +4721,7 @@ struct GBuf {
         t52_geom_program_ = dev_->CreateShaderProgram(kGeomWGSL, "");
     }
     if (!t52_geom_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -4758,7 +4758,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         t52_light_program_ = dev_->CreateShaderProgram(kLightWGSL, "");
     }
     if (!t52_light_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -4879,7 +4879,7 @@ bool WebGpuSelfTestHarness::RecordHDRSelfTest() {
     // RT：HDR 场景（8×8）、平均 log 亮度（1×1）、自动曝光（1×1）、tonemap color（64×64，CopySrc）。
     auto make_rt = [&](unsigned int& rt, uint32_t dim) {
         if (rt) return;
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(dim);
         d.height = static_cast<int>(dim);
         d.has_color = true;
@@ -4893,7 +4893,7 @@ bool WebGpuSelfTestHarness::RecordHDRSelfTest() {
 
     // 共享 PSO（无深度/无剔除/blend off）。
     if (!t53_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -5086,7 +5086,7 @@ bool WebGpuSelfTestHarness::RecordIBLSelfTest() {
     // RT：BRDF LUT（64×64）、irradiance（1×1）、prefilter（1×1）、PBR color（64×64，CopySrc）。
     auto make_rt = [&](unsigned int& rt, uint32_t dim) {
         if (rt) return;
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(dim);
         d.height = static_cast<int>(dim);
         d.has_color = true;
@@ -5099,7 +5099,7 @@ bool WebGpuSelfTestHarness::RecordIBLSelfTest() {
     make_rt(t54_color_rt_, kT54RtSize);
 
     if (!t54_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -5328,7 +5328,7 @@ bool WebGpuSelfTestHarness::RecordWBOITSelfTest() {
 
     // accum/reveal MRT（2 个 RGBA16Float 颜色附件，均 TextureBinding 可采样）。
     if (!t55_mrt_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT55RtSize);
         d.height = static_cast<int>(kT55RtSize);
         d.has_color = true;
@@ -5338,7 +5338,7 @@ bool WebGpuSelfTestHarness::RecordWBOITSelfTest() {
     }
     // 离屏 color RT（RGBA16Float + CopySrc）。
     if (!t55_color_rt_) {
-        RenderTargetDesc d;
+        RenderTargetDesc d{};
         d.width = static_cast<int>(kT55RtSize);
         d.height = static_cast<int>(kT55RtSize);
         d.has_color = true;
@@ -5377,7 +5377,7 @@ fn weightFn(z : f32) -> f32 {
         t55_geom_program_ = dev_->CreateShaderProgram(kGeomWGSL, "");
     }
     if (!t55_geom_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -5408,7 +5408,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         t55_resolve_program_ = dev_->CreateShaderProgram(kResolveWGSL, "");
     }
     if (!t55_resolve_pso_) {
-        PipelineStateDesc d;
+        PipelineStateDesc d{};
         d.blend_enabled = false;
         d.depth_test_enabled = false;
         d.depth_write_enabled = false;
@@ -5539,7 +5539,7 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
 )WGSL";
     selftest_program_ = dev_->CreateShaderProgram(kSelfTestWGSL, "");
 
-    PipelineStateDesc d;
+    PipelineStateDesc d{};
     d.blend_enabled = false;
     d.depth_test_enabled = false;
     d.depth_write_enabled = false;

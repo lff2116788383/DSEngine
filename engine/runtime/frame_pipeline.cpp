@@ -538,7 +538,7 @@ bool FramePipeline::Init() {
 
     // RSM MRT: 3 color (position + normal + flux) + depth, 512x512
     if (!render_resources_.rsm_render_target) {
-        RenderTargetDesc rsm_desc;
+        RenderTargetDesc rsm_desc{};
         rsm_desc.width = 512;
         rsm_desc.height = 512;
         rsm_desc.has_color = true;
@@ -596,7 +596,7 @@ bool FramePipeline::Init() {
                        render_pass_context_.meshlet_cull_shader.raw());
     }
 
-    PipelineStateDesc sprite_desc;
+    PipelineStateDesc sprite_desc{};
     sprite_desc.blend_enabled = true;
     sprite_desc.blend_src = BlendFactor::SrcAlpha;
     sprite_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
@@ -610,7 +610,7 @@ bool FramePipeline::Init() {
         return false;
     }
 
-    PipelineStateDesc mesh_desc;
+    PipelineStateDesc mesh_desc{};
     mesh_desc.blend_enabled = false;
     mesh_desc.depth_test_enabled = true;
     mesh_desc.depth_write_enabled = true;
@@ -623,7 +623,7 @@ bool FramePipeline::Init() {
         return false;
     }
 
-    PipelineStateDesc prez_desc;
+    PipelineStateDesc prez_desc{};
     prez_desc.blend_enabled = false;
     prez_desc.depth_test_enabled = true;
     prez_desc.depth_write_enabled = true;
@@ -636,7 +636,7 @@ bool FramePipeline::Init() {
         return false;
     }
 
-    PipelineStateDesc shadow_desc;
+    PipelineStateDesc shadow_desc{};
     shadow_desc.blend_enabled = false;
     shadow_desc.depth_test_enabled = true;
     shadow_desc.depth_write_enabled = true;
@@ -649,7 +649,7 @@ bool FramePipeline::Init() {
         return false;
     }
 
-    PipelineStateDesc composite_desc;
+    PipelineStateDesc composite_desc{};
     composite_desc.blend_enabled = false;
     composite_desc.blend_src = BlendFactor::SrcAlpha;
     composite_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
@@ -663,7 +663,7 @@ bool FramePipeline::Init() {
         return false;
     }
 
-    PipelineStateDesc decal_blend_desc;
+    PipelineStateDesc decal_blend_desc{};
     decal_blend_desc.blend_enabled = true;
     decal_blend_desc.blend_src = BlendFactor::SrcAlpha;
     decal_blend_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
@@ -678,7 +678,7 @@ bool FramePipeline::Init() {
     }
 
     // WBOIT accumulation: additive blend (ONE, ONE), depth test OFF, depth write OFF
-    PipelineStateDesc wboit_accum_desc;
+    PipelineStateDesc wboit_accum_desc{};
     wboit_accum_desc.blend_enabled = true;
     wboit_accum_desc.blend_src = BlendFactor::One;
     wboit_accum_desc.blend_dst = BlendFactor::One;
@@ -690,7 +690,7 @@ bool FramePipeline::Init() {
     render_resources_.wboit_accum_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(wboit_accum_desc);
 
     // WBOIT revealage: blend (ZERO, ONE_MINUS_SRC_ALPHA), depth test OFF, depth write OFF
-    PipelineStateDesc wboit_reveal_desc;
+    PipelineStateDesc wboit_reveal_desc{};
     wboit_reveal_desc.blend_enabled = true;
     wboit_reveal_desc.blend_src = BlendFactor::Zero;
     wboit_reveal_desc.blend_dst = BlendFactor::OneMinusSrcAlpha;

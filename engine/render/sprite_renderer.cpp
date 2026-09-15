@@ -43,7 +43,7 @@ void SpriteRenderer::EnsureResources(RhiDevice& device) {
     if (init_) return;
 
     // 2D overlay PSO：不写/不测深度、不剔除、alpha 混合。
-    PipelineStateDesc desc;
+    PipelineStateDesc desc{};
     desc.blend_enabled = true;
     desc.blend_src = BlendFactor::SrcAlpha;
     desc.blend_dst = BlendFactor::OneMinusSrcAlpha;

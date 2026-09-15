@@ -104,6 +104,9 @@ option(DSE_ENABLE_HARMONY_PLATFORM
 
 # --- 内存子系统 (engine/core/memory) ---
 option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
+# 诊断构建：AddressSanitizer。仅用于定位堆/栈越界写，不进发布产物。
+# 注意：/RTC1 与 ASan 不兼容（两者都做栈帧检查），启用时会自动从 Debug 默认参数中剔除。
+option(DSE_ENABLE_ASAN "Build with AddressSanitizer (diagnostic only; strips /RTC1)" OFF)
 option(DSE_MEM_TRACK_POINTERS "Register every allocation by pointer for precise leak location (slower)" OFF)
 set(DSE_MEM_BACKEND "system" CACHE STRING "General-heap backend: system | mimalloc (mimalloc requires the dependency, default system = zero new deps)")
 set_property(CACHE DSE_MEM_BACKEND PROPERTY STRINGS system mimalloc)
@@ -281,9 +284,23 @@ if (MSVC)
     add_compile_options(/wd4819)#忽略保存为unicode警告
     add_compile_options(/FS) # 修复多线程编译 PDB 写入冲突 C1041
     add_compile_options("$<$<CONFIG:Debug>:/Z7>")
+
+    # --- AddressSanitizer（诊断构建）---
+    # /RTC1 与 ASan 不兼容：两者都做栈帧检查，同时开启会互相干扰。
+    # 保留 /Z7（已由上方 Debug 配置开启）以便 ASan 报告符号化。
+    if(DSE_ENABLE_ASAN)
+        string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        string(REPLACE "/RTC1" "" CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG}")
+        add_compile_options(/fsanitize=address)
+        add_link_options(/INCREMENTAL:NO)
+        message(STATUS "AddressSanitizer enabled: /RTC1 stripped, incremental linking disabled")
+    endif()
     add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Z7>")
     add_compile_definitions(_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
-    add_compile_definitions(_CRT_STDIO_ISO_WIDE_SPECIFIERS=1)
+    if(NOT DSE_ENABLE_ASAN)
+        # ASan 运行时库（VCASAND.lib）未定义本宏，定义它会报 LNK2038/LNK1318 不匹配。
+        add_compile_definitions(_CRT_STDIO_ISO_WIDE_SPECIFIERS=1)
+    endif()
     add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS=1)
     add_compile_definitions(_CRT_DECLARE_NONSTDC_NAMES=1)
 endif ()
@@ -349,6 +366,7 @@ endif()
 include_directories(
     "${CMAKE_SOURCE_DIR}"
     "engine"
+    "engine/render/shaders/generated"
     "modules"
     "samples"
     "depends"
@@ -453,6 +471,50 @@ function(dse_enable_lto target)
     endif()
 endfunction()
 
+# ADR-4锛氭寜鐩綍杈圭晫鎶?engine_cpp 鎷嗘垚 OBJECT 搴擄紝dse_engine 鍙繚鐣欒仛鍚?target銆?
+# 娉ㄦ剰锛氭墍鏈夊叕鍏?include/def/option 鍦ㄥ悗闈㈢粺涓浠?dse_engine 澶嶅埗鍒?object target銆?
+set(DSE_REMAINING_CPP ${engine_cpp})
+macro(dse_take_engine_group group_name regex)
+    set(${group_name} ${DSE_REMAINING_CPP})
+    list(FILTER ${group_name} INCLUDE REGEX "${regex}")
+    if(${group_name})
+        list(REMOVE_ITEM DSE_REMAINING_CPP ${${group_name}})
+    endif()
+endmacro()
+dse_take_engine_group(DSE_ENGINE_OBJ_CORE "/engine/(core|base|platform|input|diagnostics|profiler|project)/")
+dse_take_engine_group(DSE_ENGINE_OBJ_RENDER "/engine/render/")
+dse_take_engine_group(DSE_ENGINE_OBJ_ASSETS "/engine/assets/")
+dse_take_engine_group(DSE_ENGINE_OBJ_SCENE "/engine/(scene|ecs|navigation|terrain|animation)/")
+dse_take_engine_group(DSE_ENGINE_OBJ_SCRIPTING "/engine/scripting/")
+dse_take_engine_group(DSE_ENGINE_OBJ_PHYSICS "/engine/physics/")
+dse_take_engine_group(DSE_ENGINE_OBJ_MEDIA "/engine/(audio|video)/")
+dse_take_engine_group(DSE_ENGINE_OBJ_RUNTIME "/engine/runtime/")
+dse_take_engine_group(DSE_ENGINE_OBJ_MODULES "/modules/")
+set(DSE_ENGINE_OBJ_MISC ${DSE_REMAINING_CPP})
+
+set(DSE_ENGINE_OBJECT_TARGETS)
+macro(dse_add_engine_object target_name source_var)
+    if(${source_var})
+        add_library(${target_name} OBJECT ${${source_var}})
+        list(APPEND DSE_ENGINE_OBJECT_TARGETS ${target_name})
+    endif()
+endmacro()
+dse_add_engine_object(dse_engine_obj_core DSE_ENGINE_OBJ_CORE)
+dse_add_engine_object(dse_engine_obj_render DSE_ENGINE_OBJ_RENDER)
+dse_add_engine_object(dse_engine_obj_assets DSE_ENGINE_OBJ_ASSETS)
+dse_add_engine_object(dse_engine_obj_scene DSE_ENGINE_OBJ_SCENE)
+dse_add_engine_object(dse_engine_obj_scripting DSE_ENGINE_OBJ_SCRIPTING)
+dse_add_engine_object(dse_engine_obj_physics DSE_ENGINE_OBJ_PHYSICS)
+dse_add_engine_object(dse_engine_obj_media DSE_ENGINE_OBJ_MEDIA)
+dse_add_engine_object(dse_engine_obj_runtime DSE_ENGINE_OBJ_RUNTIME)
+dse_add_engine_object(dse_engine_obj_modules DSE_ENGINE_OBJ_MODULES)
+dse_add_engine_object(dse_engine_obj_misc DSE_ENGINE_OBJ_MISC)
+
+set(DSE_ENGINE_OBJECT_FILES)
+foreach(_dse_obj_target IN LISTS DSE_ENGINE_OBJECT_TARGETS)
+    list(APPEND DSE_ENGINE_OBJECT_FILES $<TARGET_OBJECTS:${_dse_obj_target}>)
+endforeach()
+
 set(DSE_ENGINE_ALL_SOURCES
     ${glfw_sources}
     ${freetype_src}
@@ -462,7 +524,7 @@ set(DSE_ENGINE_ALL_SOURCES
     ${tiny_aes_c}
     ${bundle_cpp}
     ${imgui_src}
-    ${engine_cpp}
+    ${DSE_ENGINE_OBJECT_FILES}
 )
 if(DSE_BUILD_SHARED)
     add_library(dse_engine SHARED ${DSE_ENGINE_ALL_SOURCES})
@@ -1152,6 +1214,47 @@ target_include_directories(dse_engine PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/third_party/box2d/include>
 )
 
+# ADR-4锛氭妸 dse_engine 鐨勭紪璇?/ 閾炬帴棰勭畻澶嶅埗鍒?OBJECT 搴︼紝淇濊瘉鎷嗗垎鍚庣紪璇戝彛寰嬩笉鍙樸?
+foreach(_dse_obj_target IN LISTS DSE_ENGINE_OBJECT_TARGETS)
+    get_target_property(_dse_incs dse_engine INCLUDE_DIRECTORIES)
+    if(_dse_incs)
+        target_include_directories(${_dse_obj_target} PRIVATE ${_dse_incs})
+    endif()
+    if(SHADER_GEN_DIR)
+        target_include_directories(${_dse_obj_target} PRIVATE "${SHADER_GEN_DIR}")
+    endif()
+    get_target_property(_dse_defs dse_engine COMPILE_DEFINITIONS)
+    if(_dse_defs)
+        target_compile_definitions(${_dse_obj_target} PRIVATE ${_dse_defs})
+    endif()
+    get_target_property(_dse_opts dse_engine COMPILE_OPTIONS)
+    if(_dse_opts)
+        target_compile_options(${_dse_obj_target} PRIVATE ${_dse_opts})
+    endif()
+    get_target_property(_dse_links dse_engine LINK_LIBRARIES)
+    if(_dse_links)
+        target_link_libraries(${_dse_obj_target} PRIVATE ${_dse_links})
+    endif()
+    get_target_property(_dse_link_dirs dse_engine LINK_DIRECTORIES)
+    if(_dse_link_dirs)
+        target_link_directories(${_dse_obj_target} PRIVATE ${_dse_link_dirs})
+    endif()
+    if(MSVC)
+        set_property(TARGET ${_dse_obj_target} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
+    if(DSE_IPO_SUPPORTED)
+        set_property(TARGET ${_dse_obj_target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        set_property(TARGET ${_dse_obj_target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+    endif()
+    if(DSE_ENABLE_PCH)
+        target_precompile_headers(${_dse_obj_target} PRIVATE
+            "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/engine/dse_pch.h>")
+    endif()
+    if(TARGET dse_compile_shaders)
+        add_dependencies(${_dse_obj_target} dse_compile_shaders)
+    endif()
+endforeach()
+
 # Install rules (extracted to cmake/engine_install.cmake)
 include(cmake/engine_install.cmake)
 
@@ -1251,6 +1354,24 @@ if(Python3_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/audit/verify_feature_ledger.py
     )
     set_tests_properties(dse_feature_ledger PROPERTIES LABELS "audit;editor")
+
+    # 测试口径对账：源码里的 TEST 宏数（含被 #if 编掉的）不等于实际执行的用例数。
+    # 对外引用"多少测试"时必须用二进制实际列出的数量；本门禁同时保证"没有任何
+    # 无守卫的测试套件被静默漏掉"，并把差额逐条写明原因。
+    add_test(
+        NAME dse_test_inventory
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/audit/test_inventory.py
+                --bin-dir ${CMAKE_SOURCE_DIR}/bin
+    )
+    set_tests_properties(dse_test_inventory PROPERTIES LABELS "audit")
+
+    # 仓库体积棘轮：跟踪字节数只许降不许涨（基线 + 每文件 8 MiB 上限 + 已存在大文件
+    # grandfathered 只许缩小）。阻止"再来一次预编译库直提 Git"这类一次性增长。
+    add_test(
+        NAME dse_repo_size_budget
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/audit/repo_size_budget.py
+    )
+    set_tests_properties(dse_repo_size_budget PROPERTIES LABELS "audit")
 
     add_custom_target(dse_codegen
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/codegen/codegen.py

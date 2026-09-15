@@ -528,6 +528,11 @@ public:
     virtual void SetForceUnlit(bool enable) { (void)enable; }
     virtual void SetOverdrawMode(bool enable) { (void)enable; }
 
+    /// ADR-1：后端是否支持命令「先录制、Submit 时才提交」。
+    /// GL/DX11 仍为立即转发语义，默认 false；Vulkan 为真录制，覆写为 true。
+    /// 放在虚函数表末尾以保持已有虚接口的 ABI 槽位顺序不变。
+    virtual bool SupportsDeferredRecording() const { return false; }
+
     // --- 扩展能力查询（委托到继承的接口，此处仅保留 PatchLastFrameGPUCulledCount）---
 
 protected:

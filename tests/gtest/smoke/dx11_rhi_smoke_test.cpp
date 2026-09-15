@@ -178,7 +178,7 @@ TEST_F(DX11RhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
     }
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = 64;
     desc.height = 64;
     desc.has_depth = true;
@@ -186,6 +186,15 @@ TEST_F(DX11RhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     EXPECT_TRUE(rt);
     device_.resource_mgr().DeleteRenderTarget(rt.raw());
     SUCCEED();
+    // ADR-2 第 2 步：has_stencil=true 的 RT。DX11 深度纹理本就建为
+    // DXGI_FORMAT_R24G8_TYPELESS + DSV D24_UNORM_S8_UINT（已含模板面），
+    // 此处验证带该标志时 DSV 仍能成功创建（失败则 CreateRenderTarget 返回 0）。
+    RenderTargetDesc stencil_desc = desc;
+    stencil_desc.has_stencil = true;
+    const auto stencil_rt = device_.CreateRenderTarget(stencil_desc);
+    EXPECT_TRUE(stencil_rt) << "has_stencil=true 的 RT 创建失败";
+    if (stencil_rt) device_.resource_mgr().DeleteRenderTarget(stencil_rt.raw());
+
 }
 
 // 测试 DX 11 RHI冒烟：缓冲区创建且销毁无崩溃
@@ -209,7 +218,7 @@ TEST_F(DX11RhiSmokeTest, Correct) {
         GTEST_SKIP() << "No D3D11";
     }
     constexpr int kRtSize = 64;
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = kRtSize;
     desc.height = kRtSize;
     desc.has_color = true;
@@ -267,7 +276,7 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
         GTEST_SKIP() << "No D3D11";
     }
     constexpr int kRtSize = 64;
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
@@ -281,7 +290,7 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
 
     // 全屏拷贝需关深度测试 / 背面剔除 / 混合（与引擎 present 用的 composite 状态一致），
     // 否则全屏四边形会被剔除或深度测试丢弃。
-    PipelineStateDesc ps_desc;
+    PipelineStateDesc ps_desc{};
     ps_desc.blend_enabled = false;
     ps_desc.depth_test_enabled = false;
     ps_desc.depth_write_enabled = false;

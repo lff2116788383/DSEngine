@@ -1173,6 +1173,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
 }
 
 VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
+    const VulkanCommandState& /*state*/,
     VkCommandBuffer cmd_buf,
     const VulkanShaderProgram* program,
     unsigned int cubemap_texture_handle,

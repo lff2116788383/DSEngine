@@ -38,7 +38,7 @@ constexpr uint32_t kStrandVerts = 24;  // 单 strand 顶点数（line strip 段�
 
 // 在已初始化 device 上：建 256² RT → 清黑 → HairRenderer 画一条水平线带 → 回读。
 RenderTargetReadback RenderHair(RhiDevice& device) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

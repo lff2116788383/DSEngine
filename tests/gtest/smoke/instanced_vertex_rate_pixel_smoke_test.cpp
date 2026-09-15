@@ -117,7 +117,7 @@ float4 PSMain(VSOut i) : SV_Target { return i.color; }
 RenderTargetReadback RenderInstancedVertexRate(RhiDevice& device,
                                                const std::string& vert_src,
                                                const std::string& frag_src) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
@@ -151,7 +151,7 @@ RenderTargetReadback RenderInstancedVertexRate(RhiDevice& device,
     ib_desc.usage = GpuBufferUsage::kIndex;
     BufferHandle ibo = device.CreateGpuBuffer(ib_desc, indices);
 
-    PipelineStateDesc pso_desc;
+    PipelineStateDesc pso_desc{};
     pso_desc.blend_enabled = false;
     pso_desc.depth_test_enabled = false;
     pso_desc.depth_write_enabled = false;

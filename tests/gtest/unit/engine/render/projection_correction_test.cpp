@@ -152,7 +152,7 @@ TEST(ProjectionCorrectionTest, DX11_NDCtransform) {
 
 // 测试 渲染目标描述符扩展：MSA Aequality
 TEST(RenderTargetDescExtTest, MSAAequality) {
-    RenderTargetDesc a, b;
+    RenderTargetDesc a{}, b{};
     a.width = 1920; a.height = 1080; a.has_depth = true;
     b = a;
     EXPECT_TRUE(a == b);

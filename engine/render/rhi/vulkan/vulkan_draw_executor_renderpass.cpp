@@ -22,14 +22,23 @@
 namespace dse {
 namespace render {
 void VulkanDrawExecutor::BeginRenderPass(
+    VulkanCommandState& state,
     VkCommandBuffer cmd_buf,
     const RenderPassDesc& render_pass,
     VulkanResourceManager& resource_mgr,
     VulkanPipelineStateManager& pipeline_mgr) {
 
+    // 每个 pass 开始时清掉上一次绑定遗留的 cubemap 模式标志。
+    // state.prim_cubemap 是「当前是否走天空盒 descriptor 分支」的模式选择器，
+    // 而绑定状态属于命令缓冲/绘制，不应跨 pass 存活。它之前只被赋值、
+    // 从不复位：天空盒跟随后，其余走 PrimDraw（vertexless Draw()）的几何会误命中
+    // 天空盒分支（set0.b0 = samplerCube），自己的 UBO/SSBO 压根没绑，
+    // 顶点着色器读到全零 → 几何退化、无片元、静默无输出。
+    state.prim_cubemap = 0;
+
     // 更新帧索引和当前 RT 句柄
     current_frame_index_ = context_->current_frame() % MAX_FRAMES;
-    current_rt_handle_ = render_pass.render_target.raw();
+    state.current_rt_handle = render_pass.render_target.raw();
 
     // 确定 Framebuffer 和 RenderPass
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
@@ -76,11 +85,11 @@ void VulkanDrawExecutor::BeginRenderPass(
     }
 
     // 记录当前激活的 render pass，供后续 Draw 函数创建 pipeline 时使用
-    current_render_pass_ = vk_render_pass;
+    state.current_render_pass = vk_render_pass;
 
     // 确定渲染区域大小和 MSAA 采样数
     VkExtent2D render_extent = context_->swapchain_extent();
-    current_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
+    state.current_msaa_samples = VK_SAMPLE_COUNT_1_BIT;
     if (render_pass.render_target) {
         const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_pass.render_target.raw());
         if (rt && rt->width > 0 && rt->height > 0) {
@@ -88,7 +97,7 @@ void VulkanDrawExecutor::BeginRenderPass(
             render_extent.height = static_cast<uint32_t>(rt->height);
         }
         if (rt && rt->is_msaa && rt->msaa_samples > 1) {
-            current_msaa_samples_ = static_cast<VkSampleCountFlagBits>(rt->msaa_samples);
+            state.current_msaa_samples = static_cast<VkSampleCountFlagBits>(rt->msaa_samples);
         }
     }
 
@@ -100,7 +109,7 @@ void VulkanDrawExecutor::BeginRenderPass(
     begin_info.renderArea.extent = render_extent;
 
     // 计算实际 attachment 数（兼容 MRT GBuffer 与 MSAA resolve）
-    const bool is_msaa_rt = (current_msaa_samples_ != VK_SAMPLE_COUNT_1_BIT);
+    const bool is_msaa_rt = (state.current_msaa_samples != VK_SAMPLE_COUNT_1_BIT);
     int num_color = 1;
     bool rt_color_present = true;
     bool rt_depth_present = false;
@@ -141,20 +150,20 @@ void VulkanDrawExecutor::BeginRenderPass(
 
     // 二分法诊断：跳过超限的 render pass（在 vkCmdBeginRenderPass 之前检查）
     if (max_render_passes_ >= 0 && render_pass_counter_ >= max_render_passes_) {
-        skip_current_pass_ = true;
+        state.skip_current_pass = true;
         DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: SKIPPED rt={} (pass {} >= max {})",
                        render_pass.render_target.raw(), render_pass_counter_, max_render_passes_);
         render_pass_counter_++;
         return;
     }
-    skip_current_pass_ = false;
+    state.skip_current_pass = false;
     render_pass_counter_++;
 
     vkCmdBeginRenderPass(cmd_buf, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
     // VUID-VkGraphicsPipelineCreateInfo-renderPass-07609: pipeline 的 colorBlend attachment 数
     // 必须等于 RP subpass 的 color attachment 数。MRT GBuffer 时 num_color>1。
-    current_color_attachment_count_ = num_color;
+    state.current_color_attachment_count = num_color;
     global_state_.current_frame_stats.render_passes += 1;
     const bool vk_depth_only = (!rt_color_present && rt_depth_present);
     global_state_.current_pass_depth_only = vk_depth_only;
@@ -164,7 +173,7 @@ void VulkanDrawExecutor::BeginRenderPass(
     DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: rt={} extent={}x{} msaa={} color_count={} depth={} pass#={}",
                    render_pass.render_target.raw(),
                    render_extent.width, render_extent.height,
-                   static_cast<int>(current_msaa_samples_),
+                   static_cast<int>(state.current_msaa_samples),
                    num_color, rt_depth_present,
                    render_pass_counter_ - 1);
 
@@ -184,19 +193,19 @@ void VulkanDrawExecutor::BeginRenderPass(
     vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 }
 
-void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
+void VulkanDrawExecutor::EndRenderPass(VulkanCommandState& state, VkCommandBuffer cmd_buf) {
     global_state_.current_pass_depth_only = false;
-    if (skip_current_pass_) {
-        DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: SKIPPED rt={}", current_rt_handle_);
-        skip_current_pass_ = false;
+    if (state.skip_current_pass) {
+        DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: SKIPPED rt={}", state.current_rt_handle);
+        state.skip_current_pass = false;
         return;
     }
-    DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: rt={}", current_rt_handle_);
+    DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: rt={}", state.current_rt_handle);
     vkCmdEndRenderPass(cmd_buf);
 
     // 对 offscreen RT 的颜色附件插入显式 image barrier，确保 layout 转换和内存可见性
-    if (current_rt_handle_ != 0 && resource_mgr_) {
-        const VulkanRenderTarget* rt = resource_mgr_->GetRenderTarget(current_rt_handle_);
+    if (state.current_rt_handle != 0 && resource_mgr_) {
+        const VulkanRenderTarget* rt = resource_mgr_->GetRenderTarget(state.current_rt_handle);
         if (rt && rt->has_color && rt->color_texture.image != VK_NULL_HANDLE) {
             VkImageMemoryBarrier img_barrier{};
             img_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -271,8 +280,8 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
             0, 1, &mem_barrier, 0, nullptr, 0, nullptr);
     }
 
-    current_render_pass_ = VK_NULL_HANDLE;
-    current_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
+    state.current_render_pass = VK_NULL_HANDLE;
+    state.current_msaa_samples = VK_SAMPLE_COUNT_1_BIT;
 }
 
 // ============================================================================
@@ -369,20 +378,22 @@ void VulkanDrawExecutor::BlitRenderTargetToSwapchain(
 // 通用绘制原语 (A1)
 // ============================================================================
 
-void VulkanDrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
-    prim_program_handle_ = program_handle;
+void VulkanDrawExecutor::PrimBindShaderProgram(VulkanCommandState& state, unsigned int program_handle) {
+    state.prim_program_handle = program_handle;
 }
 
-void VulkanDrawExecutor::PrimBindVertexBuffer(uint32_t slot, VkBuffer buffer, uint32_t stride,
+void VulkanDrawExecutor::PrimBindVertexBuffer(VulkanCommandState& state, uint32_t slot,
+                                              VkBuffer buffer, uint32_t stride,
                                               const std::vector<VertexAttr>& attrs,
                                               VertexInputRate rate) {
-    prim_vbs_[slot] = PrimVbBinding{buffer, stride, attrs, rate};
+    state.prim_vbs[slot] = VulkanPrimVbBinding{buffer, stride, attrs, rate};
 }
 
 void VulkanDrawExecutor::BuildPrimVertexInput(
+        const VulkanCommandState& state,
         std::vector<VkVertexInputBindingDescription>& bindings,
         std::vector<VkVertexInputAttributeDescription>& vk_attrs) const {
-    for (const auto& [slot, b] : prim_vbs_) {
+    for (const auto& [slot, b] : state.prim_vbs) {
         bindings.push_back(VkVertexInputBindingDescription{
             slot, b.stride,
             b.rate == VertexInputRate::PerInstance ? VK_VERTEX_INPUT_RATE_INSTANCE
@@ -401,48 +412,51 @@ void VulkanDrawExecutor::BuildPrimVertexInput(
     }
 }
 
-void VulkanDrawExecutor::BindPrimVertexBuffers(VkCommandBuffer cmd_buf) const {
-    for (const auto& [slot, b] : prim_vbs_) {
+void VulkanDrawExecutor::BindPrimVertexBuffers(const VulkanCommandState& state,
+                                               VkCommandBuffer cmd_buf) const {
+    for (const auto& [slot, b] : state.prim_vbs) {
         VkDeviceSize offset = 0;
         VkBuffer buf = b.buffer;
         vkCmdBindVertexBuffers(cmd_buf, slot, 1, &buf, &offset);
     }
 }
 
-void VulkanDrawExecutor::PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
+void VulkanDrawExecutor::PrimPushConstants(VulkanCommandState& state, ShaderStage stage,
+                                           uint32_t offset, const void* data, uint32_t size) {
     (void)stage; // Vulkan 按程序反射的 push_constant_range.stageFlags 推送，无需逐次 stage
     if (!data || size == 0) return;
-    if (offset + size > kPrimPushMaxBytes) return;
-    std::memcpy(prim_push_data_ + offset, data, size);
-    if (offset + size > prim_push_size_) prim_push_size_ = offset + size;
-    prim_has_push_ = true;
+    if (offset + size > kVulkanPrimPushMaxBytes) return;
+    std::memcpy(state.prim_push_data + offset, data, size);
+    if (offset + size > state.prim_push_size) state.prim_push_size = offset + size;
+    state.prim_has_push = true;
 }
 
-void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count, uint32_t first_vertex,
+void VulkanDrawExecutor::PrimDraw(VulkanCommandState& state, VkCommandBuffer cmd_buf,
+                                  uint32_t vertex_count, uint32_t first_vertex,
                                   VulkanPipelineStateManager& pipeline_mgr,
                                   VulkanShaderManager& shader_mgr,
                                   VulkanResourceManager& resource_mgr) {
-    if (skip_current_pass_) return;
-    const VulkanShaderProgram* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (state.skip_current_pass) return;
+    const VulkanShaderProgram* program = shader_mgr.GetProgram(state.prim_program_handle);
     if (!program) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: shader program not available");
         return;
     }
     // VB 可缺省（vertexless：gl_VertexIndex 取 SSBO，毛发逐 strand 用）。
-    const bool has_vbo = HasPrimVbo();
+    const bool has_vbo = HasPrimVbo(state);
 
-    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
-        ? current_render_pass_ : context_->swapchain_render_pass();
+    VkRenderPass active_rp = state.current_render_pass != VK_NULL_HANDLE
+        ? state.current_render_pass : context_->swapchain_render_pass();
 
     // 顶点输入：由各 slot 的 BindVertexBuffer（VertexAttr + rate）翻译为 Vulkan 顶点输入描述
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    BuildPrimVertexInput(bindings, vk_attrs);
+    BuildPrimVertexInput(state, bindings, vk_attrs);
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
-        pipeline_mgr.active_pipeline_state(), program, active_rp,
+        state.prim_pipeline_state, program, active_rp,
         bindings, vk_attrs,
-        context_->swapchain_extent(), current_msaa_samples_, current_color_attachment_count_,
+        context_->swapchain_extent(), state.current_msaa_samples, state.current_color_attachment_count,
         false);
     if (pipeline == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: failed to create pipeline");
@@ -451,29 +465,29 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    if (prim_has_push_ && program->reflection.push_constant_range.size > 0) {
+    if (state.prim_has_push && program->reflection.push_constant_range.size > 0) {
         // stageFlags 取程序反射的 push range（skybox=VERTEX / PP=FRAGMENT），
-        // 推送已写入的字节范围 [0, prim_push_size_)。
-        uint32_t pc_size = std::min(prim_push_size_, program->reflection.push_constant_range.size);
+        // 推送已写入的字节范围 [0, state.prim_push_size)。
+        uint32_t pc_size = std::min(state.prim_push_size, program->reflection.push_constant_range.size);
         vkCmdPushConstants(cmd_buf, program->pipeline_layout,
                            program->reflection.push_constant_range.stageFlags,
-                           0, pc_size, prim_push_data_);
+                           0, pc_size, state.prim_push_data);
     }
-    prim_has_push_ = false;
-    prim_push_size_ = 0;
+    state.prim_has_push = false;
+    state.prim_push_size = 0;
 
-    if (prim_cubemap_ != 0) {
-        AllocateAndUpdateSkyboxDescriptorSets(cmd_buf, program, prim_cubemap_, resource_mgr);
+    if (state.prim_cubemap != 0) {
+        AllocateAndUpdateSkyboxDescriptorSets(state, cmd_buf, program, state.prim_cubemap, resource_mgr);
     } else {
         // 通用 UBO/SSBO/纹理绑定（毛发：组合 HairUniforms UBO\@set0.b0 + position/tangent SSBO\@set7.b0/b1）。
-        AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
+        AllocateAndUpdateGenericDescriptorSets(state, cmd_buf, program, resource_mgr);
     }
 
     if (has_vbo) {
-        BindPrimVertexBuffers(cmd_buf);
+        BindPrimVertexBuffers(state, cmd_buf);
     }
     vkCmdDraw(cmd_buf, vertex_count, 1, first_vertex, 0);
-    ClearExtraVertexSlots();
+    ClearExtraVertexSlots(state);
 
     global_state_.current_frame_stats.draw_calls++;
 }
@@ -482,34 +496,41 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
 // 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制
 // ============================================================================
 
-void VulkanDrawExecutor::PrimBindIndexBuffer(VkBuffer buffer, IndexType type) {
-    prim_index_buffer_ = buffer;
-    prim_index_type_ = (type == IndexType::UInt32) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+void VulkanDrawExecutor::PrimBindIndexBuffer(VulkanCommandState& state, VkBuffer buffer, IndexType type) {
+    state.prim_index_buffer = buffer;
+    state.prim_index_type = (type == IndexType::UInt32) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
 }
 
-void VulkanDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+void VulkanDrawExecutor::PrimBindTexture(VulkanCommandState& state, uint32_t slot,
+                                         unsigned int texture_handle, TextureDim dim) {
     // Vulkan 的 image view 在纹理创建时已按维度定型；契约 slot 暂存，PrimDrawIndexed 时映射到具体 binding。
     // cubemap（TexCube）走天空盒专用 descriptor set 路径（set0.b0 samplerCube），与通用 2D 纹理绑定分离。
     if (dim == TextureDim::TexCube) {
-        prim_cubemap_ = texture_handle;  // slot 固定 set0.b0（spike 仅单 cubemap binding）
+        state.prim_cubemap = texture_handle;  // slot 固定 set0.b0（spike 仅单 cubemap binding）
         return;
     }
-    prim_textures_[slot] = texture_handle;
+    // 非 cube 绑定 = 退出 cubemap 模式：否则同一 pass 内先画天空盒、再画普通几何时，
+    // 后者仍会命中天空盒 descriptor 分支。
+    state.prim_cubemap = 0;
+    state.prim_textures[slot] = texture_handle;
 }
 
-void VulkanDrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+void VulkanDrawExecutor::PrimBindUniformBuffer(VulkanCommandState& state, uint32_t slot,
+                                               unsigned int buffer_handle,
                                                uint32_t /*offset*/, uint32_t /*size*/) {
     // 契约 slot 暂存（offset/size 子区间 v1 暂不支持，整块绑定）。
-    prim_ubos_[slot] = buffer_handle;
+    state.prim_ubos[slot] = buffer_handle;
 }
 
-void VulkanDrawExecutor::PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+void VulkanDrawExecutor::PrimBindStorageBuffer(VulkanCommandState& state, uint32_t slot,
+                                               unsigned int buffer_handle,
                                                uint32_t offset, uint32_t size) {
     // 契约 slot 暂存，PrimDrawIndexed* 时映射到第 N 个 STORAGE_BUFFER binding（offset/size 走 range）。
-    prim_ssbos_[slot] = PrimSSBOBinding{buffer_handle, offset, size};
+    state.prim_ssbos[slot] = VulkanPrimSSBOBinding{buffer_handle, offset, size};
 }
 
 void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
+    const VulkanCommandState& state,
     VkCommandBuffer cmd_buf,
     const VulkanShaderProgram* program,
     VulkanResourceManager& resource_mgr) {
@@ -574,8 +595,8 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
         if (b.type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
             b.type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) {
             VkDescriptorBufferInfo info = dummy_ubo_info;
-            auto it = prim_ubos_.find(ubo_slot);
-            if (it != prim_ubos_.end()) {
+            auto it = state.prim_ubos.find(ubo_slot);
+            if (it != state.prim_ubos.end()) {
                 const VulkanBuffer* ub = resource_mgr.GetBuffer(it->second);
                 if (ub && ub->buffer) { info.buffer = ub->buffer; info.offset = 0; info.range = ub->size; }
             }
@@ -586,8 +607,8 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
             ++ubo_slot;
         } else if (b.type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
             VkDescriptorImageInfo info = dummy_img_info;
-            auto it = prim_textures_.find(tex_slot);
-            if (it != prim_textures_.end()) {
+            auto it = state.prim_textures.find(tex_slot);
+            if (it != state.prim_textures.end()) {
                 const VulkanTexture* t = resource_mgr.GetTexture(it->second);
                 if (t && t->image_view) {
                     info.imageView = t->image_view;
@@ -610,8 +631,8 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
             ++tex_slot;
         } else if (b.type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
             VkDescriptorBufferInfo info = dummy_ssbo_info;
-            auto it = prim_ssbos_.find(ssbo_slot);
-            if (it != prim_ssbos_.end()) {
+            auto it = state.prim_ssbos.find(ssbo_slot);
+            if (it != state.prim_ssbos.end()) {
                 const VulkanBuffer* sb = resource_mgr.GetSSBO(it->second.handle);
                 if (sb && sb->buffer) {
                     info.buffer = sb->buffer;
@@ -649,45 +670,48 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
                             set_count, sets.data(), 0, nullptr);
 }
 
-void VulkanDrawExecutor::PrimDrawIndexed(VkCommandBuffer cmd_buf, uint32_t index_count,
-                                         uint32_t first_index, int32_t base_vertex,
+void VulkanDrawExecutor::PrimDrawIndexed(VulkanCommandState& state, VkCommandBuffer cmd_buf,
+                                         uint32_t index_count, uint32_t first_index,
+                                         int32_t base_vertex,
                                          VulkanPipelineStateManager& pipeline_mgr,
                                          VulkanShaderManager& shader_mgr,
                                          VulkanResourceManager& resource_mgr) {
-    PrimDrawIndexedInstanced(cmd_buf, index_count, 1, first_index, base_vertex, 0,
+    PrimDrawIndexedInstanced(state, cmd_buf, index_count, 1, first_index, base_vertex, 0,
                              pipeline_mgr, shader_mgr, resource_mgr);
 }
 
-void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint32_t index_count,
-                                                  uint32_t instance_count, uint32_t first_index,
-                                                  int32_t base_vertex, uint32_t first_instance,
+void VulkanDrawExecutor::PrimDrawIndexedInstanced(VulkanCommandState& state,
+                                                  VkCommandBuffer cmd_buf,
+                                                  uint32_t index_count, uint32_t instance_count,
+                                                  uint32_t first_index, int32_t base_vertex,
+                                                  uint32_t first_instance,
                                                   VulkanPipelineStateManager& pipeline_mgr,
                                                   VulkanShaderManager& shader_mgr,
                                                   VulkanResourceManager& resource_mgr) {
-    if (skip_current_pass_) return;
-    const VulkanShaderProgram* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (state.skip_current_pass) return;
+    const VulkanShaderProgram* program = shader_mgr.GetProgram(state.prim_program_handle);
     if (!program) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: shader program not available");
         return;
     }
     // VB 可缺省（vertexless：gl_VertexIndex 取索引值→SSBO，毛发用）；IB 必须存在。
-    if (prim_index_buffer_ == VK_NULL_HANDLE) {
+    if (state.prim_index_buffer == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: index buffer not bound");
         return;
     }
 
-    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
-        ? current_render_pass_ : context_->swapchain_render_pass();
+    VkRenderPass active_rp = state.current_render_pass != VK_NULL_HANDLE
+        ? state.current_render_pass : context_->swapchain_render_pass();
 
-    const bool has_vbo = HasPrimVbo();
+    const bool has_vbo = HasPrimVbo(state);
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    BuildPrimVertexInput(bindings, vk_attrs);
+    BuildPrimVertexInput(state, bindings, vk_attrs);
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
-        pipeline_mgr.active_pipeline_state(), program, active_rp,
+        state.prim_pipeline_state, program, active_rp,
         bindings, vk_attrs,
-        context_->swapchain_extent(), current_msaa_samples_, current_color_attachment_count_,
+        context_->swapchain_extent(), state.current_msaa_samples, state.current_color_attachment_count,
         false);
     if (pipeline == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexed: failed to create pipeline");
@@ -696,24 +720,24 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    if (prim_has_push_ && program->reflection.push_constant_range.size > 0) {
+    if (state.prim_has_push && program->reflection.push_constant_range.size > 0) {
         // 后处理参数走真 push constant（stageFlags=FRAGMENT，取程序反射 range）。
-        uint32_t pc_size = std::min(prim_push_size_, program->reflection.push_constant_range.size);
+        uint32_t pc_size = std::min(state.prim_push_size, program->reflection.push_constant_range.size);
         vkCmdPushConstants(cmd_buf, program->pipeline_layout,
                            program->reflection.push_constant_range.stageFlags,
-                           0, pc_size, prim_push_data_);
+                           0, pc_size, state.prim_push_data);
     }
-    prim_has_push_ = false;
-    prim_push_size_ = 0;
+    state.prim_has_push = false;
+    state.prim_push_size = 0;
 
-    AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
+    AllocateAndUpdateGenericDescriptorSets(state, cmd_buf, program, resource_mgr);
 
     if (has_vbo) {
-        BindPrimVertexBuffers(cmd_buf);
+        BindPrimVertexBuffers(state, cmd_buf);
     }
-    vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
+    vkCmdBindIndexBuffer(cmd_buf, state.prim_index_buffer, 0, state.prim_index_type);
     vkCmdDrawIndexed(cmd_buf, index_count, instance_count, first_index, base_vertex, first_instance);
-    ClearExtraVertexSlots();
+    ClearExtraVertexSlots(state);
 
     global_state_.current_frame_stats.draw_calls++;
     if (instance_count != 1 || first_instance != 0) {
@@ -721,18 +745,20 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
     }
 }
 
-void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsigned int indirect_buffer,
+void VulkanDrawExecutor::PrimDrawIndexedIndirect(VulkanCommandState& state,
+                                                 VkCommandBuffer cmd_buf,
+                                                 unsigned int indirect_buffer,
                                                  uint32_t byte_offset,
                                                  VulkanPipelineStateManager& pipeline_mgr,
                                                  VulkanShaderManager& shader_mgr,
                                                  VulkanResourceManager& resource_mgr) {
-    if (skip_current_pass_) return;
-    const VulkanShaderProgram* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (state.skip_current_pass) return;
+    const VulkanShaderProgram* program = shader_mgr.GetProgram(state.prim_program_handle);
     if (!program) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: shader program not available");
         return;
     }
-    if (!HasPrimVbo() || prim_index_buffer_ == VK_NULL_HANDLE) {
+    if (!HasPrimVbo(state) || state.prim_index_buffer == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: vertex/index buffer not bound");
         return;
     }
@@ -747,17 +773,17 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
         return;
     }
 
-    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
-        ? current_render_pass_ : context_->swapchain_render_pass();
+    VkRenderPass active_rp = state.current_render_pass != VK_NULL_HANDLE
+        ? state.current_render_pass : context_->swapchain_render_pass();
 
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    BuildPrimVertexInput(bindings, vk_attrs);
+    BuildPrimVertexInput(state, bindings, vk_attrs);
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
-        pipeline_mgr.active_pipeline_state(), program, active_rp,
+        state.prim_pipeline_state, program, active_rp,
         bindings, vk_attrs,
-        context_->swapchain_extent(), current_msaa_samples_, current_color_attachment_count_,
+        context_->swapchain_extent(), state.current_msaa_samples, state.current_color_attachment_count,
         false);
     if (pipeline == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: failed to create pipeline");
@@ -766,15 +792,15 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
+    AllocateAndUpdateGenericDescriptorSets(state, cmd_buf, program, resource_mgr);
 
-    BindPrimVertexBuffers(cmd_buf);
-    vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
+    BindPrimVertexBuffers(state, cmd_buf);
+    vkCmdBindIndexBuffer(cmd_buf, state.prim_index_buffer, 0, state.prim_index_type);
     // draw_count=1：从 byte_offset 处读取一条 VkDrawIndexedIndirectCommand（5×uint32，三端布局一致）。
     // 契约：base_instance 偏移须经 SSBO 偏移表达（§6）。
     vkCmdDrawIndexedIndirect(cmd_buf, arg_buf->buffer, static_cast<VkDeviceSize>(byte_offset),
                              1, static_cast<uint32_t>(sizeof(DrawElementsIndirectCommand)));
-    ClearExtraVertexSlots();
+    ClearExtraVertexSlots(state);
 
     global_state_.current_frame_stats.draw_calls++;
     global_state_.current_frame_stats.indirect_draw_calls++;

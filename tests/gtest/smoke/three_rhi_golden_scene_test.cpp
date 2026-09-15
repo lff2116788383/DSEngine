@@ -77,7 +77,7 @@ void MakeTwoQuads(std::vector<MeshVertex>& verts, std::vector<uint16_t>& indices
 
 // 固定场景渲染：PBR + 单方向光（沿 +X）+ 一盏点光（上方偏置，打破 Y 对称，使 golden 更具信息量）。
 RenderTargetReadback RenderGoldenScene(RhiDevice& device) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

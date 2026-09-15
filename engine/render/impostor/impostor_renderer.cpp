@@ -57,7 +57,7 @@ void ImpostorRenderer::EnsureResources(RhiDevice& device) {
     if (init_) return;
 
     // Alpha 混合 PSO：测深度但不写深度（billboard 透明边缘需混合）、不剔除
-    PipelineStateDesc desc;
+    PipelineStateDesc desc{};
     desc.blend_enabled = true;
     desc.blend_src = BlendFactor::SrcAlpha;
     desc.blend_dst = BlendFactor::OneMinusSrcAlpha;

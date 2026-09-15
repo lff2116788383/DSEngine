@@ -42,7 +42,7 @@ static constexpr float kSH_Y2p2 = 0.546274f;    // sqrt(15) / (4*sqrt(pi))
 void LightProbeSystem::Init(RhiDevice* rhi_device) {
     if (initialized_ || !rhi_device) return;
 
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = face_resolution_;
     desc.height = face_resolution_;
     desc.has_color = true;

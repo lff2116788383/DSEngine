@@ -100,6 +100,8 @@ TEST_F(VulkanRhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
     }
+    EXPECT_TRUE(device_.SupportsDeferredRecording())
+        << "ADR-1: Vulkan backend must record before Submit";
     device_.BeginFrame();
     auto cmd = device_.CreateCommandBuffer();
     ASSERT_NE(cmd, nullptr);
@@ -178,7 +180,7 @@ TEST_F(VulkanRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
     }
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = 64;
     desc.height = 64;
     desc.has_depth = true;
@@ -206,7 +208,7 @@ TEST_F(VulkanRhiSmokeTest, ClearColorReadbackCorrect) {
         GTEST_SKIP() << "No Vulkan";
     }
     constexpr int kRtSize = 64;
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = kRtSize;
     desc.height = kRtSize;
     desc.has_color = true;
@@ -257,7 +259,7 @@ TEST_F(VulkanRhiSmokeTest, DepthRenderTargetReadback) {
         GTEST_SKIP() << "No Vulkan";
     }
     constexpr int kRtSize = 32;
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = kRtSize;
     desc.height = kRtSize;
     desc.has_color = true;
@@ -291,6 +293,34 @@ TEST_F(VulkanRhiSmokeTest, DepthRenderTargetReadback) {
     }
 
     device_.DeleteRenderTarget(rt);
+    // ADR-2 第 2 步：has_stencil=true 的 RT 必须照常创建成功（深/模板附件换用
+    // Depth24Stencil8 后 FBO/RenderPass 仍完整），且深度回读行为不变。
+    RenderTargetDesc stencil_desc = desc;
+    stencil_desc.has_stencil = true;
+    const auto stencil_rt = device_.CreateRenderTarget(stencil_desc);
+    ASSERT_TRUE(stencil_rt) << "has_stencil=true 的 RT 创建失败（附件格式/完整性回归）";
+
+    device_.BeginFrame();
+    auto stencil_cmd = device_.CreateCommandBuffer();
+    ASSERT_NE(stencil_cmd, nullptr);
+    RenderPassDesc stencil_rp;
+    stencil_rp.render_target = stencil_rt;
+    stencil_rp.clear_color = glm::vec4(0.0f);
+    stencil_rp.clear_color_enabled = true;
+    stencil_cmd->BeginRenderPass(stencil_rp);
+    stencil_cmd->EndRenderPass();
+    device_.Submit(stencil_cmd);
+    device_.EndFrame();
+
+    RenderTargetDepthReadback stencil_drb = device_.ReadRenderTargetDepthFloatWithSize(stencil_rt);
+    ASSERT_EQ(stencil_drb.width, kRtSize);
+    ASSERT_EQ(stencil_drb.height, kRtSize);
+    ASSERT_EQ(stencil_drb.depth.size(), static_cast<size_t>(kRtSize) * kRtSize);
+    for (int p = 0; p < kRtSize * kRtSize; ++p) {
+        ASSERT_NEAR(stencil_drb.depth[p], 1.0f, 0.001f) << "stencil RT depth pixel " << p;
+    }
+    device_.DeleteRenderTarget(stencil_rt);
+
 }
 
 // Pipeline state 创建/销毁冒烟
@@ -298,7 +328,7 @@ TEST_F(VulkanRhiSmokeTest, PipelineStateCreateAndDestroy) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
     }
-    PipelineStateDesc ps_desc;
+    PipelineStateDesc ps_desc{};
     ps_desc.blend_enabled = false;
     ps_desc.depth_test_enabled = true;
     ps_desc.depth_write_enabled = true;
@@ -315,7 +345,7 @@ TEST_F(VulkanRhiSmokeTest, MultipleRenderTargetsCreateDestroy) {
     constexpr int kCount = 8;
     dse::render::RenderTargetHandle handles[kCount];
     for (int i = 0; i < kCount; ++i) {
-        RenderTargetDesc desc;
+        RenderTargetDesc desc{};
         desc.width = 32 + i * 16;
         desc.height = 32 + i * 16;
         desc.has_color = true;

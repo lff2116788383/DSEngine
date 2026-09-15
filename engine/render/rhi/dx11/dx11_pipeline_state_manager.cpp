@@ -56,6 +56,20 @@ D3D11_CULL_MODE DX11PipelineStateManager::ToD3D11CullMode(CullFace face) {
     }
 }
 
+D3D11_STENCIL_OP DX11PipelineStateManager::ToD3D11StencilOp(StencilOp op) {
+    switch (op) {
+        case StencilOp::Keep:           return D3D11_STENCIL_OP_KEEP;
+        case StencilOp::Zero:           return D3D11_STENCIL_OP_ZERO;
+        case StencilOp::Replace:        return D3D11_STENCIL_OP_REPLACE;
+        case StencilOp::IncrementClamp: return D3D11_STENCIL_OP_INCR_SAT;
+        case StencilOp::DecrementClamp: return D3D11_STENCIL_OP_DECR_SAT;
+        case StencilOp::Invert:         return D3D11_STENCIL_OP_INVERT;
+        case StencilOp::IncrementWrap:  return D3D11_STENCIL_OP_INCR;
+        case StencilOp::DecrementWrap:  return D3D11_STENCIL_OP_DECR;
+    }
+    return D3D11_STENCIL_OP_KEEP;
+}
+
 unsigned int DX11PipelineStateManager::CreatePipelineState(const PipelineStateDesc& desc) {
     if (!context_) return 0;
 
@@ -86,7 +100,17 @@ unsigned int DX11PipelineStateManager::CreatePipelineState(const PipelineStateDe
     ds_desc.DepthEnable = desc.depth_test_enabled ? TRUE : FALSE;
     ds_desc.DepthWriteMask = desc.depth_write_enabled ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
     ds_desc.DepthFunc = ToD3D11ComparisonFunc(desc.depth_func);
-    ds_desc.StencilEnable = FALSE;
+    ds_desc.StencilEnable    = desc.stencil.enabled ? TRUE : FALSE;
+    ds_desc.StencilReadMask  = static_cast<UINT8>(desc.stencil.read_mask & 0xFFu);
+    ds_desc.StencilWriteMask = static_cast<UINT8>(desc.stencil.write_mask & 0xFFu);
+    ds_desc.FrontFace.StencilFailOp      = ToD3D11StencilOp(desc.stencil.front.fail_op);
+    ds_desc.FrontFace.StencilDepthFailOp = ToD3D11StencilOp(desc.stencil.front.depth_fail_op);
+    ds_desc.FrontFace.StencilPassOp      = ToD3D11StencilOp(desc.stencil.front.pass_op);
+    ds_desc.FrontFace.StencilFunc        = ToD3D11ComparisonFunc(desc.stencil.front.compare);
+    ds_desc.BackFace.StencilFailOp       = ToD3D11StencilOp(desc.stencil.back.fail_op);
+    ds_desc.BackFace.StencilDepthFailOp  = ToD3D11StencilOp(desc.stencil.back.depth_fail_op);
+    ds_desc.BackFace.StencilPassOp       = ToD3D11StencilOp(desc.stencil.back.pass_op);
+    ds_desc.BackFace.StencilFunc         = ToD3D11ComparisonFunc(desc.stencil.back.compare);
 
     hr = device->CreateDepthStencilState(&ds_desc, state.depth_stencil_state.GetAddressOf());
     if (FAILED(hr)) {
@@ -130,7 +154,8 @@ void DX11PipelineStateManager::ApplyPipelineState(unsigned int handle, ID3D11Dev
     auto& state = it->second;
     float blend_factor[4] = {0, 0, 0, 0};
     dc->OMSetBlendState(state.blend_state.Get(), blend_factor, 0xffffffff);
-    dc->OMSetDepthStencilState(state.depth_stencil_state.Get(), 0);
+    dc->OMSetDepthStencilState(state.depth_stencil_state.Get(),
+                               static_cast<UINT>(state.desc.stencil.reference));
     dc->RSSetState(state.rasterizer_state.Get());
 
     active_pipeline_state_ = handle;

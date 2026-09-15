@@ -51,6 +51,20 @@ VkCompareOp VulkanPipelineStateManager::ToVkCompareOp(CompareFunc func) {
     }
 }
 
+VkStencilOp VulkanPipelineStateManager::ToVkStencilOp(StencilOp op) {
+    switch (op) {
+        case StencilOp::Keep:           return VK_STENCIL_OP_KEEP;
+        case StencilOp::Zero:           return VK_STENCIL_OP_ZERO;
+        case StencilOp::Replace:        return VK_STENCIL_OP_REPLACE;
+        case StencilOp::IncrementClamp: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+        case StencilOp::DecrementClamp: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+        case StencilOp::Invert:         return VK_STENCIL_OP_INVERT;
+        case StencilOp::IncrementWrap:  return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+        case StencilOp::DecrementWrap:  return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+    }
+    return VK_STENCIL_OP_KEEP;
+}
+
 VkCullModeFlagBits VulkanPipelineStateManager::ToVkCullMode(CullFace face) {
     switch (face) {
     case CullFace::None:  return VK_CULL_MODE_NONE;
@@ -122,6 +136,20 @@ void VulkanPipelineStateManager::EvictPipelinesForRenderPass(VkRenderPass render
         }
     }
 }
+
+void VulkanPipelineStateManager::ForgetRenderPass(VkRenderPass render_pass) {
+    if (render_pass == VK_NULL_HANDLE) return;
+    // RenderPassKey 不含尺寸/格式：同一附件形状的 RT 共用一条缓存，销毁 RT 时必须
+    // 连同缓存条目一起失效，否则后续同形状 RT 会拿到已销毁的 VkRenderPass。
+    for (auto it = render_pass_cache_.begin(); it != render_pass_cache_.end();) {
+        if (it->second == render_pass) {
+            it = render_pass_cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 
 // ============================================================================
 // CreatePipelineState
@@ -251,7 +279,27 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     depth_stencil.depthWriteEnable = (state.desc.depth_write_enabled && !overdraw_mode_) ? VK_TRUE : VK_FALSE;
     depth_stencil.depthCompareOp = ToVkCompareOp(state.desc.depth_func);
     depth_stencil.depthBoundsTestEnable = VK_FALSE;
-    depth_stencil.stencilTestEnable = VK_FALSE;
+    // ADR-2 第 3 步：模板状态。默认 enabled=false 时 stencilTestEnable=FALSE，
+    // 与改动前一致。Vulkan 的 reference 是烘进 pipeline 的（每面各一份），
+    // 与 WebGPU 的动态 setStencilReference 语义不同  接口上统一取 StencilState::reference。
+    depth_stencil.stencilTestEnable = state.desc.stencil.enabled ? VK_TRUE : VK_FALSE;
+    if (state.desc.stencil.enabled) {
+        const auto& st = state.desc.stencil;
+        depth_stencil.front.failOp      = ToVkStencilOp(st.front.fail_op);
+        depth_stencil.front.passOp      = ToVkStencilOp(st.front.pass_op);
+        depth_stencil.front.depthFailOp = ToVkStencilOp(st.front.depth_fail_op);
+        depth_stencil.front.compareOp   = ToVkCompareOp(st.front.compare);
+        depth_stencil.front.compareMask = st.read_mask;
+        depth_stencil.front.writeMask   = st.write_mask;
+        depth_stencil.front.reference   = st.reference;
+        depth_stencil.back.failOp      = ToVkStencilOp(st.back.fail_op);
+        depth_stencil.back.passOp      = ToVkStencilOp(st.back.pass_op);
+        depth_stencil.back.depthFailOp = ToVkStencilOp(st.back.depth_fail_op);
+        depth_stencil.back.compareOp   = ToVkCompareOp(st.back.compare);
+        depth_stencil.back.compareMask = st.read_mask;
+        depth_stencil.back.writeMask   = st.write_mask;
+        depth_stencil.back.reference   = st.reference;
+    }
 
     // --- Blend ---
     VkPipelineColorBlendAttachmentState blend_attachment{};

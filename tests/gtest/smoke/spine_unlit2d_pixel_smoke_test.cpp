@@ -73,7 +73,7 @@ RenderTargetReadback RenderUnlit2D(RhiDevice& device,
                                    const std::vector<Unlit2DVertex>& verts,
                                    const std::vector<uint16_t>& indices,
                                    bool use_green_tex) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

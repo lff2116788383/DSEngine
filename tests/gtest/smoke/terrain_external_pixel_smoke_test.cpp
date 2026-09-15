@@ -75,7 +75,7 @@ DirectionalLight MakeLightAlongX() {
 // 在共享的外部 VB/IB 上按给定 (first_index, index_count) 子段列表逐个绘制。
 RenderTargetReadback RenderTiles(RhiDevice& device, int shading_mode,
                                  const std::vector<std::pair<uint32_t, uint32_t>>& draws) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

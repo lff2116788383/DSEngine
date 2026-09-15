@@ -16,9 +16,85 @@
 #include <rapidjson/writer.h>
 
 #include "engine/core/asset_version_envelope.h"
+#include "engine/core/asset_dto.h"
 #include "engine/cutscene/cutscene_serialize.h"
 
 namespace dse::editor {
+
+namespace {
+
+struct SeqProjectDto {
+    float duration = 10.0f;
+    float frame_rate = 30.0f;
+};
+
+struct SeqClipDto {
+    std::string name;
+    float start_time = 0.0f;
+    float end_time = 1.0f;
+    uint64_t color = 0;
+    std::string asset_path;
+    float volume = 1.0f;
+};
+
+struct SeqKeyframeDto {
+    float time = 0.0f;
+    float value = 0.0f;
+    float in_tangent = 0.0f;
+    float out_tangent = 0.0f;
+};
+
+struct SeqTrackDto {
+    std::string name;
+    std::string type = "Property";
+    bool muted = false;
+    bool locked = false;
+    bool visible = true;
+    bool expanded = true;
+    float height = 28.0f;
+    uint64_t track_color = 0;
+    int group_index = -1;
+    std::string target_entity;
+    std::string property_path;
+};
+
+constexpr dse::assets::FieldDesc kSeqProjectFields[] = {
+    {"duration", dse::assets::FieldType::Float, offsetof(SeqProjectDto, duration)},
+    {"frame_rate", dse::assets::FieldType::Float, offsetof(SeqProjectDto, frame_rate)},
+};
+
+constexpr dse::assets::FieldDesc kSeqTrackFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(SeqTrackDto, name)},
+    {"type", dse::assets::FieldType::String, offsetof(SeqTrackDto, type)},
+    {"muted", dse::assets::FieldType::Bool, offsetof(SeqTrackDto, muted)},
+    {"locked", dse::assets::FieldType::Bool, offsetof(SeqTrackDto, locked)},
+    {"visible", dse::assets::FieldType::Bool, offsetof(SeqTrackDto, visible)},
+    {"expanded", dse::assets::FieldType::Bool, offsetof(SeqTrackDto, expanded)},
+    {"height", dse::assets::FieldType::Float, offsetof(SeqTrackDto, height)},
+    {"track_color", dse::assets::FieldType::UInt64, offsetof(SeqTrackDto, track_color)},
+    {"group_index", dse::assets::FieldType::Int, offsetof(SeqTrackDto, group_index)},
+    {"target_entity", dse::assets::FieldType::String, offsetof(SeqTrackDto, target_entity)},
+    {"property_path", dse::assets::FieldType::String, offsetof(SeqTrackDto, property_path)},
+};
+
+constexpr dse::assets::FieldDesc kSeqClipFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(SeqClipDto, name)},
+    {"start_time", dse::assets::FieldType::Float, offsetof(SeqClipDto, start_time)},
+    {"end_time", dse::assets::FieldType::Float, offsetof(SeqClipDto, end_time)},
+    {"color", dse::assets::FieldType::UInt64, offsetof(SeqClipDto, color)},
+    {"asset_path", dse::assets::FieldType::String, offsetof(SeqClipDto, asset_path)},
+    {"volume", dse::assets::FieldType::Float, offsetof(SeqClipDto, volume)},
+};
+
+constexpr dse::assets::FieldDesc kSeqKeyframeFields[] = {
+    {"time", dse::assets::FieldType::Float, offsetof(SeqKeyframeDto, time)},
+    {"value", dse::assets::FieldType::Float, offsetof(SeqKeyframeDto, value)},
+    {"in_tangent", dse::assets::FieldType::Float, offsetof(SeqKeyframeDto, in_tangent)},
+    {"out_tangent", dse::assets::FieldType::Float, offsetof(SeqKeyframeDto, out_tangent)},
+};
+
+}  // namespace
+
 
 // ─── Type name conversion ───────────────────────────────────────────────
 
@@ -52,44 +128,58 @@ std::string SerializeSequencerProject(const SequencerState& state) {
     doc.SetObject();
     auto& a = doc.GetAllocator();
     assets::WriteVersionEnvelope(doc, kSequencerSchemaVersion, a);
-    doc.AddMember("duration", state.duration, a);
-    doc.AddMember("frame_rate", state.frame_rate, a);
+
+    SeqProjectDto project_dto;
+    project_dto.duration = state.duration;
+    project_dto.frame_rate = state.frame_rate;
+    dse::assets::WriteFields(doc, a, kSeqProjectFields,
+                             sizeof(kSeqProjectFields) / sizeof(kSeqProjectFields[0]), &project_dto);
 
     rapidjson::Value tracks(rapidjson::kArrayType);
     for (const auto& tr : state.tracks) {
+        SeqTrackDto tdto;
+        tdto.name = tr.name;
+        tdto.type = SeqTrackTypeName(tr.type);
+        tdto.muted = tr.muted;
+        tdto.locked = tr.locked;
+        tdto.visible = tr.visible;
+        tdto.expanded = tr.expanded;
+        tdto.height = tr.height;
+        tdto.track_color = static_cast<uint64_t>(tr.track_color);
+        tdto.group_index = tr.group_index;
+        tdto.target_entity = tr.target_entity;
+        tdto.property_path = tr.property_path;
+
         rapidjson::Value tj(rapidjson::kObjectType);
-        tj.AddMember("name", rapidjson::Value(tr.name.c_str(), a), a);
-        tj.AddMember("type", rapidjson::Value(SeqTrackTypeName(tr.type), a), a);
-        tj.AddMember("muted", tr.muted, a);
-        tj.AddMember("locked", tr.locked, a);
-        tj.AddMember("visible", tr.visible, a);
-        tj.AddMember("expanded", tr.expanded, a);
-        tj.AddMember("height", tr.height, a);
-        tj.AddMember("track_color", static_cast<uint64_t>(tr.track_color), a);
-        tj.AddMember("group_index", tr.group_index, a);
-        tj.AddMember("target_entity", rapidjson::Value(tr.target_entity.c_str(), a), a);
-        tj.AddMember("property_path", rapidjson::Value(tr.property_path.c_str(), a), a);
+        dse::assets::WriteFields(tj, a, kSeqTrackFields,
+                                 sizeof(kSeqTrackFields) / sizeof(kSeqTrackFields[0]), &tdto);
 
         rapidjson::Value clips(rapidjson::kArrayType);
         for (const auto& c : tr.clips) {
+            SeqClipDto cdto;
+            cdto.name = c.name;
+            cdto.start_time = c.start_time;
+            cdto.end_time = c.end_time;
+            cdto.color = static_cast<uint64_t>(c.color);
+            cdto.asset_path = c.asset_path;
+            cdto.volume = c.volume;
             rapidjson::Value cj(rapidjson::kObjectType);
-            cj.AddMember("name", rapidjson::Value(c.name.c_str(), a), a);
-            cj.AddMember("start_time", c.start_time, a);
-            cj.AddMember("end_time", c.end_time, a);
-            cj.AddMember("color", static_cast<uint64_t>(c.color), a);
-            cj.AddMember("asset_path", rapidjson::Value(c.asset_path.c_str(), a), a);
-            cj.AddMember("volume", c.volume, a);
+            dse::assets::WriteFields(cj, a, kSeqClipFields,
+                                     sizeof(kSeqClipFields) / sizeof(kSeqClipFields[0]), &cdto);
             clips.PushBack(cj, a);
         }
         tj.AddMember("clips", clips, a);
 
         rapidjson::Value kfs(rapidjson::kArrayType);
         for (const auto& k : tr.keyframes) {
+            SeqKeyframeDto kdto;
+            kdto.time = k.time;
+            kdto.value = k.value;
+            kdto.in_tangent = k.in_tangent;
+            kdto.out_tangent = k.out_tangent;
             rapidjson::Value kj(rapidjson::kObjectType);
-            kj.AddMember("time", k.time, a);
-            kj.AddMember("value", k.value, a);
-            kj.AddMember("in_tangent", k.in_tangent, a);
-            kj.AddMember("out_tangent", k.out_tangent, a);
+            dse::assets::WriteFields(kj, a, kSeqKeyframeFields,
+                                     sizeof(kSeqKeyframeFields) / sizeof(kSeqKeyframeFields[0]), &kdto);
             kfs.PushBack(kj, a);
         }
         tj.AddMember("keyframes", kfs, a);
@@ -117,41 +207,54 @@ bool DeserializeSequencerProject(const std::string& json,
         doc, kSequencerSchemaVersion, ".dsequence", diag);
     const bool legacy = version < kSequencerSchemaVersion;
 
+    // ADR-3: .dsequence read path uses unified DTO/field table.
+    SeqProjectDto project_dto;
+    dse::assets::ReadFields(doc, kSeqProjectFields,
+                            sizeof(kSeqProjectFields) / sizeof(kSeqProjectFields[0]), &project_dto);
+
     SequencerState loaded;
     loaded.initialized = true;
-    if (doc.HasMember("duration") && doc["duration"].IsNumber())
-        loaded.duration = doc["duration"].GetFloat();
-    if (doc.HasMember("frame_rate") && doc["frame_rate"].IsNumber())
-        loaded.frame_rate = doc["frame_rate"].GetFloat();
+    loaded.duration = project_dto.duration;
+    loaded.frame_rate = project_dto.frame_rate;
     loaded.view_end = loaded.duration;
 
     if (doc.HasMember("tracks") && doc["tracks"].IsArray()) {
         for (const auto& tj : doc["tracks"].GetArray()) {
             if (!tj.IsObject()) continue;
+            SeqTrackDto tdto;
+            dse::assets::ReadFields(tj, kSeqTrackFields,
+                                    sizeof(kSeqTrackFields) / sizeof(kSeqTrackFields[0]), &tdto);
+
             SequencerTrack tr;
-            if (tj.HasMember("name") && tj["name"].IsString()) tr.name = tj["name"].GetString();
-            if (tj.HasMember("type") && tj["type"].IsString()) tr.type = SeqTrackTypeFromName(tj["type"].GetString());
-            if (tj.HasMember("muted") && tj["muted"].IsBool()) tr.muted = tj["muted"].GetBool();
-            if (tj.HasMember("locked") && tj["locked"].IsBool()) tr.locked = tj["locked"].GetBool();
-            if (tj.HasMember("visible") && tj["visible"].IsBool()) tr.visible = tj["visible"].GetBool();
-            if (tj.HasMember("expanded") && tj["expanded"].IsBool()) tr.expanded = tj["expanded"].GetBool();
-            if (tj.HasMember("height") && tj["height"].IsNumber()) tr.height = tj["height"].GetFloat();
-            if (tj.HasMember("track_color") && tj["track_color"].IsUint64())
-                tr.track_color = static_cast<uint32_t>(tj["track_color"].GetUint64());
-            if (tj.HasMember("group_index") && tj["group_index"].IsInt())
-                tr.group_index = tj["group_index"].GetInt();
-            if (tj.HasMember("target_entity") && tj["target_entity"].IsString()) tr.target_entity = tj["target_entity"].GetString();
-            if (tj.HasMember("property_path") && tj["property_path"].IsString()) tr.property_path = tj["property_path"].GetString();
+            tr.name = std::move(tdto.name);
+            tr.type = SeqTrackTypeFromName(tdto.type);
+            tr.muted = tdto.muted;
+            tr.locked = tdto.locked;
+            tr.visible = tdto.visible;
+            tr.expanded = tdto.expanded;
+            tr.height = tdto.height;
+            tr.track_color = static_cast<uint32_t>(tdto.track_color);
+            tr.group_index = tdto.group_index;
+            tr.target_entity = std::move(tdto.target_entity);
+            tr.property_path = std::move(tdto.property_path);
 
             if (tj.HasMember("clips") && tj["clips"].IsArray()) {
                 for (const auto& cj : tj["clips"].GetArray()) {
                     if (!cj.IsObject()) continue;
-                    SequencerClip c;
-                    if (cj.HasMember("name") && cj["name"].IsString()) c.name = cj["name"].GetString();
+                    SeqClipDto cdto;
+                    dse::assets::ReadFields(cj, kSeqClipFields,
+                                            sizeof(kSeqClipFields) / sizeof(kSeqClipFields[0]), &cdto);
                     const bool has_start = cj.HasMember("start_time") && cj["start_time"].IsNumber();
                     const bool has_end = cj.HasMember("end_time") && cj["end_time"].IsNumber();
-                    if (has_start) c.start_time = cj["start_time"].GetFloat();
-                    if (has_end) c.end_time = cj["end_time"].GetFloat();
+
+                    SequencerClip c;
+                    c.name = std::move(cdto.name);
+                    c.start_time = cdto.start_time;
+                    c.end_time = cdto.end_time;
+                    c.color = static_cast<uint32_t>(cdto.color);
+                    c.asset_path = std::move(cdto.asset_path);
+                    c.volume = cdto.volume;
+
                     // Legacy migration: pre-v1 clips were points with a single
                     // `time` field instead of a start/end range.
                     if (!has_start && cj.HasMember("time") && cj["time"].IsNumber()) {
@@ -159,20 +262,20 @@ bool DeserializeSequencerProject(const std::string& json,
                         if (!has_end) c.end_time = c.start_time;
                         diag.migrated = true;
                     }
-                    if (cj.HasMember("color") && cj["color"].IsUint64()) c.color = static_cast<uint32_t>(cj["color"].GetUint64());
-                    if (cj.HasMember("asset_path") && cj["asset_path"].IsString()) c.asset_path = cj["asset_path"].GetString();
-                    if (cj.HasMember("volume") && cj["volume"].IsNumber()) c.volume = cj["volume"].GetFloat();
                     tr.clips.push_back(std::move(c));
                 }
             }
             if (tj.HasMember("keyframes") && tj["keyframes"].IsArray()) {
                 for (const auto& kj : tj["keyframes"].GetArray()) {
                     if (!kj.IsObject()) continue;
+                    SeqKeyframeDto kdto;
+                    dse::assets::ReadFields(kj, kSeqKeyframeFields,
+                                            sizeof(kSeqKeyframeFields) / sizeof(kSeqKeyframeFields[0]), &kdto);
                     SequencerKeyframe k;
-                    if (kj.HasMember("time") && kj["time"].IsNumber()) k.time = kj["time"].GetFloat();
-                    if (kj.HasMember("value") && kj["value"].IsNumber()) k.value = kj["value"].GetFloat();
-                    if (kj.HasMember("in_tangent") && kj["in_tangent"].IsNumber()) k.in_tangent = kj["in_tangent"].GetFloat();
-                    if (kj.HasMember("out_tangent") && kj["out_tangent"].IsNumber()) k.out_tangent = kj["out_tangent"].GetFloat();
+                    k.time = kdto.time;
+                    k.value = kdto.value;
+                    k.in_tangent = kdto.in_tangent;
+                    k.out_tangent = kdto.out_tangent;
                     tr.keyframes.push_back(std::move(k));
                 }
             }

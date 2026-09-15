@@ -318,9 +318,10 @@ void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
                                                 const glm::vec3& light_dir, const glm::vec3& light_color,
                                                 float light_intensity, float ambient_intensity,
                                                 float shadow_strength) {
-    if (active_render_cmd_ == VK_NULL_HANDLE) return;
+    if (active_render_cmd_ == VK_NULL_HANDLE || !active_render_state_) return;
     draw_executor_.SetBoundSSBOs(bound_ssbos_);
-    draw_executor_.SetupGPUDrivenPBR(active_render_cmd_, view, proj, camera_pos,
+    draw_executor_.SetupGPUDrivenPBR(*active_render_state_, active_render_cmd_,
+                                      view, proj, camera_pos,
                                       light_dir, light_color,
                                       light_intensity, ambient_intensity,
                                       shadow_strength,
@@ -328,8 +329,9 @@ void VulkanRhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::
 }
 
 void VulkanRhiDevice::SetupGPUDrivenShadowShader(const glm::mat4& light_view, const glm::mat4& light_proj) {
-    if (active_render_cmd_ == VK_NULL_HANDLE) return;
-    draw_executor_.SetupGPUDrivenShadow(active_render_cmd_, light_view, light_proj,
+    if (active_render_cmd_ == VK_NULL_HANDLE || !active_render_state_) return;
+    draw_executor_.SetupGPUDrivenShadow(*active_render_state_, active_render_cmd_,
+                                         light_view, light_proj,
                                          state_mgr_, shader_mgr_);
 }
 

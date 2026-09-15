@@ -62,7 +62,7 @@ PipelineHandle PostProcessRenderer::PsoFor(RhiDevice& device, bool blend) {
     // 后处理全屏 quad：关背面剔除（否则默认 cull-back 丢整屏）、关深度测试/写入。
     if (blend) {
         if (!pso_blend_) {
-            PipelineStateDesc desc;
+            PipelineStateDesc desc{};
             desc.blend_enabled = true;
             desc.blend_src = BlendFactor::SrcAlpha;
             desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
@@ -76,7 +76,7 @@ PipelineHandle PostProcessRenderer::PsoFor(RhiDevice& device, bool blend) {
         return pso_blend_;
     }
     if (!pso_opaque_) {
-        PipelineStateDesc desc;
+        PipelineStateDesc desc{};
         desc.blend_enabled = false;
         desc.depth_test_enabled = false;
         desc.depth_write_enabled = false;

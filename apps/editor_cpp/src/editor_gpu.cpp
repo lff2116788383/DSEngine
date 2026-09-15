@@ -44,7 +44,7 @@ void EditorDeleteTexture(unsigned int handle) {
 
 unsigned int EditorCreateBlitTarget(int width, int height) {
     if (!g_rhi || width <= 0 || height <= 0) return 0;
-    RenderTargetDesc desc;  // RHI 共享类型（rhi_types.h）定义在全局命名空间
+    RenderTargetDesc desc{};  // RHI 共享类型（rhi_types.h）定义在全局命名空间
     desc.width = width;
     desc.height = height;
     desc.has_color = true;

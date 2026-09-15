@@ -59,7 +59,7 @@ TextureHandle CreateDistinctCubemap(RhiDevice& device) {
 
 // 建 256² (color+depth) RT → 清黑 + 深度 1.0 → SkyboxRenderer 画天空盒 → 回读。
 RenderTargetReadback RenderSkybox(RhiDevice& device) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

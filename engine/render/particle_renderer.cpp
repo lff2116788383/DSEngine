@@ -45,7 +45,7 @@ void ParticleRenderer::EnsureResources(RhiDevice& device) {
     if (init_) return;
 
     // 加性混合 PSO：测深度（被不透明几何遮挡）但不写深度、不剔除（广告牌双面可见）。
-    PipelineStateDesc desc;
+    PipelineStateDesc desc{};
     desc.blend_enabled = true;
     desc.blend_src = BlendFactor::SrcAlpha;
     desc.blend_dst = BlendFactor::One;

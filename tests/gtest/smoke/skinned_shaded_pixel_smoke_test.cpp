@@ -76,7 +76,7 @@ DirectionalLight MakeLightAlongX() {
 }
 
 RenderTargetReadback RenderSkinnedShaded(RhiDevice& device, int shading_mode) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

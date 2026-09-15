@@ -39,7 +39,7 @@ void HairRenderer::EnsureResources(RhiDevice& device) {
 
     // 半透明混合 PSO：测深度（被不透明几何遮挡）但不写深度、不剔除（线带双面可见）。
     // 拓扑 LINE_STRIP 烘焙进 PSO，逐 strand 的 Draw 画一条连续线带。
-    PipelineStateDesc desc;
+    PipelineStateDesc desc{};
     desc.blend_enabled = true;
     desc.blend_src = BlendFactor::SrcAlpha;
     desc.blend_dst = BlendFactor::OneMinusSrcAlpha;

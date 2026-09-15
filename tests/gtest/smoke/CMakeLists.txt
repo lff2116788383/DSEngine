@@ -18,6 +18,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     instanced_ssbo_pixel_smoke_test.cpp
     instanced_vertex_rate_pixel_smoke_test.cpp
     bind_group_pixel_smoke_test.cpp
+    stencil_pixel_smoke_test.cpp
     immediate_draw_pixel_smoke_test.cpp
     hair_pixel_smoke_test.cpp
     forward_pbr_pixel_smoke_test.cpp
@@ -102,16 +103,71 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     )
 endif()
 
+# ---------------------------------------------------------------------------
+# smoke 套件分层（托管 CI 回归网 / 真实 GPU 门禁）
+# ---------------------------------------------------------------------------
+# 背景：整个 smoke 二进制曾是「一个 ctest 测试 + gpu 标签」，于是托管（无 GPU）
+# CI 用 -LE gpu 把 346 个用例全部排除 -> 常规 CI 对 smoke 层零覆盖。
+#
+# 现在按「是否构造真实 RHI/GPU 上下文」把用例分成两层，分类在配置期从源码自动
+# 推导（不维护手工名单）：源文件引用 rhi_pixel_harness / *RhiDevice / rhi_device
+# 即归入 gpu 层，否则归入 headless 层。
+#
+#   gtest.engine.smoke.headless : 无 GPU 依赖（core services / lua / physics3d /
+#                                 runtime 生命周期），标签不含 gpu -> 托管 CI 实跑
+#   gtest.engine.smoke.gpu      : 渲染/像素/RHI 冒烟，标签含 gpu -> 自托管 GPU
+#                                 runner 以 ctest -L gpu 门禁
+#
+# 新增 smoke 源文件会被自动分类；若一个文件既无 TEST 宏也未匹配任何一侧，配置期
+# 会打印 STATUS 行便于核对。
+set(_smoke_gpu_suites "")
+set(_smoke_headless_suites "")
+file(GLOB _smoke_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+foreach(_smoke_src ${_smoke_sources})
+    file(READ "${_smoke_src}" _smoke_src_text)
+    string(REGEX MATCHALL "TEST(_F)?\\([ \t]*[A-Za-z0-9_]+" _smoke_decls "${_smoke_src_text}")
+    if(_smoke_decls STREQUAL "")
+        continue()
+    endif()
+    set(_smoke_file_suites "")
+    foreach(_smoke_decl ${_smoke_decls})
+        string(REGEX REPLACE "^TEST(_F)?\\([ \t]*" "" _smoke_suite "${_smoke_decl}")
+        list(APPEND _smoke_file_suites "${_smoke_suite}")
+    endforeach()
+    if(_smoke_src_text MATCHES "rhi_pixel_harness|RhiDevice|rhi_device")
+        list(APPEND _smoke_gpu_suites ${_smoke_file_suites})
+    else()
+        list(APPEND _smoke_headless_suites ${_smoke_file_suites})
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES _smoke_gpu_suites)
+list(REMOVE_DUPLICATES _smoke_headless_suites)
+list(SORT _smoke_gpu_suites)
+list(SORT _smoke_headless_suites)
+
+string(REPLACE ";" ":" _smoke_gpu_filter "${_smoke_gpu_suites}")
+string(REPLACE ";" ":" _smoke_headless_filter "${_smoke_headless_suites}")
+message(STATUS "smoke 分层: headless=[${_smoke_headless_filter}] gpu=[${_smoke_gpu_filter}]")
+
+if(NOT _smoke_headless_filter STREQUAL "")
+    add_test(
+        NAME gtest.engine.smoke.headless
+        COMMAND ${DSE_GTEST_SMOKE_TARGET} --gtest_filter=${_smoke_headless_filter}.*
+    )
+    set_tests_properties(gtest.engine.smoke.headless PROPERTIES
+        LABELS "engine;smoke;gtest"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif()
+
 add_test(
-    NAME gtest.engine.smoke
-    COMMAND ${DSE_GTEST_SMOKE_TARGET}
+    NAME gtest.engine.smoke.gpu
+    COMMAND ${DSE_GTEST_SMOKE_TARGET} --gtest_filter=${_smoke_gpu_filter}.*
 )
-# The smoke suite is a render/pixel battery: three-RHI golden/soak and
-# shader-graph preview explicitly assert device.is_software==false (a real GPU).
-# It therefore cannot pass on GPU-less hosted CI runners; the "gpu" label lets
-# hosted CI exclude it (ctest -LE gpu) while a real-GPU (self-hosted) runner
-# gates it via ctest -L gpu.
-set_tests_properties(gtest.engine.smoke PROPERTIES
+# 渲染/像素冒烟：three-RHI golden/soak 与 shader-graph preview 显式断言
+# device.is_software==false（真实 GPU 读回），托管 runner 无法通过，
+# 因此保留 gpu 标签由自托管 runner 以 ctest -L gpu 门禁。
+set_tests_properties(gtest.engine.smoke.gpu PROPERTIES
     LABELS "engine;smoke;gtest;gpu"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )

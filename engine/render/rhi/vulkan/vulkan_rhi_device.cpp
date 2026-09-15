@@ -33,16 +33,16 @@ void VulkanCommandBuffer::SetDevice(VulkanRhiDevice* device) {
 
 void VulkanCommandBuffer::BeginRenderPass(const RenderPassDesc& render_pass) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-    device_->SetActiveRenderCommandBuffer(vk_command_buffer_);
+    device_->SetActiveRenderCommandBuffer(vk_command_buffer_, &state_);
     device_->FlushPendingGpuTimerReset(vk_command_buffer_);
     device_->draw_executor().BeginRenderPass(
-        vk_command_buffer_, render_pass,
+        state_, vk_command_buffer_, render_pass,
         device_->resource_mgr(), device_->state_mgr());
 }
 
 void VulkanCommandBuffer::EndRenderPass() {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-    device_->draw_executor().EndRenderPass(vk_command_buffer_);
+    device_->draw_executor().EndRenderPass(state_, vk_command_buffer_);
     device_->ClearActiveRenderCommandBuffer();
 }
 
@@ -55,7 +55,7 @@ void VulkanCommandBuffer::ClearColor(const glm::vec4& color) {
 void VulkanCommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().DispatchComputePass(
-        vk_command_buffer_, dispatch, device_->shader_mgr());
+        state_, vk_command_buffer_, dispatch, device_->shader_mgr());
 }
 
 // --- 通用绘制原语 (A1) ---
@@ -65,8 +65,9 @@ void VulkanCommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_
     const auto* desc = device_->GetGraphicsPipelineDesc(graphics_pipeline_handle);
     if (!desc) return;
     // 设为活动 PSO（绘制时与 program 一起惰性烘进 VkPipeline）；program!=0 时绑 program（PSO-only 管线 program==0）。
-    device_->state_mgr().set_active_pipeline_state(desc->pso_state.raw());
-    if (desc->program) device_->draw_executor().PrimBindShaderProgram(desc->program.raw());
+    // ADR-1锛歅SO/绋嬪簭灞炰簬 CommandBuffer 鑷繁鐨勫綍鍒剁姸鎬侊紝涓嶈兘鍐?executor/state_mgr 鍏ㄥ眬銆?
+    state_.prim_pipeline_state = desc->pso_state.raw();
+    if (desc->program) device_->draw_executor().PrimBindShaderProgram(state_, desc->program.raw());
 }
 
 
@@ -75,18 +76,18 @@ void VulkanCommandBuffer::BindVertexBuffer(uint32_t slot, BufferHandle buffer_ha
     if (!device_) return;
     const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle.raw());
     VkBuffer vk_buf = buf ? buf->buffer : VK_NULL_HANDLE;
-    device_->draw_executor().PrimBindVertexBuffer(slot, vk_buf, stride, attrs, rate);
+    device_->draw_executor().PrimBindVertexBuffer(state_, slot, vk_buf, stride, attrs, rate);
 }
 
 void VulkanCommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimPushConstants(stage, offset, data, size);
+    device_->draw_executor().PrimPushConstants(state_, stage, offset, data, size);
 }
 
 void VulkanCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().PrimDraw(
-        vk_command_buffer_, vertex_count, first_vertex,
+        state_, vk_command_buffer_, vertex_count, first_vertex,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
@@ -96,30 +97,30 @@ void VulkanCommandBuffer::BindIndexBuffer(BufferHandle buffer_handle, IndexType 
     if (!device_) return;
     const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle.raw());
     VkBuffer vk_buf = buf ? buf->buffer : VK_NULL_HANDLE;
-    device_->draw_executor().PrimBindIndexBuffer(vk_buf, type);
+    device_->draw_executor().PrimBindIndexBuffer(state_, vk_buf, type);
 }
 
 void VulkanCommandBuffer::BindTexture(uint32_t slot, TextureHandle texture_handle, TextureDim dim) {
     if (!device_) return;
-    device_->draw_executor().PrimBindTexture(slot, texture_handle.raw(), dim);
+    device_->draw_executor().PrimBindTexture(state_, slot, texture_handle.raw(), dim);
 }
 
 void VulkanCommandBuffer::BindUniformBuffer(uint32_t slot, BufferHandle buffer_handle,
                                             uint32_t offset, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle.raw(), offset, size);
+    device_->draw_executor().PrimBindUniformBuffer(state_, slot, buffer_handle.raw(), offset, size);
 }
 
 void VulkanCommandBuffer::BindStorageBuffer(uint32_t slot, BufferHandle buffer_handle,
                                             uint32_t offset, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle.raw(), offset, size);
+    device_->draw_executor().PrimBindStorageBuffer(state_, slot, buffer_handle.raw(), offset, size);
 }
 
 void VulkanCommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().PrimDrawIndexed(
-        vk_command_buffer_, index_count, first_index, base_vertex,
+        state_, vk_command_buffer_, index_count, first_index, base_vertex,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
@@ -128,14 +129,14 @@ void VulkanCommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t in
                                                uint32_t first_instance) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().PrimDrawIndexedInstanced(
-        vk_command_buffer_, index_count, instance_count, first_index, base_vertex, first_instance,
+        state_, vk_command_buffer_, index_count, instance_count, first_index, base_vertex, first_instance,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
 void VulkanCommandBuffer::DrawIndexedIndirect(BufferHandle indirect_buffer, uint32_t byte_offset) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().PrimDrawIndexedIndirect(
-        vk_command_buffer_, indirect_buffer.raw(), byte_offset,
+        state_, vk_command_buffer_, indirect_buffer.raw(), byte_offset,
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
@@ -176,6 +177,7 @@ void VulkanCommandBuffer::ClearDepth(float depth) {
 
 void VulkanCommandBuffer::Reset() {
     vk_command_buffer_ = VK_NULL_HANDLE;
+    state_ = VulkanCommandState{};
     ResetBase();
 }
 
@@ -418,6 +420,12 @@ void VulkanRhiDevice::DeleteRenderTarget(RenderTargetHandle render_target_handle
     if (const VulkanRenderTarget* rt = resource_mgr_.GetRenderTarget(render_target_handle.raw())) {
         state_mgr_.EvictPipelinesForRenderPass(rt->render_pass);
         state_mgr_.EvictPipelinesForRenderPass(rt->render_pass_load);
+        // 同步失效 RenderPass 结构缓存：它只按 {color, depth, clear*} 做键（不含尺寸/格式），
+        // 删掉一个 RT 后再建同形状 RT 会命中同一 key。残留已销毁的 VkRenderPass 会让之后
+        // 的 pass 被驱动静默丢弃（回读全 0）。生产路径同样可达：RenderGraph 的瞬态 RT 池
+        // ReleaseCachedTransientResources() 之后按同 desc 重建 RT，以及 resize 后的重建。
+        state_mgr_.ForgetRenderPass(rt->render_pass);
+        state_mgr_.ForgetRenderPass(rt->render_pass_load);
     }
     resource_mgr_.DeleteRenderTarget(render_target_handle.raw());
 }

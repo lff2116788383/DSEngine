@@ -125,7 +125,7 @@ void AtmosphereSkyPass::EnsureTransmittanceLUT(int width, int height) {
         ctx_.rhi_device->DeleteRenderTarget(transmittance_rt_);
     }
     // 创建 RT 用于 LUT
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = width;
     desc.height = height;
     desc.has_color = true;

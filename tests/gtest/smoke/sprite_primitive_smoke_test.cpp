@@ -27,7 +27,7 @@ constexpr int kRtSize = 256;
 // 在已初始化的 device 上：建 256² RT → 清黑 → 用 SpriteRenderer 画居中红色纹理 quad
 // （裁剪空间半边长 0.5，覆盖屏幕中央一半）→ 回读像素。
 RenderTargetReadback RenderCenteredSpriteQuad(RhiDevice& device) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

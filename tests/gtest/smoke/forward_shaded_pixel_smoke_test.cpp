@@ -78,7 +78,7 @@ RenderTargetReadback RenderShadedScene(RhiDevice& device, const ShadedMaterial& 
                                        const std::vector<uint16_t>& indices,
                                        const std::vector<ShadedPointLight>& point_lights = {},
                                        const ShadedGI& gi = {}) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
@@ -223,7 +223,7 @@ void MakeReceiverQuad(std::vector<MeshVertex>& verts, std::vector<uint16_t>& ind
 }
 
 RenderTargetReadback RenderShadowReceiver(RhiDevice& device, bool receive_shadow) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

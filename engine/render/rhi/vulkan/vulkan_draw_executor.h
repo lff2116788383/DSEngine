@@ -19,6 +19,7 @@
 
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/draw_executor_common.h"
+#include "engine/render/rhi/vulkan/vulkan_command_state.h"
 #include "engine/render/rhi/postprocess_common.h"
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
@@ -76,10 +77,11 @@ public:
     void ShutdownGeometryBuffers();
 
     // --- RenderPass ---
-    void BeginRenderPass(VkCommandBuffer cmd_buf, const RenderPassDesc& render_pass,
+    void BeginRenderPass(VulkanCommandState& state, VkCommandBuffer cmd_buf,
+                          const RenderPassDesc& render_pass,
                           VulkanResourceManager& resource_mgr,
                           VulkanPipelineStateManager& pipeline_mgr);
-    void EndRenderPass(VkCommandBuffer cmd_buf);
+    void EndRenderPass(VulkanCommandState& state, VkCommandBuffer cmd_buf);
 
     /// 诊断用：vkCmdBlitImage 直接从 RT 拷贝到 swapchain，绕过 shader
     void BlitRenderTargetToSwapchain(VkCommandBuffer cmd_buf,
@@ -88,49 +90,58 @@ public:
 
     // CommandBuffer 级 compute 原语：输入 dispatch.source_texture，输出当前绑定 RT 的 storage image。
     // 复刻原 bloom CS 路径（DispatchBloomCompute，含 layout 过渡 + 8×8 tile 调度）。
-    void DispatchComputePass(VkCommandBuffer cmd_buf,
+    void DispatchComputePass(VulkanCommandState& state, VkCommandBuffer cmd_buf,
                              const ComputeDispatch& dispatch,
                              VulkanShaderManager& shader_mgr);
 
     // --- 通用绘制原语 (A1) ---
-    void PrimBindShaderProgram(unsigned int program_handle);
-    void PrimBindVertexBuffer(uint32_t slot, VkBuffer buffer, uint32_t stride,
-                              const std::vector<VertexAttr>& attrs,
+    void PrimBindShaderProgram(VulkanCommandState& state, unsigned int program_handle);
+    void PrimBindVertexBuffer(VulkanCommandState& state, uint32_t slot, VkBuffer buffer,
+                              uint32_t stride, const std::vector<VertexAttr>& attrs,
                               VertexInputRate rate = VertexInputRate::PerVertex);
-    void PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
-    void PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count, uint32_t first_vertex,
+    void PrimPushConstants(VulkanCommandState& state, ShaderStage stage, uint32_t offset,
+                           const void* data, uint32_t size);
+    void PrimDraw(VulkanCommandState& state, VkCommandBuffer cmd_buf,
+                  uint32_t vertex_count, uint32_t first_vertex,
                   VulkanPipelineStateManager& pipeline_mgr,
                   VulkanShaderManager& shader_mgr,
                   VulkanResourceManager& resource_mgr);
 
     // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
-    void PrimBindIndexBuffer(VkBuffer buffer, IndexType type);
-    void PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
-    void PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+    void PrimBindIndexBuffer(VulkanCommandState& state, VkBuffer buffer, IndexType type);
+    void PrimBindTexture(VulkanCommandState& state, uint32_t slot,
+                         unsigned int texture_handle, TextureDim dim);
+    void PrimBindUniformBuffer(VulkanCommandState& state, uint32_t slot,
+                               unsigned int buffer_handle,
                                uint32_t offset, uint32_t size);
-    void PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+    void PrimBindStorageBuffer(VulkanCommandState& state, uint32_t slot,
+                               unsigned int buffer_handle,
                                uint32_t offset, uint32_t size);
-    void PrimDrawIndexed(VkCommandBuffer cmd_buf, uint32_t index_count, uint32_t first_index,
+    void PrimDrawIndexed(VulkanCommandState& state, VkCommandBuffer cmd_buf,
+                         uint32_t index_count, uint32_t first_index,
                          int32_t base_vertex,
                          VulkanPipelineStateManager& pipeline_mgr,
                          VulkanShaderManager& shader_mgr,
                          VulkanResourceManager& resource_mgr);
 
     // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
-    void PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint32_t index_count, uint32_t instance_count,
-                                  uint32_t first_index, int32_t base_vertex, uint32_t first_instance,
+    void PrimDrawIndexedInstanced(VulkanCommandState& state, VkCommandBuffer cmd_buf,
+                                  uint32_t index_count, uint32_t instance_count,
+                                  uint32_t first_index, int32_t base_vertex,
+                                  uint32_t first_instance,
                                   VulkanPipelineStateManager& pipeline_mgr,
                                   VulkanShaderManager& shader_mgr,
                                   VulkanResourceManager& resource_mgr);
 
     // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
-    void PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsigned int indirect_buffer, uint32_t byte_offset,
+    void PrimDrawIndexedIndirect(VulkanCommandState& state, VkCommandBuffer cmd_buf,
+                                 unsigned int indirect_buffer, uint32_t byte_offset,
                                  VulkanPipelineStateManager& pipeline_mgr,
                                  VulkanShaderManager& shader_mgr,
                                  VulkanResourceManager& resource_mgr);
 
     // --- GPU-Driven PBR 渲染设置 ---
-    void SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
+    void SetupGPUDrivenPBR(VulkanCommandState& state, VkCommandBuffer cmd_buf,
                             const glm::mat4& view, const glm::mat4& proj,
                             const glm::vec3& camera_pos,
                             const glm::vec3& light_dir, const glm::vec3& light_color,
@@ -140,7 +151,7 @@ public:
                             VulkanShaderManager& shader_mgr);
 
     // --- GPU-Driven Shadow 渲染设置 ---
-    void SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
+    void SetupGPUDrivenShadow(VulkanCommandState& state, VkCommandBuffer cmd_buf,
                                const glm::mat4& light_view, const glm::mat4& light_proj,
                                VulkanPipelineStateManager& pipeline_mgr,
                                VulkanShaderManager& shader_mgr);
@@ -216,29 +227,32 @@ private:
         VkDeviceSize inst_ssbo_offset = 0);
 
     /// 由 prim_vbs_ 各 slot 组装顶点输入描述（binding=slot，inputRate 按 rate，attr.binding=slot）。
-    void BuildPrimVertexInput(std::vector<VkVertexInputBindingDescription>& bindings,
+    void BuildPrimVertexInput(const VulkanCommandState& state,
+                              std::vector<VkVertexInputBindingDescription>& bindings,
                               std::vector<VkVertexInputAttributeDescription>& vk_attrs) const;
     /// 逐 slot 绑定 prim_vbs_ 的顶点缓冲（firstBinding=slot，offset=0）。
-    void BindPrimVertexBuffers(VkCommandBuffer cmd_buf) const;
+    void BindPrimVertexBuffers(const VulkanCommandState& state, VkCommandBuffer cmd_buf) const;
     /// 是否有任一 slot 绑定了顶点缓冲（vertexless 绘制时为 false）。
-    bool HasPrimVbo() const { return !prim_vbs_.empty(); }
+    bool HasPrimVbo(const VulkanCommandState& state) const { return !state.prim_vbs.empty(); }
     /// 绘制后清除 slot>0 的瞬态顶点流绑定。slot 0 沿用旧的「跨绘制保持」语义不动，
     /// 仅把新增的多 slot/per-instance 流限定为「每次绘制显式重绑」，避免泄漏到后续 vertexless 绘制。
-    void ClearExtraVertexSlots() {
-        for (auto it = prim_vbs_.begin(); it != prim_vbs_.end();) {
-            if (it->first != 0) it = prim_vbs_.erase(it); else ++it;
+    void ClearExtraVertexSlots(VulkanCommandState& state) {
+        for (auto it = state.prim_vbs.begin(); it != state.prim_vbs.end();) {
+            if (it->first != 0) it = state.prim_vbs.erase(it); else ++it;
         }
     }
 
     /// 为通用原语 (B0) 绘制分配并更新 DescriptorSet：反射驱动，按 (set,binding) 升序
     /// 把契约 slot 顺序映射到具体 UBO/纹理 binding，其余 binding 用 dummy 占位。
     void AllocateAndUpdateGenericDescriptorSets(
+        const VulkanCommandState& state,
         VkCommandBuffer cmd_buf,
         const VulkanShaderProgram* program,
         VulkanResourceManager& resource_mgr);
 
     /// 为天空盒绘制分配并更新 DescriptorSet
     VkDescriptorSet AllocateAndUpdateSkyboxDescriptorSets(
+        const VulkanCommandState& state,
         VkCommandBuffer cmd_buf,
         const VulkanShaderProgram* program,
         unsigned int cubemap_texture_handle,
@@ -338,10 +352,6 @@ private:
     uint32_t current_frame_index_ = 0;
 
     // 当前活跃的 RenderTarget 和 RenderPass（由 BeginRenderPass 设置）
-    unsigned int current_rt_handle_ = 0;
-    VkRenderPass current_render_pass_ = VK_NULL_HANDLE;
-    VkSampleCountFlagBits current_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
-    uint32_t current_color_attachment_count_ = 1;
     VkDeviceSize mesh_vbo_offset_ = 0;   ///< 当前帧 mesh VBO 写入偏移
     VkDeviceSize mesh_ibo_offset_ = 0;   ///< 当前帧 mesh IBO 写入偏移
     // Shared mesh template: 同 pass 内复用已上传的 VBO/IBO 偏移
@@ -372,7 +382,6 @@ private:
     unsigned int pp_blend_pipeline_state_ = 0; ///< 后处理管线状态句柄（alpha 混合，ui_overlay）
     int render_pass_counter_ = 0;
     int max_render_passes_ = -1;  // -1 = 无限制
-    bool skip_current_pass_ = false;
 
     // 全局渲染状态（引用 RhiDevice::global_render_state_）
     DrawExecutorGlobalState& global_state_;
@@ -387,31 +396,6 @@ private:
     const VulkanShaderProgram* cached_gpu_driven_program_ = nullptr;
     bool gpu_driven_instance_set_bound_ = false; ///< Set 4 (instance SSBO) 是否已绑定
 
-    // 通用绘制原语 (A1) 累积状态：Bind* 暂存，PrimDraw 时组装 pipeline/descriptor/draw
-    unsigned int prim_program_handle_ = 0;
-    // 各 slot 顶点流绑定（slot 化兑现契约 §3 终态；slot 0 即旧单流）。map 按 slot 有序，
-    // 据此组装 VkVertexInputBindingDescription（含 per-instance rate）并逐 slot 绑定 VB。
-    struct PrimVbBinding {
-        VkBuffer buffer = VK_NULL_HANDLE;
-        uint32_t stride = 0;
-        std::vector<VertexAttr> attrs;
-        VertexInputRate rate = VertexInputRate::PerVertex;
-    };
-    std::map<uint32_t, PrimVbBinding> prim_vbs_;
-    unsigned int prim_cubemap_ = 0;
-    // 通用 push constant 字节块（→ 真 vkCmdPushConstants，stageFlags 取程序反射 range）。
-    static constexpr uint32_t kPrimPushMaxBytes = 256;
-    uint8_t prim_push_data_[kPrimPushMaxBytes] = {};
-    uint32_t prim_push_size_ = 0;            ///< 已写入字节范围 [0, size)
-    bool prim_has_push_ = false;
-
-    // 通用绘制原语 (B0) 累积状态：索引缓冲 / 2D 纹理(slot→handle) / UBO(slot→handle)
-    VkBuffer prim_index_buffer_ = VK_NULL_HANDLE;          ///< 当前绑定的索引缓冲（VK_NULL_HANDLE=无）
-    VkIndexType prim_index_type_ = VK_INDEX_TYPE_UINT16;   ///< 索引类型
-    std::unordered_map<uint32_t, unsigned int> prim_textures_;  ///< 契约 slot → 2D 纹理句柄
-    std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< 契约 slot → UBO 句柄
-    struct PrimSSBOBinding { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
-    std::unordered_map<uint32_t, PrimSSBOBinding> prim_ssbos_;  ///< 契约 slot → SSBO 句柄+子区间
 
 };
 

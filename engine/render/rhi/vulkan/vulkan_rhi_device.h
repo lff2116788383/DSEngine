@@ -87,6 +87,7 @@ public:
     void DeleteBuffer(BufferHandle handle) override;
     VertexArrayHandle CreateVertexArray() override;
     void DeleteVertexArray(VertexArrayHandle handle) override;
+    bool SupportsDeferredRecording() const override { return true; }
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override;
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
@@ -201,8 +202,14 @@ public:
         last_frame_stats_.gpu_culled_count = culled;
     }
 
-    void SetActiveRenderCommandBuffer(VkCommandBuffer cmd) { active_render_cmd_ = cmd; }
-    void ClearActiveRenderCommandBuffer() { active_render_cmd_ = VK_NULL_HANDLE; }
+    void SetActiveRenderCommandBuffer(VkCommandBuffer cmd, VulkanCommandState* state = nullptr) {
+        active_render_cmd_ = cmd;
+        active_render_state_ = state;
+    }
+    void ClearActiveRenderCommandBuffer() {
+        active_render_cmd_ = VK_NULL_HANDLE;
+        active_render_state_ = nullptr;
+    }
     void FlushPendingGpuTimerReset(VkCommandBuffer cmd);
 
     bool NeedsTextureYFlip() const override { return true; }
@@ -284,6 +291,7 @@ private:
 
     /// 当前活跃的渲染命令缓冲（由 VulkanCommandBuffer::BeginRenderPass 设置）
     VkCommandBuffer active_render_cmd_ = VK_NULL_HANDLE;
+    VulkanCommandState* active_render_state_ = nullptr;
 
     /// 当前帧绑定的 SSBO 状态 (binding_point → handle)
     std::unordered_map<unsigned int, unsigned int> bound_ssbos_;

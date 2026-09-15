@@ -82,6 +82,30 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         glDisable(GL_CULL_FACE);
     }
 
+    // --- 模板（ADR-2 第 3 步）---
+    // 与 blend/depth 同理：GL 执行器里有裸 glStencil* 调用，不能依赖 cached_gl_state_ 做 diff，
+    // 每次绑定都权威下发。默认 stencil.enabled=false 时仅 glDisable(GL_STENCIL_TEST)，
+    // 与改动前「从不调用 glStencil*」在行为上等价。
+    if (state.stencil.enabled) {
+        glEnable(GL_STENCIL_TEST);
+        glStencilMaskSeparate(GL_FRONT, state.stencil.write_mask);
+        glStencilMaskSeparate(GL_BACK,  state.stencil.write_mask);
+        glStencilFuncSeparate(GL_FRONT, ToGLCompareFunc(state.stencil.front.compare),
+                              static_cast<GLint>(state.stencil.reference),
+                              state.stencil.read_mask);
+        glStencilFuncSeparate(GL_BACK, ToGLCompareFunc(state.stencil.back.compare),
+                              static_cast<GLint>(state.stencil.reference),
+                              state.stencil.read_mask);
+        glStencilOpSeparate(GL_FRONT, ToGLStencilOp(state.stencil.front.fail_op),
+                            ToGLStencilOp(state.stencil.front.depth_fail_op),
+                            ToGLStencilOp(state.stencil.front.pass_op));
+        glStencilOpSeparate(GL_BACK, ToGLStencilOp(state.stencil.back.fail_op),
+                            ToGLStencilOp(state.stencil.back.depth_fail_op),
+                            ToGLStencilOp(state.stencil.back.pass_op));
+    } else {
+        glDisable(GL_STENCIL_TEST);
+    }
+
     // --- 线框填充（编辑器视图模式；GLES 无 glPolygonMode，忽略）---
 #if !DSE_GL_ES_RUNTIME
     glPolygonMode(GL_FRONT_AND_BACK, state.wireframe ? GL_LINE : GL_FILL);

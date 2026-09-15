@@ -510,7 +510,7 @@ const WebGPUDrawExecutor::PipelineCacheEntry* WebGPUDrawExecutor::GetOrCreateRen
         }
     }
 
-    const PipelineStateDesc fallback_pso;
+    const PipelineStateDesc fallback_pso{};
     const PipelineStateDesc* pso = pso_->FindPipelineState(cur_pso_handle_);
     const PipelineStateDesc& ps = pso ? *pso : fallback_pso;
 
@@ -664,8 +664,24 @@ const WebGPUDrawExecutor::PipelineCacheEntry* WebGPUDrawExecutor::GetOrCreateRen
         ds.depthWriteEnabled = ps.depth_write_enabled;
         ds.depthCompare = ps.depth_test_enabled ? ToCompareFunc(ps.depth_func)
                                                 : WGPUCompareFunction_Always;
-        ds.stencilFront.compare = WGPUCompareFunction_Always;
-        ds.stencilBack.compare = WGPUCompareFunction_Always;
+        // ADR-2 第 3 步：模板状态。默认 ps.stencil.enabled=false 时保持
+        // compare=Always + 全 Keep（= 模板判定恒通过且不改值），与改动前等价。
+        // 注意：WebGPU 的 stencil reference 是**动态**状态
+        // （wgpuRenderPassEncoderSetStencilReference），不进 pipeline；本仓库当前只在
+        // reference==0 时行为正确，非 0 reference 需要在绘制前于 pass encoder 上单独下发
+        // （见 docs/architecture/ADR_DEFERRED_REFACTORS.md 的 STEP3/4 说明）。
+        ds.stencilReadMask  = static_cast<uint32_t>(ps.stencil.read_mask);
+        ds.stencilWriteMask = static_cast<uint32_t>(ps.stencil.write_mask);
+        ds.stencilFront.compare     = ps.stencil.enabled ? ToCompareFunc(ps.stencil.front.compare)
+                                                         : WGPUCompareFunction_Always;
+        ds.stencilFront.failOp      = ToStencilOp(ps.stencil.front.fail_op);
+        ds.stencilFront.depthFailOp = ToStencilOp(ps.stencil.front.depth_fail_op);
+        ds.stencilFront.passOp      = ToStencilOp(ps.stencil.front.pass_op);
+        ds.stencilBack.compare      = ps.stencil.enabled ? ToCompareFunc(ps.stencil.back.compare)
+                                                         : WGPUCompareFunction_Always;
+        ds.stencilBack.failOp       = ToStencilOp(ps.stencil.back.fail_op);
+        ds.stencilBack.depthFailOp  = ToStencilOp(ps.stencil.back.depth_fail_op);
+        ds.stencilBack.passOp       = ToStencilOp(ps.stencil.back.pass_op);
         rpd.depthStencil = &ds;
     }
 

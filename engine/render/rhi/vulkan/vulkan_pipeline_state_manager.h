@@ -83,6 +83,7 @@ public:
     static VkBlendFactor ToVkBlendFactor(BlendFactor factor);
     static VkCompareOp ToVkCompareOp(CompareFunc func);
     static VkCullModeFlagBits ToVkCullMode(CullFace face);
+    static VkStencilOp ToVkStencilOp(StencilOp op);
     static VkFrontFace ToVkFrontFace();
 
     /// 获取或创建 VkRenderPass（基于附件描述的缓存）
@@ -104,9 +105,21 @@ public:
     /// 需由调用方保证此时 render_pass 不再被在飞命令缓冲引用（与销毁 RenderPass 同一安全域）。
     void EvictPipelinesForRenderPass(VkRenderPass render_pass);
 
-    /// 设置活跃管线状态（追踪当前绑定）
+    /// 从 VkRenderPass 结构缓存中移除所有值为 render_pass 的条目。
+    /// 必须与 EvictPipelinesForRenderPass 一起在销毁 RT 时调用：RenderPassKey 只由
+    /// {has_color, has_depth, color_clear, depth_clear} 构成（不含尺寸/格式），删掉一个 RT
+    /// 后再建一个附件形状相同的 RT 会命中同一个 key；若残留旧句柄，GetOrCreateRenderPass
+    /// 会返回已 vkDestroyRenderPass 的 VkRenderPass，用它建 pipeline / 开 render pass 的
+    /// 绘制会被驱动静默丢弃（回读全 0，且不一定有校验层报错）。
+    /// 需由调用方保证此时 render_pass 不再被在飞命令缓冲引用（与销毁 RenderPass 同一安全域）。
+    void ForgetRenderPass(VkRenderPass render_pass);
+
+    /// Legacy diagnostic/test-only 活跃 pipeline state 查询；ADR-1 后普通绘制
+    /// 已改用 VulkanCommandState::prim_pipeline_state，不再依赖全局值。
     void set_active_pipeline_state(unsigned int handle) { active_pipeline_state_ = handle; }
     unsigned int active_pipeline_state() const { return active_pipeline_state_; }
+
+    /// 设置活跃管线状态（追踪当前绑定）
 
     /// 编辑器场景视图模式标志（影响下一次 GetOrCreateVkPipeline 的 rasterizer/blend 参数）
     void SetWireframeMode(bool enable) { wireframe_mode_ = enable; }

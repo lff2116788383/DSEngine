@@ -173,7 +173,7 @@ void MakeTwoQuads(std::vector<MeshVertex>& verts, std::vector<uint16_t>& indices
 // 故由调用方持有、跨迭代复用；本轮仅 churn 场景侧 GPU 资源（RT、每绘制动态缓冲、回读）——
 // 与真实 Play/Stop/切场景一致（销毁重建的是场景资源，而非 RHI 管线缓存）。
 RenderTargetReadback RenderOnce(RhiDevice& device, MeshRenderer& renderer, int iter) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "comment": "Ratchet for repo size. maxFileBytes caps any single file (new files above it must go to Git LFS / an external dependency); grandfathered lists files that already exceeded the cap when the baseline was taken (may only shrink). totalBytes + totalSlackBytes is the hard ceiling for the whole tracked tree. Tightening is free; loosening needs an explicit --force.",
+  "totalBytes": 390928484,
+  "totalSlackBytes": 4194304,
+  "maxFileBytes": 8388608,
+  "grandfathered": [
+    "apps/editor_cpp/fonts/NotoSansSC-Regular.ttf",
+    "depends/physx/physx/bin/win.x86_64.vc142.mt/debug/PhysXExtensions_static_64.lib",
+    "depends/physx/physx/bin/win.x86_64.vc142.mt/release/PhysXExtensions_static_64.lib",
+    "examples/KF_Framework/assets/audio/bgm/game.wav",
+    "examples/KF_Framework/assets/audio/bgm/result.wav",
+    "examples/KF_Framework/assets/audio/bgm/title.wav",
+    "examples/KF_Framework/assets/textures/demoField.jpg",
+    "templates/topdown_3d/assets/font/simsun.ttf"
+  ],
+  "grandfatheredSizes": [
+    {
+      "path": "apps/editor_cpp/fonts/NotoSansSC-Regular.ttf",
+      "bytes": 17797908
+    },
+    {
+      "path": "depends/physx/physx/bin/win.x86_64.vc142.mt/debug/PhysXExtensions_static_64.lib",
+      "bytes": 34000586
+    },
+    {
+      "path": "depends/physx/physx/bin/win.x86_64.vc142.mt/release/PhysXExtensions_static_64.lib",
+      "bytes": 19080054
+    },
+    {
+      "path": "examples/KF_Framework/assets/audio/bgm/game.wav",
+      "bytes": 15147780
+    },
+    {
+      "path": "examples/KF_Framework/assets/audio/bgm/result.wav",
+      "bytes": 11467136
+    },
+    {
+      "path": "examples/KF_Framework/assets/audio/bgm/title.wav",
+      "bytes": 14123564
+    },
+    {
+      "path": "examples/KF_Framework/assets/textures/demoField.jpg",
+      "bytes": 13088639
+    },
+    {
+      "path": "templates/topdown_3d/assets/font/simsun.ttf",
+      "bytes": 10499104
+    }
+  ]
+}

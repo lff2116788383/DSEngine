@@ -16,6 +16,20 @@
 #include "engine/render/rhi/opengl/gl_loader.h"
 #include <cstring>
 
+// GL 3.0 æ·±åº¦-æ¨¡æ¿éä»¶å¸¸éï¼æ åæ ¸å¿éï¼æ¾å¼ååºä»¥åå¯¹ glad/GLES å¤´ä¸åçæ¬ååè®¾ï¼
+#ifndef GL_DEPTH24_STENCIL8
+#define GL_DEPTH24_STENCIL8 0x88F0
+#endif
+#ifndef GL_DEPTH_STENCIL
+#define GL_DEPTH_STENCIL 0x84F9
+#endif
+#ifndef GL_UNSIGNED_INT_24_8
+#define GL_UNSIGNED_INT_24_8 0x84FA
+#endif
+#ifndef GL_DEPTH_STENCIL_ATTACHMENT
+#define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
+#endif
+
 // GL 4.3 SSBO / Compute 常量 — glad/gl.h 仅包含 GL 3.3 定义
 #ifndef GL_SHADER_STORAGE_BUFFER
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
@@ -655,6 +669,14 @@ RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& d
     const int num_color = desc.has_color ? (std::max)(1, desc.color_attachment_count) : 0;
     std::vector<unsigned int> color_handles(static_cast<size_t>(num_color), 0);
 
+    // ADR-2 ç¬¬ 2 æ­¥ï¼has_stencil æ¶æ·±åº¦éä»¶æ¹ç¨å¸¦æ¨¡æ¿é¢çæ ¼å¼ï¼ä¸æå¨ GL_DEPTH_STENCIL_ATTACHMENT ä¸ã
+    // é»è®¤ has_stencil=false æ¶å¨é¨åå¼ä¸æ¹å¨åå®å¨ä¸è´ï¼é¶è¡ä¸ºååï¼ã
+    const bool   depth_with_stencil = desc.has_depth && desc.has_stencil;
+    const GLint  depth_internal_format = depth_with_stencil ? GL_DEPTH24_STENCIL8 : GL_DEPTH_COMPONENT24;
+    const GLenum depth_data_format     = depth_with_stencil ? GL_DEPTH_STENCIL : GL_DEPTH_COMPONENT;
+    const GLenum depth_data_type       = depth_with_stencil ? GL_UNSIGNED_INT_24_8 : GL_UNSIGNED_INT;
+    const GLenum depth_attachment      = depth_with_stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT;
+
     auto cleanup_failed_rt = [&]() {
         if (fbo_handle != 0) {
             glDeleteFramebuffers(1, &fbo_handle);
@@ -734,7 +756,7 @@ RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& d
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
             for (int face = 0; face < 6; ++face) {
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_DEPTH_COMPONENT24, desc.width, desc.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, depth_internal_format, desc.width, desc.height, 0, depth_data_format, depth_data_type, nullptr);
             }
         } else {
             glBindTexture(GL_TEXTURE_2D, depth_texture_handle);
@@ -742,7 +764,7 @@ RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& d
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, desc.width, desc.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, depth_internal_format, desc.width, desc.height, 0, depth_data_format, depth_data_type, nullptr);
         }
     }
 
@@ -759,7 +781,7 @@ RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& d
     if (desc.has_depth) {
         if (desc.cube_map) {
 #if !DSE_GL_ES_RUNTIME
-            glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture_handle, 0);
+            glFramebufferTexture(GL_FRAMEBUFFER, depth_attachment, depth_texture_handle, 0);
             if (num_color == 0) {
                 glDrawBuffer(GL_NONE);
                 glReadBuffer(GL_NONE);
@@ -768,7 +790,7 @@ RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& d
             // GLES/WebGL2 无 glFramebufferTexture(分层 cubemap) 与 glDrawBuffer：
             // 创建时附 +X 面使 FBO 完整；运行期 PointShadowPass 逐面渲染，
             // BeginRenderPass 按 cube_face 重附对应面（见 gl_draw_executor.cpp）。
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+            glFramebufferTexture2D(GL_FRAMEBUFFER, depth_attachment,
                                    GL_TEXTURE_CUBE_MAP_POSITIVE_X, depth_texture_handle, 0);
             if (num_color == 0) {
                 const GLenum none_buf = GL_NONE;
@@ -777,7 +799,7 @@ RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& d
             }
 #endif
         } else {
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture_handle, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, depth_attachment, GL_TEXTURE_2D, depth_texture_handle, 0);
         }
     }
 
@@ -837,8 +859,8 @@ RenderTargetHandle OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& d
                 msaa_ok = false;
             } else {
                 glBindRenderbuffer(GL_RENDERBUFFER, msaa_depth_rb_handle);
-                glRenderbufferStorageMultisample(GL_RENDERBUFFER, effective_samples, GL_DEPTH_COMPONENT24, desc.width, desc.height);
-                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, msaa_depth_rb_handle);
+                glRenderbufferStorageMultisample(GL_RENDERBUFFER, effective_samples, depth_internal_format, desc.width, desc.height);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, depth_attachment, GL_RENDERBUFFER, msaa_depth_rb_handle);
             }
         }
         if (msaa_ok) {
@@ -1430,6 +1452,20 @@ void OpenGLRhiDevice::DeleteComputeShader(ShaderHandle handle) {
     if (it != compute_programs_.end()) {
         glDeleteProgram(handle.raw());
         compute_programs_.erase(it);
+    }
+
+    // 必须同步失效 push 常量 UBO 缓存：该缓存以 ShaderHandle 为键，而这里的 ShaderHandle
+    // 就是 GL program 名，glDeleteProgram 之后驱动会复用同名整数。若不清理，复用同名的新
+    // program 会命中旧条目（initialized==true），于是跳过
+    //   glUniformBlockBinding(new_prog, DsePushCS, kComputePushUboBinding)
+    // 而 DispatchCompute 仍把 backing UBO 绑到 binding 13，于是 program 的块 binding 与实绑
+    // 对不上 -> u_total_vertices/u_instance_count 读到垃圾值 -> compute 不写目标 buffer ->
+    // 回读全 0，且不产生任何 GL 错误（静默失败）。
+    // 顺带修掉 backing UBO 泄漏：旧代码只在 Shutdown 里删 UBO。
+    auto ubo_it = compute_push_ubos_.find(handle);
+    if (ubo_it != compute_push_ubos_.end()) {
+        if (ubo_it->second.ubo != 0) glDeleteBuffers(1, &ubo_it->second.ubo);
+        compute_push_ubos_.erase(ubo_it);
     }
 }
 

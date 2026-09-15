@@ -15,6 +15,7 @@
 #include <rapidjson/writer.h>
 
 #include "engine/core/asset_version_envelope.h"
+#include "engine/core/asset_dto.h"
 
 namespace dse {
 namespace scripting {
@@ -23,33 +24,61 @@ namespace {
 
 using Alloc = rapidjson::Document::AllocatorType;
 
-rapidjson::Value Str(const std::string& s, Alloc& alloc) {
-    return rapidjson::Value(s.c_str(), static_cast<rapidjson::SizeType>(s.size()), alloc);
-}
+struct ScriptMetadataDto {
+    std::string class_name;
+    std::string full_name;
+    std::string base_type;
+    std::string assembly;
+    std::string source_path;
+};
 
-std::string ReadString(const rapidjson::Value& obj, const char* key) {
-    if (obj.HasMember(key) && obj[key].IsString()) return obj[key].GetString();
-    return std::string();
-}
+struct ScriptFieldMetaDto {
+    std::string name;
+    std::string type;
+    std::string tooltip;
+    float number_default[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    std::string string_default;
+};
+
+constexpr dse::assets::FieldDesc kScriptMetadataFields[] = {
+    {"class_name", dse::assets::FieldType::String, offsetof(ScriptMetadataDto, class_name)},
+    {"full_name", dse::assets::FieldType::String, offsetof(ScriptMetadataDto, full_name)},
+    {"base_type", dse::assets::FieldType::String, offsetof(ScriptMetadataDto, base_type)},
+    {"assembly", dse::assets::FieldType::String, offsetof(ScriptMetadataDto, assembly)},
+    {"source_path", dse::assets::FieldType::String, offsetof(ScriptMetadataDto, source_path)},
+};
+
+constexpr dse::assets::FieldDesc kScriptFieldMetaFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(ScriptFieldMetaDto, name)},
+    {"type", dse::assets::FieldType::String, offsetof(ScriptFieldMetaDto, type)},
+    {"tooltip", dse::assets::FieldType::String, offsetof(ScriptFieldMetaDto, tooltip)},
+    {"number_default", dse::assets::FieldType::FloatArray4, offsetof(ScriptFieldMetaDto, number_default)},
+    {"string_default", dse::assets::FieldType::String, offsetof(ScriptFieldMetaDto, string_default)},
+};
 
 void WriteScriptBody(const ScriptMetadata& m, rapidjson::Value& out, Alloc& alloc) {
     out.SetObject();
-    out.AddMember("class_name", Str(m.class_name, alloc), alloc);
-    out.AddMember("full_name", Str(m.full_name, alloc), alloc);
-    out.AddMember("base_type", Str(m.base_type, alloc), alloc);
-    out.AddMember("assembly", Str(m.assembly, alloc), alloc);
-    out.AddMember("source_path", Str(m.source_path, alloc), alloc);
+    ScriptMetadataDto dto;
+    dto.class_name = m.class_name;
+    dto.full_name = m.full_name;
+    dto.base_type = m.base_type;
+    dto.assembly = m.assembly;
+    dto.source_path = m.source_path;
+    dse::assets::WriteFields(out, alloc, kScriptMetadataFields,
+                             sizeof(kScriptMetadataFields) / sizeof(kScriptMetadataFields[0]), &dto);
 
     rapidjson::Value fields(rapidjson::kArrayType);
     for (const auto& f : m.fields) {
+        ScriptFieldMetaDto fdto;
+        fdto.name = f.name;
+        fdto.type = ScriptFieldTypeName(f.type);
+        fdto.tooltip = f.tooltip;
+        for (int i = 0; i < 4; ++i) fdto.number_default[i] = f.number_default[i];
+        fdto.string_default = f.string_default;
+
         rapidjson::Value fj(rapidjson::kObjectType);
-        fj.AddMember("name", Str(f.name, alloc), alloc);
-        fj.AddMember("type", Str(ScriptFieldTypeName(f.type), alloc), alloc);
-        fj.AddMember("tooltip", Str(f.tooltip, alloc), alloc);
-        rapidjson::Value num(rapidjson::kArrayType);
-        for (float v : f.number_default) num.PushBack(v, alloc);
-        fj.AddMember("number_default", num, alloc);
-        fj.AddMember("string_default", Str(f.string_default, alloc), alloc);
+        dse::assets::WriteFields(fj, alloc, kScriptFieldMetaFields,
+                                 sizeof(kScriptFieldMetaFields) / sizeof(kScriptFieldMetaFields[0]), &fdto);
         fields.PushBack(fj, alloc);
     }
     out.AddMember("fields", fields, alloc);
@@ -61,11 +90,15 @@ bool ReadScriptBody(const rapidjson::Value& in, ScriptMetadata& out,
         diag.errors.push_back("script metadata body is not an object");
         return false;
     }
-    out.class_name = ReadString(in, "class_name");
-    out.full_name = ReadString(in, "full_name");
-    out.base_type = ReadString(in, "base_type");
-    out.assembly = ReadString(in, "assembly");
-    out.source_path = ReadString(in, "source_path");
+    // ADR-3：.dscriptmeta body 读取路径收敛到统一 DTO/字段表。
+    ScriptMetadataDto dto;
+    dse::assets::ReadFields(in, kScriptMetadataFields,
+                            sizeof(kScriptMetadataFields) / sizeof(kScriptMetadataFields[0]), &dto);
+    out.class_name = std::move(dto.class_name);
+    out.full_name = std::move(dto.full_name);
+    out.base_type = std::move(dto.base_type);
+    out.assembly = std::move(dto.assembly);
+    out.source_path = std::move(dto.source_path);
 
     if (in.HasMember("fields") && in["fields"].IsArray()) {
         for (const auto& fj : in["fields"].GetArray()) {
@@ -73,17 +106,16 @@ bool ReadScriptBody(const rapidjson::Value& in, ScriptMetadata& out,
                 diag.warnings.push_back("skipped non-object field entry");
                 continue;
             }
+            ScriptFieldMetaDto fdto;
+            dse::assets::ReadFields(fj, kScriptFieldMetaFields,
+                                    sizeof(kScriptFieldMetaFields) / sizeof(kScriptFieldMetaFields[0]),
+                                    &fdto);
             ScriptFieldMeta f;
-            f.name = ReadString(fj, "name");
-            f.type = ScriptFieldTypeFromName(ReadString(fj, "type").c_str());
-            f.tooltip = ReadString(fj, "tooltip");
-            if (fj.HasMember("number_default") && fj["number_default"].IsArray()) {
-                const auto& arr = fj["number_default"];
-                for (rapidjson::SizeType i = 0; i < arr.Size() && i < 4; ++i) {
-                    if (arr[i].IsNumber()) f.number_default[i] = arr[i].GetFloat();
-                }
-            }
-            f.string_default = ReadString(fj, "string_default");
+            f.name = std::move(fdto.name);
+            f.type = ScriptFieldTypeFromName(fdto.type.c_str());
+            f.tooltip = std::move(fdto.tooltip);
+            for (int i = 0; i < 4; ++i) f.number_default[i] = fdto.number_default[i];
+            f.string_default = std::move(fdto.string_default);
             out.fields.push_back(std::move(f));
         }
     }

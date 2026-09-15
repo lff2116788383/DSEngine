@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [master]
   workflow_dispatch:        # 允许手动触发（CI 无额度时按需运行）
+  schedule:
+    # 每夜 18:00 UTC 跑一次。gpu-smoke 之前只在 workflow_dispatch 时排队，等于渲染
+    # 回归网「常驻但从不触发」；挂上 schedule 后自托管 GPU runner 每夜自动门禁。
+    - cron: '0 18 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -158,6 +162,37 @@ jobs:
         run: ctest -C ${{ matrix.config }} -LE "gpu|csharp" --output-on-failure --timeout 120 -T Test
         timeout-minutes: 15
 
+      # GoogleTest 完整性 + 跳过可见性。ctest 把整个 gtest 二进制记为「1 个用例」：
+      # 进程中途 abort（MSVC STL 断言 / 崩溃）会让其后用例静默不跑 —— 本仓库真实发生过：
+      # RenderGraphIntegrationTest 越界读触发 abort，integration 只跑了 655/848，193 个
+      # 用例从未执行却没人发现。GTEST_SKIP 同理被 ctest 记成 pass，会高估真实覆盖强度。
+      # 本步骤对比「二进制列出的用例数」与「实际执行数」，并逐条打印 SKIP 及原因。
+      - name: GoogleTest integrity (completeness + skip visibility)
+        shell: pwsh
+        run: |
+          $exes = @()
+          foreach($name in @("dse_gtest_unit_tests","dse_gtest_integration_tests")){
+            $f = Get-ChildItem "bin" -Recurse -Filter "$name.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if(-not $f){ Write-Error "$name.exe not found under bin/"; exit 1 }
+            $exes += $f.FullName
+          }
+          python tools/audit/gtest_report.py `
+            --json "${{ env.BUILD_DIR }}/gtest_integrity.json" `
+            --xml-dir "${{ env.BUILD_DIR }}/gtest_integrity_xml" `
+            @exes
+        timeout-minutes: 20
+
+      - name: Upload GoogleTest integrity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtest-integrity-${{ matrix.label }}
+          path: |
+            ${{ env.BUILD_DIR }}/gtest_integrity.json
+            ${{ env.BUILD_DIR }}/gtest_integrity_xml/*.xml
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Run net smoke (GNS loopback)
         working-directory: ${{ env.BUILD_DIR }}
         run: ctest -C ${{ matrix.config }} -R "^dse_net_smoke$|^dse_net_capi_smoke$" --output-on-failure --timeout 120 -T Test
@@ -188,7 +223,7 @@ jobs:
   # runner 上以 ctest -L gpu 跑。仅 workflow_dispatch 手动触发，避免无自建 runner 时
   # 在每次 push/PR 上排队。自建 runner 需打标签 [self-hosted, windows, gpu]。
   gpu-smoke:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: [self-hosted, windows, gpu]
     name: gpu-smoke-self-hosted
     steps:
@@ -210,7 +245,7 @@ jobs:
       - name: CMake Configure (GPU backends on)
         run: |
           cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
-            -DDSE_BUILD_EDITOR=OFF `
+            -DDSE_BUILD_EDITOR=ON `
             -DDSE_BUILD_LAUNCHER=OFF `
             -DDSE_BUILD_GTESTS=ON `
             -DDSE_ENABLE_SPINE=ON `
@@ -226,23 +261,65 @@ jobs:
             -DDSE_NET_SODIUM_DIR="$env:DSE_NET_SODIUM_DIR" `
             -DDSE_NET_PROTOBUF_DIR="$env:DSE_NET_PROTOBUF_DIR"
 
-      - name: Build engine + smoke tests
+      - name: Build engine + smoke tests + editor
         run: |
           cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_engine --parallel
           cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_gtest_smoke_tests --parallel
           cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_copy_assets
+          # 编辑器窗口/ImGui 交换链三后端矩阵需要 editor 可执行文件（见下方矩阵步骤）。
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_editor_cpp --parallel
 
+      # 自托管 GPU runner 上的其余 gpu 标签用例（smoke 电池改由下一步的完整性工具跑，
+      # 避免同一电池跑两遍，故用 -E 把它排除）。
       - name: Run GPU smoke gate (real GPU; ctest -L gpu)
         working-directory: ${{ env.BUILD_DIR }}
-        run: ctest -C Release -L gpu --output-on-failure --timeout 600 -T Test
+        run: ctest -C Release -L gpu -E "gtest.engine.smoke.gpu" --output-on-failure --timeout 600 -T Test
         timeout-minutes: 30
+
+      # 真实 GPU 上的 smoke 电池：完整执行 + 完整性校验 + SKIP 逐条可见。
+      - name: GPU smoke battery (completeness + skip visibility; real GPU)
+        shell: pwsh
+        run: |
+          python tools/audit/gtest_report.py `
+            --json "${{ env.BUILD_DIR }}/gtest_integrity_smoke.json" `
+            --xml-dir "${{ env.BUILD_DIR }}/gtest_integrity_smoke_xml" `
+            "bin/dse_gtest_smoke_tests.exe"
+        timeout-minutes: 45
+
+      # 三后端覆盖矩阵：把 smoke 电池的 JUnit XML 归约成「每后端用例数/通过数 + 跨后端
+      # 一致性用例清单」，并强制要求每个必需后端都有覆盖  否则某个后端静默跳过时也能
+      # "全绿"，这正是 platformMatrix 此前只能人工目测的原因。
+      - name: RHI matrix report (per-backend coverage + cross-backend consistency)
+        if: always()
+        shell: pwsh
+        run: |
+          python tools/audit/rhi_matrix_report.py `
+            --xml "${{ env.BUILD_DIR }}/gtest_integrity_smoke_xml/dse_gtest_smoke_tests.xml" `
+            --json "${{ env.BUILD_DIR }}/rhi_matrix.json"
+        timeout-minutes: 10
+
+      # 编辑器窗口 / ImGui 交换链三后端矩阵（真机 GPU）。此前只有离屏像素 golden 验收，
+      # 交换链路径没有自动化门禁；本步骤把它变成可审计证据。
+      - name: Editor presentation matrix (OpenGL / D3D11 / Vulkan; headless window path)
+        shell: pwsh
+        run: |
+          ./scripts/test_editor_rhi_backends.ps1 `
+            -EditorExe "bin/dsengine-editor.exe" `
+            -Frames 3 `
+            -Json "${{ env.BUILD_DIR }}/editor_rhi_matrix.json"
+        timeout-minutes: 20
 
       - name: Upload GPU smoke test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gpu-smoke-results
-          path: ${{ env.BUILD_DIR }}/Testing/**/*.xml
+          path: |
+            ${{ env.BUILD_DIR }}/Testing/**/*.xml
+            ${{ env.BUILD_DIR }}/gtest_integrity_smoke.json
+            ${{ env.BUILD_DIR }}/gtest_integrity_smoke_xml/*.xml
+            ${{ env.BUILD_DIR }}/rhi_matrix.json
+            ${{ env.BUILD_DIR }}/editor_rhi_matrix.json
           retention-days: 14
           if-no-files-found: ignore
 

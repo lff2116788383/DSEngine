@@ -35,13 +35,20 @@ CI 的构建与打包都在装了 Visual Studio + Vulkan SDK 的开发机上运�
 在干净机上对待测目录运行：
 
 ```powershell
-pwsh scripts/verify_clean_room.ps1 -Dir <待测目录>
+# 发布门禁必须加 -RequireCleanHost；开发机上只想做静态自查时可以不加。
+pwsh scripts/verify_clean_room.ps1 -Dir <待测目录> -RequireCleanHost -Json clean_room_result.json
 ```
 
 脚本会依次执行并在任一步失败时返回非零退出码（可接入 CI gating）：
 
-1. **环境体检** —— 报告本机是否装了 VC++ Redist / VS / Vulkan SDK；若装了会
-   告警（说明这台不是真正的干净机）。
+1. **环境体检与干净机判定** —— 报告本机是否装了 VC++ Redist / VS / Vulkan SDK。
+   - 加 `-RequireCleanHost`：只要发现任一痕迹，**直接判失败**。发布结论必须用这个开关跑，
+     否则开发机上的“通过”会被误当成干净机验收结论（CRT/DLL 缺失类问题会被
+     本机已装的运行时掩盖）。
+   - 不加时：若本机不干净，即使其余检查全过，结论也只会是
+     `verdict=pass_on_dirty_host`，不会被当成干净机验收。
+   - `-Json <path>` 输出机器可读报告（含 `host.clean` / `host.contaminants` /
+     `verdict` / `failures` / `warnings`），供门禁与审计消费。
 2. **静态审计** —— 复用 `audit_runtime_deps.ps1`：禁止 debug CRT、要求 Release CRT 齐全。
 3. **许可证合规** —— 确认目录内有 `THIRD_PARTY_LICENSES.md`。
 4. **动态依赖检查** —— `dumpbin /DEPENDENTS` 解析每个 exe/dll 的导入表，任何既不在

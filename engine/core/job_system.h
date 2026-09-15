@@ -65,6 +65,13 @@ struct JobEntry {
     /// 代次：每次回收时自增，使指向旧任务的 JobHandle 失效（避免 ABA 误判）。
     std::atomic<uint32_t> generation{0};
 
+    /// 是否已在 freelist 中。回收必须「恰好一次」：ResolvePin 允许在 refcount 已为 0
+    /// 时重新 pin，于是两个线程可能各自观察到「归零」并都尝试回收；没有本标志时
+    /// 同一条目会被压入 freelist 两次（head 指向自己即自环），随后被分配给两个 job，
+    /// 表现为「一个 job 执行两次、相邻 job 从不执行」而 Wait() 仍返回。
+    /// 新分配的块内条目默认已在 freelist 上，故初值为 true。
+    std::atomic<bool> pooled{true};
+
     /// 依赖此任务的后续任务列表（在 deps_mutex_ 下操作）
     std::vector<JobEntry*> dependents;
 

@@ -21,22 +21,45 @@ using namespace dse::render;
 
 // 测试 渲染目标描述符：默认值
 TEST(RenderTargetDescTest, DefaultValues) {
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     EXPECT_EQ(desc.width, 0);
     EXPECT_EQ(desc.height, 0);
     EXPECT_TRUE(desc.has_color);
     EXPECT_FALSE(desc.has_depth);
+    EXPECT_FALSE(desc.has_stencil);  // ADR-2 第 2 步：默认关闭，保证零行为变化
     EXPECT_FALSE(desc.generate_mipmaps);
     EXPECT_FALSE(desc.cube_map);
 }
 
 // 测试 管线状态描述符：默认值
 TEST(PipelineStateDescTest, DefaultValues) {
-    PipelineStateDesc desc;
+    PipelineStateDesc desc{};
     EXPECT_TRUE(desc.blend_enabled);
     EXPECT_TRUE(desc.depth_test_enabled);
     EXPECT_TRUE(desc.depth_write_enabled);
     EXPECT_TRUE(desc.culling_enabled);
+    EXPECT_FALSE(desc.stencil.enabled);
+    EXPECT_EQ(desc.stencil.read_mask, 0xFFu);
+    EXPECT_EQ(desc.stencil.write_mask, 0xFFu);
+    EXPECT_EQ(desc.stencil.reference, 0u);
+    EXPECT_EQ(desc.stencil.front.compare, CompareFunc::Always);
+    EXPECT_EQ(desc.stencil.front.fail_op, StencilOp::Keep);
+    EXPECT_EQ(desc.stencil.front.depth_fail_op, StencilOp::Keep);
+    EXPECT_EQ(desc.stencil.front.pass_op, StencilOp::Keep);
+    EXPECT_EQ(desc.stencil.back.compare, CompareFunc::Always);
+    EXPECT_EQ(desc.stencil.back.fail_op, StencilOp::Keep);
+    EXPECT_EQ(desc.stencil.back.depth_fail_op, StencilOp::Keep);
+    EXPECT_EQ(desc.stencil.back.pass_op, StencilOp::Keep);
+    // StencilOp 的显式取值是四端映射函数的契约（ADR-2 第 3 步按此实现），
+    // 逐值钉住以防将来无意重编号。
+    EXPECT_EQ(static_cast<int>(StencilOp::Keep), 0);
+    EXPECT_EQ(static_cast<int>(StencilOp::Zero), 1);
+    EXPECT_EQ(static_cast<int>(StencilOp::Replace), 2);
+    EXPECT_EQ(static_cast<int>(StencilOp::IncrementClamp), 3);
+    EXPECT_EQ(static_cast<int>(StencilOp::DecrementClamp), 4);
+    EXPECT_EQ(static_cast<int>(StencilOp::Invert), 5);
+    EXPECT_EQ(static_cast<int>(StencilOp::IncrementWrap), 6);
+    EXPECT_EQ(static_cast<int>(StencilOp::DecrementWrap), 7);
 }
 
 // 测试 渲染通道描述符：默认值

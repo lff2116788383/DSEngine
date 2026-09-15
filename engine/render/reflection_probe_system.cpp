@@ -329,7 +329,7 @@ void ReflectionProbeSystem::Init(RhiDevice* rhi_device) {
 
     GenerateBRDFLUT(rhi_device);
 
-    RenderTargetDesc desc;
+    RenderTargetDesc desc{};
     desc.width = bake_resolution_;
     desc.height = bake_resolution_;
     desc.has_color = true;

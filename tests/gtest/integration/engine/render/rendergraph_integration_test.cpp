@@ -639,8 +639,14 @@ public:
     }
 };
 
-// 测试 渲染图集成：Transient渲染目标编译Distribution且Resetrelease
-TEST_F(RenderGraphIntegrationTest, TransientRT_CompileDistributionAndResetrelease) {
+// 测试 渲染图集成：Transient RT 跨帧缓存池契约（Compile 分配 → Reset 归还 → Release 销毁 → 下帧复用）
+//
+// 回归背景：c74b9188 将 Reset() 从「销毁 transient RT」改为「归还跨帧缓存池」后，本用例
+// 仍断言 Reset 即销毁，EXPECT 失败后又越界读 deleted_handles[0]，触发 MSVC STL
+// "vector subscript out of range" 断言 -> 进程 abort。integration 套件随之只跑完 655/848，
+// 其后 193 个用例（ThreeCSystemIntegrationTest 等）被静默吞掉、从未执行。
+// 现按真实契约断言，并补齐此前完全缺失的「跨帧复用同一物理 RT」覆盖。
+TEST_F(RenderGraphIntegrationTest, TransientRT_ResetReturnsToPoolThenReleaseDestroys) {
     TransientRTStub stub;
     graph.SetRhiDevice(&stub);
 
@@ -665,14 +671,41 @@ TEST_F(RenderGraphIntegrationTest, TransientRT_CompileDistributionAndResetreleas
     graph.MarkOutput(output);
     ASSERT_TRUE(graph.Compile());
 
-    // Transient 应被分配了物理 RT
-    EXPECT_EQ(stub.created_handles.size(), 1u);
+    // 帧 1：Transient 应被分配物理 RT，且此刻尚未销毁
+    ASSERT_EQ(stub.created_handles.size(), 1u);
     EXPECT_TRUE(graph.GetResourceRT(t1));
+    EXPECT_TRUE(stub.deleted_handles.empty());
+    const RenderTargetHandle first_rt = graph.GetResourceRT(t1);
 
-    // Reset 应释放
+    // Reset 归还缓存池：不得销毁（跨帧复用是生产路径的性能契约）
     graph.Reset();
-    EXPECT_EQ(stub.deleted_handles.size(), 1u);
+    EXPECT_TRUE(stub.deleted_handles.empty())
+        << "Reset 只应把 transient RT 归还跨帧缓存池，不应销毁";
+
+    // 帧 2：同 desc 的 transient 应复用池内同一物理 RT，不新建
+    auto t2 = graph.DeclareTransient("temp1", desc);
+    auto output2 = graph.DeclareResource("final");
+    auto pass3 = graph.AddPass("FillTemp");
+    graph.PassWrite(pass3, t2);
+    graph.PassSetExecute(pass3, [&](CommandBuffer&) { log.Record("FillTemp"); });
+    auto pass4 = graph.AddPass("UseTemp");
+    graph.PassRead(pass4, t2);
+    graph.PassWrite(pass4, output2);
+    graph.PassSetExecute(pass4, [&](CommandBuffer&) { log.Record("UseTemp"); });
+    graph.MarkOutput(output2);
+    ASSERT_TRUE(graph.Compile());
+
+    EXPECT_EQ(stub.created_handles.size(), 1u) << "跨帧应复用缓存池 RT，不得重复创建";
+    EXPECT_EQ(graph.GetResourceRT(t2), first_rt) << "复用的应是上一帧同一物理 RT";
+
+    // 真正释放：与 FramePipeline::Shutdown 同序列 —— 先 Reset 归还缓存池，再 Release 销毁。
+    // （帧 2 的 Compile 已把 RT 从池中取走复用，故必须先 Reset 归还，池内才有资源可销毁；
+    //   FramePipeline::OnWindowResize 直接 Release，是因为那里刚过完上一帧的 Reset，池内正是满的。）
+    graph.Reset();
+    graph.ReleaseCachedTransientResources();
+    ASSERT_EQ(stub.deleted_handles.size(), 1u);
     EXPECT_EQ(stub.deleted_handles[0], stub.created_handles[0]);
+
     graph.SetRhiDevice(nullptr);
 }
 

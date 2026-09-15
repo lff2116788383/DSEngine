@@ -30,7 +30,6 @@ void VulkanDrawExecutor::BeginFrame() {
     global_state_.current_frame_stats = {};
     current_frame_index_ = context_->current_frame() % MAX_FRAMES;
     render_pass_counter_ = 0;
-    skip_current_pass_ = false;
     mesh_vbo_offset_ = 0;
     mesh_ibo_offset_ = 0;
     bone_matrices_offset_ = 0;
@@ -53,12 +52,13 @@ void VulkanDrawExecutor::EndFrame() {
 // ============================================================================
 
 void VulkanDrawExecutor::DispatchComputePass(
+    VulkanCommandState& state,
     VkCommandBuffer cmd_buf,
     const ComputeDispatch& dispatch,
     VulkanShaderManager& shader_mgr) {
-    if (!dispatch.shader || current_rt_handle_ == 0) return;
+    if (!dispatch.shader || state.current_rt_handle == 0) return;
     DispatchBloomCompute(cmd_buf, dispatch.shader.raw(), dispatch.source_texture.raw(),
-                         current_rt_handle_, dispatch.blend_weight, shader_mgr);
+                         state.current_rt_handle, dispatch.blend_weight, shader_mgr);
 }
 
 void VulkanDrawExecutor::DispatchBloomCompute(
@@ -162,7 +162,8 @@ void VulkanDrawExecutor::DispatchBloomCompute(
 // GPU-Driven PBR 渲染设置
 // ============================================================
 
-void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
+void VulkanDrawExecutor::SetupGPUDrivenPBR(VulkanCommandState& state,
+                                            VkCommandBuffer cmd_buf,
                                             const glm::mat4& view, const glm::mat4& proj,
                                             const glm::vec3& camera_pos,
                                             const glm::vec3& light_dir, const glm::vec3& light_color,
@@ -183,8 +184,8 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     }
 
     // 获取当前 render pass（可能是离屏 RT 的 render pass）
-    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
-        ? current_render_pass_ : context_->swapchain_render_pass();
+    VkRenderPass active_rp = state.current_render_pass != VK_NULL_HANDLE
+        ? state.current_render_pass : context_->swapchain_render_pass();
 
     // BatchVertex 顶点格式（与 DrawMeshBatch 一致）
     std::vector<VkVertexInputBindingDescription> mesh_bindings = {
@@ -201,10 +202,10 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     };
 
     VkPipeline vk_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
-        pipeline_mgr.active_pipeline_state(),
+        state.prim_pipeline_state,
         pbr_program, active_rp, mesh_bindings, mesh_attrs,
-        context_->swapchain_extent(), current_msaa_samples_,
-        current_color_attachment_count_,
+        context_->swapchain_extent(), state.current_msaa_samples,
+        state.current_color_attachment_count,
         global_state_.wireframe_mode);
     if (vk_pipeline == VK_NULL_HANDLE) return;
 
@@ -379,7 +380,8 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
 // GPU-Driven Shadow 渲染设置
 // ============================================================
 
-void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
+void VulkanDrawExecutor::SetupGPUDrivenShadow(VulkanCommandState& state,
+                                                VkCommandBuffer cmd_buf,
                                                 const glm::mat4& light_view, const glm::mat4& light_proj,
                                                 VulkanPipelineStateManager& pipeline_mgr,
                                                 VulkanShaderManager& shader_mgr) {
@@ -394,8 +396,8 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
         if (!shadow_program) return;
     }
 
-    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
-        ? current_render_pass_ : context_->swapchain_render_pass();
+    VkRenderPass active_rp = state.current_render_pass != VK_NULL_HANDLE
+        ? state.current_render_pass : context_->swapchain_render_pass();
 
     std::vector<VkVertexInputBindingDescription> mesh_bindings = {
         {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
@@ -411,10 +413,10 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
     };
 
     VkPipeline vk_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
-        pipeline_mgr.active_pipeline_state(),
+        state.prim_pipeline_state,
         shadow_program, active_rp, mesh_bindings, mesh_attrs,
-        context_->swapchain_extent(), current_msaa_samples_,
-        current_color_attachment_count_);
+        context_->swapchain_extent(), state.current_msaa_samples,
+        state.current_color_attachment_count);
     if (vk_pipeline == VK_NULL_HANDLE) return;
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);

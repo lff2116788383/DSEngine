@@ -13,6 +13,7 @@
 #include <rapidjson/writer.h>
 
 #include "engine/core/asset_version_envelope.h"
+#include "engine/core/asset_dto.h"
 
 namespace dse {
 namespace cutscene {
@@ -21,47 +22,100 @@ namespace {
 
 using Alloc = rapidjson::Document::AllocatorType;
 
-rapidjson::Value Str(const std::string& s, Alloc& alloc) {
-    return rapidjson::Value(s.c_str(), static_cast<rapidjson::SizeType>(s.size()), alloc);
-}
+struct CutsceneSequenceDto {
+    std::string name;
+    float duration = 0.0f;
+};
 
-void WriteVec3(const glm::vec3& v, rapidjson::Value& out, Alloc& alloc) {
-    out.SetArray();
-    out.PushBack(v.x, alloc).PushBack(v.y, alloc).PushBack(v.z, alloc);
-}
+struct CutsceneTrackDto {
+    std::string name;
+    std::string type;
+};
 
-bool ReadVec3(const rapidjson::Value& in, glm::vec3& out) {
-    if (!in.IsArray() || in.Size() != 3) return false;
-    for (rapidjson::SizeType i = 0; i < 3; ++i) {
-        if (!in[i].IsNumber()) return false;
-    }
-    out = glm::vec3(in[0].GetFloat(), in[1].GetFloat(), in[2].GetFloat());
-    return true;
-}
+struct CameraKeyframeDto {
+    float time = 0.0f;
+    glm::vec3 position{0.0f, 0.0f, 0.0f};
+    glm::vec3 look_at{0.0f, 0.0f, 0.0f};
+    float fov = 60.0f;
+    std::string interp = "Linear";
+};
 
-float ReadFloat(const rapidjson::Value& obj, const char* key, float fallback) {
-    if (obj.HasMember(key) && obj[key].IsNumber()) return obj[key].GetFloat();
-    return fallback;
-}
+struct PropertyKeyframeDto {
+    float time = 0.0f;
+    float value = 0.0f;
+    std::string interp = "Linear";
+};
 
-bool ReadBool(const rapidjson::Value& obj, const char* key, bool fallback) {
-    if (obj.HasMember(key) && obj[key].IsBool()) return obj[key].GetBool();
-    return fallback;
-}
+struct EventDto {
+    float time = 0.0f;
+    std::string event_name;
+    std::string payload;
+};
 
-std::string ReadString(const rapidjson::Value& obj, const char* key) {
-    if (obj.HasMember(key) && obj[key].IsString()) return obj[key].GetString();
-    return std::string();
-}
+struct AudioCueDto {
+    float time = 0.0f;
+    std::string audio_path;
+    float volume = 1.0f;
+    bool loop = false;
+};
 
-InterpMode ReadInterp(const rapidjson::Value& obj) {
-    if (obj.HasMember("interp") && obj["interp"].IsString()) {
-        return InterpModeFromName(obj["interp"].GetString());
-    }
-    return InterpMode::Linear;
-}
+struct VideoCueDto {
+    float time = 0.0f;
+    std::string video_path;
+    bool fullscreen = true;
+    float opacity = 1.0f;
+    float fade_in = 0.0f;
+    float fade_out = 0.0f;
+};
 
-}  // namespace
+constexpr dse::assets::FieldDesc kCutsceneSequenceFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(CutsceneSequenceDto, name)},
+    {"duration", dse::assets::FieldType::Float, offsetof(CutsceneSequenceDto, duration)},
+};
+
+constexpr dse::assets::FieldDesc kCutsceneTrackFields[] = {
+    {"name", dse::assets::FieldType::String, offsetof(CutsceneTrackDto, name)},
+    {"type", dse::assets::FieldType::String, offsetof(CutsceneTrackDto, type)},
+};
+
+constexpr dse::assets::FieldDesc kCameraKeyframeFields[] = {
+    {"time", dse::assets::FieldType::Float, offsetof(CameraKeyframeDto, time)},
+    {"position", dse::assets::FieldType::Vec3, offsetof(CameraKeyframeDto, position)},
+    {"look_at", dse::assets::FieldType::Vec3, offsetof(CameraKeyframeDto, look_at)},
+    {"fov", dse::assets::FieldType::Float, offsetof(CameraKeyframeDto, fov)},
+    {"interp", dse::assets::FieldType::String, offsetof(CameraKeyframeDto, interp)},
+};
+
+constexpr dse::assets::FieldDesc kPropertyKeyframeFields[] = {
+    {"time", dse::assets::FieldType::Float, offsetof(PropertyKeyframeDto, time)},
+    {"value", dse::assets::FieldType::Float, offsetof(PropertyKeyframeDto, value)},
+    {"interp", dse::assets::FieldType::String, offsetof(PropertyKeyframeDto, interp)},
+};
+
+constexpr dse::assets::FieldDesc kEventFields[] = {
+    {"time", dse::assets::FieldType::Float, offsetof(EventDto, time)},
+    {"event_name", dse::assets::FieldType::String, offsetof(EventDto, event_name)},
+    {"payload", dse::assets::FieldType::String, offsetof(EventDto, payload)},
+};
+
+constexpr dse::assets::FieldDesc kAudioCueFields[] = {
+    {"time", dse::assets::FieldType::Float, offsetof(AudioCueDto, time)},
+    {"audio_path", dse::assets::FieldType::String, offsetof(AudioCueDto, audio_path)},
+    {"volume", dse::assets::FieldType::Float, offsetof(AudioCueDto, volume)},
+    {"loop", dse::assets::FieldType::Bool, offsetof(AudioCueDto, loop)},
+};
+
+constexpr dse::assets::FieldDesc kVideoCueFields[] = {
+    {"time", dse::assets::FieldType::Float, offsetof(VideoCueDto, time)},
+    {"video_path", dse::assets::FieldType::String, offsetof(VideoCueDto, video_path)},
+    {"fullscreen", dse::assets::FieldType::Bool, offsetof(VideoCueDto, fullscreen)},
+    {"opacity", dse::assets::FieldType::Float, offsetof(VideoCueDto, opacity)},
+    {"fade_in", dse::assets::FieldType::Float, offsetof(VideoCueDto, fade_in)},
+    {"fade_out", dse::assets::FieldType::Float, offsetof(VideoCueDto, fade_out)},
+};
+
+
+}
 
 const char* InterpModeName(InterpMode mode) {
     switch (mode) {
@@ -93,30 +147,36 @@ const char* TrackTypeName(TrackType type) {
 
 void WriteSequenceJson(const CutsceneSequence& seq, rapidjson::Value& out, Alloc& alloc) {
     out.SetObject();
-    out.AddMember("name", Str(seq.GetName(), alloc), alloc);
-    out.AddMember("duration", seq.GetDuration(), alloc);
+    CutsceneSequenceDto sdto;
+    sdto.name = seq.GetName();
+    sdto.duration = seq.GetDuration();
+    dse::assets::WriteFields(out, alloc, kCutsceneSequenceFields,
+                             sizeof(kCutsceneSequenceFields) / sizeof(kCutsceneSequenceFields[0]), &sdto);
 
     rapidjson::Value tracks(rapidjson::kArrayType);
     for (const auto& track : seq.GetTracks()) {
         if (!track) continue;
+        CutsceneTrackDto tdto;
+        tdto.name = track->GetName();
+        tdto.type = TrackTypeName(track->GetType());
         rapidjson::Value tj(rapidjson::kObjectType);
-        tj.AddMember("name", Str(track->GetName(), alloc), alloc);
-        tj.AddMember("type", Str(TrackTypeName(track->GetType()), alloc), alloc);
+        dse::assets::WriteFields(tj, alloc, kCutsceneTrackFields,
+                                 sizeof(kCutsceneTrackFields) / sizeof(kCutsceneTrackFields[0]), &tdto);
 
         switch (track->GetType()) {
             case TrackType::Camera: {
                 const auto* ct = static_cast<const CameraTrack*>(track.get());
                 rapidjson::Value kfs(rapidjson::kArrayType);
                 for (const auto& kf : ct->GetKeyframes()) {
+                    CameraKeyframeDto kdto;
+                    kdto.time = kf.time;
+                    kdto.position = kf.position;
+                    kdto.look_at = kf.look_at;
+                    kdto.fov = kf.fov;
+                    kdto.interp = InterpModeName(kf.interp);
                     rapidjson::Value k(rapidjson::kObjectType);
-                    k.AddMember("time", kf.time, alloc);
-                    rapidjson::Value pos, look;
-                    WriteVec3(kf.position, pos, alloc);
-                    WriteVec3(kf.look_at, look, alloc);
-                    k.AddMember("position", pos, alloc);
-                    k.AddMember("look_at", look, alloc);
-                    k.AddMember("fov", kf.fov, alloc);
-                    k.AddMember("interp", Str(InterpModeName(kf.interp), alloc), alloc);
+                    dse::assets::WriteFields(k, alloc, kCameraKeyframeFields,
+                                             sizeof(kCameraKeyframeFields) / sizeof(kCameraKeyframeFields[0]), &kdto);
                     kfs.PushBack(k, alloc);
                 }
                 tj.AddMember("keyframes", kfs, alloc);
@@ -126,10 +186,13 @@ void WriteSequenceJson(const CutsceneSequence& seq, rapidjson::Value& out, Alloc
                 const auto* pt = static_cast<const PropertyTrack*>(track.get());
                 rapidjson::Value kfs(rapidjson::kArrayType);
                 for (const auto& kf : pt->GetKeyframes()) {
+                    PropertyKeyframeDto kdto;
+                    kdto.time = kf.time;
+                    kdto.value = kf.value;
+                    kdto.interp = InterpModeName(kf.interp);
                     rapidjson::Value k(rapidjson::kObjectType);
-                    k.AddMember("time", kf.time, alloc);
-                    k.AddMember("value", kf.value, alloc);
-                    k.AddMember("interp", Str(InterpModeName(kf.interp), alloc), alloc);
+                    dse::assets::WriteFields(k, alloc, kPropertyKeyframeFields,
+                                             sizeof(kPropertyKeyframeFields) / sizeof(kPropertyKeyframeFields[0]), &kdto);
                     kfs.PushBack(k, alloc);
                 }
                 tj.AddMember("keyframes", kfs, alloc);
@@ -137,26 +200,32 @@ void WriteSequenceJson(const CutsceneSequence& seq, rapidjson::Value& out, Alloc
             }
             case TrackType::Event: {
                 const auto* et = static_cast<const EventTrack*>(track.get());
-                rapidjson::Value evs(rapidjson::kArrayType);
+                rapidjson::Value events(rapidjson::kArrayType);
                 for (const auto& ev : et->GetEvents()) {
+                    EventDto edto;
+                    edto.time = ev.time;
+                    edto.event_name = ev.event_name;
+                    edto.payload = ev.payload;
                     rapidjson::Value e(rapidjson::kObjectType);
-                    e.AddMember("time", ev.time, alloc);
-                    e.AddMember("event_name", Str(ev.event_name, alloc), alloc);
-                    e.AddMember("payload", Str(ev.payload, alloc), alloc);
-                    evs.PushBack(e, alloc);
+                    dse::assets::WriteFields(e, alloc, kEventFields,
+                                             sizeof(kEventFields) / sizeof(kEventFields[0]), &edto);
+                    events.PushBack(e, alloc);
                 }
-                tj.AddMember("events", evs, alloc);
+                tj.AddMember("events", events, alloc);
                 break;
             }
             case TrackType::Audio: {
                 const auto* at = static_cast<const AudioTrack*>(track.get());
                 rapidjson::Value cues(rapidjson::kArrayType);
                 for (const auto& cue : at->GetCues()) {
+                    AudioCueDto cdto;
+                    cdto.time = cue.time;
+                    cdto.audio_path = cue.audio_path;
+                    cdto.volume = cue.volume;
+                    cdto.loop = cue.loop;
                     rapidjson::Value c(rapidjson::kObjectType);
-                    c.AddMember("time", cue.time, alloc);
-                    c.AddMember("audio_path", Str(cue.audio_path, alloc), alloc);
-                    c.AddMember("volume", cue.volume, alloc);
-                    c.AddMember("loop", cue.loop, alloc);
+                    dse::assets::WriteFields(c, alloc, kAudioCueFields,
+                                             sizeof(kAudioCueFields) / sizeof(kAudioCueFields[0]), &cdto);
                     cues.PushBack(c, alloc);
                 }
                 tj.AddMember("cues", cues, alloc);
@@ -166,13 +235,16 @@ void WriteSequenceJson(const CutsceneSequence& seq, rapidjson::Value& out, Alloc
                 const auto* vt = static_cast<const VideoTrack*>(track.get());
                 rapidjson::Value cues(rapidjson::kArrayType);
                 for (const auto& cue : vt->GetCues()) {
+                    VideoCueDto cdto;
+                    cdto.time = cue.time;
+                    cdto.video_path = cue.video_path;
+                    cdto.fullscreen = cue.fullscreen;
+                    cdto.opacity = cue.opacity;
+                    cdto.fade_in = cue.fade_in;
+                    cdto.fade_out = cue.fade_out;
                     rapidjson::Value c(rapidjson::kObjectType);
-                    c.AddMember("time", cue.time, alloc);
-                    c.AddMember("video_path", Str(cue.video_path, alloc), alloc);
-                    c.AddMember("fullscreen", cue.fullscreen, alloc);
-                    c.AddMember("opacity", cue.opacity, alloc);
-                    c.AddMember("fade_in", cue.fade_in, alloc);
-                    c.AddMember("fade_out", cue.fade_out, alloc);
+                    dse::assets::WriteFields(c, alloc, kVideoCueFields,
+                                             sizeof(kVideoCueFields) / sizeof(kVideoCueFields[0]), &cdto);
                     cues.PushBack(c, alloc);
                 }
                 tj.AddMember("cues", cues, alloc);
@@ -191,9 +263,11 @@ std::shared_ptr<CutsceneSequence> ReadSequenceJson(const rapidjson::Value& in,
         return nullptr;
     }
 
-    std::string name = ReadString(in, "name");
-    float duration = ReadFloat(in, "duration", 0.0f);
-    auto seq = std::make_shared<CutsceneSequence>(name, duration);
+    // ADR-3: .dcutscene read path uses unified DTO/field table.
+    CutsceneSequenceDto sdto;
+    dse::assets::ReadFields(in, kCutsceneSequenceFields,
+                            sizeof(kCutsceneSequenceFields) / sizeof(kCutsceneSequenceFields[0]), &sdto);
+    auto seq = std::make_shared<CutsceneSequence>(std::move(sdto.name), sdto.duration);
 
     if (!in.HasMember("tracks") || !in["tracks"].IsArray()) {
         diag.warnings.push_back("no tracks array; produced empty sequence");
@@ -206,70 +280,80 @@ std::shared_ptr<CutsceneSequence> ReadSequenceJson(const rapidjson::Value& in,
             diag.warnings.push_back("skipped non-object track entry");
             continue;
         }
-        std::string track_name = ReadString(tj, "name");
-        std::string type_name = ReadString(tj, "type");
+        CutsceneTrackDto tdto;
+        dse::assets::ReadFields(tj, kCutsceneTrackFields,
+                                sizeof(kCutsceneTrackFields) / sizeof(kCutsceneTrackFields[0]), &tdto);
+        const std::string& type_name = tdto.type;
 
         if (type_name == "Camera") {
-            auto ct = std::make_shared<CameraTrack>(track_name);
+            auto ct = std::make_shared<CameraTrack>(std::move(tdto.name));
             if (tj.HasMember("keyframes") && tj["keyframes"].IsArray()) {
                 for (const auto& k : tj["keyframes"].GetArray()) {
                     if (!k.IsObject()) continue;
+                    CameraKeyframeDto kdto;
+                    dse::assets::ReadFields(k, kCameraKeyframeFields,
+                                            sizeof(kCameraKeyframeFields) / sizeof(kCameraKeyframeFields[0]), &kdto);
                     CameraKeyframe kf;
-                    kf.time = ReadFloat(k, "time", 0.0f);
-                    if (k.HasMember("position")) ReadVec3(k["position"], kf.position);
-                    if (k.HasMember("look_at")) ReadVec3(k["look_at"], kf.look_at);
-                    kf.fov = ReadFloat(k, "fov", 60.0f);
-                    kf.interp = ReadInterp(k);
+                    kf.time = kdto.time;
+                    kf.position = kdto.position;
+                    kf.look_at = kdto.look_at;
+                    kf.fov = kdto.fov;
+                    kf.interp = InterpModeFromName(kdto.interp.c_str());
                     ct->AddKeyframe(kf);
                 }
             }
             seq->AddTrack(ct);
         } else if (type_name == "Property") {
-            auto pt = std::make_shared<PropertyTrack>(track_name);
+            auto pt = std::make_shared<PropertyTrack>(std::move(tdto.name));
             if (tj.HasMember("keyframes") && tj["keyframes"].IsArray()) {
                 for (const auto& k : tj["keyframes"].GetArray()) {
                     if (!k.IsObject()) continue;
-                    pt->AddKeyframe(ReadFloat(k, "time", 0.0f),
-                                    ReadFloat(k, "value", 0.0f),
-                                    ReadInterp(k));
+                    PropertyKeyframeDto kdto;
+                    dse::assets::ReadFields(k, kPropertyKeyframeFields,
+                                            sizeof(kPropertyKeyframeFields) / sizeof(kPropertyKeyframeFields[0]), &kdto);
+                    pt->AddKeyframe(kdto.time, kdto.value, InterpModeFromName(kdto.interp.c_str()));
                 }
             }
             seq->AddTrack(pt);
         } else if (type_name == "Event") {
-            auto et = std::make_shared<EventTrack>(track_name);
+            auto et = std::make_shared<EventTrack>(std::move(tdto.name));
             if (tj.HasMember("events") && tj["events"].IsArray()) {
                 for (const auto& e : tj["events"].GetArray()) {
                     if (!e.IsObject()) continue;
-                    et->AddEvent(ReadFloat(e, "time", 0.0f),
-                                 ReadString(e, "event_name"),
-                                 ReadString(e, "payload"));
+                    EventDto edto;
+                    dse::assets::ReadFields(e, kEventFields,
+                                            sizeof(kEventFields) / sizeof(kEventFields[0]), &edto);
+                    et->AddEvent(edto.time, std::move(edto.event_name), std::move(edto.payload));
                 }
             }
             seq->AddTrack(et);
         } else if (type_name == "Audio") {
-            auto at = std::make_shared<AudioTrack>(track_name);
+            auto at = std::make_shared<AudioTrack>(std::move(tdto.name));
             if (tj.HasMember("cues") && tj["cues"].IsArray()) {
                 for (const auto& c : tj["cues"].GetArray()) {
                     if (!c.IsObject()) continue;
-                    at->AddCue(ReadFloat(c, "time", 0.0f),
-                               ReadString(c, "audio_path"),
-                               ReadFloat(c, "volume", 1.0f),
-                               ReadBool(c, "loop", false));
+                    AudioCueDto cdto;
+                    dse::assets::ReadFields(c, kAudioCueFields,
+                                            sizeof(kAudioCueFields) / sizeof(kAudioCueFields[0]), &cdto);
+                    at->AddCue(cdto.time, std::move(cdto.audio_path), cdto.volume, cdto.loop);
                 }
             }
             seq->AddTrack(at);
         } else if (type_name == "Video") {
-            auto vt = std::make_shared<VideoTrack>(track_name);
+            auto vt = std::make_shared<VideoTrack>(std::move(tdto.name));
             if (tj.HasMember("cues") && tj["cues"].IsArray()) {
                 for (const auto& c : tj["cues"].GetArray()) {
                     if (!c.IsObject()) continue;
+                    VideoCueDto cdto;
+                    dse::assets::ReadFields(c, kVideoCueFields,
+                                            sizeof(kVideoCueFields) / sizeof(kVideoCueFields[0]), &cdto);
                     VideoCue cue;
-                    cue.time = ReadFloat(c, "time", 0.0f);
-                    cue.video_path = ReadString(c, "video_path");
-                    cue.fullscreen = ReadBool(c, "fullscreen", true);
-                    cue.opacity = ReadFloat(c, "opacity", 1.0f);
-                    cue.fade_in = ReadFloat(c, "fade_in", 0.0f);
-                    cue.fade_out = ReadFloat(c, "fade_out", 0.0f);
+                    cue.time = cdto.time;
+                    cue.video_path = std::move(cdto.video_path);
+                    cue.fullscreen = cdto.fullscreen;
+                    cue.opacity = cdto.opacity;
+                    cue.fade_in = cdto.fade_in;
+                    cue.fade_out = cdto.fade_out;
                     vt->AddCue(cue);
                 }
             }

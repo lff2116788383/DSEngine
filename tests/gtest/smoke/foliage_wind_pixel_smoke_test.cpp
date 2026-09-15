@@ -68,7 +68,7 @@ DirectionalLight MakeLightAlongX() {
 
 // 单实例（model=I）竖直条；device 全局风始终设为强风(+X)，foliage 控制门控开关。
 RenderTargetReadback RenderStrip(RhiDevice& device, bool foliage) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

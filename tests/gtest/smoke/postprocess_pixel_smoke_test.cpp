@@ -64,7 +64,7 @@ RenderTargetReadback RenderPPViaRenderer(RhiDevice& device,
         device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
     if (!src_tex) return {};
 
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
@@ -114,7 +114,7 @@ RenderTargetReadback RenderPPViaRenderer2Tex(RhiDevice& device,
         device.CreateTexture2D(kRtSize, kRtSize, extra_texels.data(), /*linear_filter=*/false);
     if (!extra_tex) { device.DeleteTexture(src_tex); return {}; }
 
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;
@@ -174,7 +174,7 @@ RenderTargetReadback RenderPPViaRendererNTex(RhiDevice& device,
         extra_handles.push_back(h);
     }
 
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

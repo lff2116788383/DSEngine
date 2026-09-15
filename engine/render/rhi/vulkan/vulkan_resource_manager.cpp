@@ -1434,8 +1434,10 @@ unsigned int VulkanResourceManager::CreateRenderTarget(int width, int height, bo
         depth_att.samples        = actual_samples;
         depth_att.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depth_att.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
-        depth_att.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        depth_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        // 深度格式固定为 D24_UNORM_S8_UINT（带模板面），故模板也清 0 并保留：
+        // 否则上一 pass 的模板残留会让 stencil 测试结果不确定。
+        depth_att.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depth_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
         depth_att.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
         depth_att.finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
         attachments.push_back(depth_att);

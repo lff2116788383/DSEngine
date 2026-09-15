@@ -34,6 +34,15 @@ constexpr uint32_t NOTEQUAL              = 0x0205;
 constexpr uint32_t GEQUAL                = 0x0206;
 constexpr uint32_t ALWAYS                = 0x0207;
 
+// 模板操作（GL_STENCIL_OP_*）。注意 GL 的 INCR/DECR 是 clamp，INCR_WRAP/DECR_WRAP 才是回绕。
+constexpr uint32_t KEEP                  = 0x1E00;
+constexpr uint32_t REPLACE               = 0x1E01;
+constexpr uint32_t INCR                  = 0x1E02;
+constexpr uint32_t DECR                  = 0x1E03;
+constexpr uint32_t INVERT                = 0x150A;
+constexpr uint32_t INCR_WRAP             = 0x8507;
+constexpr uint32_t DECR_WRAP             = 0x8508;
+
 constexpr uint32_t FRONT                 = 0x0404;
 constexpr uint32_t BACK                  = 0x0405;
 constexpr uint32_t FRONT_AND_BACK        = 0x0408;
@@ -72,6 +81,21 @@ inline uint32_t ToGLCompareFunc(CompareFunc func) {
         case CompareFunc::Always:       return GLConst::ALWAYS;
     }
     return GLConst::LESS; // fallback
+}
+
+/// 将 RHI StencilOp 转换为 OpenGL 常量
+inline uint32_t ToGLStencilOp(StencilOp op) {
+    switch (op) {
+        case StencilOp::Keep:           return GLConst::KEEP;
+        case StencilOp::Zero:           return GLConst::ZERO;
+        case StencilOp::Replace:        return GLConst::REPLACE;
+        case StencilOp::IncrementClamp: return GLConst::INCR;       // glStencilOp 的 INCR 是 clamp
+        case StencilOp::DecrementClamp: return GLConst::DECR;
+        case StencilOp::Invert:         return GLConst::INVERT;
+        case StencilOp::IncrementWrap:  return GLConst::INCR_WRAP;
+        case StencilOp::DecrementWrap:  return GLConst::DECR_WRAP;
+    }
+    return GLConst::KEEP; // fallback
 }
 
 /// 将 RHI CullFace 转换为 OpenGL 常量

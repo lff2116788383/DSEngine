@@ -67,7 +67,7 @@ DirectionalLight MakeLightAlongX() {
 // 构建一份共享局部空间模板 VB/IB，用给定实例 model 列表做一次实例化绘制（共享顶点 + 每实例 model）。
 RenderTargetReadback RenderSharedTemplate(RhiDevice& device, int shading_mode,
                                           const std::vector<glm::mat4>& models) {
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
     rt_desc.has_color = true;

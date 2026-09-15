@@ -40,7 +40,7 @@ ImpostorBakeResult ImpostorBaker::Bake(RhiDevice& device,
     const int res = config.frame_resolution;
 
     // 创建临时 FBO（逐帧渲染）
-    RenderTargetDesc rt_desc;
+    RenderTargetDesc rt_desc{};
     rt_desc.width = res;
     rt_desc.height = res;
     rt_desc.has_color = true;

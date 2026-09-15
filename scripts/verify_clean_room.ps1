@@ -32,7 +32,13 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Dir,
     [string]$GameExe = "",
-    [int]$SmokeSeconds = 6
+    [int]$SmokeSeconds = 6,
+    # 把结果写成机器可读 JSON（含环境判定与逐步结果），供门禁/审计消费。
+    [string]$Json = "",
+    # 强制要求「本机确实是干净机」。默认关闭时，若本机装了 VS/VC++ Redist/VULKAN_SDK，
+    # 只出警告；打开后同样的条件直接判失败 —— 发布门禁必须用这个开关跑，
+    # 否则开发机上的「通过」会被误当成干净机验收结论。
+    [switch]$RequireCleanHost
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,7 +73,20 @@ Write-Host ("  Visual Studio 存在:                    {0}" -f $hasVS)
 Write-Host ("  VULKAN_SDK 环境变量:                   {0}" -f $hasVkSdk)
 Write-Host ("  系统 vulkan-1.dll 存在:                {0}" -f $hasVkRt)
 if ($hasRedist -or $hasVS) {
-    $warn += "本机已装 VC++ Redist/VS —— 不是真正的干净机，CRT 缺失问题可能被掩盖。建议换一台未装开发工具的机器/VM。"
+$hostContaminated = @()
+if ($hasRedist) { $hostContaminated += "VC++ 2015-2022 Redistributable" }
+if ($hasVS)     { $hostContaminated += "Visual Studio" }
+if ($hasVkSdk)  { $hostContaminated += "VULKAN_SDK 环境变量" }
+$cleanHost = ($hostContaminated.Count -eq 0)
+Write-Host ("  干净机判定: {0}" -f $(if ($cleanHost) { "是（未发现开发工具痕迹）" } else { "否（" + ($hostContaminated -join ", ") + "）" }))
+if (-not $cleanHost) {
+    $msg = "本机不是干净机（存在: " + ($hostContaminated -join ", ") + "）—— CRT/DLL 缺失类问题可能被本机已装的运行时掩盖，结论不可作为发布验收。"
+    if ($RequireCleanHost) {
+        $fail += $msg
+    } else {
+        $warn += $msg + " 发布门禁请加 -RequireCleanHost 跑，让该条件直接判失败。"
+    }
+}
 }
 
 Write-Host ""
@@ -172,10 +191,37 @@ if ($SmokeSeconds -gt 0) {
 Write-Host ""
 Write-Host "==== 结果 ===="
 foreach ($w in $warn) { Write-Host "  [warn] $w" -ForegroundColor Yellow }
+
+if ($Json) {
+    $verdict = if ($fail.Count -gt 0) { "fail" } elseif (-not $cleanHost) { "pass_on_dirty_host" } else { "pass" }
+    $report = [ordered]@{
+        schemaVersion     = 1
+        dir               = $Dir
+        host              = [ordered]@{
+            clean                    = $cleanHost
+            contaminants             = $hostContaminated
+            vcRedistInstalled        = $hasRedist
+            visualStudioInstalled    = $hasVS
+            vulkanSdkEnvSet          = $hasVkSdk
+            systemVulkanLoaderPresent = $hasVkRt
+        }
+        requireCleanHost  = [bool]$RequireCleanHost
+        smokeSeconds      = $SmokeSeconds
+        verdict           = $verdict
+        failures          = @($fail)
+        warnings          = @($warn)
+    }
+    $report | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $Json
+    Write-Host "  机器可读报告: $Json (verdict=$verdict)" -ForegroundColor Cyan
+}
 if ($fail.Count -gt 0) {
     Write-Host "  干净机验证未通过，共 $($fail.Count) 项：" -ForegroundColor Red
     foreach ($f in $fail) { Write-Host "   - $f" -ForegroundColor Red }
     exit 1
 }
-Write-Host "  干净机验证通过。" -ForegroundColor Green
+if (-not $cleanHost) {
+    Write-Host "  检查项通过，但本机不是干净机 -> 结论不可作为发布验收（verdict=pass_on_dirty_host）。" -ForegroundColor Yellow
+} else {
+    Write-Host "  干净机验证通过。" -ForegroundColor Green
+}
 exit 0
