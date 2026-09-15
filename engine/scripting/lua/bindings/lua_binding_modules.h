@@ -52,7 +52,8 @@ void RegisterLocalizationBindings(lua_State* L);
 void RegisterFloatingOriginBindings(lua_State* L);
 void RegisterFontBindings(lua_State* L);
 void RegisterSerializeBindings(lua_State* L);  // dse.serialize 自描述二进制序列化（编解码 Lua 值/表）
-void RegisterTilemapBindings(lua_State* L);  // dse.tilemap 增强版瓦片地图（多层/动画/属性/序列化）
+void RegisterTilemapBindings(lua_State* L);
+void RegisterCompatBindings(lua_State* L);  // 绑定兼容层：bool/number 双兼容（生成绑定之后再覆盖）  // dse.tilemap 增强版瓦片地图（多层/动画/属性/序列化）
 #ifdef DSE_ENABLE_HTTP
 void RegisterHttpBindings(lua_State* L);        // dse.http 低层 C ABI 绑定（codegen 生成）
 void RegisterHttpRequestBinding(lua_State* L);  // dse.http.request{...on_done} 高层回调式请求（手写）

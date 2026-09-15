@@ -62,6 +62,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
     RegisterLocalizationBindings(L);
     RegisterFontBindings(L);
 
+    // 兼容层必须在所有生成绑定之后注册（同名覆盖）
+    RegisterCompatBindings(L);
+
 #ifdef DSE_ENABLE_HTTP
     RegisterHttpBindings(L);
     RegisterHttpRequestBinding(L);
