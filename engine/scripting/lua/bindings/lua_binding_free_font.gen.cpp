@@ -35,6 +35,15 @@ int L_dse_font_load_cjk(lua_State* L) {
     return 1;
 }
 
+int L_dse_font_load_text(lua_State* L) {
+    const char* font_id = luaL_checkstring(L, 1);
+    const char* ttf_path = luaL_checkstring(L, 2);
+    const char* utf8_text = luaL_checkstring(L, 3);
+    int _ret = dse_font_load_text(font_id, ttf_path, utf8_text);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
 int L_dse_font_unload(lua_State* L) {
     const char* font_id = luaL_checkstring(L, 1);
     dse_font_unload(font_id);
@@ -86,6 +95,7 @@ void RegisterFontBindings(lua_State* L) {
     helper::RegisterBindings(L, {
         {"load", L_dse_font_load},
         {"load_cjk", L_dse_font_load_cjk},
+        {"load_text", L_dse_font_load_text},
         {"unload", L_dse_font_unload},
         {"set_default", L_dse_font_set_default},
         {"measure", L_dse_font_measure},

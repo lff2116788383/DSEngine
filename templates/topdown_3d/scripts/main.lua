@@ -4121,8 +4121,23 @@ function Awake()
   LoadAudio()
   LoadTextures()
 
-  -- 加载字体纹理
+  -- 加载字体纹理 (仅作为 bitmap fallback)
   G._font_tex = dse.assets.load_texture(resolve_path("assets/font/bitmap_font.png"))
+
+  -- 优先加载 CJK TTF/SDF 字体: make_text 会使用 dse.ui.add_ttf_label，
+  -- 失败时回退到上面的 ASCII bitmap atlas。
+  -- cjk_chars.lua 汇总了模板脚本中出现过的全部非 ASCII 字符，避免把完整 CJK 区
+  -- (~2 万字) 全部打进图集，显著缩短启动时间并降低显存占用。
+  G._ui_font_id = nil
+  local cjk_font_path = resolve_path("assets/font/SimHei.ttf")
+  local ok_chars, cjk_chars = pcall(require, "cjk_chars")
+  if ok_chars and type(cjk_chars) == "string" and dse.font and
+     type(dse.font.load_text) == "function" and
+     dse.font.load_text("topdown_ui", cjk_font_path, cjk_chars) == 1 then
+    G._ui_font_id = "topdown_ui"
+  else
+    print("[topdown_3d] CJK font load failed; fallback to bitmap font: " .. tostring(cjk_font_path))
+  end
 
   -- 3D 相机
   local cam = dse.ecs.create_entity()
@@ -4142,8 +4157,6 @@ function Awake()
   dse.ecs.add_transform(ambient, 0, 15, 0, 1, 1, 1)
   dse.ecs.add_point_light_3d(ambient, 0.45, 0.45, 0.5, 0.6, 35.0)
 
-  -- HUD (ui_system 完整 HUD: gauge 条 + 文本)
-  UISystem.build()
 
   -- UI 回调注入
   UISystem.on_pause = function() if S.click then dse.audio.play_sfx(S.click, 0.5, 0) end end

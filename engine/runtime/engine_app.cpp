@@ -275,11 +275,20 @@ void EngineInstance::RegisterRuntimeServices() {
                     TextureSamplerDesc sampler;
                     sampler.filter = linear ? TextureFilter::Linear : TextureFilter::Nearest;
                     sampler.wrap = TextureWrap::ClampToEdge;
+                    // stb_truetype 图集按 top-down 存储；GL/DX11/Vulkan 的纹理上传
+                    // 约定需要先按行翻转，否则字形会上下颠倒。WebGPU 不需要。
+                    if (rhi->NeedsTextureYFlip()) {
+                        std::vector<unsigned char> flipped(
+                            data, data + static_cast<std::size_t>(w) * h * 4);
+                        FlipImageRowsRgba8(flipped, w, h);
+                        return rhi->CreateTexture2D(w, h, flipped.data(), sampler);
+                    }
                     return rhi->CreateTexture2D(w, h, data, sampler);
                 },
                 [rhi](dse::render::TextureHandle handle) {
                     rhi->DeleteTexture(handle);
                 });
+            font_service_->SetTextureYFlip(rhi->NeedsTextureYFlip());
         }
     }
     service_locator().Register<dse::render::FontService, dse::render::FontService>(font_service_);
@@ -612,6 +621,12 @@ void EngineInstance::Shutdown() {
 
     splash_.Finish();
     pipeline_->SetWindowTitleSetter(nullptr);
+    if (font_service_) {
+        // 在 RHI 仍有效时释放字形图集，并清掉回调，避免 font_service_
+        // 晚于 pipeline_/RHI 析构时用旧 RHI 指针删除纹理。
+        font_service_->Shutdown();
+        font_service_->SetTextureCallbacks(nullptr, nullptr);
+    }
     pipeline_->Shutdown();
     if (services_.job_system) {
         services_.job_system->Shutdown();

@@ -64,6 +64,10 @@ public:
     /// 设置 GPU 纹理创建/销毁回调（由引擎初始化时注入）
     void SetTextureCallbacks(TextureCreateFn create_fn, TextureDeleteFn delete_fn);
 
+    /// 是否在纹理上传前按行翻转字形图集（OpenGL/DX11/Vulkan）。
+    /// 若为 true，LoadFont 会同步反转字形 UV 的 V 分量。
+    void SetTextureYFlip(bool enable) { texture_y_flip_ = enable; }
+
     /**
      * @brief 加载 TTF 字体并生成 SDF 图集
      * @param font_id 唯一标识
@@ -112,6 +116,7 @@ private:
     TextureDeleteFn texture_delete_fn_;
 
     TextureHandle UploadAtlasToGPU(const TrueTypeFont& font);
+    bool texture_y_flip_ = false;  ///< 上传字形图集前是否按行翻转
 };
 
 } // namespace render

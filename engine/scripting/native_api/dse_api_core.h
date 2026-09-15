@@ -646,6 +646,7 @@ DSE_CAPI uint64_t dse_dist_get_disk_usage(void);
 
 DSE_CAPI int   dse_font_load(const char* font_id, const char* ttf_path);
 DSE_CAPI int   dse_font_load_cjk(const char* font_id, const char* ttf_path);
+DSE_CAPI int   dse_font_load_text(const char* font_id, const char* ttf_path, const char* utf8_text);
 DSE_CAPI void  dse_font_unload(const char* font_id);
 DSE_CAPI int   dse_font_set_default(const char* font_id);
 DSE_CAPI float dse_font_measure(const char* text, const char* font_id, float font_size);

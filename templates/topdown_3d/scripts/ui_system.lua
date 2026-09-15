@@ -16,6 +16,13 @@ local clamp, lerp = State.clamp, State.lerp
 
 local M = {}
 
+-- 显式 UI order 统一偏移到负数区间：
+-- 文本 glyph 的 order 默认从 1 开始按字符递增 (ui.order + i*10 + 1)；
+-- 若面板/按钮使用 900~981 这类正 order，会在 UIRenderSystem 的升序排序中
+-- 绘制在文本之后，从而盖住文本。这里统一给 make_quad/make_button 的显式
+-- order 加负偏移：保留原有相对层级，同时让所有文本 glyph 始终位于最上层。
+local UI_ORDER_OFFSET = -10000
+
 -- dse.ui.set_visible 只接受 number, 这里包装布尔转换
 local function ui_set_visible(e, v) dse.ui.set_visible(e, v and 1 or 0) end
 
@@ -63,7 +70,7 @@ local score_anim_timer = 0
 local function make_quad(x, y, w, h, r, g, b, a, depth)
   local e = dse.ecs.create_entity()
   dse.ecs.add_transform(e, 0, 0, 0, 1, 1, 1)
-  dse.ui.add_renderer(e, 0, r or 0.5, g or 0.5, b or 0.5, a or 1.0, depth or 900, w, h)
+  dse.ui.add_renderer(e, 0, r or 0.5, g or 0.5, b or 0.5, a or 1.0, (depth or 900) + UI_ORDER_OFFSET, w, h)
   dse.ui.add_panel(e, false)
   dse.ui.set_position(e, x, y)
   dse.ui.set_size(e, w, h)
@@ -75,9 +82,21 @@ end
 local function make_text(text, x, y, r, g, b, gw, gh, scale)
   local e = dse.ecs.create_entity()
   dse.ecs.add_transform(e, 0, 0, 0, 1, 1, 1)
-  local font_tex = G._font_tex or 0
-  dse.ui.add_label(e, text or "", font_tex, r or 1, g or 1, b or 1, 1.0,
-                   gw or 16, gh or 20, scale or 1.0, 16, 6, 32, x or 0, y or 0)
+  local font_id = G._ui_font_id
+  if font_id and font_id ~= "" then
+    -- TTF/SDF 路径: 支持中文与显式字号；parent renderer 置零/透明，
+    -- 实际字形由 UILabelComponent 在 SyncLabels 时生成。
+    dse.ui.add_ttf_label(e, text or "", font_id, (gh or 20) * (scale or 1.0),
+                         r or 1, g or 1, b or 1, 1.0)
+    dse.ui.set_position(e, x or 0, y or 0)
+    dse.ui.set_size(e, 0, 0)
+    dse.ui.set_color(e, r or 1, g or 1, b or 1, 0.0)
+  else
+    -- bitmap fallback: 仅 ASCII 图集
+    local font_tex = G._font_tex or 0
+    dse.ui.add_label(e, text or "", font_tex, r or 1, g or 1, b or 1, 1.0,
+                     gw or 16, gh or 20, scale or 1.0, 16, 6, 32, x or 0, y or 0)
+  end
   return e
 end
 
@@ -85,7 +104,7 @@ end
 local function make_button(x, y, w, h, r, g, b, a, depth)
   local e = dse.ecs.create_entity()
   dse.ecs.add_transform(e, 0, 0, 0, 1, 1, 1)
-  dse.ui.add_renderer(e, 0, r or 0.3, g or 0.3, b or 0.3, a or 0.9, depth or 950, w, h)
+  dse.ui.add_renderer(e, 0, r or 0.3, g or 0.3, b or 0.3, a or 0.9, (depth or 950) + UI_ORDER_OFFSET, w, h)
   dse.ui.add_button(e, 0.25, 0.25, 0.25, 0.95)
   dse.ui.set_position(e, x, y)
   dse.ui.set_size(e, w, h)
@@ -242,7 +261,7 @@ end
 -- ============================================================================
 function M._build_pause_menu()
   -- 半透明背景遮罩
-  pause_menu.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.7, -100)
+  pause_menu.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.7, 970)
   ui_set_visible(pause_menu.bg, false)
 
   -- 三个按钮: 继续游戏 / 选项 / 退出
@@ -306,7 +325,7 @@ end
 -- ============================================================================
 function M._build_result_screen()
   -- 半透明背景
-  result_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.5, -100)
+  result_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.5, 970)
   ui_set_visible(result_ui.bg, false)
 
   -- 结果标题
@@ -353,7 +372,7 @@ end
 -- ============================================================================
 function M._build_chance_screen()
   -- 半透明黑色背景 (渐变)
-  chance_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.8, -100)
+  chance_ui.bg = make_quad(0, 0, 1280, 720, 0, 0, 0, 0.8, 975)
   ui_set_visible(chance_ui.bg, false)
 
   -- 倒计时文字
@@ -1383,6 +1402,7 @@ end
 M.paused = false
 
 -- ── UI 工具导出 (供 menu_system 等游戏外 UI 复用) ─────────────────────────
+M.UI_ORDER_OFFSET = UI_ORDER_OFFSET
 M.make_quad = make_quad
 M.make_text = make_text
 M.make_button = make_button

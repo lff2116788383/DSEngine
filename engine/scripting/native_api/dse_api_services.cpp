@@ -921,6 +921,41 @@ namespace {
 render::FontService* GetFontService() {
     return core::ServiceLocator::Instance().Get<render::FontService>();
 }
+// 从 UTF-8 文本中收集码点，去重并剔除空格/控制字符。
+std::vector<int> CollectUtf8Codepoints(const char* text) {
+    std::vector<int> codepoints;
+    if (!text) return codepoints;
+
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(text);
+    while (*p) {
+        int cp = *p;
+        if (cp < 0x80) {
+            ++p;
+        } else if ((cp & 0xE0) == 0xC0 && p[1]) {
+            cp = ((cp & 0x1F) << 6) | (p[1] & 0x3F);
+            p += 2;
+        } else if ((cp & 0xF0) == 0xE0 && p[1] && p[2]) {
+            cp = ((cp & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+            p += 3;
+        } else if ((cp & 0xF8) == 0xF0 && p[1] && p[2] && p[3]) {
+            cp = ((cp & 0x07) << 18) | ((p[1] & 0x3F) << 12) |
+                 ((p[2] & 0x3F) << 6) | (p[3] & 0x3F);
+            p += 4;
+        } else {
+            ++p;
+            continue;
+        }
+
+        // ASCII 可打印字符已由 FontService 默认加载，无需重复打包。
+        if (cp >= 32 && cp <= 126) continue;
+        if (cp > 0) codepoints.push_back(cp);
+    }
+
+    std::sort(codepoints.begin(), codepoints.end());
+    codepoints.erase(std::unique(codepoints.begin(), codepoints.end()), codepoints.end());
+    return codepoints;
+}
+
 }  // namespace
 
 extern "C" int dse_font_load(const char* font_id, const char* ttf_path) {
@@ -1134,6 +1169,40 @@ extern "C" int dse_font_load_cjk(const char* font_id, const char* ttf_path) {
     bool ok = svc->LoadFont(font_id, ttf_path, cjk_codepoints);
     cfg.default_atlas_width = old_w;
     cfg.default_atlas_height = old_h;
+    return ok ? 1 : 0;
+}
+
+extern "C" int dse_font_load_text(const char* font_id, const char* ttf_path, const char* utf8_text) {
+    auto* svc = GetFontService();
+    if (!svc || !font_id || !ttf_path || !utf8_text) return 0;
+
+    std::vector<int> codepoints = CollectUtf8Codepoints(utf8_text);
+    if (codepoints.empty()) return 0;
+
+    // 按实际用字量选择图集大小：小图集足够时避免 4096 RGBA 纹理的内存开销。
+    const int atlas_size = codepoints.size() > 2000 ? 4096 : 2048;
+
+    auto& cfg = svc->GetConfig();
+    const int old_w = cfg.default_atlas_width;
+    const int old_h = cfg.default_atlas_height;
+    const float old_size = cfg.default_font_size;
+    const int old_padding = cfg.sdf_padding;
+    const float old_dist_scale = cfg.sdf_pixel_dist_scale;
+
+    cfg.default_atlas_width = atlas_size;
+    cfg.default_atlas_height = atlas_size;
+    // 以 24px 基础 SDF 光栅化，渲染时按 label.font_size 缩放。
+    cfg.default_font_size = 24.0f;
+    cfg.sdf_padding = 4;
+    cfg.sdf_pixel_dist_scale = 128.0f / 4.0f;
+
+    const bool ok = svc->LoadFont(font_id, ttf_path, codepoints);
+
+    cfg.default_atlas_width = old_w;
+    cfg.default_atlas_height = old_h;
+    cfg.default_font_size = old_size;
+    cfg.sdf_padding = old_padding;
+    cfg.sdf_pixel_dist_scale = old_dist_scale;
     return ok ? 1 : 0;
 }
 

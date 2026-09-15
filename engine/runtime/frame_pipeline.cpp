@@ -17,6 +17,21 @@
 #include "engine/runtime/frame_pipeline_impl.h"
 #include "engine/runtime/render_thread_manager.h"
 
+namespace {
+void FlipRgba8Rows(std::vector<unsigned char>& pixels, int width, int height) {
+    if (width <= 0 || height <= 0) return;
+    const std::size_t row_bytes = static_cast<std::size_t>(width) * 4u;
+    std::vector<unsigned char> tmp(row_bytes);
+    for (int y = 0; y < height / 2; ++y) {
+        unsigned char* a = pixels.data() + static_cast<std::size_t>(y) * row_bytes;
+        unsigned char* b = pixels.data() + static_cast<std::size_t>(height - 1 - y) * row_bytes;
+        std::copy(a, a + row_bytes, tmp.data());
+        std::copy(b, b + row_bytes, a);
+        std::copy(tmp.begin(), tmp.end(), b);
+    }
+}
+}  // namespace
+
 FramePipeline::FramePipeline()
     : modules_impl_(CreateBuiltinModules()),
       rs_(std::make_unique<RenderState>()) {
@@ -65,6 +80,8 @@ const dse::render::RenderThinSnapshot& FramePipeline::read_snapshot() const { re
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/render/rhi/rhi_factory.h"
+#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/font/font_service.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include "engine/render/rhi/opengl/gl_loader.h"
 #include <iostream>
@@ -364,6 +381,32 @@ bool FramePipeline::Init() {
             device_info.is_software ? 1 : 0);
     }
     asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
+
+    // FontService 的 GPU 纹理回调依赖 RHI 设备。EngineInstance 早期注册时
+    // RHI 尚未创建，这里在 RHI 初始化完成后补挂，确保 Lua 启动阶段
+    // dse.font.load/load_cjk 能真正上传字形图集。
+    if (auto* font_service = dse::core::ServiceLocator::Instance().Get<dse::render::FontService>()) {
+        auto* rhi = runtime_context_.rhi_device.get();
+        font_service->SetTextureCallbacks(
+            [rhi](int w, int h, const unsigned char* data, bool linear) {
+                TextureSamplerDesc sampler;
+                sampler.filter = linear ? TextureFilter::Linear
+                                        : TextureFilter::Nearest;
+                sampler.wrap = TextureWrap::ClampToEdge;
+                // stb_truetype 图集是 top-down；GL/DX11/Vulkan 需要按行翻转。
+                if (rhi->NeedsTextureYFlip()) {
+                    std::vector<unsigned char> flipped(
+                        data, data + static_cast<std::size_t>(w) * h * 4);
+                    FlipRgba8Rows(flipped, w, h);
+                    return rhi->CreateTexture2D(w, h, flipped.data(), sampler);
+                }
+                return rhi->CreateTexture2D(w, h, data, sampler);
+            },
+            [rhi](dse::render::TextureHandle handle) {
+                rhi->DeleteTexture(handle);
+            });
+        font_service->SetTextureYFlip(rhi->NeedsTextureYFlip());
+    }
     // RenderGraph 瞬态 RT 分配/跨帧缓存池依赖 RHI 设备
     render_graph_dag_.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";

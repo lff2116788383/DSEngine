@@ -10346,6 +10346,29 @@
           ]
         },
         {
+          "c_name": "dse_font_load_text",
+          "lua_name": "load_text",
+          "params": [
+            {
+              "name": "font_id",
+              "type": "string"
+            },
+            {
+              "name": "ttf_path",
+              "type": "string"
+            },
+            {
+              "name": "utf8_text",
+              "type": "string"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
           "c_name": "dse_font_unload",
           "lua_name": "unload",
           "params": [

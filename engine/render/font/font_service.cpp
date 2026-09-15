@@ -159,11 +159,20 @@ bool FontService::LoadFont(const std::string& font_id, const std::string& ttf_pa
         gm.bearing_y = static_cast<float>(gs.yoff);
         gm.width = static_cast<float>(gs.w);
         gm.height = static_cast<float>(gs.h);
+        float v0 = dst_y * inv_h;
+        float v1 = (dst_y + gs.h) * inv_h;
+        if (texture_y_flip_) {
+            // 纹理行已按 Y 翻转，UV 的 V 也要同步反转，否则会采样到别的字形或空白区域。
+            const float flipped_v0 = 1.0f - v1;
+            const float flipped_v1 = 1.0f - v0;
+            v0 = flipped_v0;
+            v1 = flipped_v1;
+        }
         gm.uv = glm::vec4(
             dst_x * inv_w,
-            dst_y * inv_h,
+            v0,
             (dst_x + gs.w) * inv_w,
-            (dst_y + gs.h) * inv_h
+            v1
         );
         instance->font.SetGlyph(gs.codepoint, gm);
         ++packed_count;

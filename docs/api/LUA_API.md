@@ -1526,6 +1526,7 @@ print(streaming.get_zone_state(zone))  -- "loading" or "loaded"
 |------|------|--------|------|
 | `dse.font.load(font_id, ttf_path)` | string, string | `bool` | 加载 TTF 字体并以 `font_id` 注册 |
 | `dse.font.load_cjk(font_id, ttf_path)` | string, string | `bool` | 同上，并自动追加 ~800 高频汉字 + 常用标点（临时用 4096² 图集） |
+| `dse.font.load_text(font_id, ttf_path, utf8_text)` | string, string, string | `bool` | 按 UTF-8 文本中实际出现的非 ASCII 字符构建 SDF 图集；自动去重并复用 ASCII 字形，适合 CJK UI |
 | `dse.font.unload(font_id)` | string | — | 卸载字体 |
 | `dse.font.set_default(font_id)` | string | `bool` | 设为默认字体 |
 | `dse.font.measure(text [, font_id [, font_size]])` | string, [string=""], [number=0] | `number` | 文本宽度（`font_id`/`font_size` 省略用默认） |

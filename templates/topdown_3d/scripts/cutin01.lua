@@ -3,6 +3,7 @@
 -- 时间暂停 → 大图弹出(10x) → 缩放恢复 → 复位相机 (CameraReset 由 main 注入)
 -- ============================================================================
 local State = require("state")
+local UISystem = require("ui_system")
 
 -- dse.ui.set_visible 只接受 number, 这里包装布尔转换
 local function ui_set_visible(e, v) dse.ui.set_visible(e, v and 1 or 0) end
@@ -31,7 +32,9 @@ local function CutinOn(boss_tex_path, bossname)
     dse.ecs.add_transform(Cutin.panel_e, 0, 0, 0, 1, 1, 1)
     -- 原版 Boss 名称大图 (C# Cutin_BossTexture.SetCutinTexture)
     local h = boss_tex_path and dse.assets.load_texture(boss_tex_path) or 0
-    dse.ui.add_renderer(Cutin.panel_e, h, 1, 1, 1, 1.0, 200, 1, 1)
+    -- 与 ui_system 使用同一偏移: 保持在文本 glyph 之下
+    dse.ui.add_renderer(Cutin.panel_e, h, 1, 1, 1, 1.0,
+                        200 + UISystem.UI_ORDER_OFFSET, 1, 1)
   end
   if not Cutin.label_e then
     Cutin.label_e = dse.ecs.create_entity()
