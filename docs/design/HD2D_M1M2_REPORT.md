@@ -93,11 +93,11 @@
 | 后端 | 组件/反射/序列化 | shader 源产物 | 程序加载 | PSO 状态 | 运行验证 |
 |---|---|---|---|---|---|
 | OpenGL | 已同步 | `sprite3d.vert/.frag`  GLSL/SPIR-V/HLSL 全目标编译通过 | `GLShaderManager::InitSprite3DShader()` | 统一 PSO |  WSL/llvmpipe 截图通过 |
-| Vulkan | 已同步 | 同一源  SPIR-V 编译通过 | `VulkanShaderManager::InitSprite3DShader()` | 统一 PSO |  代码同步，无真机/运行时验证 |
-| D3D11 | 已同步 | 同一源  DXBC 编译通过 | `DX11ShaderManager::InitSprite3DShader()` + input layout | 统一 PSO |  代码同步，无真机/运行时验证 |
+| Vulkan | 已同步 | 同一源  SPIR-V 编译通过 | `VulkanShaderManager::InitSprite3DShader()` | 统一 PSO |  WSL/lavapipe 尝试运行，Vulkan 设备/表面初始化失败；无桌面真机验证 |
+| D3D11 | 已同步 | 同一源  DXBC 编译通过 | `DX11ShaderManager::InitSprite3DShader()` + input layout | 统一 PSO |  代码同步，无 Windows/真机运行时验证 |
 | WebGPU | 未改（默认关闭） | - | 返回 0 优雅跳过 | - | 不在本次范围 |
 
-说明：三后端未发现需要分叉的 Sprite3D 特殊状态；差异仅在 shader 程序获取方式（GLSL/DXBC/SPIR-V）。Vulkan/D3D11 仍需桌面机跑 smoke/pixel 用例确认 descriptor/input-layout/寄存器绑定。
+说明：三后端未发现需要分叉的 Sprite3D 特殊状态；差异仅在 shader 程序获取方式（GLSL/DXBC/SPIR-V）。Vulkan 的 WSL/lavapipe 运行尝试停在 `vkCreateShaderModule: Invalid device`（Vulkan 设备/表面初始化未成功），不能作为 Sprite3D Vulkan 运行时证据；D3D11 仍完全缺少 Windows/真机验证。两者都需要桌面机跑 smoke/pixel 用例确认 descriptor/input-layout/寄存器绑定。
 
 ---
 
@@ -106,6 +106,8 @@
 - `docs/design/hd2d_m1m2_shots/m1_front.png`  角色在房子前面（对照）
 - `docs/design/hd2d_m1m2_shots/m1_behind.png`  角色在房子后面（遮挡验收）
 - `docs/design/hd2d_m1m2_shots/m2_perf.png`  1000 billboard + 盒子性能场景
+- `docs/design/hd2d_m1m2_shots/platformer_2d_reg.png`  platformer_2d WSL/GL 回归
+- `docs/design/hd2d_m1m2_shots/topdown_3d_reg.png`  topdown_3d WSL/GL 回归
 
 原始降级机路径（WSL）：
 - `/tmp/m1_front2.png`
@@ -171,14 +173,25 @@ xvfb-run -a stdbuf -oL -eL env \
 
 ## 6. 回归
 
+WSL/OpenGL（llvmpipe，DSE_ENABLE_3D=ON）降级回归：
+
 - `templates/hd2d_wuxia/scripts/_compat_test.lua`：
-  - WSL/OpenGL + 3D 构建运行通过，打印：
+  - 3D 构建运行通过，打印：
     ```text
     [compat] tilemap get_tile=3 font_width=279.7
     [compat] OK: P1 bool/number + P2 精灵 API + P3 tilemap_ex + P4 中文字表
     ```
-- 3D WSL 构建全量编译通过（`dse_example_lua`，DSE_ENABLE_3D=ON、GL，依赖后端关闭）。
-- `platformer_2d` / `topdown_3d` 未做真机截图回归；当前代码只新增路径，不改 2D sprite 排序和 3D opaque 路径，但仍需桌面机确认。
+- `templates/platformer_2d/scripts/main.lua`：
+  - `DSE_MAX_FRAMES=5` 正常退出，RC=0；
+  - 截图 `docs/design/hd2d_m1m2_shots/platformer_2d_reg.png`；
+  - 运行结束时 `entities=43, draw_calls=5, render_passes=5`。
+- `templates/topdown_3d/scripts/main.lua`：
+  - `DSE_MAX_FRAMES=5` 正常退出，RC=0；
+  - 截图 `docs/design/hd2d_m1m2_shots/topdown_3d_reg.png`；
+  - 运行结束时 `entities=18, draw_calls=5, render_passes=5`。
+  - 注意：WSL 构建关闭了 Jolt，因此它不能替代桌面机完整物理/渲染回归；只能证明新增 Sprite3D 路径没有破坏脚本启动、资源加载和既有帧流程。
+
+桌面机仍需执行任务书的 `platformer_2d` / `topdown_3d` 完整回归截图。
 
 ---
 
@@ -186,17 +199,18 @@ xvfb-run -a stdbuf -oL -eL env \
 
 1. **台式机不可达**：本会话从笔记本侧 `ssh 169.254.139.190:22` 失败，无法执行任务书要求的 Windows 构建、截图和三后端 smoke/pixel 用例。
 2. **Vulkan/D3D11 真机未验证**：代码和 shader 产物已同步，但缺少桌面 GPU 运行结果；特别是 DX11 input layout、Vulkan descriptor set / texture binding、三后端 SSAO/后处理顺序下的 Sprite3D 深度一致性。
-3. **WSL/llvmpipe camera-relative 观察**：在同步路径（render_thread=0）下，初始 demo 把相机放在 `z=9` 时，`MeshRenderer` CPU 盒子没有按预期随 camera-relative 偏移，而 Sprite3D 的 CPU 端已减 `camera_offset`，导致盒子看起来在原点填满画面。为了得到可靠降级验证，demo 最终改为 **相机在原点、物体在负 Z**（`camera_offset=0`），绕过该差异。这个差异可能是 WSL/Linux 主线程路径的现有 bug，需桌面机确认；如果桌面机也有，应单独修 `ApplyCameraOffset`/主线程渲染路径。
-4. **`TextureRef` 序列化语义**：反射不支持 `TextureRef`，当前 scene custom codec 持久化原始 RHI 句柄。跨会话加载后句柄可能失效；M5 资产管线接入 `.dsprite.json` / 纹理路径后应替换。
-5. **`metrics.get_sprite_count()` 口径**：不统计 Sprite3D，性能验收需要脚本自己计数。建议补一个 `Sprite3D` 数量到 frame stats（非 M1/M2 必需）。
+3. **WSL/lavapipe Vulkan 尝试失败**：安装了 Mesa lavapipe 与 Vulkan loader 后，Vulkan 构建/链接成功，但启动时 Vulkan context 未成功创建 device/surface，随后在 `vkCreateShaderModule` 处 `Invalid device`。该失败发生在 Sprite3D 之外的基础 RHI 初始化阶段，不能证明也没有证明 Sprite3D Vulkan 路径可用；需要桌面 NVIDIA 真机验证。
+4. **WSL/llvmpipe camera-relative 观察**：在同步路径（render_thread=0）下，初始 demo 把相机放在 `z=9` 时，`MeshRenderer` CPU 盒子没有按预期随 camera-relative 偏移，而 Sprite3D 的 CPU 端已减 `camera_offset`，导致盒子看起来在原点填满画面。为了得到可靠降级验证，demo 最终改为 **相机在原点、物体在负 Z**（`camera_offset=0`），绕过该差异。这个差异可能是 WSL/Linux 主线程路径的现有 bug，需桌面机确认；如果桌面机也有，应单独修 `ApplyCameraOffset`/主线程渲染路径。
+5. **`TextureRef` 序列化语义**：反射不支持 `TextureRef`，当前 scene custom codec 持久化原始 RHI 句柄。跨会话加载后句柄可能失效；M5 资产管线接入 `.dsprite.json` / 纹理路径后应替换。
+6. **`metrics.get_sprite_count()` 口径**：不统计 Sprite3D，性能验收需要脚本自己计数。建议补一个 `Sprite3D` 数量到 frame stats（非 M1/M2 必需）。
 
 ---
 
 ## 8. 未完成项
 
-- Windows/MSVC RelWithDebInfo 构建、任务书指定的三后端运行与截图。
+- Windows/MSVC RelWithDebInfo 构建、任务书指定的三后端运行与截图；Vulkan WSL/lavapipe 仅尝试到设备初始化失败，D3D11 未尝试。
 - Vulkan/D3D11 的 Sprite3D pixel smoke 用例（至少覆盖 depth occlusion + alpha discard）。
-- `platformer_2d`、`topdown_3d` 的桌面机回归截图。
+- `platformer_2d`、`topdown_3d` 的桌面机完整回归截图（WSL/GL 冒烟回归已通过，但不含 Jolt/桌面三后端）。
 - M3：`lit/receive_shadow/emissive` 的 shader 消费（字段/API/序列化已就位，M1 保持 unlit）。
 - M2 半透明精灵排序（任务书明确先做 alpha-test 版本，半透明留后续 Transparent 层）。
 - M5：Sprite3D 编辑器面板、纹理路径序列化、图集/动画。
