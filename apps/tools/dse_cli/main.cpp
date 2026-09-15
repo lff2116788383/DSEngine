@@ -86,7 +86,8 @@ int PrintUsage(int rc = 1) {
         "\n"
         "示例:\n"
         "  dse new lua MyGame\n"
-        "  dse new platformer MyPlatformer        # 2D 平台跳跃品类模板\n"
+        "  dse new hd2d MyWuxia                   # HD-2D 武侠品类模板(八向/连招/任务/存档)
+  dse new platformer MyPlatformer        # 2D 平台跳跃品类模板\n"
         "  dse new MyRPG --template=topdown       # 俯视 RPG(具名选项写法)\n"
         "  dse build MyGame --out dist --key 0123456789abcdef\n"
         "  dse pack MyGame/assets assets.bun --key=0123456789abcdef\n"

@@ -653,7 +653,7 @@ def render_map(spec, out_dir):
     data = {
         "id": spec["id"], "name": spec["name"], "w": W, "h": H, "tile": TILE,
         "bg": names, "parallax": {"sky": 0.10, "far": 0.42},
-        "spawn": spec["spawn"], "collide": collide,
+        "spawn": {"x": spec["spawn"][0], "y": spec["spawn"][1]}, "collide": collide,
         "exits": spec.get("exits", []), "npcs": spec.get("npcs", []),
         "items": spec.get("items", []), "enemies": spec.get("enemies", []),
         "boss": spec.get("boss"),
@@ -675,7 +675,7 @@ def _lua_val(v, indent=0):
         return ("%g" % v)
     if isinstance(v, str):
         return '"%s"' % v.replace("\\", "\\\\").replace('"', '\\"')
-    if isinstance(v, list):
+    if isinstance(v, (list, tuple)):
         if not v:
             return "{}"
         parts = ["{"]

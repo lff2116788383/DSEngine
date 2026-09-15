@@ -13,6 +13,7 @@ namespace dse::project {
 
 /// 项目模板类型（CLI / 旧接口兼容）。
 enum class ProjectTemplate {
+    Hd2DWuxia,     ///< 品类模板：HD-2D 武侠（分层大地图/八向角色/连招技能/任务存档）
     Empty,
     Game2D,
     Game3D,

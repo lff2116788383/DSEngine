@@ -20,6 +20,7 @@ bool HasLuaScripting(ProjectTemplate tmpl) {
     return tmpl == ProjectTemplate::Game2D
         || tmpl == ProjectTemplate::Game3D
         || tmpl == ProjectTemplate::Lua
+        || tmpl == ProjectTemplate::Hd2DWuxia
         || tmpl == ProjectTemplate::Platformer2D
         || tmpl == ProjectTemplate::TopDownRPG
         || tmpl == ProjectTemplate::ThirdPerson3D;
@@ -111,6 +112,31 @@ bool ScaffoldPlatformerTemplate(const fs::path& root, std::string& error) {
         return false;
     }
     return WriteTextFile(root / "scripts" / "main.lua", body, error);
+}
+
+// HD-2D 武侠模板：整体拷贝 templates/hd2d_wuxia 的 assets/ 与 scripts/（多文件 Lua 工程）
+bool ScaffoldHd2DTemplate(const fs::path& root, std::string& error) {
+    std::error_code ec;
+    const std::string engine_root = FindEngineRoot(fs::current_path(ec).string());
+    if (engine_root.empty()) {
+        error = "无法定位引擎根目录（未找到 CMakePresets.json）";
+        return false;
+    }
+    const fs::path tpl = fs::path(engine_root) / "templates" / "hd2d_wuxia";
+    if (!fs::exists(tpl / "scripts", ec) || !fs::exists(tpl / "assets", ec)) {
+        error = "HD-2D 模板素材缺失: " + tpl.string();
+        return false;
+    }
+    fs::copy(tpl / "assets", root / "assets",
+             fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+    if (ec) { error = "复制 HD-2D 素材失败: " + ec.message(); return false; }
+    fs::copy(tpl / "scripts", root / "scripts",
+             fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+    if (ec) { error = "复制 HD-2D 脚本失败: " + ec.message(); return false; }
+    if (fs::exists(tpl / "README.md", ec)) {
+        fs::copy_file(tpl / "README.md", root / "README.md", fs::copy_options::overwrite_existing, ec);
+    }
+    return true;
 }
 
 // 3D 俯视角动作模板：从 repo 的 templates/topdown_3d 拷贝素材（三国题材逆向资源）
@@ -783,6 +809,7 @@ bool ParseTemplateToken(const std::string& token, ProjectTemplate& out) {
     if (token == "lua")          { out = ProjectTemplate::Lua;           return true; }
     if (token == "cpp")          { out = ProjectTemplate::Cpp;           return true; }
     if (token == "csharp")       { out = ProjectTemplate::CSharp;        return true; }
+    if (token == "hd2d")         { out = ProjectTemplate::Hd2DWuxia;   return true; }
     if (token == "platformer")   { out = ProjectTemplate::Platformer2D;  return true; }
     if (token == "topdown")      { out = ProjectTemplate::TopDownRPG;    return true; }
     if (token == "thirdperson")  { out = ProjectTemplate::ThirdPerson3D; return true; }
@@ -797,6 +824,7 @@ const char* TemplateDisplayName(ProjectTemplate tmpl) {
         case ProjectTemplate::Lua:    return "Lua";
         case ProjectTemplate::Cpp:    return "C++";
         case ProjectTemplate::CSharp: return "C#";
+        case ProjectTemplate::Hd2DWuxia:     return "HD-2D Wuxia";
         case ProjectTemplate::Platformer2D:  return "2D Platformer";
         case ProjectTemplate::TopDownRPG:    return "Top-Down RPG";
         case ProjectTemplate::ThirdPerson3D: return "3D Third-Person";
@@ -834,6 +862,10 @@ ScaffoldResult ScaffoldProject(const std::string& project_root,
         if (tmpl == ProjectTemplate::Platformer2D) {
             // 品类模板：拷贝 CC0 素材 + 写入完整游戏脚本（替换纯色占位版）
             if (!ScaffoldPlatformerTemplate(root, result.error)) {
+                return result;
+            }
+        } else if (tmpl == ProjectTemplate::Hd2DWuxia) {
+            if (!ScaffoldHd2DTemplate(root, result.error)) {
                 return result;
             }
         } else if (tmpl == ProjectTemplate::TopDownRPG) {
