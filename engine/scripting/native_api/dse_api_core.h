@@ -103,6 +103,7 @@ DSE_CAPI float dse_input_get_gamepad_axis(int gamepad_id, int axis);
 // ============================================================
 
 DSE_CAPI uint32_t dse_assets_load_texture(const char* path);
+DSE_CAPI uint32_t dse_assets_load_texture_ex(const char* path, int filter, int wrap);
 DSE_CAPI void     dse_assets_set_data_root(const char* path);
 
 // ============================================================

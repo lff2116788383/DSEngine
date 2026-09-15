@@ -58,6 +58,38 @@ extern "C" void dse_free_camera_add(uint32_t e, float move_speed, float mouse_se
     controller.mouse_sensitivity = mouse_sensitivity;
 }
 
+extern "C" void dse_sprite_set_uv_rect(uint32_t e, float u0, float v0, float u1, float v1) {
+    World* world = GW();
+    if (!world) return;
+    auto* sp = world->registry().try_get<SpriteRendererComponent>(TE(e));
+    if (!sp) return;
+    sp->uv = glm::vec4(u0, v0, u1 - u0, v1 - v0);
+}
+
+extern "C" void dse_sprite_set_sorting_layer(uint32_t e, int sorting_layer) {
+    World* world = GW();
+    if (!world) return;
+    auto* sp = world->registry().try_get<SpriteRendererComponent>(TE(e));
+    if (!sp) return;
+    sp->sorting_layer = sorting_layer;
+}
+
+extern "C" void dse_sprite_set_shader_variant(uint32_t e, const char* variant) {
+    World* world = GW();
+    if (!world || !variant) return;
+    auto* sp = world->registry().try_get<SpriteRendererComponent>(TE(e));
+    if (!sp) return;
+    sp->shader_variant = variant;
+}
+
+extern "C" void dse_sprite_set_blend_mode(uint32_t e, int blend_mode) {
+    World* world = GW();
+    if (!world) return;
+    auto* sp = world->registry().try_get<SpriteRendererComponent>(TE(e));
+    if (!sp) return;
+    sp->blend_mode = static_cast<SpriteBlendMode>(blend_mode);
+}
+
 extern "C" void dse_sprite_add(uint32_t e, float r, float g, float b, float a,
                                int order_in_layer, uint32_t texture_handle) {
     World* world = GW();

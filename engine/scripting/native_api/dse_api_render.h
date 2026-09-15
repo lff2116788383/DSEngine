@@ -879,6 +879,10 @@ DSE_CAPI void  dse_sprite_add(uint32_t e, float r, float g, float b, float a,
                               int order_in_layer, uint32_t texture_handle);
 DSE_CAPI void  dse_sprite_set_uv_scroll(uint32_t e, float sx, float sy);
 DSE_CAPI void  dse_sprite_set_uv_offset(uint32_t e, float ox, float oy);
+DSE_CAPI void  dse_sprite_set_uv_rect(uint32_t e, float u0, float v0, float u1, float v1);
+DSE_CAPI void  dse_sprite_set_sorting_layer(uint32_t e, int sorting_layer);
+DSE_CAPI void  dse_sprite_set_shader_variant(uint32_t e, const char* variant);
+DSE_CAPI void  dse_sprite_set_blend_mode(uint32_t e, int blend_mode);
 
 // ============================================================
 // Rendering Mesh 扩展
