@@ -267,11 +267,11 @@ extern "C" uint32_t dse_assets_load_texture(const char* path) {
 
 extern "C" uint32_t dse_assets_load_texture_ex(const char* path, int filter, int wrap) {
     if (!g_ctx.asset_manager || !path) return 0;
-    dse::render::TextureSamplerDesc desc;
-    desc.filter = (filter == 0) ? dse::render::TextureFilter::Nearest
-                                : dse::render::TextureFilter::Linear;
-    desc.wrap = (wrap == 1) ? dse::render::TextureWrap::ClampToEdge
-                            : dse::render::TextureWrap::Repeat;
+    TextureSamplerDesc desc;
+    desc.filter = (filter == 0) ? TextureFilter::Nearest
+                                : TextureFilter::Linear;
+    desc.wrap = (wrap == 1) ? TextureWrap::ClampToEdge
+                            : TextureWrap::Repeat;
     auto tex = g_ctx.asset_manager->LoadTexture(path, desc);
     return tex ? tex->GetHandle().raw() : 0;
 }
