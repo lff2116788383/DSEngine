@@ -478,19 +478,19 @@ void PutVec4(rapidjson::Value& obj, JsonAlloc& alloc, const char* key, const glm
 }
 
 void PutFloat(rapidjson::Value& obj, JsonAlloc& alloc, const char* key, float v) {
-    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(v).Move(), alloc);
+    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(static_cast<int64_t>(v)).Move(), alloc);
 }
 
 void PutInt(rapidjson::Value& obj, JsonAlloc& alloc, const char* key, int v) {
-    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(v).Move(), alloc);
+    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(static_cast<int64_t>(v)).Move(), alloc);
 }
 
 void PutInt64(rapidjson::Value& obj, JsonAlloc& alloc, const char* key, long long v) {
-    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(v).Move(), alloc);
+    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(static_cast<int64_t>(v)).Move(), alloc);
 }
 
 void PutBool(rapidjson::Value& obj, JsonAlloc& alloc, const char* key, bool v) {
-    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(v).Move(), alloc);
+    obj.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(static_cast<int64_t>(v)).Move(), alloc);
 }
 
 void PutString(rapidjson::Value& obj, JsonAlloc& alloc, const char* key, const std::string& v) {
