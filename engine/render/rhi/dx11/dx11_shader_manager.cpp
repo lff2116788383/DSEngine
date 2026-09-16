@@ -13,6 +13,8 @@
 #include "engine/render/shaders/generated/embed/sprite2d_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite3d_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite3d_frag.gen.h"
+#include "engine/render/shaders/generated/embed/sprite3d_lit_vert.gen.h"
+#include "engine/render/shaders/generated/embed/sprite3d_lit_frag.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_frag.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_skinned_vert.gen.h"
@@ -85,6 +87,7 @@
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite3d_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/sprite3d_lit_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_skinned_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_skinned_vert_reflect.gen.h"
@@ -432,6 +435,23 @@ void DX11ShaderManager::InitSprite3DShader() {
                                static_cast<int>(layout.size()));
 }
 
+void DX11ShaderManager::InitSprite3DLitShader() {
+    if (sprite3d_lit_shader_handle_ != 0) return;
+    using namespace generated_shaders;
+    sprite3d_lit_shader_handle_ = CreateProgramFromDXBC(
+        ksprite3d_lit_vert_dxbc, ksprite3d_lit_vert_dxbc_size,
+        ksprite3d_lit_frag_dxbc, ksprite3d_lit_frag_dxbc_size);
+    if (sprite3d_lit_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("[D3D11] Builtin Sprite3DLit shader creation failed");
+        return;
+    }
+    DEBUG_LOG_INFO("[D3D11] Builtin Sprite3DLit shader created (DXBC): {}", sprite3d_lit_shader_handle_);
+    using namespace generated_shaders::reflect;
+    std::vector<D3D11_INPUT_ELEMENT_DESC> layout;
+    CreateInputLayoutFromReflection(ksprite3d_lit_vert_reflection, layout);
+    CreateInputLayoutForShader(sprite3d_lit_shader_handle_, layout.data(),
+                               static_cast<int>(layout.size()));
+}
 void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     using namespace generated_shaders;
     auto pulse = [&]() { if (keep_alive) keep_alive(); };

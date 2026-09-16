@@ -644,6 +644,9 @@ ShaderHandle DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::Sprite3D:
             if (!shader_mgr_.sprite3d_shader_handle()) shader_mgr_.InitSprite3DShader();
             return shader_mgr_.sprite3d_shader_handle();
+        case BuiltinProgram::Sprite3DLit:
+            if (!shader_mgr_.sprite3d_lit_shader_handle()) shader_mgr_.InitSprite3DLitShader();
+            return shader_mgr_.sprite3d_lit_shader_handle();
         case BuiltinProgram::SpriteFxSdf: return shader_mgr_.sprite_fx_sdf_shader_handle();
         case BuiltinProgram::SpriteFxVfx: return shader_mgr_.sprite_fx_vfx_shader_handle();
         case BuiltinProgram::ForwardPbr:  return shader_mgr_.forward_pbr_shader_handle();

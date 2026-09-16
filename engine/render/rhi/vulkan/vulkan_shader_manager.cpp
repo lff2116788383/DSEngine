@@ -30,6 +30,8 @@
 #include "embed/sprite2d_frag.gen.h"
 #include "embed/sprite3d_vert.gen.h"
 #include "embed/sprite3d_frag.gen.h"
+#include "embed/sprite3d_lit_vert.gen.h"
+#include "embed/sprite3d_lit_frag.gen.h"
 #include "embed/forward_pbr_vert.gen.h"
 #include "embed/forward_pbr_frag.gen.h"
 #include "embed/forward_pbr_skinned_vert.gen.h"
@@ -690,6 +692,18 @@ void VulkanShaderManager::InitSprite3DShader() {
     }
 }
 
+void VulkanShaderManager::InitSprite3DLitShader() {
+    if (sprite3d_lit_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite3d_lit_shader_handle_ = CreateProgramFromSpirv(
+        ksprite3d_lit_vert_spv, ksprite3d_lit_vert_spv_size,
+        ksprite3d_lit_frag_spv, ksprite3d_lit_frag_spv_size);
+    if (sprite3d_lit_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan Sprite3DLit shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan Sprite3DLit shader created: handle={}", sprite3d_lit_shader_handle_);
+    }
+}
 void VulkanShaderManager::InitForwardPbrShader() {
     if (forward_pbr_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;

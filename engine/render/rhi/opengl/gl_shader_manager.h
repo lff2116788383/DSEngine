@@ -170,7 +170,9 @@ public:
 
     /// HD-2D Sprite3D program (sprite3d.vert + sprite3d.frag; PerFrame UBO@0 + u_texture@unit0).
     void InitSprite3DShader();
+    void InitSprite3DLitShader();
     ShaderHandle sprite3d_shader_handle() const { return ShaderHandle{sprite3d_shader_handle_}; }
+    ShaderHandle sprite3d_lit_shader_handle() const { return ShaderHandle{sprite3d_lit_shader_handle_}; }
     // SpriteBatchRenderer SDF/VFX 路径：sprite_fx.vert + sprite_fx_{sdf,vfx}.frag，
     // 参数走 SpriteFx push-block UBO\@slot0，纹理\@slot0。
     void InitSpriteFxSdfShader();
@@ -315,6 +317,7 @@ private:
 
     unsigned int sprite2d_shader_handle_ = 0;
     unsigned int sprite3d_shader_handle_ = 0;
+    unsigned int sprite3d_lit_shader_handle_ = 0;
     PBRShaderLocations sprite2d_locations_;
     unsigned int sprite_fx_sdf_shader_handle_ = 0;
     unsigned int sprite_fx_vfx_shader_handle_ = 0;

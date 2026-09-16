@@ -63,6 +63,8 @@
 #include "embed/sprite2d_frag.gen.h"
 #include "embed/sprite3d_vert.gen.h"
 #include "embed/sprite3d_frag.gen.h"
+#include "embed/sprite3d_lit_vert.gen.h"
+#include "embed/sprite3d_lit_frag.gen.h"
 #include "embed/forward_pbr_vert.gen.h"
 #include "embed/forward_pbr_frag.gen.h"
 #include "embed/forward_pbr_skinned_vert.gen.h"
@@ -138,6 +140,8 @@
 #include "embed/sprite_frag_reflect.gen.h"
 #include "embed/sprite2d_vert_reflect.gen.h"
 #include "embed/sprite3d_vert_reflect.gen.h"
+#include "embed/sprite3d_lit_vert_reflect.gen.h"
+#include "embed/sprite3d_lit_frag_reflect.gen.h"
 #include "embed/forward_pbr_vert_reflect.gen.h"
 #include "embed/forward_pbr_frag_reflect.gen.h"
 #include "embed/forward_pbr_skinned_vert_reflect.gen.h"
@@ -465,6 +469,7 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     if (std::strcmp(name, "PerScene") == 0)       return UBOBindingPoint::PerScene;
     if (std::strcmp(name, "PerMaterial") == 0)    return UBOBindingPoint::PerMaterial;
     if (std::strcmp(name, "SpriteFx") == 0)       return UBOBindingPoint::PerFrame;
+    if (std::strcmp(name, "Sprite3DLight") == 0) return static_cast<UBOBindingPoint>(1);
     if (std::strcmp(name, "PointLightUBO") == 0)  return UBOBindingPoint::PointLights;
     // B2c-3: ForwardShaded 的 TerrainParams 置于 set=4 / 契约 slot=4，复用 binding point 4
     // （该着色器不含 SpotLights，无冲突；通用原语 BindUniformBuffer(4) → glBindBufferBase(...,4,...)）。
@@ -753,6 +758,25 @@ void GLShaderManager::InitSprite3DShader() {
     glUseProgram(0);
 }
 
+void GLShaderManager::InitSprite3DLitShader() {
+    if (sprite3d_lit_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite3d_lit_shader_handle_ = CompileProgram(DSE_SL(ksprite3d_lit_vert), DSE_SL(ksprite3d_lit_frag));
+    if (sprite3d_lit_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: Sprite3DLit shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(sprite3d_lit_shader_handle_, ksprite3d_lit_vert_reflection);
+    BindUBOsFromReflection(sprite3d_lit_shader_handle_, ksprite3d_lit_frag_reflection);
+    glUseProgram(sprite3d_lit_shader_handle_);
+    const int tex = glGetUniformLocation(sprite3d_lit_shader_handle_, "u_texture");
+    if (tex >= 0) {
+        glUniform1i(tex, 0);
+    }
+    glUseProgram(0);
+}
 void GLShaderManager::InitForwardPbrShader() {
     if (forward_pbr_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;

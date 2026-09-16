@@ -68,6 +68,19 @@
 - `platformer_2d`（在模板目录运行以解析模板 assets）：`[platformer] ready -- 3 levels, 8 pickups total`，截图写出，exit=0。
 - `topdown_3d`：`[topdown_3d] Game initialized  full port from C# source`，exit=0。
 
+### 0.7 M3.1 Sprite3D_LIT 最小链路（2026-09-16）
+
+- 新增 `engine/render/shaders/src/sprite3d_lit.vert/.frag`，由 `dse_shader_compiler` 生成三后端产物；未手改 `*.gen.*`。
+- 新增 `BuiltinProgram::Sprite3DLit`，GL/Vulkan/D3D11 shader manager 均已接入；D3D11 按当前约定只保证编译通过、不跑真机。
+- `RenderThinSnapshot` 新增最多 8 个点光/8 个聚光灯（颜色/强度/半径），`FrameContext` 携带 snapshot 指针；`SpriteBatchRenderer` 在 `lit=true` 时绑定 `Sprite3DLight` UBO，unlit 路径不变。
+- 验收：GL/VK 真机点光开/关 hero 区域平均 RGB 提升明显，`_sprite3d_lit_test.lua` exit=0。
+  - GL: off `(13.0,7.6,7.1)` -> on `(84.4,46.6,29.5)`
+  - VK: off `(12.7,7.5,6.9)` -> on `(83.6,46.8,28.7)`
+- 截图：`docs/design/hd2d_m1m2_shots/desktop/m3_lit_off.png`、`m3_lit_on.png`、`m3_lit_off_vulkan.png`、`m3_lit_on_vulkan.png`。
+- 回归：M1 behind 截图与 M2 修复后像素完全一致（SHA-256 相同）；`_compat_test.lua` exit=0。
+- M3 剩余：CSM 接收/点光/聚光阴影、法线贴图、emissiveBloom、接地阴影，以及 clustered lights 全量路径（当前 lit 只覆盖 snapshot 最多 8+8 盏灯）。
+
+
 ## 1. 改动清单
 
 ### M1：精灵进 3D

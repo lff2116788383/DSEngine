@@ -252,6 +252,13 @@ int L_Sprite3DSetBillboard(lua_State* L) {
     return 0;
 }
 
+int L_Sprite3DSetLit(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->lit = ToBoolish(L, 2, false);
+    }
+    return 0;
+}
 int L_Sprite3DSetSortingBias(lua_State* L) {
     World* world = dse_api_internal::GW();
     if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
@@ -329,6 +336,7 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "ecs", "add_sprite3d", L_AddSprite3D);
     Override(L, "ecs", "set_sprite3d_uv_rect", L_Sprite3DSetUvRect);
     Override(L, "ecs", "set_sprite3d_billboard", L_Sprite3DSetBillboard);
+    Override(L, "ecs", "set_sprite3d_lit", L_Sprite3DSetLit);
     Override(L, "ecs", "set_sprite3d_sorting_bias", L_Sprite3DSetSortingBias);
     Override(L, "ecs", "set_sprite3d_emissive", L_Sprite3DSetEmissive);
     Override(L, "ecs", "set_sprite3d_size", L_Sprite3DSetSize);

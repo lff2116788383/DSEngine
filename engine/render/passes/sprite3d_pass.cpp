@@ -99,12 +99,12 @@ void Sprite3DPass::Render(CommandBuffer& cmd, const FrameContext& frame) {
     if (frame_items_.begin() != normal_end) {
         opaque_items_.assign(frame_items_.begin(), normal_end);
         batch_.DrawSprite3D(cmd, *rhi_device_, opaque_items_,
-                            frame.view, frame.projection, viewport, frame.camera_offset, false);
+                            frame.view, frame.projection, viewport, frame.camera_offset, false, frame.snapshot);
     }
     if (normal_end != frame_items_.end()) {
         foreground_items_.assign(normal_end, frame_items_.end());
         batch_.DrawSprite3D(cmd, *rhi_device_, foreground_items_,
-                            frame.view, frame.projection, viewport, frame.camera_offset, true);
+                            frame.view, frame.projection, viewport, frame.camera_offset, true, frame.snapshot);
     }
 }
 void Sprite3DPass::Shutdown() {

@@ -85,6 +85,30 @@ struct RenderThinSnapshot {
         float cascade_split_lambda = 0.75f;
     } directional_light;
 
+    // HD-2D M3.1: small all-lights snapshot for Sprite3D_LIT. The shadow
+    // arrays above only capture casters; this list feeds the lit sprite shader.
+    static constexpr int kMaxSprite3DLights = 8;
+    struct Sprite3DPointLight {
+        glm::vec3 position{0.0f};
+        float radius = 10.0f;
+        glm::vec3 color{1.0f};
+        float intensity = 1.0f;
+    };
+    Sprite3DPointLight sprite3d_point_lights[kMaxSprite3DLights];
+    int sprite3d_point_light_count = 0;
+
+    struct Sprite3DSpotLight {
+        glm::vec3 position{0.0f};
+        float radius = 20.0f;
+        glm::vec3 direction{0.0f, -1.0f, 0.0f};
+        glm::vec3 color{1.0f};
+        float intensity = 1.0f;
+        float inner_cone_angle = 12.5f;
+        float outer_cone_angle = 17.5f;
+    };
+    Sprite3DSpotLight sprite3d_spot_lights[kMaxSprite3DLights];
+    int sprite3d_spot_light_count = 0;
+
     // ── 聚光灯（SpotShadowPass，最多 4 盏投影阴影）──
     static constexpr int kMaxSpotShadowLights = 4;
     struct SpotLight {
@@ -318,6 +342,8 @@ struct RenderThinSnapshot {
         directional_light = DirectionalLight{};
         spot_shadow_count = 0;
         point_shadow_count = 0;
+        sprite3d_point_light_count = 0;
+        sprite3d_spot_light_count = 0;
         post_process = PostProcess{};
         water_count = 0;
         decal_count = 0;

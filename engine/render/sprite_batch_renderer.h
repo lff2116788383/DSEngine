@@ -25,6 +25,8 @@
 namespace dse {
 namespace render {
 
+struct RenderThinSnapshot;
+
 class CommandBuffer;
 class RhiDevice;
 
@@ -47,7 +49,8 @@ public:
                       const glm::mat4& view, const glm::mat4& projection,
                       const glm::vec2& viewport_size,
                       const glm::vec3& camera_offset,
-                      bool foreground = false);
+                      bool foreground = false,
+                      const RenderThinSnapshot* light_snapshot = nullptr);
 
     /// 释放内部 GPU 资源（析构/重置时调用）。
     void Shutdown(RhiDevice& device);
@@ -78,6 +81,8 @@ private:
     PerInFlightBuffer ubo_;
     /// Sprite3D PerFrame UBO (vp/view/camera_pos/viewport; separate from 2D ubo_).
     PerInFlightBuffer ubo3d_;
+    /// Sprite3D lit light UBO (PerFrame stays in ubo3d_; this is set0.b1).
+    PerInFlightBuffer ubo3d_lit_;
     /// SDF/VFX 批的 push-block 参数 UBO 池（SpriteFx 布局，128B/个）。每 fx 批一个独立逻辑
     /// 缓冲（参数互异），每帧覆写 → 各自每在飞帧缓冲（满足 Vulkan「提交前不可别名/覆写」约束）。
     std::vector<PerInFlightBuffer> fx_ubos_;

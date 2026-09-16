@@ -7,12 +7,15 @@
 
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_gpu_buffer.h"
+#include "engine/render/render_snapshot.h"
 
 #include <glm/gtc/type_ptr.hpp>
 
 #include <array>
 #include <cstddef>
 #include <cstring>
+#include <algorithm>
+#include <cmath>
 #include <functional>
 #include <string>
 
@@ -62,6 +65,68 @@ struct Sprite3DPerFrameUBO {
     glm::vec4 viewport;  // xy = width/height, zw = reserved
 };
 static_assert(sizeof(Sprite3DPerFrameUBO) == 160, "Sprite3DPerFrameUBO std140 layout = 160 bytes");
+struct Sprite3DPointLightGPU {
+    glm::vec4 position_radius;  // xyz = position, w = radius
+    glm::vec4 color_intensity;  // xyz = color, w = intensity
+    glm::vec4 pad0;
+    glm::vec4 pad1;
+};
+struct Sprite3DSpotLightGPU {
+    glm::vec4 position_radius;  // xyz = position, w = radius
+    glm::vec4 direction_inner;  // xyz = direction, w = cos(inner cone)
+    glm::vec4 color_intensity;  // xyz = color, w = intensity
+    glm::vec4 outer_pad;        // x = cos(outer cone)
+};
+struct Sprite3DLightUBO {
+    glm::vec4 dir_direction_enabled;  // xyz = direction TO light, w = enabled
+    glm::vec4 dir_color_ambient;      // xyz = color, w = ambient intensity
+    glm::vec4 dir_params;             // x = intensity
+    glm::ivec4 point_count;           // x = count
+    Sprite3DPointLightGPU points[8];
+    glm::ivec4 spot_count;            // x = count
+    Sprite3DSpotLightGPU spots[8];
+};
+static_assert(sizeof(Sprite3DLightUBO) == 1104, "Sprite3DLightUBO std140 layout = 1104 bytes");
+
+void FillSprite3DLightUBO(const RenderThinSnapshot* snap, Sprite3DLightUBO& out) {
+    out.dir_direction_enabled = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+    out.dir_color_ambient = glm::vec4(1.0f, 1.0f, 1.0f, 0.1f);
+    out.dir_params = glm::vec4(0.0f);
+    out.point_count = glm::ivec4(0);
+    out.spot_count = glm::ivec4(0);
+    if (!snap) return;
+
+    const auto& dl = snap->directional_light;
+    if (dl.valid) {
+        const float len2 = glm::dot(dl.direction, dl.direction);
+        const glm::vec3 to_light = len2 > 1.0e-8f
+            ? -glm::normalize(dl.direction) : glm::vec3(0.0f, -1.0f, 0.0f);
+        out.dir_direction_enabled = glm::vec4(to_light, 1.0f);
+        out.dir_color_ambient = glm::vec4(dl.color, dl.ambient_intensity);
+        out.dir_params.x = dl.intensity;
+    }
+
+    const int point_count = std::min(snap->sprite3d_point_light_count, 8);
+    out.point_count.x = point_count;
+    for (int i = 0; i < point_count; ++i) {
+        const auto& light = snap->sprite3d_point_lights[i];
+        out.points[i].position_radius = glm::vec4(light.position, light.radius);
+        out.points[i].color_intensity = glm::vec4(light.color, light.intensity);
+    }
+
+    const int spot_count = std::min(snap->sprite3d_spot_light_count, 8);
+    out.spot_count.x = spot_count;
+    for (int i = 0; i < spot_count; ++i) {
+        const auto& light = snap->sprite3d_spot_lights[i];
+        const float inner = std::cos(glm::radians(light.inner_cone_angle));
+        const float outer = std::cos(glm::radians(light.outer_cone_angle));
+        out.spots[i].position_radius = glm::vec4(light.position, light.radius);
+        out.spots[i].direction_inner = glm::vec4(light.direction, inner);
+        out.spots[i].color_intensity = glm::vec4(light.color, light.intensity);
+        out.spots[i].outer_pad.x = outer;
+    }
+}
+
 
 // Sprite3D 顶点：CPU 只做去 camera_offset 和打包，billboard 展开在顶点着色器中完成。
 // 属性 location 必须与 shaders/src/sprite3d.vert 保持一致。
@@ -91,6 +156,7 @@ struct Batch3D {
     size_t quad_count = 0;
     TextureHandle texture;
     unsigned int blend_mode = 0;
+    bool lit = false;
 };
 
 // 着色器变体 key（与 sprite_render_system / draw_executor 一致）。
@@ -421,7 +487,8 @@ void SpriteBatchRenderer::DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
                                        const glm::mat4& view, const glm::mat4& projection,
                                        const glm::vec2& viewport_size,
                                        const glm::vec3& camera_offset,
-                                       bool foreground) {
+                                       bool foreground,
+                                       const RenderThinSnapshot* light_snapshot) {
     if (items.empty()) return;
 
     ShaderHandle sprite_prog = device.GetBuiltinProgram(BuiltinProgram::Sprite3D);
@@ -434,6 +501,28 @@ void SpriteBatchRenderer::DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
                                       GpuBufferUsage::kVertex);
     BufferHandle ubo = ubo3d_.Acquire(device, sizeof(Sprite3DPerFrameUBO), GpuBufferUsage::kUniform);
     if (!vbo || !ubo) return;
+    bool has_lit = false;
+    for (const auto& item : items) {
+        if (item.sprite3d_lit) { has_lit = true; break; }
+    }
+    BufferHandle light_ubo = {};
+    Sprite3DLightUBO light_data{};
+    ShaderHandle sprite_lit_prog = {};
+    if (has_lit) {
+        sprite_lit_prog = device.GetBuiltinProgram(BuiltinProgram::Sprite3DLit);
+        if (sprite_lit_prog) {
+            light_ubo = ubo3d_lit_.Acquire(device, sizeof(Sprite3DLightUBO), GpuBufferUsage::kUniform);
+            if (light_ubo) {
+                FillSprite3DLightUBO(light_snapshot, light_data);
+                device.UpdateGpuBuffer(light_ubo, 0, sizeof(light_data), &light_data);
+            } else {
+                has_lit = false;
+            }
+        } else {
+            has_lit = false;
+        }
+    }
+
 
     std::vector<Sprite3DVertex> verts;
     verts.reserve(items.size() * 4);
@@ -444,12 +533,14 @@ void SpriteBatchRenderer::DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
         const TextureHandle tex = item.texture_handle ? item.texture_handle : white_tex_;
 
         if (batches.empty() || batches.back().texture != tex ||
-            batches.back().blend_mode != item.blend_mode) {
+            batches.back().blend_mode != item.blend_mode ||
+            batches.back().lit != item.sprite3d_lit) {
             Batch3D b;
             b.start_quad = i;
             b.quad_count = 0;
             b.texture = tex;
             b.blend_mode = item.blend_mode;
+            b.lit = item.sprite3d_lit;
             batches.push_back(b);
         }
         batches.back().quad_count += 1;
@@ -520,7 +611,10 @@ void SpriteBatchRenderer::DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
 
     for (const Batch3D& b : batches) {
         const PipelineHandle pso = PsoForBlend3D(device, b.blend_mode, foreground);
-        cmd.BindPipeline(device.GetGraphicsPipeline(pso, sprite_prog));
+        const bool use_lit = b.lit && has_lit;
+        ShaderHandle prog = use_lit ? sprite_lit_prog : sprite_prog;
+        cmd.BindPipeline(device.GetGraphicsPipeline(pso, prog));
+        if (use_lit) cmd.BindUniformBuffer(1u, light_ubo);
         cmd.BindUniformBuffer(0u, ubo);
         cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);
         cmd.BindVertexBuffer(0u, vbo, static_cast<uint32_t>(sizeof(Sprite3DVertex)), kAttrs3D);
@@ -535,6 +629,7 @@ void SpriteBatchRenderer::Shutdown(RhiDevice& device) {
     ubo_.Shutdown(device);
     vbo3d_.Shutdown(device);
     ubo3d_.Shutdown(device);
+    ubo3d_lit_.Shutdown(device);
     for (PerInFlightBuffer& b : fx_ubos_) b.Shutdown(device);
     fx_ubos_.clear();
     if (ibo_) device.DeleteGpuBuffer(ibo_);

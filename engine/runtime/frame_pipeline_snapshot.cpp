@@ -222,6 +222,44 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
+    // 6.1 HD-2D M3.1: all enabled point/spot lights for Sprite3D_LIT.
+    {
+        auto view = reg.view<TransformComponent, dse::PointLightComponent>();
+        snap.sprite3d_point_light_count = 0;
+        for (auto e : view) {
+            if (snap.sprite3d_point_light_count >=
+                dse::render::RenderThinSnapshot::kMaxSprite3DLights) break;
+            auto& light = view.get<dse::PointLightComponent>(e);
+            if (!light.enabled) continue;
+            auto& tf = view.get<TransformComponent>(e);
+            auto& out = snap.sprite3d_point_lights[snap.sprite3d_point_light_count];
+            out.position = tf.position - snap.camera_offset;
+            out.radius = light.radius;
+            out.color = light.color;
+            out.intensity = light.intensity;
+            ++snap.sprite3d_point_light_count;
+        }
+    }
+    {
+        auto view = reg.view<TransformComponent, dse::SpotLightComponent>();
+        snap.sprite3d_spot_light_count = 0;
+        for (auto e : view) {
+            if (snap.sprite3d_spot_light_count >=
+                dse::render::RenderThinSnapshot::kMaxSprite3DLights) break;
+            auto& light = view.get<dse::SpotLightComponent>(e);
+            if (!light.enabled) continue;
+            auto& tf = view.get<TransformComponent>(e);
+            auto& out = snap.sprite3d_spot_lights[snap.sprite3d_spot_light_count];
+            out.position = tf.position - snap.camera_offset;
+            out.radius = light.radius;
+            out.direction = glm::normalize(tf.rotation * light.direction);
+            out.color = light.color;
+            out.intensity = light.intensity;
+            out.inner_cone_angle = light.inner_cone_angle;
+            out.outer_cone_angle = light.outer_cone_angle;
+            ++snap.sprite3d_spot_light_count;
+        }
+    }
     // ── 7. PostProcess（合并 13 个 Pass 的重复查询）──
     {
         auto view = reg.view<dse::PostProcessComponent>();

@@ -795,6 +795,9 @@ ShaderHandle VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::Sprite3D:
             if (!shader_mgr_.sprite3d_shader_handle()) shader_mgr_.InitSprite3DShader();
             return shader_mgr_.sprite3d_shader_handle();
+        case BuiltinProgram::Sprite3DLit:
+            if (!shader_mgr_.sprite3d_lit_shader_handle()) shader_mgr_.InitSprite3DLitShader();
+            return shader_mgr_.sprite3d_lit_shader_handle();
         case BuiltinProgram::SpriteFxSdf:
             if (!shader_mgr_.sprite_fx_sdf_shader_handle()) shader_mgr_.InitSpriteFxSdfShader();
             return shader_mgr_.sprite_fx_sdf_shader_handle();

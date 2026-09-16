@@ -1124,6 +1124,8 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
     list(APPEND SHADER_SOURCE_FILES
         "${SHADER_SRC_DIR}/sprite3d.vert"
         "${SHADER_SRC_DIR}/sprite3d.frag"
+        "${SHADER_SRC_DIR}/sprite3d_lit.vert"
+        "${SHADER_SRC_DIR}/sprite3d_lit.frag"
     )
     list(REMOVE_DUPLICATES SHADER_SOURCE_FILES)
 

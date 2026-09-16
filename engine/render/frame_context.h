@@ -16,11 +16,14 @@
 namespace dse {
 namespace render {
 
+struct RenderThinSnapshot;
+
 /// 一帧绘制所用的相机矩阵载体（值类型，按 const& 传递）。
 struct FrameContext {
     glm::mat4 view = glm::mat4(1.0f);        ///< 视图矩阵（Camera-Relative 时相机在原点）
     glm::mat4 projection = glm::mat4(1.0f);  ///< 投影矩阵（含 clip correction）
     glm::vec3 camera_offset = glm::vec3(0.0f);  ///< Camera-Relative: CPU world-space geometry subtracts this
+    const RenderThinSnapshot* snapshot = nullptr;  ///< Light snapshot for HD-2D M3+
 };
 
 } // namespace render

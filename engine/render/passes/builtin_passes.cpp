@@ -454,6 +454,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     glm::mat4 gpu_proj = glm::mat4(1.0f);
     glm::vec3 gpu_camera_pos = glm::vec3(0.0f);
     FrameContext frame;
+    frame.snapshot = &snap;
 
     // Editor camera override: use editor view/proj for Scene render target
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
