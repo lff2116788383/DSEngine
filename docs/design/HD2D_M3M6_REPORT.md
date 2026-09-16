@@ -72,6 +72,7 @@
 实现：
 - 新增 `templates/hd2d_wuxia/scripts/_hd2d_m6_acceptance_test.lua`：程序化 3D 地面/台阶/建筑/屋檐/树冠、3 个 Sprite3D atlas 角色、方向光 CSM + 暖点光、emissive bloom、tilt-shift、弱透视/正交相机。
 - `templates/hd2d_wuxia/tools/hd2d_pixel_stats.py`：均值 RGB/luma、bright ratio、warm-emissive ratio、PSNR、global SSIM。
+- `DSE_DX11_HEADLESS=1`：D3D11 走 `D3D11CreateDevice` + 离屏 backbuffer/RTV/DSV，无 DXGI swapchain，Present no-op；M6 验收场景可 headless 输出 `1280x720` PNG。
 - 未完成：`templates/hd2d_wuxia` 原有战斗/AI/任务/存档层的完整 B+ 表现层迁移尚未完成；当前交付为可复现 B+ 验收底座，原模板逻辑未被破坏。
 
 证据：
@@ -102,4 +103,4 @@
 4. 编辑器已加入 Sprite3D Inspector 面板与纹理缩略图；独立 viewport 预览/动画时间轴未实现。
 5. `gen_maps.py` 的程序化 3D 地形/道具导出未实现。
 6. `templates/hd2d_wuxia` 主模板完整 B+ 表现层迁移未完成，仅完成验收底座。
-7. CI/headless 仅验证本机 Windows + 三后端 CLI；WSL/Xvfb 与 CI 脚本尚未接入。
+7. CI/headless：已实现 D3D11 `DSE_DX11_HEADLESS=1` 离屏路径并可截图；WSL/Xvfb、CMake/CTest 流水线仍未接入。

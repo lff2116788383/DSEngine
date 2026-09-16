@@ -60,6 +60,7 @@ void DX11Context::Shutdown() {
 
     ReleaseBackbufferViews();
     swapchain_.Reset();
+    backbuffer_texture_.Reset();
     context_.Reset();
     device_.Reset();
 
@@ -68,6 +69,7 @@ void DX11Context::Shutdown() {
 }
 
 void DX11Context::Present(bool vsync) {
+    if (!swapchain_) return;  // headless/offscreen: Present is a no-op
     if (swapchain_) {
         UINT flags = (!vsync && tearing_supported_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
         const bool diag = []() {
@@ -92,6 +94,13 @@ void DX11Context::Present(bool vsync) {
 bool DX11Context::Resize(int width, int height) {
     if (!initialized_ || width <= 0 || height <= 0) return false;
 
+    if (headless_) {
+        ReleaseBackbufferViews();
+        width_ = width;
+        height_ = height;
+        return CreateBackbufferViews();
+    }
+
     ReleaseBackbufferViews();
 
     UINT resize_flags = tearing_supported_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
@@ -108,6 +117,10 @@ bool DX11Context::Resize(int width, int height) {
 }
 
 bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int height, bool enable_debug, bool force_sdr) {
+    const char* headless_env = std::getenv("DSE_DX11_HEADLESS");
+    if (headless_env && headless_env[0] != '\0' && headless_env[0] != '0') {
+        return CreateHeadlessDevice(enable_debug);
+    }
     UINT create_flags = 0;
     if (enable_debug) {
         create_flags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -291,19 +304,107 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     return true;
 }
 
-bool DX11Context::CreateBackbufferViews() {
-    // 获取后备缓冲区并创建 RTV
-    ComPtr<ID3D11Texture2D> backbuffer;
-    HRESULT hr = swapchain_->GetBuffer(0, IID_PPV_ARGS(backbuffer.GetAddressOf()));
+bool DX11Context::CreateHeadlessDevice(bool enable_debug) {
+    UINT create_flags = 0;
+    if (enable_debug) create_flags |= D3D11_CREATE_DEVICE_DEBUG;
+
+    D3D_FEATURE_LEVEL feature_levels[] = {
+        D3D_FEATURE_LEVEL_11_1,
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0,
+    };
+    const UINT num_feature_levels = ARRAYSIZE(feature_levels);
+
+    auto try_create = [&](D3D_DRIVER_TYPE driver_type) -> HRESULT {
+        return D3D11CreateDevice(
+            nullptr, driver_type, nullptr,
+            create_flags, feature_levels, num_feature_levels,
+            D3D11_SDK_VERSION,
+            device_.ReleaseAndGetAddressOf(), &feature_level_,
+            context_.ReleaseAndGetAddressOf());
+    };
+
+    HRESULT hr = try_create(D3D_DRIVER_TYPE_HARDWARE);
+    if (hr == DXGI_ERROR_SDK_COMPONENT_MISSING && (create_flags & D3D11_CREATE_DEVICE_DEBUG)) {
+        DEBUG_LOG_WARN("[D3D11] D3D11 debug layer unavailable; retrying headless without DEBUG flag");
+        create_flags &= ~static_cast<UINT>(D3D11_CREATE_DEVICE_DEBUG);
+        hr = try_create(D3D_DRIVER_TYPE_HARDWARE);
+    }
     if (FAILED(hr)) {
-        DEBUG_LOG_ERROR("[D3D11] GetBuffer failed: 0x{:08X}", static_cast<unsigned>(hr));
+        DEBUG_LOG_WARN("[D3D11] Headless hardware device creation failed (HRESULT=0x{}), falling back to WARP",
+            static_cast<unsigned>(hr));
+        hr = try_create(D3D_DRIVER_TYPE_WARP);
+        if (SUCCEEDED(hr)) is_warp_ = true;
+    }
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] D3D11CreateDevice headless failed: HRESULT=0x{}", static_cast<unsigned>(hr));
         return false;
     }
 
-    hr = device_->CreateRenderTargetView(backbuffer.Get(), nullptr, backbuffer_rtv_.GetAddressOf());
-    if (FAILED(hr)) {
-        DEBUG_LOG_ERROR("[D3D11] CreateRenderTargetView failed: 0x{:08X}", static_cast<unsigned>(hr));
-        return false;
+    headless_ = true;
+    hdr_enabled_ = false;
+    tearing_supported_ = false;
+    is_software_ = is_warp_;
+
+    ComPtr<IDXGIDevice> dxgi_device;
+    ComPtr<IDXGIAdapter> dxgi_adapter;
+    if (SUCCEEDED(device_.As(&dxgi_device)) &&
+        SUCCEEDED(dxgi_device->GetAdapter(dxgi_adapter.GetAddressOf()))) {
+        ComPtr<IDXGIAdapter1> dxgi_adapter1;
+        DXGI_ADAPTER_DESC1 desc{};
+        if (SUCCEEDED(dxgi_adapter.As(&dxgi_adapter1)) &&
+            SUCCEEDED(dxgi_adapter1->GetDesc1(&desc))) {
+            adapter_name_ = WideToUtf8(desc.Description);
+            is_software_ = is_warp_ ||
+                (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0 ||
+                adapter_name_.find("Basic Render") != std::string::npos;
+        }
+    }
+    DEBUG_LOG_INFO("[D3D11] Headless offscreen device: {} ({})",
+        adapter_name_, is_software_ ? "software" : "hardware");
+    return true;
+}
+
+bool DX11Context::CreateBackbufferViews() {
+    HRESULT hr = S_OK;
+    if (headless_) {
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = static_cast<UINT>(width_);
+        desc.Height = static_cast<UINT>(height_);
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = 0;
+        hr = device_->CreateTexture2D(&desc, nullptr, backbuffer_texture_.ReleaseAndGetAddressOf());
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[D3D11] Headless CreateTexture2D failed: 0x{:08X}", static_cast<unsigned>(hr));
+            return false;
+        }
+        hr = device_->CreateRenderTargetView(backbuffer_texture_.Get(), nullptr, backbuffer_rtv_.ReleaseAndGetAddressOf());
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[D3D11] Headless CreateRenderTargetView failed: 0x{:08X}", static_cast<unsigned>(hr));
+            return false;
+        }
+    } else {
+        // 获取后备缓冲区并创建 RTV
+        ComPtr<ID3D11Texture2D> backbuffer;
+        hr = swapchain_->GetBuffer(0, IID_PPV_ARGS(backbuffer.GetAddressOf()));
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[D3D11] GetBuffer failed: 0x{:08X}", static_cast<unsigned>(hr));
+            return false;
+        }
+
+        hr = device_->CreateRenderTargetView(backbuffer.Get(), nullptr, backbuffer_rtv_.GetAddressOf());
+        if (FAILED(hr)) {
+            DEBUG_LOG_ERROR("[D3D11] CreateRenderTargetView failed: 0x{:08X}", static_cast<unsigned>(hr));
+            return false;
+        }
     }
 
     // 创建深度/模板缓冲区
@@ -341,6 +442,7 @@ void DX11Context::ReleaseBackbufferViews() {
     }
     backbuffer_rtv_.Reset();
     backbuffer_dsv_.Reset();
+    backbuffer_texture_.Reset();
     depth_stencil_texture_.Reset();
 }
 

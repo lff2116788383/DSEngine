@@ -81,6 +81,8 @@ public:
     bool tearing_supported() const { return tearing_supported_; }
     UINT msaa_4x_quality() const { return msaa_4x_quality_; }
     bool is_warp() const { return is_warp_; }
+    /// D3D11 headless/offscreen path: no DXGI swapchain, render to an offscreen backbuffer.
+    bool headless() const { return headless_; }
     /// 实际所选适配器名称（设备创建后回查 DXGI 适配器得到）
     const std::string& adapter_name() const { return adapter_name_; }
     /// 是否软件渲染（WARP 或 Microsoft Basic Render Driver 等 software adapter）
@@ -91,12 +93,14 @@ public:
 
 private:
     bool CreateDeviceAndSwapChain(void* window_handle, int width, int height, bool enable_debug, bool force_sdr);
+    bool CreateHeadlessDevice(bool enable_debug);
     bool CreateBackbufferViews();
     void ReleaseBackbufferViews();
 
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<IDXGISwapChain> swapchain_;
+    ComPtr<ID3D11Texture2D> backbuffer_texture_;
     std::recursive_mutex immediate_context_mutex_;
 
     ComPtr<ID3D11RenderTargetView> backbuffer_rtv_;
@@ -113,6 +117,7 @@ private:
     bool is_warp_ = false;        ///< 是否运行在 WARP 软件光栅器（无 GPU 回退）
     std::string adapter_name_ = "unknown"; ///< 实际所选适配器名称
     bool is_software_ = false;    ///< 是否软件渲染（WARP / Basic Render Driver）
+    bool headless_ = false;       ///< true: no swapchain, offscreen backbuffer
 };
 
 } // namespace render
