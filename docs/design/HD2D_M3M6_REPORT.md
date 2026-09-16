@@ -53,7 +53,8 @@
   - `ecs.set_sprite3d_anim(e, clip_name, {fps=..., loop=...})`
 - 运行时 clip UV 表 + `Gameplay2DModule::OnUpdate` 帧动画。
 - `scene_json_codec_custom.h` 序列化 `atlas_path` / `clip_name`，加载时通过运行时 atlas registry 重新加载纹理与 clip，不再依赖跨会话 raw RHI handle。
-- 未完成：编辑器 Sprite3D 预览/面板尚未实现；3D 地形/道具 `gen_maps.py` 程序化导出尚未接入。
+- 编辑器：已加入 Sprite3D Inspector 面板（texture/atlas/clip 缩略图、size/anchor/billboard、lit/receive_shadow/emissive、sorting_bias/opacity/contact shadow 等字段）。独立 viewport 预览与图集动画时间轴仍待后续。
+- 未完成：3D 地形/道具 `gen_maps.py` 程序化导出尚未接入。
 
 证据：
 - 测试 `.dsprite`：`templates/hd2d_wuxia/assets/char/hero/hero_d_walk.dsprite.json` + `hero_d_walk_atlas.png`。

@@ -31,6 +31,7 @@
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/component_reflection.h"
 #include "editor_reflected_inspector.h"
+#include "editor_gpu.h"
 
 #include "editor_shared_components.h"
 #include "editor_toolbar.h"
@@ -411,6 +412,11 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<SpriteRendererComponent>(e)) r.emplace<SpriteRendererComponent>(e); },
         20,
         [](entt::registry& r, entt::entity e) { if (r.all_of<SpriteRendererComponent>(e)) r.erase<SpriteRendererComponent>(e); }});
+    reg.Register({"Sprite3D", "3D", DrawSprite3DSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::Sprite3DComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::Sprite3DComponent>(e)) r.emplace<dse::Sprite3DComponent>(e); },
+        30,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::Sprite3DComponent>(e)) r.erase<dse::Sprite3DComponent>(e); }});
     reg.Register({"RigidBody 2D", "2D", DrawRigidBody2DSection,
         [](entt::registry& r, entt::entity e) { return r.all_of<RigidBody2DComponent>(e); },
         [](entt::registry& r, entt::entity e) { if (!r.all_of<RigidBody2DComponent>(e)) r.emplace<RigidBody2DComponent>(e); },
@@ -1153,6 +1159,7 @@ void DrawInspectorPanel(EditorContext& context) {
                 };
                 check_all_have(TransformComponent{}, "Transform");
                 check_all_have(SpriteRendererComponent{}, "SpriteRenderer");
+                check_all_have(dse::Sprite3DComponent{}, "Sprite3D");
                 check_all_have(dse::MeshRendererComponent{}, "MeshRenderer");
                 check_all_have(dse::Camera3DComponent{}, "Camera3D");
                 check_all_have(dse::DirectionalLight3DComponent{}, "DirectionalLight");

@@ -1,3 +1,146 @@
+// Drawn by editor_inspector_panel.cpp. Keeps the same field set the Lua/API
+// and scene codec expose, plus a texture/atlas thumbnail preview.
+void DrawSprite3DSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::Sprite3DComponent>(context.selected_entity)) return;
+    auto& sprite = context.registry.get<dse::Sprite3DComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_PALETTE "  Sprite3D", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ImGui::BeginDisabled(context.read_only);
+    ImGui::Columns(2, "sprite3d_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Preview");
+    ImGui::NextColumn();
+    if (sprite.texture_handle) {
+        const float max_w = 96.0f;
+        const float aspect = (sprite.size_h > 0.001f) ? (sprite.size_w / sprite.size_h) : 1.0f;
+        ImGui::Image((ImTextureID)EditorImGuiTextureId(sprite.texture_handle.raw()),
+                     ImVec2(max_w, max_w / (aspect > 0.001f ? aspect : 1.0f)));
+    } else {
+        ImGui::TextUnformatted("(no texture)");
+    }
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Atlas");
+    ImGui::NextColumn();
+    {
+        char buf[512] = {};
+        std::strncpy(buf, sprite.atlas_path.c_str(), sizeof(buf) - 1);
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::InputText("##sprite3d_atlas", buf, sizeof(buf))) sprite.atlas_path = buf;
+    }
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Clip");
+    ImGui::NextColumn();
+    {
+        char buf[128] = {};
+        std::strncpy(buf, sprite.clip_name.c_str(), sizeof(buf) - 1);
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::InputText("##sprite3d_clip", buf, sizeof(buf))) sprite.clip_name = buf;
+    }
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Size");
+    ImGui::NextColumn();
+    {
+        float size[2] = {sprite.size_w, sprite.size_h};
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::DragFloat2("##sprite3d_size", size, 0.01f, 0.001f, 100.0f)) {
+            sprite.size_w = size[0];
+            sprite.size_h = size[1];
+        }
+    }
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Anchor");
+    ImGui::NextColumn();
+    ImGui::SetNextItemWidth(-1);
+    ImGui::SliderFloat("##sprite3d_anchor", &sprite.anchor_y, 0.0f, 1.0f);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Billboard");
+    ImGui::NextColumn();
+    {
+        const char* modes[] = {"None", "Yaw", "YawPitch", "Screen"};
+        int mode = sprite.billboard;
+        if (mode < 0 || mode > 3) mode = 1;
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::Combo("##sprite3d_billboard", &mode, modes, IM_ARRAYSIZE(modes))) {
+            sprite.billboard = mode;
+        }
+    }
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Lighting");
+    ImGui::NextColumn();
+    ImGui::Checkbox("Lit", &sprite.lit);
+    ImGui::SameLine();
+    ImGui::Checkbox("Receive Shadow", &sprite.receive_shadow);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Sorting Bias");
+    ImGui::NextColumn();
+    ImGui::SetNextItemWidth(-1);
+    ImGui::DragFloat("##sprite3d_bias", &sprite.sorting_bias, 0.01f, -100.0f, 100.0f);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Z Offset");
+    ImGui::NextColumn();
+    ImGui::SetNextItemWidth(-1);
+    ImGui::DragFloat("##sprite3d_zoffset", &sprite.z_offset, 0.01f, -100.0f, 100.0f);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Opacity");
+    ImGui::NextColumn();
+    ImGui::SetNextItemWidth(-1);
+    ImGui::SliderFloat("##sprite3d_opacity", &sprite.opacity, 0.0f, 1.0f);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Tint");
+    ImGui::NextColumn();
+    ImGui::ColorEdit4("##sprite3d_tint", &sprite.color_tint.x);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Emissive");
+    ImGui::NextColumn();
+    ImGui::ColorEdit3("##sprite3d_emissive", &sprite.emissive.x);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Normal Strength");
+    ImGui::NextColumn();
+    ImGui::SetNextItemWidth(-1);
+    ImGui::DragFloat("##sprite3d_normal", &sprite.normal_strength, 0.01f, 0.0f, 4.0f);
+    ImGui::NextColumn();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Contact Shadow");
+    ImGui::NextColumn();
+    ImGui::Checkbox("##sprite3d_contact", &sprite.contact_shadow);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(70.0f);
+    ImGui::DragFloat("Radius##sprite3d_contact_r", &sprite.contact_shadow_radius, 0.01f, 0.01f, 10.0f);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(70.0f);
+    ImGui::DragFloat("Opacity##sprite3d_contact_a", &sprite.contact_shadow_opacity, 0.01f, 0.0f, 1.0f);
+
+    ImGui::Columns(1);
+    ImGui::EndDisabled();
+}
+
 // editor_inspector_sections_render.inl - extracted from editor_inspector_panel.cpp (T9)
 // DO NOT include directly; #include'd from editor_inspector_panel.cpp
 void DrawSpriteRendererSection(EditorContext& context) {
