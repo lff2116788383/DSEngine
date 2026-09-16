@@ -1,15 +1,69 @@
 # HD-2D M1+M2 实现报告
 
-日期：2026-09-15  
+日期：2026-09-16
 基线 HEAD：`7c2f623db2add897542e39ce536e821dbdecadb0`（`feature/engine-lib`）  
 实现范围：`docs/design/HD2D_M1M2_TASK.md` 的 M1 + M2，不包含 M3~M6。
 
-> 说明：本会话从笔记本侧无法连到台式机（`169.254.139.190:22` 不可达），
-> 因此没有在 Windows/MSVC/Vulkan/D3D11 真机上编译或截图。为了不阻塞交付，
-> 使用仓库已有的 WSL 降级路径做了 **OpenGL/llvmpipe 的编译与像素验收**。
-> 三后端的源码同步已完成，但 Vulkan/D3D11 真机验证仍是待办项（见未完成/阻塞项）。
+> 历史说明：第 1 节及之后部分保留首轮 WSL/llvmpipe 降级记录。
+> 2026-09-16 已在台式机 Windows/MSVC 上完成 OpenGL/Vulkan 真机复验，
+> 并修复 procedural inline mesh 二次变换导致的前脸不写深度问题；最新结论见第 0 节。
+> D3D11 真机运行受设备初始化失败阻塞，不能作为已验证项。
 
 ---
+
+## 0. 2026-09-16 台式机真机复验（最新，覆盖旧 WSL 数据）
+
+### 0.1 根因
+
+`MeshRenderSystem::BuildRenderQueues` 对 procedural inline mesh（`mesh_path.empty()`、不可实例化）生成的是 world-space 顶点，但 `MeshRenderer::DrawShaded` 会再次乘 `item.model`。房子因此被二次平移/缩放，前脸没有进入正确深度区间；Sprite3D 在房子矩形区域的 depth test 仍然通过并覆盖房子。
+
+修复：`modules/gameplay_3d/rendering/mesh_render_system.cpp` 在所有 world-space 顶点路径上把 `item.model` 置为 identity；后续 `RenderScene::ApplyCameraOffset` 只调 translation，`DrawShaded` 不再二次应用 `mesh_model`。
+
+### 0.2 OpenGL 台式机真机像素证据
+
+台式机：NVIDIA GeForce GT 1030，Windows MSVC RelWithDebInfo，OpenGL 4.5。
+真实房子 mask：同相机只画地面+房子、不创建 Sprite3D临时场景（house-only vs ground-only）差分；1028x720，mask=251381 px，bbox=(42,413)-(985,686)。
+角色红色阈值：`r > 110 && r > g+35 && r > b+35 && g > 20`。
+
+| 截图 | 角色红像素总数 | mask 内 | mask 外 |
+|---|---:|---:|---:|
+| `m1_behind_fixed.png` | 8121 | 0 | 8121 |
+| `m1_front_fixed.png` | 78150 | 54376 | 23774 |
+
+结论：behind inside == 0，behind outside > 0；front inside > 0。GL 真机硬验收通过。
+
+截图路径（仓库内）：`docs/design/hd2d_m1m2_shots/desktop/`
+- `m1_behind_fixed.png`
+- `m1_front_fixed.png`
+- `m1_house_only_fixed.png`
+- `m1_ground_only_fixed.png`
+- `m2_perf_fixed.png`
+
+台式机原始路径：`C:\ProgramData\m1_behind_fixed2.png`、`C:\ProgramData\m1_front_fixed2.png`。
+
+### 0.3 Vulkan 台式机真机 smoke/pixel
+
+- `DSE_RHI_BACKEND=vulkan`，M1 behind：run_exit=0；用同一 OpenGL house mask 统计：red total=7584，inside=0，outside=7584。
+- front 对照：red total=74146，inside=52939，outside=21207。
+- 结论：Vulkan 真机遮挡同样成立。
+
+### 0.4 D3D11
+
+- 台式机 D3D11 设备创建失败：`D3D11CreateDeviceAndSwapChain failed (incl. WARP fallback)`，随后 `FramePipeline init failed` / segfault。失败发生在 RHI 初始化阶段，与 Sprite3D pass 无关。
+- 三后端公共代码已同步并编译通过；D3D11 运行时应作为环境阻塞项，不能声称已验证。
+
+### 0.5 M2 性能与排序
+
+- `_sprite3d_perf_test.lua` GL 真机：1000 个 Sprite3D + 10 个盒子，`dse.metrics.get_draw_calls()=6 < 100`。
+- `dse.metrics.get_sprite_count()=0`：当前 metrics 只统计 2D sprite 路径，未统计 Sprite3D；报告中的精灵数来自 Lua 脚本自身计数。
+- `Sprite3DPass` 排序键为 `(depth_bucket, texture, blend)`，bucket 已改为 camera-relative/view-space depth（渲染线程用 `frame.view - camera_offset` 计算），不再使用绝对 world Z。
+- `sorting_bias` 仍只影响排序 key，不是真实深度偏移。物理上更远的前景即使 `sorting_bias < 0`，只要 depth test/write 开启，仍会被更近的角色 depth-reject；屋檐/树冠盖住角色需要独立前景 pass 或真实深度偏移（shader depth bias / 分层 pass）。这是 M2 未完成项，不应伪装为已支持。
+
+### 0.6 回归
+
+- `_compat_test.lua`：`[compat] OK: P1 bool/number + P2 精灵 API + P3 tilemap_ex + P4 中文字表`，exit=0。
+- `platformer_2d`（在模板目录运行以解析模板 assets）：`[platformer] ready -- 3 levels, 8 pickups total`，截图写出，exit=0。
+- `topdown_3d`：`[topdown_3d] Game initialized  full port from C# source`，exit=0。
 
 ## 1. 改动清单
 
@@ -60,6 +114,13 @@
     - 另增 `set_sprite3d_size/color_tint/opacity` 便于 demo。
 - `CMakeLists.txt`
   - 显式追加 `sprite3d.vert/.frag`，避免旧构建目录因文件 GLOB 未重配而漏编。
+
+### 2026-09-16 台式机真机深度修复
+
+- `modules/gameplay_3d/rendering/mesh_render_system.cpp`
+  - world-space procedural inline mesh 使用 identity `item.model`，避免 `DrawShaded` 二次应用 `mesh_model`，修复房子前脸不写正确深度。
+- `engine/render/passes/sprite3d_pass.{h,cpp}`
+  - M2 bucket 从绝对 world Z 改为 camera-relative/view-space depth；排序从 Extract 阶段移到 `Render()`，以便使用 `frame.view` 与 `camera_offset`。
 
 ### M2：排序与批处理
 

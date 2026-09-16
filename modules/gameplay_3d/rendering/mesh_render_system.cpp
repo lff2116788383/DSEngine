@@ -1777,6 +1777,15 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
 
                 item.vertices.push_back(bv);
             }
+            // MeshDrawItem contract: world-space vertices must use an identity model.
+            // RenderScene::ApplyCameraOffset later adjusts only the translation to
+            // convert absolute world vertices into camera-relative space. Keeping the
+            // original mesh_model here would make DrawShaded apply rotation/scale/
+            // translation twice for procedural inline meshes, shrinking and pushing
+            // them backwards so their front faces never write the correct depth.
+            if (!vtx_in_local_space) {
+                item.model = glm::mat4(1.0f);
+            }
             item.indices = mesh_renderer.temp_indices;
             item.debug_world_bounds_min = world_min;
             item.debug_world_bounds_max = world_max;

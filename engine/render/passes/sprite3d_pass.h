@@ -30,8 +30,9 @@ class Sprite3DPass {
 public:
     void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
 
-    /// Phase 1 (main thread): extract ECS Sprite3D components into SpriteDrawItem
-    /// and sort by (depth_bucket, texture, blend); smaller bucket/bias is in front.
+    /// Phase 1 (main thread): extract ECS Sprite3D components into SpriteDrawItem.
+    /// Phase 2 computes the camera-relative view-space depth bucket and sorts by
+    /// (depth_bucket, texture, blend); smaller bucket/bias is closer to the camera.
     void ExtractFrameRenderData(World& world);
 
     /// Phase 2 (render thread): issue the sorted Sprite3D batch through the
