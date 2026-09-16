@@ -14,10 +14,12 @@
 - emissive 经 `ShadedMaterial.emissive` / `emissive_tex` 进入 HDR。
 - Sprite3D 接地阴影：在 `Sprite3DPass` 中生成 XZ 径向 alpha 卡片，复用 `SpriteBatchRenderer::DrawSprite3D` 深度测试路径。
 - Lua API：`ecs.set_sprite3d_receive_shadow`、`ecs.set_sprite3d_normal`、`ecs.set_sprite3d_contact_shadow`。
-- 未完成/边界：当前 lit 路径使用 `ForwardShaded` 的全场景光 UBO（点/聚光各 64 上限），**尚未改成直接读 clustered lights SSBO**；M3.1 的 8+8 snapshot UBO 不再是 lit 主路径。
+- 当前 lit 路径使用 `ForwardShaded` 的全场景光 UBO，容量已从 64 提升到 **255**；`8+8` snapshot UBO 不再是 lit 主路径。**仍未改成直接读 clustered lights SSBO**，但已解除 8/64 灯的硬截断。
+- 新增大灯数 smoke：`templates/hd2d_wuxia/scripts/_sprite3d_many_lights_test.lua`，GL/Vulkan/D3D11 均可 255 点光启动并出图。
 
 证据：
 - `templates/hd2d_wuxia/scripts/_sprite3d_lit_test.lua` 夜景/室内单灯场景。
+- `templates/hd2d_wuxia/scripts/_sprite3d_many_lights_test.lua`：255 点光路径三后端 exit=0；8 灯 vs 80 灯全图均值为 `(34.43,43.08,28.52)` vs `(49.56,58.32,36.76)`。
 - GL ForwardPlusDefault 点灯开关全图均值：
   - off `(10.53, 10.56, 6.74)`
   - on `(32.03, 35.70, 22.70)`

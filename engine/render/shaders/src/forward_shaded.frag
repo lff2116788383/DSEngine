@@ -57,7 +57,7 @@ struct FwdPointLight {
 layout(std140, set = 3, binding = 0) uniform PointLightUBO {
     int u_point_light_count;
     int _plpad0, _plpad1, _plpad2;
-    FwdPointLight u_point_lights[64];
+    FwdPointLight u_point_lights[255];
 };
 
 // Final-Feat-4: 聚光灯 SpotLight（≤64，UBO fallback）。布局与 ubo_types.h SpotLightEntry（64B）一致：
@@ -78,7 +78,7 @@ struct FwdSpotLight {
 layout(std140, set = 7, binding = 1) uniform FwdSpotLightUBO {
     int u_spot_light_count;
     int _slpad0, _slpad1, _slpad2;
-    FwdSpotLight u_spot_lights[64];
+    FwdSpotLight u_spot_lights[255];
 };
 
 layout(set = 2, binding = 1) uniform sampler2D u_texture;                  // albedo  -> flat unit 0

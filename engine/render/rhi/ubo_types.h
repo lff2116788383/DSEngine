@@ -40,7 +40,7 @@ enum class UBOBindingPoint : unsigned int {
 };
 
 /// GL 3.3 UBO fallback 模式下每类光源的最大数量（固定大小 UBO 数组上限）
-static constexpr int kMaxUBOLights = 64;
+static constexpr int kMaxUBOLights = 255;
 
 // ============================================================
 // PerFrame UBO (binding = 0)
@@ -145,7 +145,7 @@ struct PointLightEntry {
 };
 static_assert(sizeof(PointLightEntry) == 48, "PointLightEntry must be 48 bytes for std140");
 
-static constexpr int kMaxPointLightsUBO = 64;
+static constexpr int kMaxPointLightsUBO = 255;
 
 struct PointLightsUBO {
     int u_point_light_count;
@@ -168,7 +168,7 @@ struct SpotLightEntry {
 };
 static_assert(sizeof(SpotLightEntry) == 64, "SpotLightEntry must be 64 bytes for std140");
 
-static constexpr int kMaxSpotLightsUBO = 64;
+static constexpr int kMaxSpotLightsUBO = 255;
 
 struct SpotLightsUBO {
     int u_spot_light_count;
