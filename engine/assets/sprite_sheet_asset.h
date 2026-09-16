@@ -32,11 +32,21 @@ struct SpriteFrame {
  * @struct SpriteSheetAsset
  * @brief 精灵图集资产，包含帧列表和源纹理引用
  */
+struct SpriteClip {
+    std::string name;
+    std::vector<int> frames;         ///< indices into SpriteSheetAsset::frames
+    float fps = 10.0f;
+    bool loop = true;
+};
+
 struct SpriteSheetAsset {
     std::string texture_path;        ///< 源纹理路径
+    std::string normal_texture_path; ///< optional normal atlas path
+    std::string emissive_texture_path; ///< optional emissive atlas path
     int texture_width = 0;           ///< 纹理像素宽度
     int texture_height = 0;          ///< 纹理像素高度
     std::vector<SpriteFrame> frames; ///< 所有帧数据
+    std::vector<SpriteClip> clips;   ///< named clips for Sprite3D animation
 
     /**
      * @brief 从 .dsprite JSON 文件加载

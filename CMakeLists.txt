@@ -1077,6 +1077,8 @@ dse_enable_lto(dse_cli)
 add_executable(AssetBuilder 
     apps/tools/asset_builder/main.cpp
     engine/assets/compiler/importer.cpp
+    engine/core/asset_diagnostics.cpp
+    engine/assets/sprite_sheet_asset.cpp
     engine/assets/texture_compressor.cpp
     engine/assets/dtex.cpp
     engine/assets/ktx2_parser.cpp
@@ -1093,6 +1095,7 @@ add_executable(AssetBuilder
     engine/core/memory/memory_tracker.cpp
 )
 target_include_directories(AssetBuilder PRIVATE ${CMAKE_SOURCE_DIR} depends/tinygltf depends/glm)
+target_include_directories(AssetBuilder PRIVATE depends/rapidjson/include)
 # 与静态 dse_engine 消费端一致：DSE_EXPORT 展开为空，避免 dllimport 未解析符号
 target_compile_definitions(AssetBuilder PRIVATE DSE_BUILD_STATIC)
 if(DSE_HAS_ASSIMP)

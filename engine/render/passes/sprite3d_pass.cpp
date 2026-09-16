@@ -86,6 +86,7 @@ void Sprite3DPass::ExtractFrameRenderData(World& world) {
         item.sprite3d_lit = sprite.lit;
         item.sprite3d_receive_shadow = sprite.receive_shadow;
         item.sprite3d_normal_handle = sprite.normal_handle;
+        item.sprite3d_emissive_handle = sprite.emissive_handle;
         item.sprite3d_normal_strength = sprite.normal_strength;
         item.sprite3d_contact_shadow = sprite.contact_shadow;
         item.sprite3d_contact_shadow_radius = sprite.contact_shadow_radius;
@@ -304,6 +305,7 @@ void Sprite3DPass::RenderLit(CommandBuffer& cmd, const FrameContext& frame,
         material.albedo_tex = item.texture_handle;
         material.normal_tex = item.sprite3d_normal_handle;
         material.normal_strength = item.sprite3d_normal_strength;
+        material.emissive_tex = item.sprite3d_emissive_handle;
 
         frame.mesh_renderer->DrawShaded(cmd, *rhi_device_, vertices, indices, identity,
                                          frame.view, frame.projection, camera_pos,

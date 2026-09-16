@@ -20,6 +20,8 @@
 
 #include <glm/glm.hpp>
 #include <algorithm>
+#include <cstdio>
+#include <filesystem>
 #include <vector>
 
 using Entity = entt::entity;
@@ -33,6 +35,62 @@ inline Entity TE(uint32_t e) { return static_cast<Entity>(static_cast<entt::id_t
 // SpriteSheet / Atlas resource storage (matches Lua binding's static vectors)
 std::vector<SpriteSheetAsset> g_sheets;
 std::vector<AtlasAsset> g_atlases;
+
+struct SpriteAtlasRuntime {
+    SpriteSheetAsset sheet;
+    std::string path;
+    uint32_t texture = 0;
+    uint32_t normal_texture = 0;
+    uint32_t emissive_texture = 0;
+};
+std::vector<SpriteAtlasRuntime> g_sprite3d_atlases;
+
+const SpriteClip* FindSpriteClip(const SpriteAtlasRuntime& runtime, const char* clip_name) {
+    if (!clip_name || !*clip_name) return nullptr;
+    for (const auto& clip : runtime.sheet.clips) {
+        if (clip.name == clip_name) return &clip;
+    }
+    return nullptr;
+}
+
+int SpriteClipFrameCount(const SpriteAtlasRuntime& runtime, const char* clip_name) {
+    const SpriteClip* clip = FindSpriteClip(runtime, clip_name);
+    if (clip) return static_cast<int>(clip->frames.size());
+    return static_cast<int>(runtime.sheet.frames.size());
+}
+
+void SpriteClipFrameUV(const SpriteAtlasRuntime& runtime, const char* clip_name,
+                       int frame, float* out_uv) {
+    if (!out_uv) return;
+    const SpriteClip* clip = FindSpriteClip(runtime, clip_name);
+    int index = frame;
+    if (clip && !clip->frames.empty()) {
+        index = clip->frames[static_cast<size_t>(std::clamp(frame, 0, static_cast<int>(clip->frames.size()) - 1))];
+    }
+    const glm::vec4 uv = runtime.sheet.GetFrameUV(index);
+    out_uv[0] = uv.x; out_uv[1] = uv.y; out_uv[2] = uv.z; out_uv[3] = uv.w;
+}
+
+std::string ResolveRelativeToAtlas(const std::string& atlas_path, const std::string& texture_path) {
+    if (texture_path.empty()) return texture_path;
+    std::filesystem::path tex(texture_path);
+    if (tex.is_absolute()) return texture_path;
+    std::filesystem::path atlas(atlas_path);
+    if (!atlas.has_parent_path()) return texture_path;
+    return (atlas.parent_path() / tex).lexically_normal().generic_string();
+}
+
+uint32_t LoadAtlasTexture(const std::string& atlas_path, const std::string& texture_path,
+                          int filter, int wrap) {
+    if (texture_path.empty()) return 0;
+    uint32_t handle = dse_assets_load_texture_ex(texture_path.c_str(), filter, wrap);
+    if (handle) return handle;
+    const std::string resolved = ResolveRelativeToAtlas(atlas_path, texture_path);
+    if (resolved != texture_path) {
+        return dse_assets_load_texture_ex(resolved.c_str(), filter, wrap);
+    }
+    return 0;
+}
 
 } // namespace
 
@@ -175,6 +233,75 @@ extern "C" void dse_sprite_sheet_get_frame_uv(int sheet, int frame, float* out_u
         return;
     }
     out_uv[0] = 0.0f; out_uv[1] = 0.0f; out_uv[2] = 1.0f; out_uv[3] = 1.0f;
+}
+
+// ============================================================
+// Sprite3D atlas (.dsprite + clips)
+// ============================================================
+
+extern "C" int dse_sprite_atlas_load(const char* path, int filter, int wrap) {
+    if (!path) return -1;
+    SpriteAtlasRuntime runtime;
+    if (!runtime.sheet.LoadFromFile(path)) return -1;
+    runtime.path = path;
+    runtime.texture = LoadAtlasTexture(runtime.path, runtime.sheet.texture_path, filter, wrap);
+    if (!runtime.texture) return -1;
+    runtime.normal_texture = LoadAtlasTexture(runtime.path, runtime.sheet.normal_texture_path, filter, wrap);
+    runtime.emissive_texture = LoadAtlasTexture(runtime.path, runtime.sheet.emissive_texture_path, filter, wrap);
+    g_sprite3d_atlases.push_back(std::move(runtime));
+    return static_cast<int>(g_sprite3d_atlases.size()) - 1;
+}
+
+extern "C" int dse_sprite_atlas_path(int atlas, char* out_path, int out_size) {
+    if (!out_path || out_size <= 0) return 0;
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) {
+        out_path[0] = '\0';
+        return 0;
+    }
+    const std::string& path = g_sprite3d_atlases[atlas].path;
+    std::snprintf(out_path, static_cast<size_t>(out_size), "%s", path.c_str());
+    return 1;
+}
+
+extern "C" uint32_t dse_sprite_atlas_texture(int atlas) {
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) return 0;
+    return g_sprite3d_atlases[atlas].texture;
+}
+
+extern "C" uint32_t dse_sprite_atlas_normal_texture(int atlas) {
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) return 0;
+    return g_sprite3d_atlases[atlas].normal_texture;
+}
+
+extern "C" uint32_t dse_sprite_atlas_emissive_texture(int atlas) {
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) return 0;
+    return g_sprite3d_atlases[atlas].emissive_texture;
+}
+
+extern "C" int dse_sprite_atlas_clip_frame_count(int atlas, const char* clip_name) {
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) return 0;
+    return SpriteClipFrameCount(g_sprite3d_atlases[atlas], clip_name);
+}
+
+extern "C" void dse_sprite_atlas_clip_frame_uv(int atlas, const char* clip_name, int frame, float* out_uv) {
+    if (!out_uv) return;
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) {
+        out_uv[0] = 0.0f; out_uv[1] = 0.0f; out_uv[2] = 1.0f; out_uv[3] = 1.0f;
+        return;
+    }
+    SpriteClipFrameUV(g_sprite3d_atlases[atlas], clip_name, frame, out_uv);
+}
+
+extern "C" float dse_sprite_atlas_clip_fps(int atlas, const char* clip_name) {
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) return 10.0f;
+    const SpriteClip* clip = FindSpriteClip(g_sprite3d_atlases[atlas], clip_name);
+    return clip ? clip->fps : 10.0f;
+}
+
+extern "C" int dse_sprite_atlas_clip_loop(int atlas, const char* clip_name) {
+    if (atlas < 0 || atlas >= static_cast<int>(g_sprite3d_atlases.size())) return 1;
+    const SpriteClip* clip = FindSpriteClip(g_sprite3d_atlases[atlas], clip_name);
+    return clip ? (clip->loop ? 1 : 0) : 1;
 }
 
 // ============================================================

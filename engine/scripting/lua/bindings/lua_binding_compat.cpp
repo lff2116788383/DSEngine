@@ -24,6 +24,7 @@ extern "C" {
 }
 
 namespace dse::runtime::lua_binding {
+#include <algorithm>
 #include <cstring>
 
 namespace {
@@ -288,6 +289,98 @@ int L_Sprite3DSetContactShadow(lua_State* L) {
     }
     return 0;
 }
+int L_LoadSpriteAtlas(lua_State* L) {
+    const char* path = luaL_checkstring(L, 1);
+    const int handle = dse_sprite_atlas_load(path, 0, 1);  // nearest + clamp
+    lua_pushinteger(L, handle);
+    return 1;
+}
+
+int L_Sprite3DSetAtlas(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    const uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    auto* c = GetSprite3D(world, e);
+    if (!c) return 0;
+    const int atlas = static_cast<int>(luaL_checkinteger(L, 2));
+    const char* clip = luaL_checkstring(L, 3);
+    const uint32_t texture = dse_sprite_atlas_texture(atlas);
+    if (!texture) return 0;
+
+    c->texture_handle = dse::render::TextureRef(dse::render::TextureHandle::from_raw(texture));
+    c->atlas_handle = atlas;
+    c->clip_name = clip ? clip : "";
+    char path_buffer[1024] = {0};
+    if (dse_sprite_atlas_path(atlas, path_buffer, static_cast<int>(sizeof(path_buffer)))) {
+        c->atlas_path = path_buffer;
+    }
+    const uint32_t normal_texture = dse_sprite_atlas_normal_texture(atlas);
+    c->normal_handle = normal_texture
+        ? dse::render::TextureRef(dse::render::TextureHandle::from_raw(normal_texture))
+        : dse::render::TextureRef{};
+    const uint32_t emissive_texture = dse_sprite_atlas_emissive_texture(atlas);
+    c->emissive_handle = emissive_texture
+        ? dse::render::TextureRef(dse::render::TextureHandle::from_raw(emissive_texture))
+        : dse::render::TextureRef{};
+
+    const int frame_count = dse_sprite_atlas_clip_frame_count(atlas, c->clip_name.c_str());
+    c->clip_uvs.clear();
+    c->clip_uvs.reserve(static_cast<size_t>(std::max(frame_count, 0)));
+    for (int i = 0; i < frame_count; ++i) {
+        float uv[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+        dse_sprite_atlas_clip_frame_uv(atlas, c->clip_name.c_str(), i, uv);
+        c->clip_uvs.emplace_back(uv[0], uv[1], uv[2], uv[3]);
+    }
+    if (!c->clip_uvs.empty()) c->uv_rect = c->clip_uvs.front();
+    c->anim_fps = dse_sprite_atlas_clip_fps(atlas, c->clip_name.c_str());
+    c->anim_loop = dse_sprite_atlas_clip_loop(atlas, c->clip_name.c_str()) != 0;
+    c->anim_time = 0.0f;
+    c->anim_frame = 0;
+    c->anim_playing = !c->clip_uvs.empty();
+    return 0;
+}
+
+int L_Sprite3DSetAnim(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    const uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    auto* c = GetSprite3D(world, e);
+    if (!c) return 0;
+    const char* clip = luaL_checkstring(L, 2);
+    if (!clip) return 0;
+
+    if (c->atlas_handle >= 0 && c->clip_name != clip) {
+        const int frame_count = dse_sprite_atlas_clip_frame_count(c->atlas_handle, clip);
+        if (frame_count <= 0) return 0;
+        c->clip_name = clip;
+        c->clip_uvs.clear();
+        c->clip_uvs.reserve(static_cast<size_t>(frame_count));
+        for (int i = 0; i < frame_count; ++i) {
+            float uv[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+            dse_sprite_atlas_clip_frame_uv(c->atlas_handle, clip, i, uv);
+            c->clip_uvs.emplace_back(uv[0], uv[1], uv[2], uv[3]);
+        }
+        c->uv_rect = c->clip_uvs.front();
+        c->anim_fps = dse_sprite_atlas_clip_fps(c->atlas_handle, clip);
+        c->anim_loop = dse_sprite_atlas_clip_loop(c->atlas_handle, clip) != 0;
+    }
+    if (c->clip_uvs.empty()) return 0;
+
+    if (lua_istable(L, 3)) {
+        lua_getfield(L, 3, "fps");
+        if (lua_isnumber(L, -1)) c->anim_fps = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+        lua_getfield(L, 3, "loop");
+        if (!lua_isnoneornil(L, -1)) c->anim_loop = ToBoolish(L, -1, c->anim_loop);
+        lua_pop(L, 1);
+    }
+    c->anim_time = 0.0f;
+    c->anim_frame = 0;
+    c->anim_playing = c->anim_fps > 0.0f;
+    c->uv_rect = c->clip_uvs.front();
+    return 0;
+}
+
 int L_Sprite3DSetSortingBias(lua_State* L) {
     World* world = dse_api_internal::GW();
     if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
@@ -399,6 +492,9 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "ecs", "set_sprite3d_receive_shadow", L_Sprite3DSetReceiveShadow);
     Override(L, "ecs", "set_sprite3d_normal", L_Sprite3DSetNormal);
     Override(L, "ecs", "set_sprite3d_contact_shadow", L_Sprite3DSetContactShadow);
+    Override(L, "ecs", "set_sprite3d_atlas", L_Sprite3DSetAtlas);
+    Override(L, "ecs", "set_sprite3d_anim", L_Sprite3DSetAnim);
+    Override(L, "assets", "load_sprite_atlas", L_LoadSpriteAtlas);
     Override(L, "ecs", "set_camera_ortho_3d", L_SetCameraOrtho3D);
     Override(L, "ecs", "set_post_process_tilt_shift", L_SetPostProcessTiltShift);
     Override(L, "ecs", "set_sprite3d_sorting_bias", L_Sprite3DSetSortingBias);

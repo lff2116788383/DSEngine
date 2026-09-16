@@ -1,4 +1,5 @@
 #include "engine/assets/compiler/importer.h"
+#include "engine/assets/sprite_sheet_asset.h"
 #include "engine/assets/texture_compressor.h"
 #include "engine/assets/ktx2_parser.h"
 #include "engine/mesh/mesh_decimator.h"
@@ -33,7 +34,7 @@ void PrintUsage() {
         << "  --decimate <ratio>   decimate mesh to target ratio (e.g. 0.5 = 50%%)\n"
         << "  --lod-levels <n>     auto-generate n LOD levels (e.g. 3 => LOD1=50%%, LOD2=25%%, LOD3=12.5%%)\n\n"
         << "Lightmap baking:\n"
-        << "  AssetBuilder --bake-lightmap <scene.gltf/glb> <output.dlightmap> [options]\n"
+        << "  AssetBuilder --bake-lightmap <scene.gltf/glb> <output.dlightmap> [options]\n"        << "  AssetBuilder --sprite <input.dsprite.json> <output.dsprite>\n"
         << "  --lm-resolution <n>   lightmap resolution (default 512)\n"
         << "  --lm-samples <n>      samples per texel (default 64)\n"
         << "  --lm-bounces <n>      indirect bounces (default 2)\n"
@@ -72,6 +73,38 @@ bool ParseTextureFormat(const std::string& s, CompressedTextureFormat& out) {
     if (s == "astc8x8")     { out = F::ASTC_8x8_UNORM;  return true; }
     if (s == "astc8x8srgb") { out = F::ASTC_8x8_SRGB;   return true; }
     return false;
+}
+
+int RunSpriteCook(int argc, char** argv) {
+    // argv[1] == "--sprite"; expect input .dsprite.json and output .dsprite.
+    if (argc != 4) {
+        std::cerr << "[AssetBuilder] --sprite requires <input.dsprite.json> <output.dsprite>." << std::endl;
+        return 1;
+    }
+    const std::filesystem::path input_path = argv[2];
+    const std::filesystem::path output_path = argv[3];
+
+    SpriteSheetAsset sheet;
+    dse::assets::AssetDiagnostics diag;
+    if (!sheet.LoadFromFile(input_path.string(), diag)) {
+        std::cerr << "[AssetBuilder] .dsprite load failed:";
+        for (const auto& e : diag.errors) std::cerr << " " << e;
+        std::cerr << std::endl;
+        return 1;
+    }
+
+    std::error_code ec;
+    const std::filesystem::path out_dir = output_path.parent_path();
+    if (!out_dir.empty()) std::filesystem::create_directories(out_dir, ec);
+    if (!sheet.SaveToFile(output_path.string())) {
+        std::cerr << "[AssetBuilder] Failed to write .dsprite: " << output_path.string() << std::endl;
+        return 1;
+    }
+
+    std::cout << "[AssetBuilder] Cooked dsprite: " << output_path.string()
+              << " (" << sheet.frames.size() << " frames, "
+              << sheet.clips.size() << " clips, texture=" << sheet.texture_path << ")" << std::endl;
+    return 0;
 }
 
 int RunTextureCook(int argc, char** argv) {
@@ -313,6 +346,9 @@ int main(int argc, char** argv) {
 
     if (first_arg == "--texture") {
         return RunTextureCook(argc, argv);
+    }
+    if (first_arg == "--sprite") {
+        return RunSpriteCook(argc, argv);
     }
 
     if (first_arg == "--bake-lightmap") {

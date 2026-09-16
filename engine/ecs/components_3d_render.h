@@ -117,6 +117,17 @@ struct Sprite3DComponent {
     float contact_shadow_radius = 0.5f;   ///< Grounding ellipse radius (world units)
     float contact_shadow_opacity = 0.45f; ///< Grounding shadow opacity [0,1]
     glm::vec3 emissive{0.0f};       ///< M3/Bloom; stored now for serialization/API
+    dse::render::TextureRef emissive_handle; ///< M5 optional emissive atlas/map
+    // M5 .dsprite runtime data (not reflected; custom codec stores atlas_path/clip_name).
+    std::string atlas_path;
+    std::string clip_name;
+    std::vector<glm::vec4> clip_uvs;
+    int atlas_handle = -1;
+    float anim_fps = 0.0f;
+    bool anim_loop = true;
+    float anim_time = 0.0f;
+    int anim_frame = 0;
+    bool anim_playing = false;
     float opacity = 1.0f;
     float sorting_bias = 0.0f;      ///< Smaller is in front (M2)
     float z_offset = 0.0f;

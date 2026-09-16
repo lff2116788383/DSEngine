@@ -1,8 +1,10 @@
 #include "modules/gameplay_2d/gameplay_2d_module.h"
 
 #include "engine/assets/asset_manager.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
+#include <algorithm>
 #include <glm/vec2.hpp>
 
 namespace dse::gameplay2d {
@@ -62,6 +64,28 @@ void Gameplay2DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
     light_2d_system_.Update(world, scaled);
     audio_system_.Update(world.registry(), unscaled);
     audio_spatial_2d_system_.Update(world, unscaled);
+
+    // M5: .dsprite Sprite3D frame animation. The pass itself stays ECS-free;
+    // this system advances uv_rect from the runtime clip frame table.
+    auto sprite3d_view = world.registry().view<Sprite3DComponent>();
+    for (auto e : sprite3d_view) {
+        auto& c = sprite3d_view.get<Sprite3DComponent>(e);
+        if (!c.anim_playing || c.clip_uvs.empty() || c.anim_fps <= 0.0f) continue;
+        const int count = static_cast<int>(c.clip_uvs.size());
+        c.anim_time += scaled;
+        int frame = static_cast<int>(c.anim_time * c.anim_fps);
+        if (c.anim_loop) {
+            frame %= count;
+            if (frame < 0) frame += count;
+        } else {
+            frame = std::min(frame, count - 1);
+        }
+        if (frame != c.anim_frame) {
+            c.anim_frame = frame;
+            c.uv_rect = c.clip_uvs[static_cast<size_t>(frame)];
+        }
+        if (!c.anim_loop && frame >= count - 1) c.anim_playing = false;
+    }
 }
 
 void Gameplay2DModule::OnFixedUpdate(World& world, float fixed_delta_time) {

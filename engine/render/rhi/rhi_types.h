@@ -430,6 +430,7 @@ struct SpriteDrawItem {
     bool sprite3d_lit = false;
     bool sprite3d_receive_shadow = false;
     dse::render::TextureHandle sprite3d_normal_handle;
+    dse::render::TextureHandle sprite3d_emissive_handle;
     float sprite3d_normal_strength = 1.0f;
     bool sprite3d_contact_shadow = false;
     float sprite3d_contact_shadow_radius = 0.5f;

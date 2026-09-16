@@ -39,6 +39,10 @@ bool SpriteSheetAsset::LoadFromFile(const std::string& path,
 
     if (doc.HasMember("texture") && doc["texture"].IsString())
         texture_path = doc["texture"].GetString();
+    if (doc.HasMember("normal") && doc["normal"].IsString())
+        normal_texture_path = doc["normal"].GetString();
+    if (doc.HasMember("emissive") && doc["emissive"].IsString())
+        emissive_texture_path = doc["emissive"].GetString();
     if (doc.HasMember("width") && doc["width"].IsInt())
         texture_width = doc["width"].GetInt();
     if (doc.HasMember("height") && doc["height"].IsInt())
@@ -106,6 +110,35 @@ bool SpriteSheetAsset::LoadFromFile(const std::string& path,
         }
     }
 
+    clips.clear();
+    if (doc.HasMember("clips") && doc["clips"].IsObject()) {
+        for (auto it = doc["clips"].MemberBegin(); it != doc["clips"].MemberEnd(); ++it) {
+            if (!it->name.IsString() || !it->value.IsObject()) continue;
+            SpriteClip clip;
+            clip.name = it->name.GetString();
+            const auto& jc = it->value;
+            if (jc.HasMember("frames") && jc["frames"].IsArray()) {
+                for (auto& jf : jc["frames"].GetArray()) {
+                    if (jf.IsInt()) {
+                        clip.frames.push_back(jf.GetInt());
+                    } else if (jf.IsString()) {
+                        const SpriteFrame* frame = FindFrame(jf.GetString());
+                        if (frame) clip.frames.push_back(frame->index);
+                    }
+                }
+            }
+            if (clip.frames.empty()) {
+                for (const auto& frame : frames) clip.frames.push_back(frame.index);
+            }
+            if (jc.HasMember("fps") && jc["fps"].IsNumber()) clip.fps = jc["fps"].GetFloat();
+            if (jc.HasMember("loop")) {
+                if (jc["loop"].IsBool()) clip.loop = jc["loop"].GetBool();
+                else if (jc["loop"].IsInt()) clip.loop = jc["loop"].GetInt() != 0;
+            }
+            clips.push_back(std::move(clip));
+        }
+    }
+
     if (legacy && diag.migrated) {
         diag.warnings.push_back(
             ".dsprite: migrated legacy flat frame rects to pixel_rect/uv_rect");
@@ -121,6 +154,10 @@ bool SpriteSheetAsset::SaveToFile(const std::string& path) const {
 
     dse::assets::WriteVersionEnvelope(doc, kSpriteSheetSchemaVersion, alloc);
     doc.AddMember("texture", rapidjson::Value(texture_path.c_str(), alloc), alloc);
+    if (!normal_texture_path.empty())
+        doc.AddMember("normal", rapidjson::Value(normal_texture_path.c_str(), alloc), alloc);
+    if (!emissive_texture_path.empty())
+        doc.AddMember("emissive", rapidjson::Value(emissive_texture_path.c_str(), alloc), alloc);
     doc.AddMember("width", texture_width, alloc);
     doc.AddMember("height", texture_height, alloc);
 
@@ -152,6 +189,20 @@ bool SpriteSheetAsset::SaveToFile(const std::string& path) const {
         jarr.PushBack(jf, alloc);
     }
     doc.AddMember("frames", jarr, alloc);
+
+    if (!clips.empty()) {
+        rapidjson::Value jc(rapidjson::kObjectType);
+        for (const auto& clip : clips) {
+            rapidjson::Value jclip(rapidjson::kObjectType);
+            rapidjson::Value jframes(rapidjson::kArrayType);
+            for (int index : clip.frames) jframes.PushBack(index, alloc);
+            jclip.AddMember("frames", jframes, alloc);
+            jclip.AddMember("fps", clip.fps, alloc);
+            jclip.AddMember("loop", clip.loop, alloc);
+            jc.AddMember(rapidjson::Value(clip.name.c_str(), alloc), jclip, alloc);
+        }
+        doc.AddMember("clips", jc, alloc);
+    }
 
     rapidjson::StringBuffer sb;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);

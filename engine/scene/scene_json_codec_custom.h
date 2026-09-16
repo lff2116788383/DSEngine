@@ -7,6 +7,7 @@
 // binding_defs.json (in addition to, not instead of, the reflected fields).
 
 #include "engine/ecs/components_3d_render.h"
+#include "engine/scripting/native_api/dse_api_core.h"
 
 #include <rapidjson/document.h>
 #include <string>
@@ -70,6 +71,13 @@ inline void SerializeExtra(const dse::Sprite3DComponent& c,
                            rapidjson::Document::AllocatorType& alloc) {
     json.AddMember("texture_handle", c.texture_handle.raw(), alloc);
     json.AddMember("normal_handle", c.normal_handle.raw(), alloc);
+    json.AddMember("emissive_handle", c.emissive_handle.raw(), alloc);
+    if (!c.atlas_path.empty())
+        json.AddMember("atlas_path", rapidjson::Value(c.atlas_path.c_str(), alloc), alloc);
+    if (!c.clip_name.empty())
+        json.AddMember("clip_name", rapidjson::Value(c.clip_name.c_str(), alloc), alloc);
+    json.AddMember("anim_fps", c.anim_fps, alloc);
+    json.AddMember("anim_loop", c.anim_loop, alloc);
 }
 
 inline void DeserializeExtra(dse::Sprite3DComponent& c,
@@ -79,6 +87,54 @@ inline void DeserializeExtra(dse::Sprite3DComponent& c,
     }
     if (json.HasMember("normal_handle") && json["normal_handle"].IsUint()) {
         c.normal_handle = dse::render::TextureHandle::from_raw(json["normal_handle"].GetUint());
+    }
+    if (json.HasMember("emissive_handle") && json["emissive_handle"].IsUint()) {
+        c.emissive_handle = dse::render::TextureHandle::from_raw(json["emissive_handle"].GetUint());
+    }
+    if (json.HasMember("atlas_path") && json["atlas_path"].IsString()) {
+        c.atlas_path = json["atlas_path"].GetString();
+    }
+    if (json.HasMember("clip_name") && json["clip_name"].IsString()) {
+        c.clip_name = json["clip_name"].GetString();
+    }
+    if (json.HasMember("anim_fps") && json["anim_fps"].IsNumber()) {
+        c.anim_fps = json["anim_fps"].GetFloat();
+    }
+    if (json.HasMember("anim_loop")) {
+        if (json["anim_loop"].IsBool()) c.anim_loop = json["anim_loop"].GetBool();
+        else if (json["anim_loop"].IsInt()) c.anim_loop = json["anim_loop"].GetInt() != 0;
+    }
+
+    // M5: re-resolve .dsprite asset paths so scene load never depends on stale
+    // raw RHI handles. The runtime atlas registry owns the texture references.
+    if (!c.atlas_path.empty()) {
+        const int atlas = dse_sprite_atlas_load(c.atlas_path.c_str(), 0, 1);
+        if (atlas >= 0) {
+            c.atlas_handle = atlas;
+            const uint32_t texture = dse_sprite_atlas_texture(atlas);
+            if (texture) c.texture_handle = dse::render::TextureHandle::from_raw(texture);
+            const uint32_t normal = dse_sprite_atlas_normal_texture(atlas);
+            c.normal_handle = normal
+                ? dse::render::TextureHandle::from_raw(normal)
+                : dse::render::TextureHandle{};
+            const uint32_t emissive = dse_sprite_atlas_emissive_texture(atlas);
+            c.emissive_handle = emissive
+                ? dse::render::TextureHandle::from_raw(emissive)
+                : dse::render::TextureHandle{};
+
+            const int frame_count = dse_sprite_atlas_clip_frame_count(atlas, c.clip_name.c_str());
+            c.clip_uvs.clear();
+            for (int i = 0; i < frame_count; ++i) {
+                float uv[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+                dse_sprite_atlas_clip_frame_uv(atlas, c.clip_name.c_str(), i, uv);
+                c.clip_uvs.emplace_back(uv[0], uv[1], uv[2], uv[3]);
+            }
+            if (!c.clip_uvs.empty()) {
+                c.uv_rect = c.clip_uvs.front();
+                if (c.anim_fps <= 0.0f) c.anim_fps = dse_sprite_atlas_clip_fps(atlas, c.clip_name.c_str());
+                c.anim_playing = c.anim_fps > 0.0f;
+            }
+        }
     }
 }
 

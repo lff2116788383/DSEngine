@@ -408,6 +408,17 @@ DSE_CAPI int   dse_sprite_sheet_load(const char* path);
 DSE_CAPI int   dse_sprite_sheet_frame_count(int sheet);
 DSE_CAPI void  dse_sprite_sheet_get_frame_uv(int sheet, int frame, float* out_uv);
 
+// M5 Sprite3D atlas: .dsprite loader + clip sampling
+DSE_CAPI int   dse_sprite_atlas_load(const char* path, int filter, int wrap);
+DSE_CAPI int   dse_sprite_atlas_path(int atlas, char* out_path, int out_size);
+DSE_CAPI uint32_t dse_sprite_atlas_texture(int atlas);
+DSE_CAPI uint32_t dse_sprite_atlas_normal_texture(int atlas);
+DSE_CAPI uint32_t dse_sprite_atlas_emissive_texture(int atlas);
+DSE_CAPI int   dse_sprite_atlas_clip_frame_count(int atlas, const char* clip_name);
+DSE_CAPI void  dse_sprite_atlas_clip_frame_uv(int atlas, const char* clip_name, int frame, float* out_uv);
+DSE_CAPI float dse_sprite_atlas_clip_fps(int atlas, const char* clip_name);
+DSE_CAPI int   dse_sprite_atlas_clip_loop(int atlas, const char* clip_name);
+
 DSE_CAPI int   dse_atlas_load(const char* path);
 DSE_CAPI int   dse_atlas_entry_count(int atlas);
 DSE_CAPI void  dse_atlas_get_entry_uv(int atlas, const char* name, float* out_uv);
