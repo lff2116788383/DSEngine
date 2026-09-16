@@ -39,7 +39,12 @@ long long ReadInt64(const rapidjson::Value& obj, const char* key, long long fall
 }
 
 bool ReadBool(const rapidjson::Value& obj, const char* key, bool fallback) {
-    if (obj.HasMember(key) && obj[key].IsBool()) return obj[key].GetBool();
+    if (!obj.HasMember(key)) return fallback;
+    const auto& v = obj[key];
+    if (v.IsBool()) return v.GetBool();
+    // PutBool writes int64_t for legacy/editor compatibility; accept both forms.
+    if (v.IsInt64()) return v.GetInt64() != 0;
+    if (v.IsNumber()) return v.GetDouble() != 0.0;
     return fallback;
 }
 

@@ -90,7 +90,11 @@
   - Vulkan vs D3D11 `PSNR=22.30 dB SSIM=0.9589`
 - `bright_ratio` 非零即 Bloom/emissive 亮像素证据；三后端无 看起来可以 的口头结论。
 
-## 5. 提交记录
+## 5. 回归补充
+
+- `UISerializerTest.SaveRoundTrip` 已修复：`PutBool` 写 int64、`ReadBool` 只接受 bool；现在 3450 passed / 1 skip / exit=0。
+
+## 6. 提交记录
 
 - `44b4bc87 feat(render): add sprite3d lit shadows, normal, emissive and contact shadow`
 - `042f2202 feat(render): add HD-2D tilt-shift and ortho camera`
