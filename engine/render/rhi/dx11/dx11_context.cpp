@@ -263,6 +263,13 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
         if (FAILED(hr)) {
             DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed (incl. WARP fallback): HRESULT=0x{}", static_cast<unsigned>(hr));
             if (preferred_adapter) preferred_adapter->Release();
+            // Swapchain/window path unavailable (SSH/CI/session-0/invalid HWND): keep D3D11
+            // rendering alive through the headless offscreen fallback instead of aborting init.
+            DEBUG_LOG_WARN("[D3D11] Swapchain unavailable; trying headless offscreen fallback");
+            if (CreateHeadlessDevice(enable_debug)) {
+                DEBUG_LOG_WARN("[D3D11] Headless offscreen fallback active");
+                return true;
+            }
             return false;
         }
         hdr_enabled_ = false;

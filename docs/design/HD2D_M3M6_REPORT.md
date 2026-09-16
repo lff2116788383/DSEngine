@@ -74,6 +74,7 @@
 - `templates/hd2d_wuxia/tools/hd2d_pixel_stats.py`：均值 RGB/luma、bright ratio、warm-emissive ratio、PSNR、global SSIM。
 - `templates/hd2d_wuxia/tools/run_hd2d_m6_acceptance.py`：可复现三后端截图与像素统计 runner；支持 `--headless-d3d11`。
 - `DSE_DX11_HEADLESS=1`：D3D11 走 `D3D11CreateDevice` + 离屏 backbuffer/RTV/DSV，无 DXGI swapchain，Present no-op；M6 验收场景可 headless 输出 `1280x720` PNG。
+- D3D11 swapchain 创建失败（含 WARP）时自动回退到 headless offscreen，不再直接 `FramePipeline init failed`/segfault。
 - `run_hd2d_m6_acceptance.py --backends d3d11 --headless-d3d11` 本地通过，普通/离屏 D3D11 均输出 1280x720 截图。
 - 未完成：`templates/hd2d_wuxia` 原有战斗/AI/任务/存档层的完整 B+ 表现层迁移尚未完成；当前交付为可复现 B+ 验收底座，原模板逻辑未被破坏。
 
