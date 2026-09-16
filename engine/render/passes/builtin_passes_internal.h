@@ -63,7 +63,7 @@ inline ActiveCamera GetActiveCamera(const RenderPassContext& ctx, float fallback
         cam.near_clip = snap.camera_3d.near_clip;
         cam.far_clip = snap.camera_3d.far_clip;
         cam.fov_y = snap.camera_3d.fov;
-        cam.proj = glm::perspective(glm::radians(cam.fov_y), cam.aspect, cam.near_clip, cam.far_clip);
+        cam.proj = BuildCamera3DProjection(snap.camera_3d, cam.aspect);
         cam.forward = snap.camera_3d.forward;
         cam.right = snap.camera_3d.right;
         cam.up = snap.camera_3d.up;

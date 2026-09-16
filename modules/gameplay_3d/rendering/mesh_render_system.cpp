@@ -1114,8 +1114,10 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
             if (aspect <= 0.0f) {
                 aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
             }
-            const glm::mat4 projection = glm::perspective(glm::radians(cam.fov), aspect,
-                cam.near_clip, cam.far_clip);
+            const glm::mat4 projection = cam.orthographic
+                ? glm::ortho(-cam.ortho_size * aspect, cam.ortho_size * aspect,
+                             -cam.ortho_size, cam.ortho_size, cam.near_clip, cam.far_clip)
+                : glm::perspective(glm::radians(cam.fov), aspect, cam.near_clip, cam.far_clip);
             camera_frustum_planes = ExtractMeshFrustumPlanes(projection * camera_view_matrix);
             has_camera_frustum = true;
         }
@@ -1643,9 +1645,11 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
                 }
                 if (cam_entity != entt::null) {
                     auto& cam = camera3d_view.get<Camera3DComponent>(cam_entity);
-                    glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
-                        cam.aspect_ratio,
-                        cam.near_clip, cam.far_clip);
+                    glm::mat4 proj = cam.orthographic
+                        ? glm::ortho(-cam.ortho_size * cam.aspect_ratio, cam.ortho_size * cam.aspect_ratio,
+                                     -cam.ortho_size, cam.ortho_size, cam.near_clip, cam.far_clip)
+                        : glm::perspective(glm::radians(cam.fov), cam.aspect_ratio,
+                                           cam.near_clip, cam.far_clip);
                     glm::mat4 cam_view(1.0f);
                     if (world.registry().all_of<TransformComponent>(cam_entity)) {
                         auto& cam_tf = world.registry().get<TransformComponent>(cam_entity);

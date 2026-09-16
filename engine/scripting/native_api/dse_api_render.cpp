@@ -68,7 +68,10 @@ extern "C" int dse_render_world_to_screen(float wx, float wy, float wz,
     glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
     glm::mat4 view_mat = glm::lookAt(transform.position, transform.position + front, up);
-    glm::mat4 proj_mat = glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
+    glm::mat4 proj_mat = cam.orthographic
+        ? glm::ortho(-cam.ortho_size * cam.aspect_ratio, cam.ortho_size * cam.aspect_ratio,
+                     -cam.ortho_size, cam.ortho_size, cam.near_clip, cam.far_clip)
+        : glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
 
     glm::vec4 clip = proj_mat * view_mat * glm::vec4(wx, wy, wz, 1.0f);
     bool visible = clip.w > 0.0f;
@@ -111,7 +114,10 @@ extern "C" int dse_render_screen_to_world_ray(float sx, float sy,
     glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
     glm::mat4 view_mat = glm::lookAt(transform.position, transform.position + front, up);
-    glm::mat4 proj_mat = glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
+    glm::mat4 proj_mat = cam.orthographic
+        ? glm::ortho(-cam.ortho_size * cam.aspect_ratio, cam.ortho_size * cam.aspect_ratio,
+                     -cam.ortho_size, cam.ortho_size, cam.near_clip, cam.far_clip)
+        : glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
     glm::mat4 inv_vp = glm::inverse(proj_mat * view_mat);
 
     float screen_w = static_cast<float>(Screen::width());

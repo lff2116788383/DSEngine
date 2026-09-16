@@ -99,9 +99,9 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
             : snap.camera_3d.view;
         glm::mat4 projection = use_editor_cam
             ? clip_correction * ctx_.editor_projection
-            : clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
-                                                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+            : clip_correction * BuildCamera3DProjection(
+                  snap.camera_3d,
+                  static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()));
 
         // TAA jitter 必须与 ForwardScenePass 一致，否则 PreZ 深度与主 pass 不匹配导致闪烁
         if (ctx_.taa_active && !use_editor_cam) {
@@ -476,9 +476,9 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     } else if (snap.camera_3d.valid) {
         render_3d = true;
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
-                                                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+        glm::mat4 projection = clip_correction * BuildCamera3DProjection(
+            snap.camera_3d,
+            static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()));
 
         if (ctx_.taa_active) {
             projection[2][0] += ctx_.taa_jitter.x * 2.0f;

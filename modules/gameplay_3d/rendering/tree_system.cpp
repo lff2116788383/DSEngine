@@ -390,9 +390,13 @@ void TreeSystem::ExtractFrameRenderData(World& world, const glm::vec3& camera_of
         glm::vec3 front = cam_t.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
         glm::vec3 up = cam_t.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
         view_matrix = glm::lookAt(camera_pos, camera_pos + front, up);
-        proj_matrix = glm::perspective(glm::radians(cam.fov),
-                                        cam.aspect_ratio > 0.0f ? cam.aspect_ratio : (16.0f / 9.0f),
-                                        cam.near_clip, cam.far_clip);
+        {
+            const float aspect = cam.aspect_ratio > 0.0f ? cam.aspect_ratio : (16.0f / 9.0f);
+            proj_matrix = cam.orthographic
+                ? glm::ortho(-cam.ortho_size * aspect, cam.ortho_size * aspect,
+                             -cam.ortho_size, cam.ortho_size, cam.near_clip, cam.far_clip)
+                : glm::perspective(glm::radians(cam.fov), aspect, cam.near_clip, cam.far_clip);
+        }
         has_camera = true;
         break;
     }

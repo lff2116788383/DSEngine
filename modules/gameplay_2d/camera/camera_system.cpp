@@ -42,13 +42,6 @@ void CameraSystem::Update(World& world, float aspect_ratio) {
         }
 
         camera.aspect_ratio = aspect_ratio;
-        float fov = camera.fov;
-        if (fov < 1.0f) {
-            fov = 1.0f;
-        }
-        if (fov > 179.0f) {
-            fov = 179.0f;
-        }
         float near_clip = camera.near_clip;
         if (near_clip <= 0.0f) {
             near_clip = 0.1f;
@@ -57,7 +50,20 @@ void CameraSystem::Update(World& world, float aspect_ratio) {
         if (far_clip <= near_clip) {
             far_clip = near_clip + 1000.0f;
         }
-        camera.projection = glm::perspective(glm::radians(fov), aspect_ratio, near_clip, far_clip);
+        if (camera.orthographic) {
+            const float h = (camera.ortho_size > 0.001f) ? camera.ortho_size : 5.0f;
+            const float w = h * aspect_ratio;
+            camera.projection = glm::ortho(-w, w, -h, h, near_clip, far_clip);
+        } else {
+            float fov = camera.fov;
+            if (fov < 1.0f) {
+                fov = 1.0f;
+            }
+            if (fov > 179.0f) {
+                fov = 179.0f;
+            }
+            camera.projection = glm::perspective(glm::radians(fov), aspect_ratio, near_clip, far_clip);
+        }
 
         glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
         glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);

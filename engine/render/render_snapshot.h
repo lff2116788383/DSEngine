@@ -9,6 +9,7 @@
 #define DSE_RENDER_SNAPSHOT_H
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include "engine/render/rhi/rhi_handle.h"
@@ -24,6 +25,8 @@ struct RenderThinSnapshot {
         float fov = 60.0f;
         float near_clip = 0.1f;
         float far_clip = 1000.0f;
+        bool orthographic = false;
+        float ortho_size = 5.0f;
         glm::vec3 position{0.0f};
         glm::vec3 forward{0.0f, 0.0f, -1.0f};
         glm::vec3 up{0.0f, 1.0f, 0.0f};
@@ -353,6 +356,16 @@ struct RenderThinSnapshot {
         ddgi_config = DDGIConfig{};
     }
 };
+
+inline glm::mat4 BuildCamera3DProjection(const RenderThinSnapshot::Camera3D& cam, float aspect) {
+    if (aspect <= 0.0f) aspect = 1.0f;
+    if (cam.orthographic) {
+        const float h = (cam.ortho_size > 0.001f) ? cam.ortho_size : 5.0f;
+        const float w = h * aspect;
+        return glm::ortho(-w, w, -h, h, cam.near_clip, cam.far_clip);
+    }
+    return glm::perspective(glm::radians(cam.fov), aspect, cam.near_clip, cam.far_clip);
+}
 
 } // namespace render
 } // namespace dse

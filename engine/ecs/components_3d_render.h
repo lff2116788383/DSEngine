@@ -157,6 +157,8 @@ struct BoundingBoxComponent {
 };
 
 struct Camera3DComponent {
+    bool orthographic = false;      ///< HD-2D M4: orthographic 3D camera
+    float ortho_size = 5.0f;        ///< vertical half-size when orthographic
     bool enabled = true;
     int priority = 0;
     float fov = 60.0f;

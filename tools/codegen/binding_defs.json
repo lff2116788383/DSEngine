@@ -95,6 +95,16 @@
                         10.0
                     ],
                     "script": false
+                },
+                {
+                    "name": "orthographic",
+                    "type": "bool",
+                    "script": false
+                },
+                {
+                    "name": "ortho_size",
+                    "type": "float",
+                    "script": false
                 }
             ]
         },

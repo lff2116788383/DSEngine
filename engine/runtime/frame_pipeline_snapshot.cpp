@@ -64,6 +64,8 @@ void FramePipeline::CaptureThinSnapshot() {
             c.fov = cam.fov;
             c.near_clip = cam.near_clip;
             c.far_clip = cam.far_clip;
+            c.orthographic = cam.orthographic;
+            c.ortho_size = cam.ortho_size;
             if (reg.all_of<TransformComponent>(best)) {
                 auto& tf = reg.get<TransformComponent>(best);
                 c.position = tf.position;

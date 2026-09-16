@@ -49,6 +49,8 @@ void RegisterCamera3D() {
     t.field("enabled", &Camera3DComponent::enabled);
     t.field("priority", &Camera3DComponent::priority);
     t.field("aspect_ratio", &Camera3DComponent::aspect_ratio).range(0.1, 10.0);
+    t.field("orthographic", &Camera3DComponent::orthographic);
+    t.field("ortho_size", &Camera3DComponent::ortho_size);
 }
 
 void RegisterMeshRenderer() {

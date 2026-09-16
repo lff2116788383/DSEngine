@@ -54,10 +54,9 @@ void MeshletCullRenderPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     glm::vec3 camera_pos(0.0f);
     if (snap.camera_3d.valid) {
         view = snap.camera_3d.view;
-        proj = glm::perspective(
-            glm::radians(snap.camera_3d.fov),
-            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
-            snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+        proj = BuildCamera3DProjection(
+            snap.camera_3d,
+            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
         camera_pos = snap.camera_3d.position;
     }
 
@@ -225,10 +224,9 @@ void MeshletCullRenderPass::DispatchGPUCull() {
     glm::mat4 view_projection(1.0f);
     if (snap.camera_3d.valid) {
         const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
-        glm::mat4 projection = clip_correction * glm::perspective(
-            glm::radians(snap.camera_3d.fov),
-            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
-            snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+        glm::mat4 projection = clip_correction * BuildCamera3DProjection(
+            snap.camera_3d,
+            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
         view_projection = projection * snap.camera_3d.view;
 
         // Normalize Z to [0,1] for GL backends (same logic as HiZCullPass)
@@ -264,10 +262,9 @@ void MeshletCullRenderPass::ExecuteCPUFallback() {
     glm::mat4 view_proj(1.0f);
     glm::vec3 camera_pos(0.0f);
     if (snap.camera_3d.valid) {
-        glm::mat4 proj = glm::perspective(
-            glm::radians(snap.camera_3d.fov),
-            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
-            snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+        glm::mat4 proj = BuildCamera3DProjection(
+            snap.camera_3d,
+            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
         view_proj = proj * snap.camera_3d.view;
         camera_pos = snap.camera_3d.position;
     }

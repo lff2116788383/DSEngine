@@ -87,9 +87,11 @@ void FramePipeline::PrepareRenderFrame() {
             auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
             const int sw = Screen::width();
             const int sh = Screen::height();
-            glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
-                static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
-                cam.near_clip, cam.far_clip);
+            const float aspect = static_cast<float>(sw) / static_cast<float>(std::max(1, sh));
+            glm::mat4 proj = cam.orthographic
+                ? glm::ortho(-cam.ortho_size * aspect, cam.ortho_size * aspect,
+                             -cam.ortho_size, cam.ortho_size, cam.near_clip, cam.far_clip)
+                : glm::perspective(glm::radians(cam.fov), aspect, cam.near_clip, cam.far_clip);
             // Camera-Relative: 光源已减去 camera_offset，cluster view 也用 camera-at-origin
             glm::mat4 view_mat = glm::mat4(1.0f);
             if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
@@ -214,7 +216,7 @@ void FramePipeline::PrepareRenderFrame() {
                 : glm::mat4(1.0f);
             const float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
             const glm::mat4 proj = snap.camera_3d.valid
-                ? glm::perspective(glm::radians(snap.camera_3d.fov), aspect, snap.camera_3d.near_clip, snap.camera_3d.far_clip)
+                ? BuildCamera3DProjection(snap.camera_3d, aspect)
                 : glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
 
             for (auto e : vg_view) {

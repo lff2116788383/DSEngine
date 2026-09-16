@@ -14,7 +14,9 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/tilemap.h"
 #include "engine/ecs/components_3d_render.h"
+#include "engine/ecs/transform.h"
 #include "engine/render/rhi/rhi_handle.h"
+#include <glm/gtx/quaternion.hpp>
 
 extern "C" {
 #include "depends/lua/lua.h"
@@ -334,6 +336,36 @@ int L_Sprite3DSetOpacity(lua_State* L) {
     return 0;
 }
 
+int L_SetCameraOrtho3D(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    const uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    auto* cam = world->registry().try_get<Camera3DComponent>(static_cast<entt::entity>(dse_api_internal::TE(e)));
+    if (!cam) return 0;
+    cam->orthographic = true;
+    cam->ortho_size = static_cast<float>(luaL_optnumber(L, 2, 5.0));
+    if (auto* tf = world->registry().try_get<TransformComponent>(static_cast<entt::entity>(dse_api_internal::TE(e)))) {
+        const float pitch = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+        const float yaw = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+        tf->rotation = glm::quat(glm::vec3(glm::radians(pitch), glm::radians(yaw), 0.0f));
+        tf->dirty = true;
+    }
+    return 0;
+}
+
+int L_SetPostProcessTiltShift(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    const uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    auto* pp = world->registry().try_get<PostProcessComponent>(static_cast<entt::entity>(dse_api_internal::TE(e)));
+    if (!pp) return 0;
+    pp->dof_enabled = ToBoolish(L, 2, false);
+    pp->dof_focus_distance = static_cast<float>(luaL_optnumber(L, 3, pp->dof_focus_distance));
+    pp->dof_focus_range = static_cast<float>(luaL_optnumber(L, 4, pp->dof_focus_range));
+    pp->dof_bokeh_radius = static_cast<float>(luaL_optnumber(L, 5, pp->dof_bokeh_radius));
+    return 0;
+}
+
 void Override(lua_State* L, const char* table, const char* name, lua_CFunction fn) {
     lua_getglobal(L, "dse");
     if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
@@ -367,6 +399,8 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "ecs", "set_sprite3d_receive_shadow", L_Sprite3DSetReceiveShadow);
     Override(L, "ecs", "set_sprite3d_normal", L_Sprite3DSetNormal);
     Override(L, "ecs", "set_sprite3d_contact_shadow", L_Sprite3DSetContactShadow);
+    Override(L, "ecs", "set_camera_ortho_3d", L_SetCameraOrtho3D);
+    Override(L, "ecs", "set_post_process_tilt_shift", L_SetPostProcessTiltShift);
     Override(L, "ecs", "set_sprite3d_sorting_bias", L_Sprite3DSetSortingBias);
     Override(L, "ecs", "set_sprite3d_emissive", L_Sprite3DSetEmissive);
     Override(L, "ecs", "set_sprite3d_size", L_Sprite3DSetSize);

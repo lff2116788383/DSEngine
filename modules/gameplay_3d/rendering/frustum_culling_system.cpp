@@ -25,7 +25,10 @@ void FrustumCullingSystem::Update(World& world) {
     }
 
     auto& cam = camera_view.get<Camera3DComponent>((entt::entity)main_camera);
-    glm::mat4 projection = glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
+    glm::mat4 projection = cam.orthographic
+        ? glm::ortho(-cam.ortho_size * cam.aspect_ratio, cam.ortho_size * cam.aspect_ratio,
+                     -cam.ortho_size, cam.ortho_size, cam.near_clip, cam.far_clip)
+        : glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
     glm::mat4 view = glm::mat4(1.0f);
     if (world.registry().all_of<TransformComponent>((entt::entity)main_camera)) {
         auto& transform = world.registry().get<TransformComponent>((entt::entity)main_camera);
