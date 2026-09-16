@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file sprite3d_pass.h
  * @brief HD-2D Sprite3D pass: extract/sort/issue the 3D billboard sprites.
  *
@@ -44,8 +44,17 @@ public:
     std::size_t sprite_count() const { return frame_items_.size(); }
 
 private:
+    /// M3 lit path: render through the existing ForwardShaded MeshRenderer path
+    /// so sprites receive the same light lists, CSM/spot/point shadow maps,
+    /// normal maps and emissive/Bloom contract as the hand-authored 3D meshes.
+    void RenderLit(CommandBuffer& cmd, const FrameContext& frame,
+                   const std::vector<SpriteDrawItem>& items);
+
+    void EnsureContactShadowTexture(RhiDevice& device);
+
     RhiDevice* rhi_device_ = nullptr;
     SpriteBatchRenderer batch_;
+    TextureHandle contact_shadow_tex_;
     std::vector<SpriteDrawItem> frame_items_;
     std::vector<SpriteDrawItem> opaque_items_;
     std::vector<SpriteDrawItem> foreground_items_;

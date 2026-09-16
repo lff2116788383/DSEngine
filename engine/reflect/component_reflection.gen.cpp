@@ -810,6 +810,10 @@ void RegisterSprite3D() {
     t.field("billboard", &Sprite3DComponent::billboard);
     t.field("lit", &Sprite3DComponent::lit);
     t.field("receive_shadow", &Sprite3DComponent::receive_shadow);
+    t.field("normal_strength", &Sprite3DComponent::normal_strength);
+    t.field("contact_shadow", &Sprite3DComponent::contact_shadow);
+    t.field("contact_shadow_radius", &Sprite3DComponent::contact_shadow_radius);
+    t.field("contact_shadow_opacity", &Sprite3DComponent::contact_shadow_opacity);
     t.field("emissive", &Sprite3DComponent::emissive).color();
     t.field("opacity", &Sprite3DComponent::opacity);
     t.field("sorting_bias", &Sprite3DComponent::sorting_bias);

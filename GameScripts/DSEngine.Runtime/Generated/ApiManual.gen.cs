@@ -75,6 +75,7 @@ public static class App {
 
 public static class Assets {
     public static uint LoadTexture(string path) { return Native.dse_assets_load_texture(path); }
+    public static uint LoadTextureEx(string path, int filter, int wrap) { return Native.dse_assets_load_texture_ex(path, filter, wrap); }
     public static void SetDataRoot(string path) { Native.dse_assets_set_data_root(path); }
 }
 
@@ -256,6 +257,7 @@ public static class Components {
     public static int EcsGetScriptEnabled(uint e) { return Native.dse_ecs_get_script_enabled(e); }
     public static int FontLoad(string fontId, string ttfPath) { return Native.dse_font_load(fontId, ttfPath); }
     public static int FontLoadCjk(string fontId, string ttfPath) { return Native.dse_font_load_cjk(fontId, ttfPath); }
+    public static int FontLoadText(string fontId, string ttfPath, string utf8Text) { return Native.dse_font_load_text(fontId, ttfPath, utf8Text); }
     public static void FontUnload(string fontId) { Native.dse_font_unload(fontId); }
     public static int FontSetDefault(string fontId) { return Native.dse_font_set_default(fontId); }
     public static float FontMeasure(string text, string fontId, float fontSize) { return Native.dse_font_measure(text, fontId, fontSize); }
@@ -916,6 +918,10 @@ public static class Sprite {
     public static void Add(uint e, float r, float g, float b, float a, int orderInLayer, uint textureHandle) { Native.dse_sprite_add(e, r, g, b, a, orderInLayer, textureHandle); }
     public static void SetUvScroll(uint e, float sx, float sy) { Native.dse_sprite_set_uv_scroll(e, sx, sy); }
     public static void SetUvOffset(uint e, float ox, float oy) { Native.dse_sprite_set_uv_offset(e, ox, oy); }
+    public static void SetUvRect(uint e, float u0, float v0, float u1, float v1) { Native.dse_sprite_set_uv_rect(e, u0, v0, u1, v1); }
+    public static void SetSortingLayer(uint e, int sortingLayer) { Native.dse_sprite_set_sorting_layer(e, sortingLayer); }
+    public static void SetShaderVariant(uint e, string variant) { Native.dse_sprite_set_shader_variant(e, variant); }
+    public static void SetBlendMode(uint e, int blendMode) { Native.dse_sprite_set_blend_mode(e, blendMode); }
 }
 
 public static class SpriteSheet {

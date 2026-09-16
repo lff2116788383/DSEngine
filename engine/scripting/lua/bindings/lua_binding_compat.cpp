@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file lua_binding_compat.cpp
  * @brief Lua 绑定兼容层：修正「生成绑定」中过严/命名不一致的参数约定。
  *
@@ -259,6 +259,33 @@ int L_Sprite3DSetLit(lua_State* L) {
     }
     return 0;
 }
+int L_Sprite3DSetReceiveShadow(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->receive_shadow = ToBoolish(L, 2, false);
+    }
+    return 0;
+}
+
+int L_Sprite3DSetNormal(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        const uint32_t tex = static_cast<uint32_t>(luaL_optinteger(L, 2, 0));
+        c->normal_handle = dse::render::TextureRef(dse::render::TextureHandle::from_raw(tex));
+        c->normal_strength = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    }
+    return 0;
+}
+
+int L_Sprite3DSetContactShadow(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
+        c->contact_shadow = ToBoolish(L, 2, false);
+        c->contact_shadow_radius = static_cast<float>(luaL_optnumber(L, 3, 0.5));
+        c->contact_shadow_opacity = static_cast<float>(luaL_optnumber(L, 4, 0.45));
+    }
+    return 0;
+}
 int L_Sprite3DSetSortingBias(lua_State* L) {
     World* world = dse_api_internal::GW();
     if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
@@ -337,6 +364,9 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "ecs", "set_sprite3d_uv_rect", L_Sprite3DSetUvRect);
     Override(L, "ecs", "set_sprite3d_billboard", L_Sprite3DSetBillboard);
     Override(L, "ecs", "set_sprite3d_lit", L_Sprite3DSetLit);
+    Override(L, "ecs", "set_sprite3d_receive_shadow", L_Sprite3DSetReceiveShadow);
+    Override(L, "ecs", "set_sprite3d_normal", L_Sprite3DSetNormal);
+    Override(L, "ecs", "set_sprite3d_contact_shadow", L_Sprite3DSetContactShadow);
     Override(L, "ecs", "set_sprite3d_sorting_bias", L_Sprite3DSetSortingBias);
     Override(L, "ecs", "set_sprite3d_emissive", L_Sprite3DSetEmissive);
     Override(L, "ecs", "set_sprite3d_size", L_Sprite3DSetSize);

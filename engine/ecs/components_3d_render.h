@@ -1,4 +1,4 @@
-#ifndef DSE_COMPONENTS_3D_RENDER_H
+﻿#ifndef DSE_COMPONENTS_3D_RENDER_H
 #define DSE_COMPONENTS_3D_RENDER_H
 
 #include <algorithm>
@@ -111,6 +111,11 @@ struct Sprite3DComponent {
     int billboard = 1;              ///< 0=None, 1=Yaw, 2=YawPitch, 3=Screen
     bool lit = false;               ///< M3 lighting; false keeps the M1 unlit path
     bool receive_shadow = false;    ///< M3
+    dse::render::TextureRef normal_handle; ///< M3 normal-map atlas/texture
+    float normal_strength = 1.0f;         ///< M3 normal-map strength
+    bool contact_shadow = false;          ///< M3 lightweight grounding ellipse
+    float contact_shadow_radius = 0.5f;   ///< Grounding ellipse radius (world units)
+    float contact_shadow_opacity = 0.45f; ///< Grounding shadow opacity [0,1]
     glm::vec3 emissive{0.0f};       ///< M3/Bloom; stored now for serialization/API
     float opacity = 1.0f;
     float sorting_bias = 0.0f;      ///< Smaller is in front (M2)

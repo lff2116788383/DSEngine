@@ -72,6 +72,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_assets_load_texture", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint dse_assets_load_texture(string path);
 
+    [LibraryImport(Lib, EntryPoint = "dse_assets_load_texture_ex", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_assets_load_texture_ex(string path, int filter, int wrap);
+
     [LibraryImport(Lib, EntryPoint = "dse_assets_set_data_root", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_assets_set_data_root(string path);
 
@@ -981,6 +984,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_font_load_cjk", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_font_load_cjk(string fontId, string ttfPath);
 
+    [LibraryImport(Lib, EntryPoint = "dse_font_load_text", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_font_load_text(string fontId, string ttfPath, string utf8Text);
+
     [LibraryImport(Lib, EntryPoint = "dse_font_unload", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_font_unload(string fontId);
 
@@ -1832,6 +1838,18 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_sprite_set_uv_offset")]
     internal static partial void dse_sprite_set_uv_offset(uint e, float ox, float oy);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_set_uv_rect")]
+    internal static partial void dse_sprite_set_uv_rect(uint e, float u0, float v0, float u1, float v1);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_set_sorting_layer")]
+    internal static partial void dse_sprite_set_sorting_layer(uint e, int sortingLayer);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_set_shader_variant", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_sprite_set_shader_variant(uint e, string variant);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_set_blend_mode")]
+    internal static partial void dse_sprite_set_blend_mode(uint e, int blendMode);
 
     [LibraryImport(Lib, EntryPoint = "dse_mesh_set_material", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_mesh_set_material(uint e, string materialPath);

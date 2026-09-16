@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file frame_context.h
  * @brief 帧/场景级相机上下文
  *
@@ -17,6 +17,12 @@ namespace dse {
 namespace render {
 
 struct RenderThinSnapshot;
+class MeshRenderer;
+class LightBuffer;
+class ClusterGrid;
+
+// ECS-free scene snapshot consumed by render passes and render-thread systems.
+struct RenderSceneView;
 
 /// 一帧绘制所用的相机矩阵载体（值类型，按 const& 传递）。
 struct FrameContext {
@@ -24,6 +30,10 @@ struct FrameContext {
     glm::mat4 projection = glm::mat4(1.0f);  ///< 投影矩阵（含 clip correction）
     glm::vec3 camera_offset = glm::vec3(0.0f);  ///< Camera-Relative: CPU world-space geometry subtracts this
     const RenderThinSnapshot* snapshot = nullptr;  ///< Light snapshot for HD-2D M3+
+    const RenderSceneView* scene_view = nullptr; ///< ECS-free full light/probe list for HD-2D lighting
+    MeshRenderer* mesh_renderer = nullptr;   ///< Existing full ForwardShaded path (CSM/spot/point shadows)
+    LightBuffer* light_buffer = nullptr;     ///< Clustered Forward+ light SSBO owner
+    ClusterGrid* cluster_grid = nullptr;     ///< Clustered Forward+ cluster-grid SSBO owner
 };
 
 } // namespace render

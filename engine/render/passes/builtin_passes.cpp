@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file builtin_passes.cpp
  * @brief 引擎内置渲染 Pass 实现
  *
@@ -503,6 +503,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         frame.view = snap.camera_2d.view; frame.projection = clip_correction_2d * snap.camera_2d.projection;
     }
     frame.camera_offset = ctx_.camera_offset;
+    frame.scene_view = ctx_.scene_view;
+    frame.mesh_renderer = ctx_.mesh_renderer;
+    frame.light_buffer = ctx_.light_buffer;
+    frame.cluster_grid = ctx_.cluster_grid;
     ctx_.frame_camera = frame;
 
     if (render_3d) {

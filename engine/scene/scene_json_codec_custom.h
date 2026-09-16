@@ -69,12 +69,17 @@ inline void SerializeExtra(const dse::Sprite3DComponent& c,
                            rapidjson::Value& json,
                            rapidjson::Document::AllocatorType& alloc) {
     json.AddMember("texture_handle", c.texture_handle.raw(), alloc);
+    json.AddMember("normal_handle", c.normal_handle.raw(), alloc);
 }
 
 inline void DeserializeExtra(dse::Sprite3DComponent& c,
                              const rapidjson::Value& json) {
-    if (!json.HasMember("texture_handle") || !json["texture_handle"].IsUint()) return;
-    c.texture_handle = dse::render::TextureHandle::from_raw(json["texture_handle"].GetUint());
+    if (json.HasMember("texture_handle") && json["texture_handle"].IsUint()) {
+        c.texture_handle = dse::render::TextureHandle::from_raw(json["texture_handle"].GetUint());
+    }
+    if (json.HasMember("normal_handle") && json["normal_handle"].IsUint()) {
+        c.normal_handle = dse::render::TextureHandle::from_raw(json["normal_handle"].GetUint());
+    }
 }
 
 } // namespace dse::scene_codec_custom

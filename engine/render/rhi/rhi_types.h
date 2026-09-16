@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file rhi_types.h
  * @brief RHI 层公共类型定义，集中管理所有渲染相关的数据描述结构体
  *
@@ -429,6 +429,11 @@ struct SpriteDrawItem {
     glm::vec3 sprite3d_emissive = glm::vec3(0.0f);
     bool sprite3d_lit = false;
     bool sprite3d_receive_shadow = false;
+    dse::render::TextureHandle sprite3d_normal_handle;
+    float sprite3d_normal_strength = 1.0f;
+    bool sprite3d_contact_shadow = false;
+    float sprite3d_contact_shadow_radius = 0.5f;
+    float sprite3d_contact_shadow_opacity = 0.45f;
 };
 
 /// 批量渲染顶点格式
