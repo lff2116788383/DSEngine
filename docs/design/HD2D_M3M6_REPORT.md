@@ -72,7 +72,9 @@
 实现：
 - 新增 `templates/hd2d_wuxia/scripts/_hd2d_m6_acceptance_test.lua`：程序化 3D 地面/台阶/建筑/屋檐/树冠、3 个 Sprite3D atlas 角色、方向光 CSM + 暖点光、emissive bloom、tilt-shift、弱透视/正交相机。
 - `templates/hd2d_wuxia/tools/hd2d_pixel_stats.py`：均值 RGB/luma、bright ratio、warm-emissive ratio、PSNR、global SSIM。
+- `templates/hd2d_wuxia/tools/run_hd2d_m6_acceptance.py`：可复现三后端截图与像素统计 runner；支持 `--headless-d3d11`。
 - `DSE_DX11_HEADLESS=1`：D3D11 走 `D3D11CreateDevice` + 离屏 backbuffer/RTV/DSV，无 DXGI swapchain，Present no-op；M6 验收场景可 headless 输出 `1280x720` PNG。
+- `run_hd2d_m6_acceptance.py --backends d3d11 --headless-d3d11` 本地通过，普通/离屏 D3D11 均输出 1280x720 截图。
 - 未完成：`templates/hd2d_wuxia` 原有战斗/AI/任务/存档层的完整 B+ 表现层迁移尚未完成；当前交付为可复现 B+ 验收底座，原模板逻辑未被破坏。
 
 证据：
