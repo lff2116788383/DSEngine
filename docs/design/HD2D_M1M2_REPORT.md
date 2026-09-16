@@ -54,10 +54,13 @@
 
 ### 0.5 M2 性能与排序
 
-- `_sprite3d_perf_test.lua` GL 真机：1000 个 Sprite3D + 10 个盒子，`dse.metrics.get_draw_calls()=6 < 100`。
-- `dse.metrics.get_sprite_count()=0`：当前 metrics 只统计 2D sprite 路径，未统计 Sprite3D；报告中的精灵数来自 Lua 脚本自身计数。
-- `Sprite3DPass` 排序键为 `(depth_bucket, texture, blend)`，bucket 已改为 camera-relative/view-space depth（渲染线程用 `frame.view - camera_offset` 计算），不再使用绝对 world Z。
-- `sorting_bias` 仍只影响排序 key，不是真实深度偏移。物理上更远的前景即使 `sorting_bias < 0`，只要 depth test/write 开启，仍会被更近的角色 depth-reject；屋檐/树冠盖住角色需要独立前景 pass 或真实深度偏移（shader depth bias / 分层 pass）。这是 M2 未完成项，不应伪装为已支持。
+- `_sprite3d_perf_test.lua` GL 真机：1000 个 Sprite3D + 10 个盒子，`dse.metrics.get_draw_calls()=7 < 100`，`dse.metrics.get_sprite_count()=1000`。
+- Sprite3D 数量已接入 `FramePipeline::LastSpriteCount()`：由 `IBuiltinModules::GetSprite3DCount()` 从 `Gameplay2DModule` / `Sprite3DPass` 的提取数量汇总。
+- `Sprite3DPass` 排序键为 `(depth_bucket, texture, blend)`，bucket 使用 camera-relative/view-space depth（`frame.view` + `camera_offset`），不再使用绝对 world Z。
+- `sorting_bias < 0` 现在进入独立 foreground overlay batch：在正常 depth-tested Sprite3D 之后绘制，depth test/write 关闭，所以物理更远的前景也能覆盖更近角色。专项测试：普通层 far-blue 被 near-red 完全遮挡（blue=0）；far `sorting_bias=-1` 时 blue>0、red 下降。
+- 专项截图：`docs/design/hd2d_m1m2_shots/desktop/m2_fg_normal.png`、`m2_fg_foreground.png`。
+- Vulkan foreground smoke：同 `far_bias=-1` 场景，`exit=0`，red=18090、blue=693，说明新 foreground PSO 在 Vulkan 后端同样生效。
+- 剩余限制：foreground overlay 是整层语义，会覆盖其后的 3D 几何；细粒度前景遮罩、半透明 Sprite3D 分层排序仍是后续项。
 
 ### 0.6 回归
 

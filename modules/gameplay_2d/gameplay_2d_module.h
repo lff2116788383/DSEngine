@@ -51,6 +51,7 @@ public:
     TransformSystem& transform_system() { return transform_system_; }
     CameraSystem& camera_system() { return camera_system_; }
     SpriteRenderSystem& sprite_render_system() { return sprite_render_system_; }
+    std::size_t sprite3d_count() const { return sprite3d_pass_.sprite_count(); }
     UIRenderSystem& ui_render_system() { return ui_render_system_; }
     Physics2DSystem& physics2d_system() { return physics2d_system_; }
     AnimationSystem& animation_system() { return animation_system_; }

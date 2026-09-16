@@ -47,6 +47,8 @@ private:
     RhiDevice* rhi_device_ = nullptr;
     SpriteBatchRenderer batch_;
     std::vector<SpriteDrawItem> frame_items_;
+    std::vector<SpriteDrawItem> opaque_items_;
+    std::vector<SpriteDrawItem> foreground_items_;
 };
 
 } // namespace render

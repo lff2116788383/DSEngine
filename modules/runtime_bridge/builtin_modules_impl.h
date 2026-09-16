@@ -40,6 +40,7 @@ public:
     void RenderScene2D(CommandBuffer& cmd, const dse::render::FrameContext& frame) override;
     void RenderUI2D(CommandBuffer& cmd, int w, int h, const glm::mat4& clip) override;
     dse::gameplay2d::AudioSystem& GetAudioSystem() override;
+    int GetSprite3DCount() const override;
 
     // ---- MeshRenderSystem ----
     void InitMeshSystem(AssetManager* asset_mgr) override;

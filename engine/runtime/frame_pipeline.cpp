@@ -44,6 +44,13 @@ FramePipeline::FramePipeline()
     );
 }
 FramePipeline::~FramePipeline() = default;
+int FramePipeline::LastSpriteCount() const {
+    // Generic RHI frame stats do not populate sprite_count; HD-2D also adds the
+    // extracted Sprite3D item count so Lua metrics/tools see the full workload.
+    const int sprite3d = modules_impl_ ? modules_impl_->GetSprite3DCount() : 0;
+    return stats_.LastSpriteCount() + sprite3d;
+}
+
 
 bool FramePipeline::IsRenderThreadActive() const {
     return render_thread_mgr_ && render_thread_mgr_->IsActive();

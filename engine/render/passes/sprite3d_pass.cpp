@@ -87,12 +87,26 @@ void Sprite3DPass::Render(CommandBuffer& cmd, const FrameContext& frame) {
         return a.order_in_layer < b.order_in_layer;
     });
 
+    // sorting_bias < 0 is the explicit foreground overlay contract: these items
+    // are drawn after the depth-tested Sprite3D batch with depth test/write off,
+    // so a physically farther foreground layer can still cover a closer actor.
+    auto normal_end = std::stable_partition(
+        frame_items_.begin(), frame_items_.end(),
+        [](const SpriteDrawItem& item) { return item.sprite3d_sorting_bias >= 0.0f; });
+
     const glm::vec2 viewport(static_cast<float>(Screen::render_width()),
                              static_cast<float>(Screen::render_height()));
-    batch_.DrawSprite3D(cmd, *rhi_device_, frame_items_,
-                        frame.view, frame.projection, viewport, frame.camera_offset);
+    if (frame_items_.begin() != normal_end) {
+        opaque_items_.assign(frame_items_.begin(), normal_end);
+        batch_.DrawSprite3D(cmd, *rhi_device_, opaque_items_,
+                            frame.view, frame.projection, viewport, frame.camera_offset, false);
+    }
+    if (normal_end != frame_items_.end()) {
+        foreground_items_.assign(normal_end, frame_items_.end());
+        batch_.DrawSprite3D(cmd, *rhi_device_, foreground_items_,
+                            frame.view, frame.projection, viewport, frame.camera_offset, true);
+    }
 }
-
 void Sprite3DPass::Shutdown() {
     if (rhi_device_) batch_.Shutdown(*rhi_device_);
 }

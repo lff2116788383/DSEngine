@@ -48,6 +48,10 @@ dse::gameplay2d::AudioSystem& BuiltinModulesImpl::GetAudioSystem() {
     return gameplay2d_module_.audio_system();
 }
 
+int BuiltinModulesImpl::GetSprite3DCount() const {
+    return static_cast<int>(gameplay2d_module_.sprite3d_count());
+}
+
 // ============================================================
 // MeshRenderSystem
 // ============================================================

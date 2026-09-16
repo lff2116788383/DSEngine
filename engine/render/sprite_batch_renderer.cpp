@@ -230,7 +230,8 @@ PipelineHandle SpriteBatchRenderer::PsoForBlend(RhiDevice& device, unsigned int 
     return pso_alpha_;
 }
 
-PipelineHandle SpriteBatchRenderer::PsoForBlend3D(RhiDevice& device, unsigned int blend_mode) {
+PipelineHandle SpriteBatchRenderer::PsoForBlend3D(RhiDevice& device, unsigned int blend_mode,
+                                                  bool foreground) {
     auto make = [&](BlendFactor src, BlendFactor dst) {
         PipelineStateDesc desc{};
         desc.blend_enabled = true;
@@ -238,12 +239,30 @@ PipelineHandle SpriteBatchRenderer::PsoForBlend3D(RhiDevice& device, unsigned in
         desc.blend_dst = dst;
         desc.alpha_blend_src = src;
         desc.alpha_blend_dst = dst;
-        desc.depth_test_enabled = true;
-        desc.depth_write_enabled = true;
+        // Normal Sprite3D items participate in scene depth. Foreground items
+        // are an explicit overlay layer: depth test/write off so a physically
+        // farther canopy/roof can still cover a closer character, matching the
+        // "sorting_bias < 0 => foreground" design contract.
+        desc.depth_test_enabled = !foreground;
+        desc.depth_write_enabled = !foreground;
         desc.depth_func = CompareFunc::Less;
         desc.culling_enabled = false;
         return device.CreatePipelineState(desc);
     };
+    if (foreground) {
+        if (blend_mode == 1u) {  // additive
+            if (!pso3d_fg_additive_) pso3d_fg_additive_ = make(BlendFactor::SrcAlpha, BlendFactor::One);
+            return pso3d_fg_additive_;
+        }
+        if (blend_mode == 2u) {  // multiply
+            if (!pso3d_fg_multiply_) pso3d_fg_multiply_ = make(BlendFactor::DstColor, BlendFactor::Zero);
+            return pso3d_fg_multiply_;
+        }
+        if (!pso3d_fg_alpha_) {
+            pso3d_fg_alpha_ = make(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+        }
+        return pso3d_fg_alpha_;
+    }
     if (blend_mode == 1u) {  // additive
         if (!pso3d_additive_) pso3d_additive_ = make(BlendFactor::SrcAlpha, BlendFactor::One);
         return pso3d_additive_;
@@ -259,7 +278,6 @@ PipelineHandle SpriteBatchRenderer::PsoForBlend3D(RhiDevice& device, unsigned in
     }
     return pso3d_alpha_;
 }
-
 void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                                const std::vector<SpriteDrawItem>& items,
                                const glm::mat4& view, const glm::mat4& projection) {
@@ -402,7 +420,8 @@ void SpriteBatchRenderer::DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
                                        const std::vector<SpriteDrawItem>& items,
                                        const glm::mat4& view, const glm::mat4& projection,
                                        const glm::vec2& viewport_size,
-                                       const glm::vec3& camera_offset) {
+                                       const glm::vec3& camera_offset,
+                                       bool foreground) {
     if (items.empty()) return;
 
     ShaderHandle sprite_prog = device.GetBuiltinProgram(BuiltinProgram::Sprite3D);
@@ -500,7 +519,7 @@ void SpriteBatchRenderer::DrawSprite3D(CommandBuffer& cmd, RhiDevice& device,
     };
 
     for (const Batch3D& b : batches) {
-        const PipelineHandle pso = PsoForBlend3D(device, b.blend_mode);
+        const PipelineHandle pso = PsoForBlend3D(device, b.blend_mode, foreground);
         cmd.BindPipeline(device.GetGraphicsPipeline(pso, sprite_prog));
         cmd.BindUniformBuffer(0u, ubo);
         cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);

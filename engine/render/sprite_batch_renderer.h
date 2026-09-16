@@ -46,7 +46,8 @@ public:
                       const std::vector<SpriteDrawItem>& items,
                       const glm::mat4& view, const glm::mat4& projection,
                       const glm::vec2& viewport_size,
-                      const glm::vec3& camera_offset);
+                      const glm::vec3& camera_offset,
+                      bool foreground = false);
 
     /// 释放内部 GPU 资源（析构/重置时调用）。
     void Shutdown(RhiDevice& device);
@@ -55,7 +56,7 @@ private:
     void EnsureResources(RhiDevice& device, size_t needed_quads);
     void EnsureFxUbos(RhiDevice& device, size_t needed);
     PipelineHandle PsoForBlend(RhiDevice& device, unsigned int blend_mode);
-    PipelineHandle PsoForBlend3D(RhiDevice& device, unsigned int blend_mode);
+    PipelineHandle PsoForBlend3D(RhiDevice& device, unsigned int blend_mode, bool foreground);
 
     PipelineHandle pso_alpha_;
     PipelineHandle pso_additive_;
@@ -63,6 +64,9 @@ private:
     PipelineHandle pso3d_alpha_;
     PipelineHandle pso3d_additive_;
     PipelineHandle pso3d_multiply_;
+    PipelineHandle pso3d_fg_alpha_;
+    PipelineHandle pso3d_fg_additive_;
+    PipelineHandle pso3d_fg_multiply_;
     TextureHandle white_tex_;
 
     /// 动态顶点缓冲（按需扩容）。每帧覆写 → 每在飞帧缓冲（规避 2 帧在飞下的覆写竞争，D9）。

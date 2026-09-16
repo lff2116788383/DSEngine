@@ -161,7 +161,7 @@ ecs.set_post_process_tilt_shift(e, enabled, focus, range, blur)
 | 阶段 | 任务 | 关键文件 | 验收 | 估时 |
 |---|---|---|---|---|
 | **[x] M1 精灵进 3D** | `Sprite3DComponent`+billboard shader+`Sprite3DPass`(depth test/write+alpha test)+Lua 绑定+最小 demo | `engine/ecs/components_3d_render.h`、`engine/render/shaders/src/sprite3d.*`、`engine/render/passes/`、`engine/scripting/lua/bindings/`、`tools/codegen/binding_defs.json`、`modules/gameplay_3d/rendering/mesh_render_system.cpp` | 台式机 GL 真机 behind 房子 mask 内=0/外=8121、front 内=54376；Vulkan 真机 behind 内=0、front 内=52939；D3D11 编译同步但真机 RHI 设备初始化失败 | 12 周 |
-| **[~] M2 排序/批处理** | view-space depth bucket 排序、`sorting_bias`、纹理合批、三后端管线状态 | `engine/render/passes/sprite3d_pass.cpp`、`engine/render/sprite_batch_renderer.*`、三后端 executor | 1000 精灵 + 10 盒 GL 真机 `draw_calls=6 < 100`；`sorting_bias` 仅排序 key，未实现真实前景遮挡；纹理合批/前景 pass 继续推进 | 35 天 |
+| **[x] M2 排序/批处理** | view-space depth bucket、`sorting_bias` foreground pass、Sprite3D metrics、纹理合批、三后端管线状态 | `engine/render/passes/sprite3d_pass.*`、`engine/render/sprite_batch_renderer.*`、`engine/runtime/frame_pipeline.cpp`、`modules/runtime_bridge/*`、三后端 executor | 1000 精灵 + 10 盒 GL 真机 `draw_calls=7 < 100`、`get_sprite_count()=1000`；foreground 专项：normal blue=0、bias<0 blue>0；Vulkan smoke 通过 | 35 天 |
 | **M3 光照/阴影** | `SPRITE3D_LIT`、法线贴图、CSM 接收、点/聚光、emissiveBloom、接地阴影 | `engine/render/shaders/src/sprite3d_lit.*`、`clustered` 光路、`shadow` pass | 灯笼照亮角色与地面、树影落在角色上 | 12 周 |
 | **M4 后处理/相机** | 精灵写深度DoF、Tilt-shift、体积光适配、正交/弱透视 3D 相机 | `builtin_passes_postfx.cpp`、`camera` 组件/控制器 | 移轴景深生效且 UI 不受影响 | 1 周 |
 | **M5 资产/工具** | `.dsprite.json`、AssetBuilder、程序化 3D 地形/道具导出、编辑器预览 | `engine/assets/`、`apps/tools/asset_builder/`、`templates/hd2d_wuxia/tools/` | `dse new hd2d` 直接产出 3D 地形+精灵工程 | 1 周 |

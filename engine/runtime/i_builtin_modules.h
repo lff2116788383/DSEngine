@@ -58,6 +58,7 @@ public:
     virtual void RenderScene2D(CommandBuffer& cmd, const dse::render::FrameContext& frame) = 0;
     virtual void RenderUI2D(CommandBuffer& cmd, int w, int h, const glm::mat4& clip) = 0;
     virtual dse::gameplay2d::AudioSystem& GetAudioSystem() = 0;
+    virtual int GetSprite3DCount() const = 0;
 
     // ---- MeshRenderSystem ----
     virtual void InitMeshSystem(AssetManager* asset_mgr) = 0;

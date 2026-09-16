@@ -209,7 +209,7 @@ public:
      * @brief 获取上一帧提交渲染的精灵总数
      * @return 精灵数量
      */
-    int LastSpriteCount() const { return stats_.LastSpriteCount(); }
+    int LastSpriteCount() const;
 
     /**
      * @brief 注入用于修改底层平台窗口标题的回调函数
