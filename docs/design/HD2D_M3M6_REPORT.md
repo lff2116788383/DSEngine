@@ -16,10 +16,15 @@
 - Lua API：`ecs.set_sprite3d_receive_shadow`、`ecs.set_sprite3d_normal`、`ecs.set_sprite3d_contact_shadow`。
 - 当前 lit 路径使用 `ForwardShaded` 的全场景光 UBO，容量已从 64 提升到 **255**；`8+8` snapshot UBO 不再是 lit 主路径。**仍未改成直接读 clustered lights SSBO**，但已解除 8/64 灯的硬截断。
 - 新增大灯数 smoke：`templates/hd2d_wuxia/scripts/_sprite3d_many_lights_test.lua`，GL/Vulkan/D3D11 均可 255 点光启动并出图。
+- normal map / emissive map 像素路径已用 `.dsprite` 附属贴图验证：`hero_d_walk_m3.dsprite.json`。
 
 证据：
 - `templates/hd2d_wuxia/scripts/_sprite3d_lit_test.lua` 夜景/室内单灯场景。
 - `templates/hd2d_wuxia/scripts/_sprite3d_many_lights_test.lua`：255 点光路径三后端 exit=0；8 灯 vs 80 灯全图均值为 `(34.43,43.08,28.52)` vs `(49.56,58.32,36.76)`。
+- `templates/hd2d_wuxia/scripts/_sprite3d_normal_emissive_test.lua`：
+  - normal off mean `(16.93,25.75,15.92)`  normal on mean `(17.64,26.45,16.61)`。
+  - emissive off mean `(16.93,25.75,15.92)`  emissive on mean `(21.06,28.20,16.34)`；`bright_ratio=0.02707 warm_emissive_ratio=0.02707`，Bloom 亮像素非零。
+  - normal+emissive vs emissive-only：`PSNR=41.90dB SSIM=0.9980`。
 - GL ForwardPlusDefault 点灯开关全图均值：
   - off `(10.53, 10.56, 6.74)`
   - on `(32.03, 35.70, 22.70)`
@@ -67,7 +72,6 @@
 实现：
 - 新增 `templates/hd2d_wuxia/scripts/_hd2d_m6_acceptance_test.lua`：程序化 3D 地面/台阶/建筑/屋檐/树冠、3 个 Sprite3D atlas 角色、方向光 CSM + 暖点光、emissive bloom、tilt-shift、弱透视/正交相机。
 - `templates/hd2d_wuxia/tools/hd2d_pixel_stats.py`：均值 RGB/luma、bright ratio、warm-emissive ratio、PSNR、global SSIM。
-- `templates/hd2d_wuxia/tools/run_hd2d_m6_acceptance.ps1`：三后端截图 + 像素统计一键脚本。
 - 未完成：`templates/hd2d_wuxia` 原有战斗/AI/任务/存档层的完整 B+ 表现层迁移尚未完成；当前交付为可复现 B+ 验收底座，原模板逻辑未被破坏。
 
 证据：
@@ -93,9 +97,9 @@
 ## 6. 未完成 / 阻塞
 
 1. 台式机 `169.254.139.190` 不可达，未取得台式机 GT 1030 / D3D11 真机证据；D3D11 阻塞不能标记为已修复。
-2. M3 lit 主路径仍是 `ForwardShaded` 全光 UBO 64/64，尚未替换为 clustered lights SSBO 直读。
-3. 法线贴图/emissive 图在 `.dsprite` 中已支持字段与绑定，但当前测试 atlas 未附 normal/emissive 贴图，尚未做像素级法线/bloom 对照。
-4. 编辑器 Sprite3D 面板/预览未实现。
+2. M3 lit 主路径仍是 `ForwardShaded` 全光 UBO（已提升到 255），尚未替换为 clustered lights SSBO 直读。
+3. 法线贴图/emissive 已完成 `.dsprite` 附属贴图与像素对照（见 M3 证据）；仍需与美术自动图集切分流程联动。
+4. 编辑器已加入 Sprite3D Inspector 面板与纹理缩略图；独立 viewport 预览/动画时间轴未实现。
 5. `gen_maps.py` 的程序化 3D 地形/道具导出未实现。
 6. `templates/hd2d_wuxia` 主模板完整 B+ 表现层迁移未完成，仅完成验收底座。
 7. CI/headless 仅验证本机 Windows + 三后端 CLI；WSL/Xvfb 与 CI 脚本尚未接入。

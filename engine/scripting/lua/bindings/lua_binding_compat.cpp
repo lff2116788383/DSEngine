@@ -274,7 +274,10 @@ int L_Sprite3DSetNormal(lua_State* L) {
     World* world = dse_api_internal::GW();
     if (auto* c = GetSprite3D(world, static_cast<uint32_t>(luaL_checkinteger(L, 1)))) {
         const uint32_t tex = static_cast<uint32_t>(luaL_optinteger(L, 2, 0));
-        c->normal_handle = dse::render::TextureRef(dse::render::TextureHandle::from_raw(tex));
+        // tex==0 keeps the current normal handle; only the strength is changed.
+        if (tex != 0) {
+            c->normal_handle = dse::render::TextureRef(dse::render::TextureHandle::from_raw(tex));
+        }
         c->normal_strength = static_cast<float>(luaL_optnumber(L, 3, 1.0));
     }
     return 0;
