@@ -141,20 +141,26 @@
 必然崩在加载期（exit=150）。改为按数组下标回落到第一遍创建的实体。修复后该批处理用例通过，
 `SceneIO_*` 25 条往返测试仍全绿。
 
-已知仍未闭合（不属 HD-2D 验收范围，已在 §8 记录）：编辑器 UI 测试套件整体依赖「已打开工程」前置条件，裸跑会因 Project Hub 短路而大面积失败。
+已知仍未闭合（不属 HD-2D 验收范围，见 §8）：编辑器 UI 测试套件在交互层（右键菜单点击等）与两个分组
+的 exit=150 上仍红；起步工程的显式装载已修好「场景为空」这一项。
 
 ## 8. 附：编辑器 UI 测试套件（`DSE_EDITOR_UI_TESTS`）现状
 
-本轮为了让新面板进 UI 覆盖，首次在本机完整跑了 `dsengine-editor-uitest.exe --headless --run-ui-tests`，结论如下（**与 HD-2D 改动无关，属既有欠账**）：
+本轮为了让新面板进 UI 覆盖，首次在本机完整跑了 `dsengine-editor-uitest.exe --headless --run-ui-tests`。
+结论（**与 HD-2D 改动无关，属既有欠账**），以实测摘要为准（`bin/ui_test_summary.txt` 现会输出起步状态）：
 
-- 裸跑（仓根、未打开工程）时，`DrawEditorUI` 命中 Project Hub 分支并提前返回，所有面板都不再绘制 →
-  依赖面板交互的用例成片失败：`dse-hierarchy` 0/6、`dse-inspector` 2/17、`dse-components` 0/11、
-  `dse-undo` 0/8、`dse-dragdrop` 0/4、`dse-menubar` 0/2、`dse-terrain` 0/3 等；`dse-console` 与
-  `dse-misc` 直接以 exit=150 退出。
-- 通过组：`dse-harness`、`dse-assets`、`dse-assetmgmt`、`dse-play`、`dse-tabs`、`dse-blueprint`
-  (28/28)、`dse-panel-deep`、`dse-2d-tools` (18/19)，以及本轮修好的 `dse-panels` (**36/36**)。
-- 失败信息确认根因：`ui_tests_hierarchy.cpp` 断言 `CountValidEntities() == before + 1` 且 `before >= 1`
-  —— 层级面板右键建实体根本没发生，即「面板未绘制」而非逻辑错误。
+- 起步状态：`startup_project_preexisting=1`、`startup_entities=0` —— 工程本来就已打开，但场景是空的。
+  故**面板是被绘制的**（`dse-panels` 36/36 PASS 即为反证），本报告早前「Project Hub 短路导致面板不绘制」
+  的猜测已被证伪。
+- 显式装载 `tests/automation/testdata/projects/simple_2d_game`（4 实体）后，`startup_entities=4`，
+  Hierarchy 用例里 `before >= 1` 一类断言随之通过；但 `CountValidEntities() == before + 1` 仍失败。
+- 剩余根因已收敛到**交互层**：Hierarchy 右键菜单项「Create Empty Entity」被点击后实体数不变
+  （4 → 4）。同一工具路径经 RPC 调用是正常的（`dsengine_project_open` → `dsengine_entity_create`
+  实测 `entity_id=4, components=[Transform]`），说明是 UI 测试的点击合成/焦点路径而非工具或数据问题。
+- 分组实测（装载起步工程后）：`dse-panels` 36/36 PASS、`dse-blueprint` 28/28 PASS、
+  `dse-2d-tools` 18/19、`dse-features` 9/13、`dse-inspector` 2/17、`dse-hierarchy` 0/6、
+  `dse-components` 0/11、`dse-undo` 0/8、`dse-multiselect` 0/4、`dse-dragdrop` 0/4、`dse-menubar` 0/2、
+  `dse-terrain` 0/3；`dse-console` 与 `dse-misc` 以 exit=150 硬退。
 
-后续若要恢复 `editor-automation.yml` 的 L0b 作业，需要先给测试壳补「打开一个内置示例工程」的前置
-（`ProjectManager::OpenProject` / `dsengine_project_open`），再逐个清理历史用例。
+后续要恢复 `editor-automation.yml` 的 L0b 作业，需要在交互层继续排查（右键菜单/焦点/鼠标合成），
+而不是再改工程前置。

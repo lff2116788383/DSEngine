@@ -32,6 +32,20 @@ void RegisterAllUiTests(ImGuiTestEngine* engine);
 /// 当前被测世界中 valid 的实体数（断言基准）；引擎不可用时返回 -1。
 int CountValidEntities();
 
+/// 打开仓库内置的 UI 测试示例工程（默认 scenes/main.scene.json，含 4 个实体）。
+///
+/// 为什么要有：UI 测试壳运行时工程状态取决于进程外部条件。实测（summary 的
+/// startup_project_preexisting）启动时已有一个工程处于打开状态，但其场景是空的
+/// （startup_entities=0），于是依赖「场景里已有实体」的用例（Hierarchy 的
+/// duplicate/delete 先要求 before >= 1）必然失败。这里按与自动化框架完全相同的工具路径
+/// （OpenProjectCmd → dsengine_project_open）显式装载一个已知内容的工程，让用例的起步
+/// 状态可复现。注意：它并不能修正交互层用例（右键菜单点击等）自身的失败。
+/// @return 工程文件存在且工具返回 ok 时为 true；否则 false（用例照跑，便于区分环境/功能问题）。
+bool OpenUiTestProject();
+
+/// 示例工程的仓库相对路径（OpenUiTestProject 使用；也供用例断言/诊断引用）。
+const char* UiTestProjectPath();
+
 /// 把全部面板可见性开关置真，让被隐藏的面板下一帧起被绘制（覆盖全部面板的前提）。
 void EnsureAllPanelsVisible();
 

@@ -20,6 +20,10 @@
 #include "imgui_internal.h"
 #include "imgui_te_context.h"
 
+// 写路径门面：UI 用例的起步工程经与自动化相同的 dsengine_* 工具路径打开。
+#include "apps/editor_cpp/core/command_bus.h"
+#include "apps/editor_cpp/core/editor_command.h"
+
 #include "../editor_project.h"  // ProjectManager
 #include "../editor_selection.h"  // SelectionManager (ResetUiState)
 
@@ -28,6 +32,25 @@
 #include "engine/ecs/world.h"
 
 namespace dse::editor::uitest {
+
+namespace {
+// UI 用例的起步工程：与自动化批处理用例共用同一个 testdata 工程，保证两边看到同一份
+// 初始场景（4 个实体：MainCamera/Player/Ground/Light），避免再维护第二份夹具。
+// 实测启动时工程虽已打开但场景为空，故必须显式装载而非依赖默认状态。
+constexpr const char* kUiTestProject = "tests/automation/testdata/projects/simple_2d_game/project.dseproj";
+}  // namespace
+
+const char* UiTestProjectPath() { return kUiTestProject; }
+
+bool OpenUiTestProject() {
+    const UiTestServices& s = Services();
+    if (!s.bus || !s.engine) return false;
+    namespace fs = std::filesystem;
+    if (!fs::exists(kUiTestProject)) return false;
+    const auto result = s.bus->dispatch(
+        dse::editor::core::OpenProjectCmd{kUiTestProject}, *s.engine);
+    return result.ok;
+}
 
 int CountValidEntities() {
     auto* engine = Services().engine;

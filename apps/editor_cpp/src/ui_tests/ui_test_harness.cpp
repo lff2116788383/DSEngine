@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <fstream>
 
+#include "../editor_project.h"  // ProjectManager（起步前置诊断）
+
 #include "imgui.h"
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
@@ -31,6 +33,12 @@ bool             g_started = false;
 std::string      g_results_xml     = "bin/ui_test_results.xml";
 const char*      kResultsSummary   = "bin/ui_test_summary.txt";
 
+// 起步前置的实测结果，落进 summary 便于判定「失败是环境还是功能」：
+// 无工程时编辑器只画 Project Hub，面板类用例会成片失败，必须能从摘要一眼看出。
+bool             g_startup_project_open = false;
+bool             g_startup_project_preexisting = false;
+int              g_startup_entities     = -1;
+
 } // namespace
 
 const UiTestServices& Services() { return g_services; }
@@ -40,6 +48,16 @@ void SetServices(const UiTestServices& services) { g_services = services; }
 void Init(ImGuiContext* ui_ctx, const UiTestServices& services, const std::string& filter) {
     SetServices(services);
     g_filter = filter;
+
+    // 先显式装载一个已知内容的起步工程（见 OpenUiTestProject 注释）；失败也继续，
+    // 用例会各自报错，便于区分「环境没准备好」与「功能坏了」。
+    const bool had_project = dse::editor::ProjectManager::Get().HasOpenProject();
+    g_startup_project_preexisting = had_project;
+    g_startup_project_open = OpenUiTestProject();
+    g_startup_entities = CountValidEntities();
+    std::printf("[ui-tests] startup had_project=%d project open=%s entities=%d (%s)\n",
+                had_project ? 1 : 0, g_startup_project_open ? "ok" : "FAILED",
+                g_startup_entities, UiTestProjectPath());
 
     g_engine = ImGuiTestEngine_CreateContext();
 
@@ -97,7 +115,10 @@ int ResultExitCode() {
             << "tested=" << summary.CountTested << "\n"
             << "passed=" << summary.CountSuccess << "\n"
             << "failed=" << failed << "\n"
-            << "in_queue=" << summary.CountInQueue << "\n";
+            << "in_queue=" << summary.CountInQueue << "\n"
+            << "startup_project_open=" << (g_startup_project_open ? 1 : 0) << "\n"
+            << "startup_entities=" << g_startup_entities << "\n"
+            << "startup_project_preexisting=" << (g_startup_project_preexisting ? 1 : 0) << "\n";
     }
     return ok ? 0 : 1;
 }
