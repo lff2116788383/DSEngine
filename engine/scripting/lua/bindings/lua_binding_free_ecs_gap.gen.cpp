@@ -421,21 +421,45 @@ int L_set_gi_probe(lua_State* L) {
     return 0;
 }
 
-int L_dse_steering_get_state(lua_State* L) {
-    int out_flags = 0;
+int L_dse_compat_steering_get_state(lua_State* L) {
+    int out_enabled = 0;
+    int out_seek_enabled = 0;
+    int out_flee_enabled = 0;
+    int out_arrive_enabled = 0;
     float out_velocity[3] = {0, 0, 0};
-    float out_params = 0;
-    float out_targets = 0;
+    float out_speed = 0;
+    float out_max_velocity = 0;
+    float out_max_force = 0;
+    float out_mass = 0;
+    float out_arrive_decel_radius = 0;
+    float out_seek_target[3] = {0, 0, 0};
+    float out_flee_target[3] = {0, 0, 0};
+    float out_arrive_target[3] = {0, 0, 0};
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int _ret = dse_steering_get_state(e, &out_flags, out_velocity, &out_params, &out_targets);
+    int _ret = dse_compat_steering_get_state(e, &out_enabled, &out_seek_enabled, &out_flee_enabled, &out_arrive_enabled, out_velocity, &out_speed, &out_max_velocity, &out_max_force, &out_mass, &out_arrive_decel_radius, out_seek_target, out_flee_target, out_arrive_target);
     lua_pushinteger(L, _ret);
-    lua_pushinteger(L, out_flags);
+    lua_pushinteger(L, out_enabled);
+    lua_pushinteger(L, out_seek_enabled);
+    lua_pushinteger(L, out_flee_enabled);
+    lua_pushinteger(L, out_arrive_enabled);
     lua_pushnumber(L, out_velocity[0]);
     lua_pushnumber(L, out_velocity[1]);
     lua_pushnumber(L, out_velocity[2]);
-    lua_pushnumber(L, out_params);
-    lua_pushnumber(L, out_targets);
-    return 7;
+    lua_pushnumber(L, out_speed);
+    lua_pushnumber(L, out_max_velocity);
+    lua_pushnumber(L, out_max_force);
+    lua_pushnumber(L, out_mass);
+    lua_pushnumber(L, out_arrive_decel_radius);
+    lua_pushnumber(L, out_seek_target[0]);
+    lua_pushnumber(L, out_seek_target[1]);
+    lua_pushnumber(L, out_seek_target[2]);
+    lua_pushnumber(L, out_flee_target[0]);
+    lua_pushnumber(L, out_flee_target[1]);
+    lua_pushnumber(L, out_flee_target[2]);
+    lua_pushnumber(L, out_arrive_target[0]);
+    lua_pushnumber(L, out_arrive_target[1]);
+    lua_pushnumber(L, out_arrive_target[2]);
+    return 22;
 }
 
 int L_set_steering_target(lua_State* L) {
@@ -651,7 +675,7 @@ void RegisterFreeFn_ecs_gap(lua_State* L) {
         {"load_terrain_heightmap", L_dse_terrain_load_heightmap},
         {"set_terrain_texture", L_dse_terrain_set_texture},
         {"set_gi_probe", L_set_gi_probe},
-        {"get_steering_state", L_dse_steering_get_state},
+        {"get_steering_state", L_dse_compat_steering_get_state},
         {"set_steering_target", L_set_steering_target},
         {"get_animator_3d_state", L_dse_anim3d_get_state},
         {"get_animator_3d_root_motion_delta", L_dse_anim3d_get_root_motion_delta},

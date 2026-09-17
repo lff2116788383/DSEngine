@@ -316,6 +316,7 @@ public static class Components {
     public static int SpotLightHas(uint e) { return Native.dse_spot_light_has(e); }
     public static int SkyLightHas(uint e) { return Native.dse_sky_light_has(e); }
     public static int DirLightGetShadowParams(uint e, out int outCastShadow, out float outStrength, out float outC0, out float outC1, out float outC2, out float outLambda) { return Native.dse_dir_light_get_shadow_params(e, out outCastShadow, out outStrength, out outC0, out outC1, out outC2, out outLambda); }
+    public static int CompatSteeringGetState(uint e, out int outEnabled, out int outSeekEnabled, out int outFleeEnabled, out int outArriveEnabled, [Out] float[] outVelocity, out float outSpeed, out float outMaxVelocity, out float outMaxForce, out float outMass, out float outArriveDecelRadius, out float outSeekTarget, out float outFleeTarget, out float outArriveTarget) { return Native.dse_compat_steering_get_state(e, out outEnabled, out outSeekEnabled, out outFleeEnabled, out outArriveEnabled, outVelocity, out outSpeed, out outMaxVelocity, out outMaxForce, out outMass, out outArriveDecelRadius, out outSeekTarget, out outFleeTarget, out outArriveTarget); }
     public static int CutsceneCreate() { return Native.dse_cutscene_create(); }
     public static void CutsceneDestroy(int playerId) { Native.dse_cutscene_destroy(playerId); }
     public static void CutsceneShutdown() { Native.dse_cutscene_shutdown(); }

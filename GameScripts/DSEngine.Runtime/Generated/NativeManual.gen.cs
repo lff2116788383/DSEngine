@@ -1902,6 +1902,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_steering_get_state")]
     internal static partial int dse_steering_get_state(uint e, out int outFlags, [Out] float[] outVelocity, out float outParams, out float outTargets);
 
+    [LibraryImport(Lib, EntryPoint = "dse_compat_steering_get_state")]
+    internal static partial int dse_compat_steering_get_state(uint e, out int outEnabled, out int outSeekEnabled, out int outFleeEnabled, out int outArriveEnabled, [Out] float[] outVelocity, out float outSpeed, out float outMaxVelocity, out float outMaxForce, out float outMass, out float outArriveDecelRadius, out float outSeekTarget, out float outFleeTarget, out float outArriveTarget);
+
     [LibraryImport(Lib, EntryPoint = "dse_lod_add_level", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_lod_add_level(uint e, string meshPath, float screenSizeThreshold);
 

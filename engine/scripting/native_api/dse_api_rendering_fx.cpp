@@ -7,6 +7,7 @@
 #include "engine/scripting/native_api/dse_api_internal.h"
 #include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/components_3d_character.h"
+#include <cmath>
 
 using namespace dse;
 using namespace dse_api_internal;
@@ -70,6 +71,55 @@ extern "C" int dse_steering_get_state(uint32_t e, int* out_flags, float* out_vel
         out_targets[6] = st->arrive_target.x; out_targets[7] = st->arrive_target.y; out_targets[8] = st->arrive_target.z;
     }
     return 1;
+}
+
+// get_steering_state 的 Lua 期望签名与 C ABI 不一致，这里按 CODEGEN_GUIDE §6 加零行为变更的薄包装：
+// C ABI 用定长输出缓冲（flags[4] / velocity[3] / params[4] / targets[9]），而 Lua 侧契约是 22 个平铺
+// 返回值（ok, enabled, seek, flee, arrive, vx, vy, vz, speed, max_vel, max_force, mass, decel_r,
+// seek_t[3], flee_t[3], arrive_t[3]，见 samples/lua/3d/3d_steering_behavior.lua 的注释）。
+// 旧绑定的缺陷：codegen 定义把 flags/params/targets 声明成标量 → 包装器只分配 1 个 int/float，
+// 而 C ABI 会写 out_flags[0..3]、out_params[0..3]、out_targets[0..8] → **栈越界写**，调用即崩/挂死
+// （实测 3d_character_third_person 卡死在 dse.ecs.get_steering_state）。这里把缓冲改由本函数持有，
+// 调用方只拿标量，越界面消失。
+// speed 不在 C ABI 里，由速度向量模长推导（Lua 侧契约要求第 9 个返回值是 speed）。
+extern "C" int dse_compat_steering_get_state(uint32_t e,
+                                            int* out_enabled, int* out_seek_enabled,
+                                            int* out_flee_enabled, int* out_arrive_enabled,
+                                            float* out_velocity, float* out_speed,
+                                            float* out_max_velocity, float* out_max_force,
+                                            float* out_mass, float* out_arrive_decel_radius,
+                                            float* out_seek_target, float* out_flee_target,
+                                            float* out_arrive_target) {
+    int flags[4] = {0, 0, 0, 0};
+    float velocity[3] = {0.0f, 0.0f, 0.0f};
+    float params[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float targets[9] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    const int ok = dse_steering_get_state(e, flags, velocity, params, targets);
+    if (out_enabled)            *out_enabled = flags[0];
+    if (out_seek_enabled)       *out_seek_enabled = flags[1];
+    if (out_flee_enabled)       *out_flee_enabled = flags[2];
+    if (out_arrive_enabled)     *out_arrive_enabled = flags[3];
+    if (out_velocity) {
+        out_velocity[0] = velocity[0]; out_velocity[1] = velocity[1]; out_velocity[2] = velocity[2];
+    }
+    if (out_speed) {
+        *out_speed = std::sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1] +
+                               velocity[2] * velocity[2]);
+    }
+    if (out_max_velocity)       *out_max_velocity = params[0];
+    if (out_max_force)          *out_max_force = params[1];
+    if (out_mass)               *out_mass = params[2];
+    if (out_arrive_decel_radius) *out_arrive_decel_radius = params[3];
+    if (out_seek_target) {
+        out_seek_target[0] = targets[0]; out_seek_target[1] = targets[1]; out_seek_target[2] = targets[2];
+    }
+    if (out_flee_target) {
+        out_flee_target[0] = targets[3]; out_flee_target[1] = targets[4]; out_flee_target[2] = targets[5];
+    }
+    if (out_arrive_target) {
+        out_arrive_target[0] = targets[6]; out_arrive_target[1] = targets[7]; out_arrive_target[2] = targets[8];
+    }
+    return ok;
 }
 
 extern "C" void dse_lod_add_level(uint32_t e, const char* mesh_path, float screen_size_threshold) {

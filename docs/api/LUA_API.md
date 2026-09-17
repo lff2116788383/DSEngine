@@ -3615,7 +3615,7 @@ dse.ecs.add_audio_listener_2d(listener, 1.0)
 | `snow_cover_get` | int | 4值 | `dse_snow_cover_get` | 获取snow cover |
 | `spot_light_add` | int | — | `dse_spot_light_add` | 添加spot light |
 | `spot_light_has` | int | 1值 | `dse_spot_light_has` | 检查spot light 是否存在 |
-| `steering_get_state` | int | 7值 | `dse_steering_get_state` | 获取steering state |
+| `steering_get_state` | int | 22值（ok, enabled, seek, flee, arrive, vx, vy, vz, speed, max_vel, max_force, mass, decel_r, seek_t[3], flee_t[3], arrive_t[3]） | `dse_compat_steering_get_state` | 获取steering state |
 | `steering_set_target` | int, int, float, float, float | 1值 | `dse_steering_set_target` | 设置steering target |
 | `terrain_get_lod` | int | 5值 | `dse_terrain_get_lod` | 获取terrain lod |
 | `terrain_load_heightmap` | int, string | 6值 | `dse_terrain_load_heightmap` | 加载 |

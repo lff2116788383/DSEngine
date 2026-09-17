@@ -213,11 +213,28 @@ ecs.set_post_process_tilt_shift(e, enabled, focus, range, blur)
 **被 git 跟踪**的文件删掉（实测删掉 `bin/samples/lua/3d/3d_character_outfit.lua`）；已改为非破坏式
 `copytree(dirs_exist_ok=True)`。
 
-**仍未闭合（引擎侧待查，不属 HD-2D）**：`3d_character_third_person` 与 `3d_vse15_22_scene` 在 Lua
-setup 阶段**挂死**（300s 超时也不结束；日志分别停在 `Awake begin` 之后与 Physics2D body 创建之后，
-两者自身都没有 while/repeat 等待循环）。已在 runner 里以 `KNOWN_ENGINE_HANGS` 显式登记：`all` 预设会
-打印 `SKIP_KNOWN_HANG <entry>` 并跳过，`--include-known-hangs` 可强制运行——**不是静默跳过**，
-后续需在引擎侧定位阻塞点。
+**两个超时条目的最终结论（都不是"慢"，也都已闭环或明确排除）**：
+
+1. `3d_character_third_person` —— **真因是内存安全问题，已修**。用插桩二分把挂死点锁到
+   `dse.ecs.get_steering_state(character)`：`function_defs.json` 把 `out_flags`/`out_params`/`out_targets`
+   声明成**标量**，而 C ABI 分别写 `out_flags[0..3]`、`out_params[0..3]`、`out_targets[0..8]` →
+   生成的包装器只分配 1 个 int/float，**栈越界写**，调用即挂死。修法（CODEGEN_GUIDE §6 的
+   `dse_compat_*` 薄包装）：新增 `dse_compat_steering_get_state`，缓冲由 C 侧持有、只把标量交给
+   Lua，同时按 Lua 契约补齐 22 个返回值（含由速度推导的 `speed`），`get_steering_state` 与
+   `steering_get_state` 两个条目都指向它。修复后该条目 **VERIFY_OK**，且 demo 新增的目标回读
+   （`readback_seek_enabled=1 readback_target=(2.25,0.09)` 与设定值一致）证明数据通路正常。
+2. `3d_vse15_22_scene` —— **不是挂死 bug，是 demo 本体不存在**。日志实测
+   `[main] require('3d.3d_vse15_22_scene') failed: module ... not found` →
+   `[main] 未知 demo: ..., fallback to phase1_2d_physics_showcase`，随后进程挂住。它本是本文档
+   §15 的**规划项**（仓库只有 `tools/cook_vse15_22_assets.bat`，没有 demo 本体），不该作为门禁项。
+   已从门禁排除并登记在 runner 的 `EXCLUDED_ENTRIES`：`all` 会打印 `SKIP_EXCLUDED <entry>: <原因>`，
+   `--include-excluded` 可强制运行（**不是静默跳过**）；实现落地后从表里删掉即恢复门禁。
+
+**审计待办（同类越界嫌疑，未修）**：用「名字像数组却声明成标量」扫 `function_defs.json` 还发现 6 处同类
+`out_param`：`audio_source_get_state._out_flags`、`character_controller_3d_move.out_flags`、
+`character_controller3d_move.out_flags`、`meshlet_get_info.out_indices`、`nav_agent_get.out_params` /
+`out_flags`。它们**尚未逐个核对 C ABI 实际写入元素数**，故本轮未动（避免凭猜测改 Lua 契约）；
+后续按 steering 同样的方式核对+修。
 
 ---
 

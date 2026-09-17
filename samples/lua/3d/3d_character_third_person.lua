@@ -4,7 +4,9 @@ local CharacterThirdPerson3D = {}
 
 local function _anim_state_9(e)
     local n, t, sp, lp, tr, bc, hs = dse.ecs.anim3d_get_state(e)
-    return (n ~= nil), "?", n, t, sp, lp, tr, bc, hs
+    -- 绑定按 P1 口径返回 0/1 数字（不再是 boolean），统一归一成 boolean：否则调用侧的
+    -- `x == true` 恒为 false，日志会谎报 has_skeleton=false / loop=false（骨骼其实已加载）。
+    return (n ~= nil), "?", n, t, sp, (lp ~= 0), (tr ~= 0), bc, (hs ~= 0)
 end
 
 
@@ -156,10 +158,14 @@ function CharacterThirdPerson3D.Update(delta_time)
     local steering_ok = false
     if state.character ~= nil and dse.ecs.set_steering_target then
         local target_mode = state.mode == "attack" and "arrive" or "seek"
-        steering_ok = dse.ecs.set_steering_target(state.character, target_mode, target_x, 0.0, target_z)
+        -- set_steering_target 是 void setter（无返回值），所以不能用它的返回值做断言；
+        -- 用「绑定存在（已经过 if 守卫）+ 调用未报错」作为证据，并把回读交给 get_steering_state。
+        steering_ok = true
+        dse.ecs.set_steering_target(state.character, target_mode, target_x, 0.0, target_z)
+        local _, _, seek_en, _, _, _, _, _, _, _, _, _, _, seek_tx, _, seek_tz = dse.ecs.get_steering_state(state.character)
         if state.last_target_mode ~= target_mode then
             state.last_target_mode = target_mode
-            print(string.format("[3D][Character] steering_target set_steering_target=%s behavior=%s target=(%.2f,%.2f)", tostring(steering_ok), target_mode, target_x, target_z))
+            print(string.format("[3D][Character] steering_target set_steering_target_api=1 behavior=%s target=(%.2f,%.2f) readback_seek_enabled=%s readback_target=(%.2f,%.2f)", target_mode, target_x, target_z, tostring(seek_en), seek_tx or -1.0, seek_tz or -1.0))
         end
     end
 

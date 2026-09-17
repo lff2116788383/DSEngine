@@ -144,7 +144,11 @@ REQUIRED_LOG_TOKENS = {
         "[3D][Character]",
         "character_steering_api",
         "add_steering=true",
-        "set_steering_target=true",
+        # set_steering_target 是 void setter（无返回值），旧 token `set_steering_target=true` 永远不可能满足；
+        # 改为断言「绑定存在 + 调用未报错」与目标回读。get_steering_state 的返回值契约见
+        # samples/lua/3d/3d_steering_behavior.lua 的注释（22 值），故也用它回读 seek 目标。
+        "set_steering_target_api=1",
+        "readback_target=",
         "get_steering_state=true",
         "speed_nonzero=true",
         "character_animation_resource",
@@ -296,17 +300,18 @@ VISUAL_SUBJECT_CHECKS = {
     "3d_vse15_22_scene": {"min_subject_ratio": 0.080, "min_edge_ratio": 0.0020, "min_luma_std": 8.0},
 }
 
-# 已知在 Lua setup 阶段**挂死**（不是慢）的条目：300s 超时也不结束，故不进 `all` 预设。
-#
-# 实测（2026-09-17，本机 RTX 3070 / Debug）：
-#   - 3d_character_third_person：日志停在 `Lua bootstrap: Awake begin` 之后，Awake 内不返回，
-#     该 demo 自身没有 while/repeat 等待循环 → 疑为某个原生调用阻塞。
-#   - 3d_vse15_22_scene：日志停在 setup 阶段创建 Physics2D body 之后。
-# 两者都需要在引擎侧继续定位（与 HD-2D 无关）。跑 `--include-known-hangs` 可强制包含它们。
-KNOWN_ENGINE_HANGS = (
-    "3d_character_third_person",
-    "3d_vse15_22_scene",
-)
+# 不进 `all` 预设的条目及原因（跑 `--include-excluded` 可强制包含；跳过时会打印 SKIP_EXCLUDED，
+# 不做静默跳过）。条目仍留在预设列表里，实现/修复落地后只需从本表删除即可恢复门禁。
+EXCLUDED_ENTRIES = {
+    # 实测（2026-09-17，本机 RTX 3070 / Debug）：该 demo 的 Lua 模块**从未提交**，
+    # 运行日志为 `[main] require('3d.3d_vse15_22_scene') failed: module ... not found` →
+    # `[main] 未知 demo: 3d_vse15_22_scene, fallback to phase1_2d_physics_showcase`，随后进程挂住。
+    # 它本是 docs/design/LUA_3D_DEMOS.md §15 的规划项（"新增 3d_vse15_22_scene"），
+    # 仓库里只有烘焙脚本 tools/cook_vse15_22_assets.bat，没有 demo 本体，故不该作为门禁项。
+    "3d_vse15_22_scene":
+        "Lua 模块未提交（仅规划项，仓库只有 tools/cook_vse15_22_assets.bat）；"
+        "加载失败后回落到 phase1_2d_physics_showcase 并挂住",
+}
 
 ENTRY_PRESETS = {
     "basic": BASIC_3D_ENTRIES,
@@ -686,8 +691,8 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=90, help="Timeout seconds per demo. Default: 90")
     parser.add_argument("--out-dir", default="tmp/lua_3d_verify", help="Output directory for screenshots/logs. Default: tmp/lua_3d_verify")
     parser.add_argument("--no-sync", action="store_true", help="Do not copy samples to bin/samples before running")
-    parser.add_argument("--include-known-hangs", action="store_true",
-                        help="强制包含 KNOWN_ENGINE_HANGS 里已知会挂死的条目（默认 all 预设不含它们）")
+    parser.add_argument("--include-excluded", action="store_true",
+                        help="强制包含 EXCLUDED_ENTRIES 里的条目（默认 all 预设跳过并打印 SKIP_EXCLUDED）")
     args = parser.parse_args()
 
     root = pathlib.Path.cwd()
@@ -716,13 +721,12 @@ def main() -> int:
 
     original_config = config_path.read_text(encoding="utf-8-sig")
     entries = expand_entries(args.entries)
-    # 显式点名的已知挂死条目：默认跳过并打印原因（不静默跳过，避免把门禁做虚）。
-    skipped_hangs = [e for e in entries if e in KNOWN_ENGINE_HANGS and not args.include_known_hangs]
-    if skipped_hangs:
-        for e in skipped_hangs:
-            print(f"SKIP_KNOWN_HANG {e}: 已知在 Lua setup 阶段挂死（见 KNOWN_ENGINE_HANGS 注释）；"
-                  f"用 --include-known-hangs 强制运行", flush=True)
-        entries = [e for e in entries if e not in skipped_hangs]
+    # 排除项：默认跳过并打印原因（不静默跳过，避免把门禁做虚）。
+    if not args.include_excluded:
+        skipped = [e for e in entries if e in EXCLUDED_ENTRIES]
+        for e in skipped:
+            print(f"SKIP_EXCLUDED {e}: {EXCLUDED_ENTRIES[e]}；用 --include-excluded 强制运行", flush=True)
+        entries = [e for e in entries if e not in EXCLUDED_ENTRIES]
     print(f"EXE={exe}", flush=True)
     print(f"CONFIG={config_path}", flush=True)
     print(f"OUT_DIR={out_dir}", flush=True)

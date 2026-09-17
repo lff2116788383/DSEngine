@@ -559,7 +559,15 @@ data/
 - runner 的样例同步不再 `rmtree`（会删掉 `bin/samples` 下被 git 跟踪、源码侧不存在的文件），
   改为非破坏式覆盖。
 
-**已知挂死项（引擎侧待查）**：`3d_character_third_person`、`3d_vse15_22_scene` 在 Lua setup 阶段挂死，
-300s 超时也不结束（日志分别停在 `Awake begin` 之后 / Physics2D body 创建之后，二者自身没有
-while/repeat 等待循环）。已在 runner 中以 `KNOWN_ENGINE_HANGS` 显式登记：`all` 会打印
-`SKIP_KNOWN_HANG <entry>` 后跳过，`--include-known-hangs` 可强制运行。
+**两个超时条目的结论**：
+
+- `3d_character_third_person`：真因是 `get_steering_state` 包装器的**栈越界写**（codegen 定义把
+  `out_flags`/`out_params`/`out_targets` 声明成标量，C ABI 实际写 4/4/9 个元素）→ 已用
+  `dse_compat_steering_get_state` 薄包装修好（返回值按 Lua 契约补齐为 22 个，含 `speed`），现
+  **VERIFY_OK**。
+- `3d_vse15_22_scene`：**demo 本体未提交**（`require('3d.3d_vse15_22_scene') failed` → 回落到
+  `phase1_2d_physics_showcase` 后挂住）。它是 §15 的规划项，已从门禁排除并登记在 runner 的
+  `EXCLUDED_ENTRIES`（`all` 打印 `SKIP_EXCLUDED <entry>: <原因>`，`--include-excluded` 可强制）。
+- 审计待办：另有 6 处「名字像数组却声明成标量」的 `out_param`（`audio_source_get_state`、
+  `character_controller_3d_move`、`character_controller3d_move`、`meshlet_get_info`、`nav_agent_get`）
+  尚未核对 C ABI 实写元素数，后续按 steering 同样方式处理。

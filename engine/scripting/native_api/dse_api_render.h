@@ -906,6 +906,20 @@ DSE_CAPI int   dse_steering_set_target(uint32_t e, int behavior, float x, float 
 DSE_CAPI int   dse_steering_get_state(uint32_t e, int* out_flags, float* out_velocity,
                                       float* out_params, float* out_targets);
 
+// Lua 侧契约的薄包装（见 CODEGEN_GUIDE §6）：把 dse_steering_get_state 的定长缓冲摊成独立标量/分量，
+// 并补上 Lua 契约要求的第 9 个返回值 speed（|velocity|）。存在的理由：直接把 C ABI 的缓冲指针接到
+// codegen 生成的标量 out_params 上会造成栈越界写（out_flags[0..3] 写进单个 int）。
+// 返回 1=组件存在；分量顺序：enabled/seek/flee/arrive, vx/vy/vz/speed, max_vel/max_force/mass/decel_r,
+// seek_t[3], flee_t[3], arrive_t[3]。
+DSE_CAPI int   dse_compat_steering_get_state(uint32_t e,
+                                             int* out_enabled, int* out_seek_enabled,
+                                             int* out_flee_enabled, int* out_arrive_enabled,
+                                             float* out_velocity, float* out_speed,
+                                             float* out_max_velocity, float* out_max_force,
+                                             float* out_mass, float* out_arrive_decel_radius,
+                                             float* out_seek_target, float* out_flee_target,
+                                             float* out_arrive_target);
+
 DSE_CAPI void  dse_lod_add_level(uint32_t e, const char* mesh_path, float screen_size_threshold);
 DSE_CAPI void  dse_lod_set_scale(uint32_t e, float scale);
 DSE_CAPI void  dse_lod_set_min_screen_size(uint32_t e, float min_size);
