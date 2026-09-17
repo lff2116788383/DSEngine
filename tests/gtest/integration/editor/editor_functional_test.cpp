@@ -25,6 +25,7 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/components_3d_physics.h"
 
 // Editor modules (headless-safe, no ImGui/GLFW calls in these paths)
@@ -838,9 +839,84 @@ TEST_F(EditorFunctionalTest, SceneIO_SpriteRendererRoundTrip) {
 }
 
 // ============================================================
-// Test 18: SceneIO UILabel 往返
+// Test 17b: SceneIO Sprite3D（HD-2D）往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO Sprite3D往返。HD-2D 的 Sprite3DComponent 此前不在编辑器
+// 编解码器里（编辑器里加完组件一保存就丢），本用例锁定 atlas/clip/尺寸/光照/接触阴影/
+// 动画字段的往返，并确认无 RHI 上下文时图集解析失败也不崩、不丢字段。
+TEST_F(EditorFunctionalTest, SceneIO_Sprite3DRoundTrip) {
+    Entity e = world.CreateEntity();
+    reg().emplace<EditorNameComponent>(e, "Billboard");
+    reg().emplace<TransformComponent>(e);
+    auto& s = reg().emplace<dse::Sprite3DComponent>(e);
+    s.atlas_path = "templates/hd2d_wuxia/assets/char/hero/hero_d_idle_atlas.dsprite.json";
+    s.clip_name = "idle";
+    s.uv_rect = glm::vec4(0.25f, 0.0f, 0.5f, 1.0f);
+    s.size_w = 2.5f;
+    s.size_h = 3.5f;
+    s.anchor_y = 0.25f;
+    s.billboard = 2;
+    s.lit = true;
+    s.receive_shadow = true;
+    s.normal_strength = 0.75f;
+    s.contact_shadow = true;
+    s.contact_shadow_radius = 0.8f;
+    s.contact_shadow_opacity = 0.3f;
+    s.emissive = glm::vec3(0.1f, 0.2f, 0.3f);
+    s.opacity = 0.6f;
+    s.sorting_bias = -1.5f;
+    s.z_offset = 0.2f;
+    s.color_tint = glm::vec4(0.9f, 0.8f, 0.7f, 0.5f);
+    s.anim_fps = 12.0f;
+    s.anim_loop = false;
+    s.anim_frame = 2;
+
+    const auto path = TempPath("dse_test_sprite3d.dscene");
+    SaveScene(reg(), path.string());
+
+    entt::registry loaded;
+    LoadScene(loaded, path.string());
+    ASSERT_EQ(dse::editor::test::CountAliveEntities(loaded), 1u);
+
+    bool found = false;
+    for (auto en : loaded.storage<entt::entity>()) {
+        if (!loaded.valid(en)) continue;
+        if (!loaded.all_of<dse::Sprite3DComponent>(en)) continue;
+        found = true;
+        const auto& r = loaded.get<dse::Sprite3DComponent>(en);
+        EXPECT_EQ(r.atlas_path, s.atlas_path);
+        EXPECT_EQ(r.clip_name, "idle");
+        EXPECT_NEAR(r.uv_rect.x, 0.25f, 0.001f);
+        EXPECT_NEAR(r.uv_rect.z, 0.5f, 0.001f);
+        EXPECT_NEAR(r.size_w, 2.5f, 0.001f);
+        EXPECT_NEAR(r.size_h, 3.5f, 0.001f);
+        EXPECT_NEAR(r.anchor_y, 0.25f, 0.001f);
+        EXPECT_EQ(r.billboard, 2);
+        EXPECT_TRUE(r.lit);
+        EXPECT_TRUE(r.receive_shadow);
+        EXPECT_NEAR(r.normal_strength, 0.75f, 0.001f);
+        EXPECT_TRUE(r.contact_shadow);
+        EXPECT_NEAR(r.contact_shadow_radius, 0.8f, 0.001f);
+        EXPECT_NEAR(r.contact_shadow_opacity, 0.3f, 0.001f);
+        EXPECT_NEAR(r.emissive.z, 0.3f, 0.001f);
+        EXPECT_NEAR(r.opacity, 0.6f, 0.001f);
+        EXPECT_NEAR(r.sorting_bias, -1.5f, 0.001f);
+        EXPECT_NEAR(r.z_offset, 0.2f, 0.001f);
+        EXPECT_NEAR(r.color_tint.w, 0.5f, 0.001f);
+        EXPECT_NEAR(r.anim_fps, 12.0f, 0.001f);
+        EXPECT_FALSE(r.anim_loop);
+        EXPECT_EQ(r.anim_frame, 2);
+        // 该用例没有 RHI 设备/资产管理器 → .dsprite 图集解析必然失败，属预期回退路径。
+        EXPECT_TRUE(r.clip_uvs.empty());
+    }
+    EXPECT_TRUE(found);
+    CleanupFile(path);
+}
+
+// ============================================================
+// Test 18: SceneIO UILabel 往返
+// ============================================================
 // 测试 编辑器功能：场景IO UI标签往返
 TEST_F(EditorFunctionalTest, SceneIO_UILabelRoundTrip) {
     Entity e = world.CreateEntity();

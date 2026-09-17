@@ -128,6 +128,7 @@
 #include "editor_blueprint.h"
 #include "editor_2d_tools.h"
 #include "editor_crash.h"
+#include "editor_sprite3d_preview.h"
 
 
 
@@ -834,6 +835,15 @@ void EditorApp::Run() {
             }
         }
 
+        // HD-2D Sprite3D 独立预览视口：用聚焦相机重渲场景 → 拷进面板私有 RT → 用编辑器
+        // 相机再渲一次还原场景 RT。放在 ImGui::NewFrame 之前，任何面板都看不到中间态。
+        if (panels_.sprite3d_preview) {
+            dse::editor::RenderSprite3DPreviewViewport(
+                engine_instance_->pipeline(),
+                engine_instance_->pipeline()->world().registry(),
+                selected_entity_);
+        }
+
         unsigned int scene_texture = engine_instance_->pipeline()->GetSceneTextureId();
         unsigned int game_texture = engine_instance_->pipeline()->GetMainTextureId();
 
@@ -1112,6 +1122,7 @@ void EditorApp::Shutdown() {
         engine_instance_->asset_manager()->StopFileWatcher();
         // 释放编辑器自建的多视口 blit RT（须在 RHI 设备销毁前）
         dse::editor::ReleaseMultiViewportBlitTargets();
+        dse::editor::ReleaseSprite3DPreviewTargets();
         engine_instance_->Shutdown();
         engine_instance_.reset();
         dse::editor::SetEditorRhiDevice(nullptr);
@@ -1260,6 +1271,7 @@ void EditorApp::RegisterPanels() {
         {"git", &panels_.git},
         {"blueprint", &panels_.blueprint},
         {"sequencer", &panels_.sequencer},
+        {"sprite3d_preview", &panels_.sprite3d_preview},
     };
     for (const auto& b : binds) {
         if (auto* e = reg.Find(b.id)) e->visible = b.flag;

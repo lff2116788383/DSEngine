@@ -5,6 +5,7 @@
 #include <utility>
 #include <filesystem>
 #include <cstdint>
+#include <algorithm>
 #include <vector>
 #include <unordered_map>
 
@@ -16,11 +17,15 @@
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/audio.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/tilemap.h"
 #include "engine/ecs/physics_2d.h"
 #include "engine/ecs/camera.h"
+// .dsprite 图集解析（与运行时 scene_json_codec_custom.h 同源），用于加载时把
+// atlas_path/clip_name 重新解析成纹理句柄 + 逐帧 UV，避免依赖跨会话失效的裸句柄。
+#include "engine/scripting/native_api/dse_api_core.h"
 
 #include "editor_shared_components.h"
 #include "editor_prefab_marker.h"
@@ -133,6 +138,7 @@ enum CompFlags : uint64_t {
     CF_CAMERA2D         = 1ull << 34,
     CF_CAMERA_FOLLOW    = 1ull << 35,
     CF_PREFAB_MARKER    = 1ull << 36,
+    CF_SPRITE3D         = 1ull << 37,
 };
 
 template<typename T>
@@ -217,6 +223,7 @@ static void SaveSceneBinary(entt::registry& registry,
         if (registry.all_of<CameraComponent>(entity))                          flags |= CF_CAMERA2D;
         if (registry.all_of<CameraFollowComponent>(entity))                    flags |= CF_CAMERA_FOLLOW;
         if (registry.all_of<dse::editor::PrefabMarkerComponent>(entity))       flags |= CF_PREFAB_MARKER;
+        if (registry.all_of<dse::Sprite3DComponent>(entity))                   flags |= CF_SPRITE3D;
         WPod(f, static_cast<uint32_t>(entity));
         WPod(f, flags);
         if (flags & CF_NAME)             WStr(f, registry.get<dse::editor::EditorNameComponent>(entity).name);
@@ -457,12 +464,60 @@ static void SaveSceneBinary(entt::registry& registry,
             auto& m = registry.get<dse::editor::PrefabMarkerComponent>(entity);
             WStr(f, m.source_path);
         }
+        if (flags & CF_SPRITE3D) {
+            auto& s = registry.get<dse::Sprite3DComponent>(entity);
+            WStr(f, s.atlas_path); WStr(f, s.clip_name);
+            WPod(f, s.atlas_handle);
+            WPod(f, s.texture_handle.raw()); WPod(f, s.normal_handle.raw());
+            WPod(f, s.emissive_handle.raw());
+            WPod(f, s.uv_rect);
+            WPod(f, s.size_w); WPod(f, s.size_h); WPod(f, s.anchor_y); WPod(f, s.billboard);
+            WPod(f, s.lit); WPod(f, s.receive_shadow); WPod(f, s.normal_strength);
+            WPod(f, s.contact_shadow); WPod(f, s.contact_shadow_radius);
+            WPod(f, s.contact_shadow_opacity);
+            WPod(f, s.emissive); WPod(f, s.opacity); WPod(f, s.sorting_bias);
+            WPod(f, s.z_offset); WPod(f, s.color_tint);
+            WPod(f, s.anim_fps); WPod(f, s.anim_loop); WPod(f, s.anim_frame);
+        }
+    }
+}
+
+// 解析 Sprite3DComponent 的 .dsprite 图集：重建纹理句柄与 clip 逐帧 UV。
+// JSON 与二进制两条加载路径共用——scene 文件里存的是资产路径，裸 RHI 句柄只在同一
+// 会话内有效，跨会话加载必须重新解析（与运行时 scene_json_codec_custom.h 同源）。
+static void ResolveSprite3DAtlas(dse::Sprite3DComponent& s) {
+    if (s.atlas_path.empty()) return;
+    const int atlas = dse_sprite_atlas_load(s.atlas_path.c_str(), 0, 1);
+    if (atlas < 0) return;  // 无资产管理器 / 图集缺失：保留文件里的字段，不影响其余组件
+    s.atlas_handle = atlas;
+    const uint32_t texture = dse_sprite_atlas_texture(atlas);
+    if (texture) s.texture_handle = dse::render::TextureHandle::from_raw(texture);
+    const uint32_t normal = dse_sprite_atlas_normal_texture(atlas);
+    s.normal_handle = normal ? dse::render::TextureHandle::from_raw(normal)
+                             : dse::render::TextureHandle{};
+    const uint32_t emissive_tex = dse_sprite_atlas_emissive_texture(atlas);
+    s.emissive_handle = emissive_tex ? dse::render::TextureHandle::from_raw(emissive_tex)
+                                     : dse::render::TextureHandle{};
+
+    const int frame_count = dse_sprite_atlas_clip_frame_count(atlas, s.clip_name.c_str());
+    s.clip_uvs.clear();
+    for (int i = 0; i < frame_count; ++i) {
+        float uv[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+        dse_sprite_atlas_clip_frame_uv(atlas, s.clip_name.c_str(), i, uv);
+        s.clip_uvs.emplace_back(uv[0], uv[1], uv[2], uv[3]);
+    }
+    if (!s.clip_uvs.empty()) {
+        const int frame = std::max(0, std::min(
+            s.anim_frame, static_cast<int>(s.clip_uvs.size()) - 1));
+        s.anim_frame = frame;
+        s.uv_rect = s.clip_uvs[static_cast<size_t>(frame)];
+        if (s.anim_fps <= 0.0f)
+            s.anim_fps = dse_sprite_atlas_clip_fps(atlas, s.clip_name.c_str());
     }
 }
 
 static bool LoadSceneBinary(entt::registry& registry,
-                            const std::string& bin_path) {
-    std::ifstream f(bin_path, std::ios::binary);
+                            const std::string& bin_path) {    std::ifstream f(bin_path, std::ios::binary);
     if (!f.is_open()) return false;
     uint32_t magic = 0, ver = 0;
     if (!RPod(f, magic) || magic != kSceneBinMagic) return false;
@@ -753,6 +808,28 @@ static bool LoadSceneBinary(entt::registry& registry,
         if (flags & CF_PREFAB_MARKER) {
             auto& m = registry.emplace<dse::editor::PrefabMarkerComponent>(entity);
             if (!RStr(f, m.source_path)) return false;
+        }
+        if (flags & CF_SPRITE3D) {
+            auto& s = registry.emplace<dse::Sprite3DComponent>(entity);
+            uint32_t texture = 0, normal = 0, emissive_tex = 0;
+            if (!RStr(f, s.atlas_path) || !RStr(f, s.clip_name)) return false;
+            if (!RPod(f, s.atlas_handle)) return false;
+            if (!RPod(f, texture) || !RPod(f, normal) || !RPod(f, emissive_tex)) return false;
+            s.texture_handle = dse::render::TextureHandle::from_raw(texture);
+            s.normal_handle = dse::render::TextureHandle::from_raw(normal);
+            s.emissive_handle = dse::render::TextureHandle::from_raw(emissive_tex);
+            if (!RPod(f, s.uv_rect)) return false;
+            if (!RPod(f, s.size_w) || !RPod(f, s.size_h) || !RPod(f, s.anchor_y) ||
+                !RPod(f, s.billboard)) return false;
+            if (!RPod(f, s.lit) || !RPod(f, s.receive_shadow) ||
+                !RPod(f, s.normal_strength)) return false;
+            if (!RPod(f, s.contact_shadow) || !RPod(f, s.contact_shadow_radius) ||
+                !RPod(f, s.contact_shadow_opacity)) return false;
+            if (!RPod(f, s.emissive) || !RPod(f, s.opacity) || !RPod(f, s.sorting_bias) ||
+                !RPod(f, s.z_offset) || !RPod(f, s.color_tint)) return false;
+            if (!RPod(f, s.anim_fps) || !RPod(f, s.anim_loop) || !RPod(f, s.anim_frame))
+                return false;
+            ResolveSprite3DAtlas(s);
         }
     }
     return true;
@@ -2336,8 +2413,96 @@ static void LoadPrefabMarkerJsonComponent(
         m.source_path = o["source_path"].GetString();
 }
 
-const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
-    static const std::vector<ComponentJsonIOEntry> entries = {
+// ─── HD-2D Sprite3D ─────────────────────────────────────────────────────────
+// Sprite3DComponent 的 TextureRef/图集数据不在反射范围（托管句柄 + 运行时派生），
+// 故像运行时 scene_json_codec_custom.h 一样：存 atlas_path/clip_name/animation 与
+// 全部可编辑字段，加载时经 .dsprite 图集注册表重新解析纹理与逐帧 UV。裸 RHI 句柄
+// 只在同一会话内有效，写进文件仅作回退，不作为加载依据。
+
+static void SaveSprite3DJsonComponent(
+        entt::registry& registry,
+        entt::entity entity,
+        rapidjson::Value& ent_obj,
+        SceneAllocator& allocator) {
+
+    auto& s = registry.get<dse::Sprite3DComponent>(entity);
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("atlas_path", rapidjson::Value(s.atlas_path.c_str(), allocator).Move(), allocator);
+    o.AddMember("clip_name", rapidjson::Value(s.clip_name.c_str(), allocator).Move(), allocator);
+    o.AddMember("atlas_handle", s.atlas_handle, allocator);
+    o.AddMember("texture_handle", s.texture_handle.raw(), allocator);
+    o.AddMember("normal_handle", s.normal_handle.raw(), allocator);
+    o.AddMember("emissive_handle", s.emissive_handle.raw(), allocator);
+    WriteVec4(o, "uv_rect", s.uv_rect, allocator);
+    o.AddMember("size_w", s.size_w, allocator);
+    o.AddMember("size_h", s.size_h, allocator);
+    o.AddMember("anchor_y", s.anchor_y, allocator);
+    o.AddMember("billboard", s.billboard, allocator);
+    o.AddMember("lit", s.lit, allocator);
+    o.AddMember("receive_shadow", s.receive_shadow, allocator);
+    o.AddMember("normal_strength", s.normal_strength, allocator);
+    o.AddMember("contact_shadow", s.contact_shadow, allocator);
+    o.AddMember("contact_shadow_radius", s.contact_shadow_radius, allocator);
+    o.AddMember("contact_shadow_opacity", s.contact_shadow_opacity, allocator);
+    WriteVec3(o, "emissive", s.emissive, allocator);
+    o.AddMember("opacity", s.opacity, allocator);
+    o.AddMember("sorting_bias", s.sorting_bias, allocator);
+    o.AddMember("z_offset", s.z_offset, allocator);
+    WriteVec4(o, "color_tint", s.color_tint, allocator);
+    o.AddMember("anim_fps", s.anim_fps, allocator);
+    o.AddMember("anim_loop", s.anim_loop, allocator);
+    o.AddMember("anim_frame", s.anim_frame, allocator);
+    ent_obj.AddMember("sprite3d", o, allocator);
+}
+
+static void LoadSprite3DJsonComponent(
+        entt::registry& registry,
+        entt::entity entity,
+        const rapidjson::Value& v) {
+    if (!v.HasMember("sprite3d") || !v["sprite3d"].IsObject()) return;
+
+    const auto& o = v["sprite3d"];
+    auto& s = registry.emplace<dse::Sprite3DComponent>(entity);
+    if (o.HasMember("atlas_path") && o["atlas_path"].IsString()) s.atlas_path = o["atlas_path"].GetString();
+    if (o.HasMember("clip_name") && o["clip_name"].IsString()) s.clip_name = o["clip_name"].GetString();
+    if (o.HasMember("atlas_handle") && o["atlas_handle"].IsInt()) s.atlas_handle = o["atlas_handle"].GetInt();
+    if (o.HasMember("texture_handle") && o["texture_handle"].IsUint())
+        s.texture_handle = dse::render::TextureHandle::from_raw(o["texture_handle"].GetUint());
+    if (o.HasMember("normal_handle") && o["normal_handle"].IsUint())
+        s.normal_handle = dse::render::TextureHandle::from_raw(o["normal_handle"].GetUint());
+    if (o.HasMember("emissive_handle") && o["emissive_handle"].IsUint())
+        s.emissive_handle = dse::render::TextureHandle::from_raw(o["emissive_handle"].GetUint());
+    ReadVec4(o, "uv_rect", s.uv_rect);
+    if (o.HasMember("size_w") && o["size_w"].IsNumber()) s.size_w = o["size_w"].GetFloat();
+    if (o.HasMember("size_h") && o["size_h"].IsNumber()) s.size_h = o["size_h"].GetFloat();
+    if (o.HasMember("anchor_y") && o["anchor_y"].IsNumber()) s.anchor_y = o["anchor_y"].GetFloat();
+    if (o.HasMember("billboard") && o["billboard"].IsInt()) s.billboard = o["billboard"].GetInt();
+    if (o.HasMember("lit") && o["lit"].IsBool()) s.lit = o["lit"].GetBool();
+    if (o.HasMember("receive_shadow") && o["receive_shadow"].IsBool())
+        s.receive_shadow = o["receive_shadow"].GetBool();
+    if (o.HasMember("normal_strength") && o["normal_strength"].IsNumber())
+        s.normal_strength = o["normal_strength"].GetFloat();
+    if (o.HasMember("contact_shadow") && o["contact_shadow"].IsBool())
+        s.contact_shadow = o["contact_shadow"].GetBool();
+    if (o.HasMember("contact_shadow_radius") && o["contact_shadow_radius"].IsNumber())
+        s.contact_shadow_radius = o["contact_shadow_radius"].GetFloat();
+    if (o.HasMember("contact_shadow_opacity") && o["contact_shadow_opacity"].IsNumber())
+        s.contact_shadow_opacity = o["contact_shadow_opacity"].GetFloat();
+    ReadVec3(o, "emissive", s.emissive);
+    if (o.HasMember("opacity") && o["opacity"].IsNumber()) s.opacity = o["opacity"].GetFloat();
+    if (o.HasMember("sorting_bias") && o["sorting_bias"].IsNumber())
+        s.sorting_bias = o["sorting_bias"].GetFloat();
+    if (o.HasMember("z_offset") && o["z_offset"].IsNumber()) s.z_offset = o["z_offset"].GetFloat();
+    ReadVec4(o, "color_tint", s.color_tint);
+    if (o.HasMember("anim_fps") && o["anim_fps"].IsNumber()) s.anim_fps = o["anim_fps"].GetFloat();
+    if (o.HasMember("anim_loop") && o["anim_loop"].IsBool()) s.anim_loop = o["anim_loop"].GetBool();
+    if (o.HasMember("anim_frame") && o["anim_frame"].IsInt()) s.anim_frame = o["anim_frame"].GetInt();
+
+    // 重新解析 .dsprite：图集注册表持有纹理引用，且逐帧 UV 由 clip 名重建。
+    ResolveSprite3DAtlas(s);
+}
+
+const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {    static const std::vector<ComponentJsonIOEntry> entries = {
         {&SaveEditorNameJsonComponent, &LoadEditorNameJsonComponent,
          [](auto& r, auto e) { return r.all_of<dse::editor::EditorNameComponent>(e); }},
         {&SaveSiblingIndexJsonComponent, &LoadSiblingIndexJsonComponent,
@@ -2412,6 +2577,8 @@ const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
          [](auto& r, auto e) { return r.all_of<CameraFollowComponent>(e); }},
         {&SavePrefabMarkerJsonComponent, &LoadPrefabMarkerJsonComponent,
          [](auto& r, auto e) { return r.all_of<dse::editor::PrefabMarkerComponent>(e); }},
+        {&SaveSprite3DJsonComponent, &LoadSprite3DJsonComponent,
+         [](auto& r, auto e) { return r.all_of<dse::Sprite3DComponent>(e); }},
     };
     return entries;
 }

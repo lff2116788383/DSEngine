@@ -46,6 +46,7 @@ struct PanelVisibilityState {
     bool plugins            = false;
     bool ai_agent           = false;
     bool background_tasks   = false;
+    bool sprite3d_preview   = false;
 };
 
 /// Describes a single editor panel for data-driven registration.

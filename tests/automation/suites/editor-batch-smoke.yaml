@@ -6,6 +6,7 @@ env: tests/automation/envs/local-dse.yaml
 cases:
   - tests/automation/cases/cli/headless_boot.yaml
   - tests/automation/cases/cli/scene_load_screenshot.yaml
+  - tests/automation/cases/cli/sprite3d_scene_load.yaml
 
 # 间隔与清理
 case_delay_seconds: 1

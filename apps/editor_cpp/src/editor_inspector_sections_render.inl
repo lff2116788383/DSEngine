@@ -1,3 +1,4 @@
+
 // Drawn by editor_inspector_panel.cpp. Keeps the same field set the Lua/API
 // and scene codec expose, plus a texture/atlas thumbnail preview.
 void DrawSprite3DSection(EditorContext& context) {
@@ -19,6 +20,10 @@ void DrawSprite3DSection(EditorContext& context) {
                      ImVec2(max_w, max_w / (aspect > 0.001f ? aspect : 1.0f)));
     } else {
         ImGui::TextUnformatted("(no texture)");
+    }
+    // 缩略图旁边只放一个入口：真正的实时预览在独立面板里（引擎重渲 + 私有 RT）。
+    if (ImGui::Button("Open Preview Window")) {
+        dse::editor::OpenSprite3DPreview();
     }
     ImGui::NextColumn();
 

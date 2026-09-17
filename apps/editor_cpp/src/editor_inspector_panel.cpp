@@ -34,6 +34,7 @@
 #include "editor_gpu.h"
 
 #include "editor_shared_components.h"
+#include "editor_sprite3d_preview.h"
 #include "editor_toolbar.h"
 #include "editor_shortcuts.h"
 #include "editor_console_panel.h"

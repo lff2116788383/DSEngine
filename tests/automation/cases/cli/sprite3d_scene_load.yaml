@@ -1,0 +1,28 @@
+case_id: cli.sprite3d_scene_load
+title: 无头加载含 Sprite3D（HD-2D）组件的场景并在退出前截图
+
+# 锁定编辑器场景编解码器的 Sprite3D 分支：该组件此前不入编解码器，
+# 场景里出现 "sprite3d" 键时既不加载也不报错；现在必须能解析（含 .dsprite 图集路径）
+# 并在 max-frames 内正常渲染退出。
+#
+# 场景先拷到 work_root 再加载：LoadScene 会在场景文件旁写 .bin 缓存，
+# 不把派生产物落进仓库工作树。
+setup:
+  - action: copy_file
+    src: "${repo_root}/tests/editor_smoke_fixtures/with_sprite3d.dscene"
+    dst: "${work_root}/scenes/with_sprite3d.dscene"
+
+command:
+  type: cli
+  executable: "${editor_exe}"
+  args:
+    - "--headless"
+    - "--scene=${work_root}/scenes/with_sprite3d.dscene"
+    - "--screenshot=${report_root}/cli_sprite3d.png"
+    - "--max-frames=60"
+    - "--api-port=${api_port}"
+
+assert:
+  exit_code: 0
+  files_exist:
+    - "${report_root}/cli_sprite3d.png"

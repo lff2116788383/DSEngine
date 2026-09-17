@@ -1,0 +1,70 @@
+[
+    {
+        "id": 1,
+        "name": "Sun",
+        "transform": {
+            "position": [0.0, 8.0, 4.0],
+            "rotation": [0.35, 0.0, 0.0, 0.94],
+            "scale": [1.0, 1.0, 1.0],
+            "dirty": false
+        },
+        "directional_light3d": {
+            "enabled": true,
+            "color": [1.0, 0.95, 0.85],
+            "intensity": 1.6,
+            "cast_shadow": false,
+            "shadow_strength": 1.0
+        }
+    },
+    {
+        "id": 2,
+        "name": "HeroBillboard",
+        "transform": {
+            "position": [0.0, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0],
+            "dirty": false
+        },
+        "sprite3d": {
+            "atlas_path": "templates/hd2d_wuxia/assets/char/hero/hero_d_idle_atlas.dsprite.json",
+            "clip_name": "idle",
+            "uv_rect": [0.0, 0.0, 0.25, 1.0],
+            "size_w": 2.0,
+            "size_h": 2.6,
+            "anchor_y": 0.0,
+            "billboard": 1,
+            "lit": true,
+            "receive_shadow": false,
+            "normal_strength": 1.0,
+            "contact_shadow": true,
+            "contact_shadow_radius": 0.6,
+            "contact_shadow_opacity": 0.45,
+            "emissive": [0.0, 0.0, 0.0],
+            "opacity": 1.0,
+            "sorting_bias": 0.0,
+            "z_offset": 0.0,
+            "color_tint": [1.0, 1.0, 1.0, 1.0],
+            "anim_fps": 8.0,
+            "anim_loop": true,
+            "anim_frame": 0
+        }
+    },
+    {
+        "id": 3,
+        "name": "Lantern",
+        "transform": {
+            "position": [1.6, 1.4, 1.2],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0],
+            "dirty": false
+        },
+        "point_light": {
+            "enabled": true,
+            "color": [1.0, 0.55, 0.2],
+            "intensity": 7.0,
+            "radius": 5.0,
+            "falloff": 1.0,
+            "cast_shadow": false
+        }
+    }
+]
