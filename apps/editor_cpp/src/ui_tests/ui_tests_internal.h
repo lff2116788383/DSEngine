@@ -46,6 +46,11 @@ bool OpenUiTestProject();
 /// 示例工程的仓库相对路径（OpenUiTestProject 使用；也供用例断言/诊断引用）。
 const char* UiTestProjectPath();
 
+/// 清掉会干扰 UI 测试的运行态残留：本工程的 autosave 恢复文件（否则下次启动弹
+/// "AutoSave Recovery" 抢焦点）与本机持久化布局（可能把面板排到视口外）。
+/// 由 harness 在装载起步工程后调用一次。
+void ClearUiTestRunState();
+
 /// 把全部面板可见性开关置真，让被隐藏的面板下一帧起被绘制（覆盖全部面板的前提）。
 void EnsureAllPanelsVisible();
 
@@ -59,6 +64,13 @@ ImGuiWindow* FindActiveWindow(const char* name_or_substr);
 
 /// 在 Hierarchy 窗口体空白处右键打开上下文菜单，并把 ref 指向弹窗（"//$FOCUSED"）。
 void OpenHierarchyContextMenu(ImGuiTestContext* ctx);
+
+/// 交互链诊断日志：追加一行到 bin/ui_test_diag.txt（进程启动时清空）。
+///
+/// 用途：UI 用例失败时，摘要只给最终断言值（如「实体数没 +1」），无法区分
+/// 「弹窗没开 / 菜单项不存在 / 菜单项被禁用 / 点击没落到项上」。用例可把各环节实测值写进
+/// 该文件，便于在不复跑、不打断点的情况下定位交互层故障点。
+void UiDiagLog(const char* fmt, ...);
 
 /// 关闭脏页签时会弹「Unsaved Changes」确认框（feature A 脏场景关闭确认）；用例收尾用页签右键
 /// 「Close」关闭可能为脏的新建页签时，调用本函数：若确认框已弹出则点「Don't Save」丢弃改动完成关闭。

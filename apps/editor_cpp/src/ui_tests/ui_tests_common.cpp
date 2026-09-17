@@ -10,6 +10,8 @@
 #ifdef DSE_EDITOR_UI_TESTS
 
 #include <cstring>
+#include <cstdarg>
+#include <cstdio>
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -24,8 +26,10 @@
 #include "apps/editor_cpp/core/command_bus.h"
 #include "apps/editor_cpp/core/editor_command.h"
 
+#include "../editor_autosave.h"   // AutoSaveManager（起步清恢复弹窗）
 #include "../editor_project.h"  // ProjectManager
 #include "../editor_selection.h"  // SelectionManager (ResetUiState)
+#include "../editor_shell.h"      // ResetEditorLayout（起步复位布局）
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -50,6 +54,36 @@ bool OpenUiTestProject() {
     const auto result = s.bus->dispatch(
         dse::editor::core::OpenProjectCmd{kUiTestProject}, *s.engine);
     return result.ok;
+}
+
+void ClearUiTestRunState() {
+    namespace fs = std::filesystem;
+    // 1) autosave 恢复：上一轮 UI 测试会让工程变脏并被自动保存，下一次启动就弹
+    //    "AutoSave Recovery" 抢走焦点（实测 WindowFocus("//Console") 报
+    //    "Expected focused window 'Console', but 'AutoSave Recovery' got focus back"），
+    //    后续所有 WindowFocus/点击都失败。清掉本工程残留的 autosave 后重查一次以清 pending。
+    std::error_code ec;
+    const fs::path project_dir = fs::path(kUiTestProject).parent_path();
+    const fs::path autosave = project_dir / ".editor" / "autosave";
+    const std::uintmax_t removed = fs::remove_all(autosave, ec);
+    dse::editor::AutoSaveManager::Get().CheckRecovery();
+    // 2) 布局：本地持久化的 editor_layout.ini 可能把面板排到视口之外
+    //    （实测 Console 的点击目标 y=842 > 视口高 720），UI 测试必须从默认布局起步。
+    dse::editor::ResetEditorLayout();
+    UiDiagLog("[startup] cleared_autosave=%llu layout=reset",
+              static_cast<unsigned long long>(removed));
+}
+
+void UiDiagLog(const char* fmt, ...) {
+    static const char* kDiagPath = "bin/ui_test_diag.txt";
+    std::FILE* f = std::fopen(kDiagPath, "a");
+    if (!f) return;
+    va_list args;
+    va_start(args, fmt);
+    std::vfprintf(f, fmt, args);
+    va_end(args);
+    std::fputc('\n', f);
+    std::fclose(f);
 }
 
 int CountValidEntities() {
@@ -111,27 +145,69 @@ ImGuiWindow* FindActiveWindow(const char* name_or_substr) {
 void ResetUiState(ImGuiTestContext* ctx) {
     // 防止上一用例残留的 UI 状态泄漏到本用例（根因：用例间 hover/弹窗/ref/多选未复位，
     // 导致本用例的 MouseMove/ItemClick 命中上个用例的残留控件）。
-    // 顺序：先清多选 → 关弹窗 → 移鼠标到空白处清 hover → 复位 ref → Yield 沉淀。
+    // 顺序：先清多选 → 关弹窗 → 复位 ref → Yield 沉淀。
+    //
+    // 注意：这里**不再调用 MouseMoveToVoid**。实测（ui_tests_diag.txt 的 [menu] 链）：
+    // 上游 MouseMoveToVoid → GetPosOnVoid 在编辑器这种全屏 dockspace + 浮动面板布局里
+    // 找不到 void 位置，会**移动窗口**去造一个 void，把待操作的窗口挪走，
+    // 使紧随其后的 ItemInfo/点击全部失效（found=1 → found=0）——dse-hierarchy 整组
+    // 因此从「点了没反应」变成全红。清 hover 改为由调用方按显式坐标点击来完成。
     SelectionManager::Get().Clear();
     ctx->SetRef("");
     // 按两次 Escape 关闭可能残留的右键菜单/弹窗（按一次可能只关一层）。
     ctx->KeyPress(ImGuiKey_Escape, 2);
-    ctx->MouseMoveToVoid();
     ctx->Yield(2);
 }
 
 void OpenHierarchyContextMenu(ImGuiTestContext* ctx) {
-    // 每次打开前先复位 UI 状态：防止上一用例残留的 hover 目标导致 MouseMove("//Hierarchy/Scene")
-    // 命中错误控件（如上一用例的 ##scale_undo/##scale/##x DragFloat），进而使右键菜单无法弹出。
-    ResetUiState(ctx);
+    // 复位只清选择/关残留弹窗，**故意不做 MouseMoveToVoid**。
+    //
+    // 实测（bin/ui_test_diag.txt 的 [menu] 链）：MouseMoveToVoid 会调用上游 GetPosOnVoid，
+    // 而编辑器是全屏 dockspace + 浮动面板的布局，找不到「void」位置时它会**移动窗口**去造一个；
+    // Hierarchy 面板随之被挪走/裁切，紧随其后的 '//Hierarchy/Scene' 查询立刻失效
+    //（found=1 → found=0），右键菜单永远打不开——这就是本组用例此前成片「点了没反应」的根因。
+    SelectionManager::Get().Clear();
+    ctx->SetRef("");
+    ctx->KeyPress(ImGuiKey_Escape, 2);
+    ctx->Yield(2);
+
     // 在常驻、必定存在的 "Scene" 根节点上右键打开窗口上下文菜单（BeginPopupContextWindow
-    // 不设 NoOpenOverItems，故在节点上右键同样会弹出窗口菜单）。相比"点窗口底部留白"，
-    // 这条在实体数增多、树撑满窗口时仍稳定——空白处会被树节点占满导致点不中。
-    // 用绝对引用 "//Hierarchy/Scene"：避免按当前 ref（上一轮可能停在 "//$FOCUSED" 弹窗）解析错误。
-    ctx->WindowFocus("//Hierarchy");
-    ctx->MouseMove("//Hierarchy/Scene");
-    ctx->MouseClick(ImGuiMouseButton_Right);
-    ctx->SetRef("//$FOCUSED");
+    // 不设 NoOpenOverItems，故在节点上右键同样会弹出窗口菜单）。
+    // 先按绝对引用取节点实测矩形，再用显式坐标合成右键（MouseMoveToPos + MouseDown/Up）——
+    // 物理落点比 ctx->MouseMove(ref) 更可靠（与 ManualMouseDrag 同样的取舍）。
+    //
+    // 开窗校验 + 重试：EnsureAllPanelsVisible 之类用例会一次性打开几十个面板，Hierarchy
+    // 可能被后绘制的面板在目标坐标上盖住，右键就打不开菜单。因此每次点击后校验
+    // OpenPopupStack，未开则重新置顶重试；只在失败路径落盘诊断（避免正常运行时刷文件）。
+    ctx->SetRef("");
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        ctx->WindowFocus("//Hierarchy");
+        ctx->Yield(2);
+        const ImGuiTestItemInfo node =
+            ctx->ItemInfo("//Hierarchy/Scene", ImGuiTestOpFlags_NoError);
+        if (node.ID == 0 || node.RectClipped.GetWidth() <= 0.0f ||
+            node.RectClipped.GetHeight() <= 0.0f) {
+            UiDiagLog("[menu] attempt=%d 节点不可用 ID=%u rect=%.0fx%.0f", attempt, node.ID,
+                      node.RectClipped.GetWidth(), node.RectClipped.GetHeight());
+            continue;
+        }
+        const ImVec2 center = node.RectClipped.GetCenter();
+        ctx->MouseMoveToPos(center);
+        ctx->Yield(2);
+        ctx->MouseDown(ImGuiMouseButton_Right);
+        ctx->Yield(2);
+        ctx->MouseUp(ImGuiMouseButton_Right);
+        ctx->Yield(3);
+        ImGuiContext& g = *ImGui::GetCurrentContext();
+        if (g.OpenPopupStack.Size > 0) {
+            ctx->SetRef("//$FOCUSED");
+            return;
+        }
+        UiDiagLog("[menu] attempt=%d 未打开菜单 clicked=(%.0f,%.0f) hovered=%s",
+                  attempt, center.x, center.y,
+                  g.HoveredWindow ? g.HoveredWindow->Name : "(none)");
+    }
+    ctx->LogError("OpenHierarchyContextMenu: 右键 3 次仍未打开上下文菜单");
 }
 
 void UndockPanel(ImGuiTestContext* ctx, const char* window_name) {

@@ -90,6 +90,53 @@ void RegisterHarnessSanityTests(ImGuiTestEngine* e) {
 }
 
 void RegisterHierarchyTests(ImGuiTestEngine* e) {
+    // dse-hierarchy/context_menu_chain：把「右键 → 点菜单项 → 实体 +1」整条链的各环节
+    // 实测值落盘并断言，用于把交互层故障定位到具体环节（而不是只知道最终计数没变）。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-hierarchy", "context_menu_chain");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const int before = CountValidEntities();
+            ImGuiWindow* hierarchy = ctx->GetWindowByRef("//Hierarchy");
+            const ImGuiTestItemInfo node =
+                ctx->ItemInfo("//Hierarchy/Scene", ImGuiTestOpFlags_NoError);
+            UiDiagLog("[chain] hierarchy_win=%s rect=(%.0f,%.0f)-(%.0f,%.0f) node_found=%d "
+                      "node_rect=(%.0f,%.0f)-(%.0f,%.0f)",
+                      hierarchy ? hierarchy->Name : "(none)",
+                      hierarchy ? hierarchy->Pos.x : 0.0f, hierarchy ? hierarchy->Pos.y : 0.0f,
+                      hierarchy ? hierarchy->Pos.x + hierarchy->Size.x : 0.0f,
+                      hierarchy ? hierarchy->Pos.y + hierarchy->Size.y : 0.0f,
+                      node.ID != 0 ? 1 : 0,
+                      node.RectClipped.Min.x, node.RectClipped.Min.y,
+                      node.RectClipped.Max.x, node.RectClipped.Max.y);
+            OpenHierarchyContextMenu(ctx);
+            ImGuiContext& g = *ImGui::GetCurrentContext();
+            UiDiagLog("[chain] mouse=(%.0f,%.0f) hovered=%s nav=%s open_popups=%d",
+                      g.IO.MousePos.x, g.IO.MousePos.y,
+                      g.HoveredWindow ? g.HoveredWindow->Name : "(none)",
+                      g.NavWindow ? g.NavWindow->Name : "(none)",
+                      g.OpenPopupStack.Size);
+            ImGuiWindow* popup = ctx->GetWindowByRef("//$FOCUSED");
+            const bool is_popup = popup != nullptr &&
+                (popup->Flags & ImGuiWindowFlags_Popup) != 0;
+            const ImGuiTestItemInfo info =
+                ctx->ItemInfo("Create Empty Entity", ImGuiTestOpFlags_NoError);
+            const bool disabled = (info.ItemFlags & ImGuiItemFlags_Disabled) != 0;
+            UiDiagLog("[chain] entities_before=%d popup=%d popup_name=%s item_found=%d "
+                      "item_disabled=%d item_label='%s' item_rect=(%.0f,%.0f)-(%.0f,%.0f)",
+                      before, is_popup ? 1 : 0, popup ? popup->Name : "(none)",
+                      info.ID != 0 ? 1 : 0, disabled ? 1 : 0, info.DebugLabel,
+                      info.RectClipped.Min.x, info.RectClipped.Min.y,
+                      info.RectClipped.Max.x, info.RectClipped.Max.y);
+            IM_CHECK(is_popup);
+            IM_CHECK(info.ID != 0);
+            IM_CHECK(!disabled);
+            ctx->ItemClick("Create Empty Entity");
+            const int after = CountValidEntities();
+            UiDiagLog("[chain] entities_after=%d delta=%d", after, after - before);
+            IM_CHECK_EQ(after, before + 1);
+        };
+    }
+
     // dse-hierarchy/create_empty_entity：右键 → Create Empty Entity，实体数 +1。
     {
         ImGuiTest* t = IM_REGISTER_TEST(e, "dse-hierarchy", "create_empty_entity");

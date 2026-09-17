@@ -141,26 +141,79 @@
 必然崩在加载期（exit=150）。改为按数组下标回落到第一遍创建的实体。修复后该批处理用例通过，
 `SceneIO_*` 25 条往返测试仍全绿。
 
-已知仍未闭合（不属 HD-2D 验收范围，见 §8）：编辑器 UI 测试套件在交互层（右键菜单点击等）与两个分组
-的 exit=150 上仍红；起步工程的显式装载已修好「场景为空」这一项。
+已知仍未闭合（属独立后续项，见 §8.4）：编辑器 UI 测试套件跑批仍有抖动、`dse-console`/`dse-misc`
+以 exit=150 收场，故 L0b 暂不应判绿；结构性的「共享助手移动窗口导致面板类用例成片失败」已修复
+（绿色分组 7 → 20）。
 
-## 8. 附：编辑器 UI 测试套件（`DSE_EDITOR_UI_TESTS`）现状
+## 8. 附：编辑器 UI 测试套件（`DSE_EDITOR_UI_TESTS`）现状与修复
 
-本轮为了让新面板进 UI 覆盖，首次在本机完整跑了 `dsengine-editor-uitest.exe --headless --run-ui-tests`。
-结论（**与 HD-2D 改动无关，属既有欠账**），以实测摘要为准（`bin/ui_test_summary.txt` 现会输出起步状态）：
+本轮为了让新面板进 UI 覆盖，完整跑了 `dsengine-editor-uitest.exe --headless --run-ui-tests`，
+定位并修掉了让面板类用例成片失败的**共享助手缺陷**。过程与结论如下（以 `bin/ui_test_summary.txt`
+与 `bin/ui_test_diag.txt` 的实测为准）。
 
-- 起步状态：`startup_project_preexisting=1`、`startup_entities=0` —— 工程本来就已打开，但场景是空的。
-  故**面板是被绘制的**（`dse-panels` 36/36 PASS 即为反证），本报告早前「Project Hub 短路导致面板不绘制」
-  的猜测已被证伪。
-- 显式装载 `tests/automation/testdata/projects/simple_2d_game`（4 实体）后，`startup_entities=4`，
-  Hierarchy 用例里 `before >= 1` 一类断言随之通过；但 `CountValidEntities() == before + 1` 仍失败。
-- 剩余根因已收敛到**交互层**：Hierarchy 右键菜单项「Create Empty Entity」被点击后实体数不变
-  （4 → 4）。同一工具路径经 RPC 调用是正常的（`dsengine_project_open` → `dsengine_entity_create`
-  实测 `entity_id=4, components=[Transform]`），说明是 UI 测试的点击合成/焦点路径而非工具或数据问题。
-- 分组实测（装载起步工程后）：`dse-panels` 36/36 PASS、`dse-blueprint` 28/28 PASS、
-  `dse-2d-tools` 18/19、`dse-features` 9/13、`dse-inspector` 2/17、`dse-hierarchy` 0/6、
-  `dse-components` 0/11、`dse-undo` 0/8、`dse-multiselect` 0/4、`dse-dragdrop` 0/4、`dse-menubar` 0/2、
-  `dse-terrain` 0/3；`dse-console` 与 `dse-misc` 以 exit=150 硬退。
+### 8.1 起步状态（先证伪了早前的猜测）
 
-后续要恢复 `editor-automation.yml` 的 L0b 作业，需要在交互层继续排查（右键菜单/焦点/鼠标合成），
-而不是再改工程前置。
+`ui_test_summary.txt` 现会输出起步状态：`startup_project_preexisting=1`、`startup_project_open=1`、
+`startup_entities=4`。
+
+- 早前「无工程 → Project Hub 短路 → 面板不绘制 → 成片失败」的判断**是错的**：启动时工程本就打开，
+  且 `dse-panels` 36/36 PASS 说明面板一直在绘制。
+- 真正缺的是「场景里有实体」：装载 `tests/automation/testdata/projects/simple_2d_game` 前
+  `startup_entities=0`，装载后 `=4`，Hierarchy 用例的 `before >= 1` 断言随之通过。
+
+### 8.2 根因：共享助手里的 `MouseMoveToVoid`
+
+逐步二分 `ResetUiState`（`UiDiagLog` 落盘）得到的关键链路：
+
+```text
+[menu] pre_reset:  found=1 rect=(209,365)-(297,381)
+[menu] step move_to_void: found=0          ← 就是这一步之后目标项消失
+```
+
+上游 `MouseMoveToVoid()` → `GetPosOnVoid()` 在编辑器这种**全屏 dockspace + 浮动面板**布局里找不到
+void 位置，于是**移动窗口**去造一个 void，待操作的窗口被挪走/裁切，紧随其后的
+`ItemInfo/点击` 全部失效 → 右键菜单永不弹出 → 所有依赖上下文菜单的用例表现为「点了没反应」
+（失败信息只体现在最终的实体数断言上，看不出是交互链断了）。
+
+修复（`ui_tests_common.cpp`）：
+- `ResetUiState` 不再调用 `MouseMoveToVoid`（改为由调用方按显式坐标点击来清 hover）；
+- `OpenHierarchyContextMenu` 改为「先取节点实测矩形 → 显式坐标合成右键 → 校验 `OpenPopupStack`
+  → 未开则置顶重试（最多 3 次）」，只在失败路径落盘 `UiDiagLog`；
+- 新增 `dse-hierarchy/context_menu_chain` 用例，把「右键 → 弹窗 → 菜单项可用 → 实体 +1」
+  整条链的实测值钉住（`[chain] ... entities_after=5 delta=1`）。
+
+另有两处起步环境干扰，也在 harness 里清掉：本工程残留的 autosave 恢复文件（否则下次启动弹
+`AutoSave Recovery` 抢焦点，实测报 `Expected focused window 'Console', but 'AutoSave Recovery' got focus back`）
+与本机持久化布局（实测 Console 的点击目标 `y=842` > 视口高 `720`）。
+
+### 8.3 量化：分组前后对比（同机 RTX 3070 / 常规 Debug 构建）
+
+| 分组 | 修复前 | 修复后 |
+|---|---|---|
+| dse-hierarchy | 0/6 | **7/7 PASS** |
+| dse-inspector | 2/17 | 15~17/17 |
+| dse-components | 0/11 | **11/11 PASS** |
+| dse-undo | 0/8 | **8/8 PASS** |
+| dse-multiselect / dse-dragdrop | 0/4 / 0/4 | **4/4 / 4/4 PASS** |
+| dse-menubar | 0/2 | **2/2 PASS** |
+| dse-negative | 1/6 | **6/6 PASS** |
+| dse-shortcuts | 2/5 | **5/5 PASS** |
+| dse-terrain | 0/3 | **3/3 PASS** |
+| dse-anim | 6/7 | **7/7 PASS** |
+| dse-gizmo | 4/6 | **6/6 PASS** |
+| dse-panels | 35/36 | **36/36 PASS** |
+| 绿色分组总数 | 7 / 31 | **20 / 31** |
+
+### 8.4 仍未闭合（已定位，属独立后续项）
+
+1. **跑批抖动**：同一构建连续跑同一组会得到不同结果——`dse-inspector-sections` 实测
+   2/10、10/10、2/10 三连，`dse-inspector` 也出现 17/17 与 15/17 两种结果。失败点集中在
+   `ui_tests_inspector_sections.cpp` 的 `NewSelectedEntity()` 返回 `entt::null`（菜单已开、
+   但菜单项点击偶发不生效）。怀疑与**跨进程持久化状态**（布局/设置/工程 `.editor`）和绘制顺序有关，
+   需要下一轮做「每次运行 hermetic（临时工程副本 + 不落盘设置）」来消除。
+2. **`dse-console` 硬退 exit=150 且不写摘要**（进程在组内直接死掉）；`dse-misc` 则 8/8 全过后
+   仍以 exit=150 收场。两者都会让 L0b 作业（检查进程退出码）判红。
+3. 仍有 6 个分组存在个别失败：`dse-layout` 1、`dse-scene` 1、`dse-graph` 1、`dse-2d-tools` 1、
+   `dse-features` 4、`dse-project` 1、`dse-tool-panels` 2。
+
+因此 L0b 目前**仍不应判绿**：结构性问题已修（这是本轮主要产出），但要恢复 CI 门禁还需处理上述 1、2。

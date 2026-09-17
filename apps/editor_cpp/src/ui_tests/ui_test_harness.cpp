@@ -55,9 +55,12 @@ void Init(ImGuiContext* ui_ctx, const UiTestServices& services, const std::strin
     g_startup_project_preexisting = had_project;
     g_startup_project_open = OpenUiTestProject();
     g_startup_entities = CountValidEntities();
+    if (g_startup_project_open) ClearUiTestRunState();
     std::printf("[ui-tests] startup had_project=%d project open=%s entities=%d (%s)\n",
                 had_project ? 1 : 0, g_startup_project_open ? "ok" : "FAILED",
                 g_startup_entities, UiTestProjectPath());
+    // 交互链诊断文件按进程清空（用例经 UiDiagLog 追加），避免上一次运行的残留混淆判断。
+    std::remove("bin/ui_test_diag.txt");
 
     g_engine = ImGuiTestEngine_CreateContext();
 
