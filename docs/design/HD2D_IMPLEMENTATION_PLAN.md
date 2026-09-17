@@ -230,11 +230,18 @@ ecs.set_post_process_tilt_shift(e, enabled, focus, range, blur)
    已从门禁排除并登记在 runner 的 `EXCLUDED_ENTRIES`：`all` 会打印 `SKIP_EXCLUDED <entry>: <原因>`，
    `--include-excluded` 可强制运行（**不是静默跳过**）；实现落地后从表里删掉即恢复门禁。
 
-**审计待办（同类越界嫌疑，未修）**：用「名字像数组却声明成标量」扫 `function_defs.json` 还发现 6 处同类
-`out_param`：`audio_source_get_state._out_flags`、`character_controller_3d_move.out_flags`、
-`character_controller3d_move.out_flags`、`meshlet_get_info.out_indices`、`nav_agent_get.out_params` /
-`out_flags`。它们**尚未逐个核对 C ABI 实际写入元素数**，故本轮未动（避免凭猜测改 Lua 契约）；
-后续按 steering 同样的方式核对+修。
+**同类越界审计（本轮已完成，逐个核对 C ABI 实写元素数）**：用「名字像数组却声明成标量」扫
+`function_defs.json` 得到 6 处嫌疑，逐条核实后**只有 2 处真越界**，均已修：
+
+| 条目 | C ABI 实写 | 结论 |
+|---|---|---|
+| `audio_source_get_state` | `out_flags[0..2]`（3 int）+ `out_params[0..4]`（5 float） | **越界**：生成的包装器只给 1 个 int + 4 个 float。改为指向仓库既有的扁平实现 `dse_audio_source_get_state_ex`（与 `get_source_state` 同一份 C 函数、同一套 11 个 out_params），返回 12 值，不再有表/标量混用 |
+| `nav_agent_get` | `out_params[0..7]`（8 float）+ `out_flags[0..3]`（4 int，含 waypoint 索引） | **越界**：新增 `dse_compat_nav_agent_get` 薄包装（缓冲由 C 侧持有），Lua 收到 13 个扁平值 |
+| `character_controller_3d_move` / `character_controller3d_move` | `*out_flags`（**单值**） | 不越界（名字误报），`out_velocity` 本就是 float3，未改动 |
+| `meshlet_get_info` | `*out_indices`（**单值**，索引总数） | 不越界（名字误报），未改动 |
+
+`docs/api/LUA_API.md` 的两行返回值列已同步更正。至此 steering / audio / nav 三处同类问题都按
+CODEGEN_GUIDE §6 的薄包装或既有扁平 C ABI 收敛，`--entries all` 与三套 gtest 复跑均通过。
 
 ---
 

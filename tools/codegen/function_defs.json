@@ -163,7 +163,7 @@
                     }
                 },
                 {
-                    "c_name": "dse_audio_source_get_state",
+                    "c_name": "dse_audio_source_get_state_ex",
                     "lua_name": "audio_source_get_state",
                     "params": [
                         {
@@ -171,52 +171,57 @@
                             "type": "entity"
                         }
                     ],
-                    "calls": [
-                        {
-                            "c_name": "dse_audio_source_get_state",
-                            "args": [
-                                "e",
-                                "&_out_flags",
-                                "_out_params",
-                                "&_out_runtime_handle",
-                                "&_out_clip_size",
-                                "_path_buf",
-                                "sizeof(_path_buf)"
-                            ]
-                        }
-                    ],
-                    "validators": [
-                        "long long _out_runtime_handle = 0;",
-                        "long long _out_clip_size = 0;",
-                        "float _out_params[4] = {0,0,0,0};",
-                        "char _path_buf[256] = {0};"
-                    ],
                     "out_params": [
                         {
-                            "name": "_out_flags",
+                            "name": "out_clip_loaded",
                             "type": "int"
+                        },
+                        {
+                            "name": "out_is_playing",
+                            "type": "int"
+                        },
+                        {
+                            "name": "out_spatial",
+                            "type": "int"
+                        },
+                        {
+                            "name": "out_min_dist",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_max_dist",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_rolloff",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_volume",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_pitch",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_runtime_handle",
+                            "type": "double"
+                        },
+                        {
+                            "name": "out_clip_bytes",
+                            "type": "double"
+                        },
+                        {
+                            "name": "out_path",
+                            "type": "string"
                         }
                     ],
-                    "returns": [],
-                    "table_return": {
-                        "fields": [
-                            {
-                                "key": "flags",
-                                "push": "integer",
-                                "source": "_out_flags"
-                            },
-                            {
-                                "key": "runtime_handle",
-                                "push": "integer_cast",
-                                "source": "_out_runtime_handle"
-                            },
-                            {
-                                "key": "clip_size",
-                                "push": "integer_cast",
-                                "source": "_out_clip_size"
-                            }
-                        ]
-                    }
+                    "returns": [
+                        {
+                            "type": "int"
+                        }
+                    ]
                 }
             ],
             "register_func": "RegisterFreeFn_audio"
@@ -15690,7 +15695,7 @@
                     "returns": []
                 },
                 {
-                    "c_name": "dse_nav_agent_get",
+                    "c_name": "dse_compat_nav_agent_get",
                     "lua_name": "nav_agent_get",
                     "params": [
                         {
@@ -15700,11 +15705,51 @@
                     ],
                     "out_params": [
                         {
-                            "name": "out_params",
+                            "name": "out_speed",
                             "type": "float"
                         },
                         {
-                            "name": "out_flags",
+                            "name": "out_acceleration",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_stopping_dist",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_agent_radius",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_agent_height",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_dest_x",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_dest_y",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_dest_z",
+                            "type": "float"
+                        },
+                        {
+                            "name": "out_has_path",
+                            "type": "int"
+                        },
+                        {
+                            "name": "out_path_pending",
+                            "type": "int"
+                        },
+                        {
+                            "name": "out_arrived",
+                            "type": "int"
+                        },
+                        {
+                            "name": "out_current_waypoint",
                             "type": "int"
                         }
                     ],

@@ -2376,6 +2376,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_nav_agent_get")]
     internal static partial int dse_nav_agent_get(uint e, out float outParams, out int outFlags);
 
+    [LibraryImport(Lib, EntryPoint = "dse_compat_nav_agent_get")]
+    internal static partial int dse_compat_nav_agent_get(uint e, out float outSpeed, out float outAcceleration, out float outStoppingDist, out float outAgentRadius, out float outAgentHeight, out float outDestX, out float outDestY, out float outDestZ, out int outHasPath, out int outPathPending, out int outArrived, out int outCurrentWaypoint);
+
     [LibraryImport(Lib, EntryPoint = "dse_l10n_load", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_l10n_load(string path, string locale);
 

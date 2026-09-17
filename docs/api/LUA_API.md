@@ -3488,7 +3488,7 @@ dse.ecs.add_audio_listener_2d(listener, 1.0)
 |--------|------|------|-------|------|
 | `audio_bus_get_names` | — | 1值 | `dse_audio_bus_get_names` | 获取audio bus names |
 | `audio_snapshot_list` | — | 1值 | `dse_audio_snapshot_list` |  |
-| `audio_source_get_state` | int | 1值 | `dse_audio_source_get_state` | 获取audio source state |
+| `audio_source_get_state` | int | 12值（ok, clip_loaded, is_playing, spatial, min_dist, max_dist, rolloff, volume, pitch, runtime_handle, clip_bytes, path） | `dse_audio_source_get_state_ex` | 获取audio source state |
 | `fade_out_all_sfx` | float | — | `dse_audio_fade_out_all_sfx` |  |
 | `source_is_playing` | int | 1值 | `dse_audio_source_is_playing` |  |
 
@@ -3581,7 +3581,7 @@ dse.ecs.add_audio_listener_2d(listener, 1.0)
 | `morph_simple_get_weight_index` | int, int | 1值 | `dse_morph_simple_get_weight_index` | 获取morph simple weight index |
 | `morph_simple_set_weight` | int, string, float | — | `dse_morph_simple_set_weight` | 设置morph simple weight |
 | `morph_simple_set_weight_index` | int, int, float | — | `dse_morph_simple_set_weight_index` | 设置morph simple weight index |
-| `nav_agent_get` | int | 3值 | `dse_nav_agent_get` | 获取nav agent |
+| `nav_agent_get` | int | 13值（ok, speed, acceleration, stopping_dist, agent_radius, agent_height, dest_x, dest_y, dest_z, has_path, path_pending, arrived, current_waypoint） | `dse_compat_nav_agent_get` | 获取nav agent |
 | `nav_agent_get_destination` | int | 3值 | `dse_nav_agent_get_destination` | 获取nav agent destination |
 | `nav_find_nearest` | float, float, float | 4值 | `dse_nav_find_nearest` |  |
 | `nav_raycast` | float, float, float, float, float, float | 4值 | `dse_nav_raycast` | 射线检测 |

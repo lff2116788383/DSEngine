@@ -568,6 +568,7 @@ data/
 - `3d_vse15_22_scene`：**demo 本体未提交**（`require('3d.3d_vse15_22_scene') failed` → 回落到
   `phase1_2d_physics_showcase` 后挂住）。它是 §15 的规划项，已从门禁排除并登记在 runner 的
   `EXCLUDED_ENTRIES`（`all` 打印 `SKIP_EXCLUDED <entry>: <原因>`，`--include-excluded` 可强制）。
-- 审计待办：另有 6 处「名字像数组却声明成标量」的 `out_param`（`audio_source_get_state`、
-  `character_controller_3d_move`、`character_controller3d_move`、`meshlet_get_info`、`nav_agent_get`）
-  尚未核对 C ABI 实写元素数，后续按 steering 同样方式处理。
+- 同类越界审计已做完：6 处嫌疑里只有 `audio_source_get_state`（C 写 3 int + 5 float）与
+  `nav_agent_get`（C 写 8 float + 4 int）真越界，已分别改为指向既有扁平实现
+  `dse_audio_source_get_state_ex` 与新增的 `dse_compat_nav_agent_get`；`character_controller*_move`
+  的 `out_flags` 与 `meshlet_get_info` 的 `out_indices` 经核实是**单值写入**（名字误报），未改动。

@@ -681,15 +681,35 @@ int L_dse_meshlet_get_info(lua_State* L) {
     return 4;
 }
 
-int L_dse_nav_agent_get(lua_State* L) {
-    float out_params = 0;
-    int out_flags = 0;
+int L_dse_compat_nav_agent_get(lua_State* L) {
+    float out_speed = 0;
+    float out_acceleration = 0;
+    float out_stopping_dist = 0;
+    float out_agent_radius = 0;
+    float out_agent_height = 0;
+    float out_dest_x = 0;
+    float out_dest_y = 0;
+    float out_dest_z = 0;
+    int out_has_path = 0;
+    int out_path_pending = 0;
+    int out_arrived = 0;
+    int out_current_waypoint = 0;
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int _ret = dse_nav_agent_get(e, &out_params, &out_flags);
+    int _ret = dse_compat_nav_agent_get(e, &out_speed, &out_acceleration, &out_stopping_dist, &out_agent_radius, &out_agent_height, &out_dest_x, &out_dest_y, &out_dest_z, &out_has_path, &out_path_pending, &out_arrived, &out_current_waypoint);
     lua_pushinteger(L, _ret);
-    lua_pushnumber(L, out_params);
-    lua_pushinteger(L, out_flags);
-    return 3;
+    lua_pushnumber(L, out_speed);
+    lua_pushnumber(L, out_acceleration);
+    lua_pushnumber(L, out_stopping_dist);
+    lua_pushnumber(L, out_agent_radius);
+    lua_pushnumber(L, out_agent_height);
+    lua_pushnumber(L, out_dest_x);
+    lua_pushnumber(L, out_dest_y);
+    lua_pushnumber(L, out_dest_z);
+    lua_pushinteger(L, out_has_path);
+    lua_pushinteger(L, out_path_pending);
+    lua_pushinteger(L, out_arrived);
+    lua_pushinteger(L, out_current_waypoint);
+    return 13;
 }
 
 int L_dse_nav_agent_get_destination(lua_State* L) {
@@ -1121,7 +1141,7 @@ void RegisterFreeGapBindings(lua_State* L) {
         {"mesh_renderer_set_texture", L_dse_mesh_renderer_set_texture},
         {"meshlet_cull_stats", L_dse_meshlet_cull_stats},
         {"meshlet_get_info", L_dse_meshlet_get_info},
-        {"nav_agent_get", L_dse_nav_agent_get},
+        {"nav_agent_get", L_dse_compat_nav_agent_get},
         {"nav_agent_get_destination", L_dse_nav_agent_get_destination},
         {"nav_find_nearest", L_dse_nav_find_nearest},
         {"nav_raycast", L_dse_nav_raycast},

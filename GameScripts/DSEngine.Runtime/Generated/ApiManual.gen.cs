@@ -362,6 +362,7 @@ public static class Components {
     public static void AiAddInverter(int treeId, string name) { Native.dse_ai_add_inverter(treeId, name); }
     public static void AiAddSucceeder(int treeId, string name) { Native.dse_ai_add_succeeder(treeId, name); }
     public static void AiAddRepeater(int treeId, string name, int maxRepeats) { Native.dse_ai_add_repeater(treeId, name, maxRepeats); }
+    public static int CompatNavAgentGet(uint e, out float outSpeed, out float outAcceleration, out float outStoppingDist, out float outAgentRadius, out float outAgentHeight, out float outDestX, out float outDestY, out float outDestZ, out int outHasPath, out int outPathPending, out int outArrived, out int outCurrentWaypoint) { return Native.dse_compat_nav_agent_get(e, out outSpeed, out outAcceleration, out outStoppingDist, out outAgentRadius, out outAgentHeight, out outDestX, out outDestY, out outDestZ, out outHasPath, out outPathPending, out outArrived, out outCurrentWaypoint); }
     public static int CompatL10nLoad(string locale, string json) { return Native.dse_compat_l10n_load(locale, json); }
     public static int UuidGet(uint e, [Out] byte[] @out, int cap) { return Native.dse_uuid_get(e, @out, cap); }
     public static int UuidSet(uint e, string uuidStr, [Out] byte[] @out, int cap) { return Native.dse_uuid_set(e, uuidStr, @out, cap); }

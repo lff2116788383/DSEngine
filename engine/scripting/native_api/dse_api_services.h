@@ -84,6 +84,18 @@ DSE_CAPI int  dse_nav_agent_arrived(uint32_t e);
 // out_flags={has_path,path_pending,arrived,current_waypoint}（int[4]）。返回 1=存在组件。
 DSE_CAPI int  dse_nav_agent_get(uint32_t e, float* out_params, int* out_flags);
 
+// Lua 侧契约的薄包装（CODEGEN_GUIDE §6）：把上面的定长缓冲摊成独立标量。存在的理由：codegen 的
+// out_params 只能声明标量/定长向量，直接把标量指针接到 float[8]/int[4] 缓冲上会造成栈越界写
+// （steering 的同类问题实测会让调用直接挂死）。分量顺序：speed, acceleration, stopping_dist,
+// agent_radius, agent_height, dest_x, dest_y, dest_z, has_path, path_pending, arrived, current_waypoint。
+DSE_CAPI int  dse_compat_nav_agent_get(uint32_t e,
+                                       float* out_speed, float* out_acceleration,
+                                       float* out_stopping_dist, float* out_agent_radius,
+                                       float* out_agent_height, float* out_dest_x,
+                                       float* out_dest_y, float* out_dest_z,
+                                       int* out_has_path, int* out_path_pending,
+                                       int* out_arrived, int* out_current_waypoint);
+
 // ============================================================
 // Localization（LocalizationManager via ServiceLocator）
 // ============================================================

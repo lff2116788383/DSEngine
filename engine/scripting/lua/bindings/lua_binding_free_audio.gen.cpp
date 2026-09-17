@@ -62,22 +62,33 @@ int L_dse_audio_snapshot_list(lua_State* L) {
     return 1;
 }
 
-int L_dse_audio_source_get_state(lua_State* L) {
-    int _out_flags = 0;
+int L_dse_audio_source_get_state_ex(lua_State* L) {
+    int out_clip_loaded = 0;
+    int out_is_playing = 0;
+    int out_spatial = 0;
+    float out_min_dist = 0;
+    float out_max_dist = 0;
+    float out_rolloff = 0;
+    float out_volume = 0;
+    float out_pitch = 0;
+    double out_runtime_handle = 0;
+    double out_clip_bytes = 0;
+    char out_path[256] = {0};
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    long long _out_runtime_handle = 0;
-    long long _out_clip_size = 0;
-    float _out_params[4] = {0,0,0,0};
-    char _path_buf[256] = {0};
-    dse_audio_source_get_state(e, &_out_flags, _out_params, &_out_runtime_handle, &_out_clip_size, _path_buf, sizeof(_path_buf));
-    lua_newtable(L);
-    lua_pushinteger(L, _out_flags);
-    lua_setfield(L, -2, "flags");
-    lua_pushinteger(L, static_cast<lua_Integer>(_out_runtime_handle));
-    lua_setfield(L, -2, "runtime_handle");
-    lua_pushinteger(L, static_cast<lua_Integer>(_out_clip_size));
-    lua_setfield(L, -2, "clip_size");
-    return 1;
+    int _ret = dse_audio_source_get_state_ex(e, &out_clip_loaded, &out_is_playing, &out_spatial, &out_min_dist, &out_max_dist, &out_rolloff, &out_volume, &out_pitch, &out_runtime_handle, &out_clip_bytes, out_path, sizeof(out_path));
+    lua_pushinteger(L, _ret);
+    lua_pushinteger(L, out_clip_loaded);
+    lua_pushinteger(L, out_is_playing);
+    lua_pushinteger(L, out_spatial);
+    lua_pushnumber(L, out_min_dist);
+    lua_pushnumber(L, out_max_dist);
+    lua_pushnumber(L, out_rolloff);
+    lua_pushnumber(L, out_volume);
+    lua_pushnumber(L, out_pitch);
+    lua_pushnumber(L, static_cast<lua_Number>(out_runtime_handle));
+    lua_pushnumber(L, static_cast<lua_Number>(out_clip_bytes));
+    lua_pushstring(L, out_path);
+    return 12;
 }
 
 } // namespace
@@ -96,7 +107,7 @@ void RegisterFreeFn_audio(lua_State* L) {
         {"source_is_playing", L_dse_audio_source_is_playing},
         {"bus_get_names", L_dse_audio_bus_get_names},
         {"snapshot_list", L_dse_audio_snapshot_list},
-        {"audio_source_get_state", L_dse_audio_source_get_state},
+        {"audio_source_get_state", L_dse_audio_source_get_state_ex},
     });
     lua_pop(L, 2);
 }

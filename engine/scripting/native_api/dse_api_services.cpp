@@ -508,6 +508,32 @@ extern "C" int dse_nav_agent_get(uint32_t e, float* out_params, int* out_flags) 
     return 1;
 }
 
+// Lua 侧契约的薄包装：缓冲由本函数持有，只把标量交给 Lua（见头文件里的理由说明）。
+extern "C" int dse_compat_nav_agent_get(uint32_t e,
+                                        float* out_speed, float* out_acceleration,
+                                        float* out_stopping_dist, float* out_agent_radius,
+                                        float* out_agent_height, float* out_dest_x,
+                                        float* out_dest_y, float* out_dest_z,
+                                        int* out_has_path, int* out_path_pending,
+                                        int* out_arrived, int* out_current_waypoint) {
+    float params[8] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    int flags[4] = {0, 0, 0, 0};
+    const int ok = dse_nav_agent_get(e, params, flags);
+    if (out_speed)          *out_speed = params[0];
+    if (out_acceleration)   *out_acceleration = params[1];
+    if (out_stopping_dist)  *out_stopping_dist = params[2];
+    if (out_agent_radius)   *out_agent_radius = params[3];
+    if (out_agent_height)   *out_agent_height = params[4];
+    if (out_dest_x)         *out_dest_x = params[5];
+    if (out_dest_y)         *out_dest_y = params[6];
+    if (out_dest_z)         *out_dest_z = params[7];
+    if (out_has_path)       *out_has_path = flags[0];
+    if (out_path_pending)   *out_path_pending = flags[1];
+    if (out_arrived)        *out_arrived = flags[2];
+    if (out_current_waypoint) *out_current_waypoint = flags[3];
+    return ok;
+}
+
 #else  // !DSE_ENABLE_NAVMESH — 安全空实现
 
 extern "C" int dse_nav_is_ready(void) { return 0; }
