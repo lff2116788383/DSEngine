@@ -28,6 +28,7 @@
 
 #include "../editor_autosave.h"   // AutoSaveManager（起步清恢复弹窗）
 #include "../editor_project.h"  // ProjectManager
+#include "../editor_scene_io.h"  // LoadScene / SetCurrentScenePath（起步显式加载场景）
 #include "../editor_selection.h"  // SelectionManager (ResetUiState)
 #include "../editor_shell.h"      // ResetEditorLayout（起步复位布局）
 
@@ -46,19 +47,22 @@ constexpr const char* kUiTestProject = "tests/automation/testdata/projects/simpl
 
 const char* UiTestProjectPath() { return kUiTestProject; }
 
-bool OpenUiTestProject() {
+bool UiTestProjectReady() {
     const UiTestServices& s = Services();
-    if (!s.bus || !s.engine) return false;
-    namespace fs = std::filesystem;
-    if (!fs::exists(kUiTestProject)) return false;
-    const auto result = s.bus->dispatch(
-        dse::editor::core::OpenProjectCmd{kUiTestProject}, *s.engine);
-    return result.ok;
+    if (!s.engine) return false;
+    // 工程由 EditorApp::Init 的 DSE_EDITOR_UI_TESTS 分支固定打开（同一个路径常量），
+    // 这里只校验结果：不重复 OpenProject（那会 CloseProject+重载场景，反而引入抖动）。
+    return dse::editor::ProjectManager::Get().HasOpenProject();
 }
 
 void ClearUiTestRunState() {
     namespace fs = std::filesystem;
-    // 1) autosave 恢复：上一轮 UI 测试会让工程变脏并被自动保存，下一次启动就弹
+    // 1) ImGui 布局 ini 两不沾：置空 IniFilename 后既不读也不写（ImGui 在 NewFrame 首次惰性
+    //    加载），于是每次跑都从默认布局起步、也不污染开发者本地布局——本地 ini 曾把面板排到
+    //    视口之外（实测 Console 点击目标 y=842 > 视口高 720）。
+    ImGui::GetIO().IniFilename = nullptr;
+    dse::editor::ResetEditorLayout();
+    // 2) autosave 恢复：上一轮运行会让工程变脏并被自动保存，下一次启动就弹
     //    "AutoSave Recovery" 抢走焦点（实测 WindowFocus("//Console") 报
     //    "Expected focused window 'Console', but 'AutoSave Recovery' got focus back"），
     //    后续所有 WindowFocus/点击都失败。清掉本工程残留的 autosave 后重查一次以清 pending。
@@ -67,11 +71,32 @@ void ClearUiTestRunState() {
     const fs::path autosave = project_dir / ".editor" / "autosave";
     const std::uintmax_t removed = fs::remove_all(autosave, ec);
     dse::editor::AutoSaveManager::Get().CheckRecovery();
-    // 2) 布局：本地持久化的 editor_layout.ini 可能把面板排到视口之外
-    //    （实测 Console 的点击目标 y=842 > 视口高 720），UI 测试必须从默认布局起步。
-    dse::editor::ResetEditorLayout();
-    UiDiagLog("[startup] cleared_autosave=%llu layout=reset",
-              static_cast<unsigned long long>(removed));
+    // 3) 起步场景：走与自动化完全相同的工具路径打开工程（OpenProjectCmd → dsengine_project_open，
+    //    它内部会加载 default_scene）——不要在 harness 里自己 LoadScene，那会让场景页签/脏标记
+    //    等状态偏离编辑器正常路径（实测 dse-undo/dse-dragdrop/dse-negative/dse-terrain 各差 1 例）。
+    //    打开前删掉派生 .bin 缓存：LoadScene 在 .bin 比 json 新时会优先读缓存，
+    //    等于把「上一轮跑出来的状态」带进下一轮。
+    int entities = -1;
+    if (auto* engine = Services().engine) {
+        auto& pm = dse::editor::ProjectManager::Get();
+        const std::string scene_rel = pm.GetDescriptor().default_scene;
+        if (!scene_rel.empty()) {
+            const fs::path scene_path = pm.GetProjectRoot() / scene_rel;
+            fs::remove(scene_path.string() + ".bin", ec);
+        }
+        // 恒定走工具路径装载：编辑器自身启动路径加载出的实体数实测是 3（与夹具的 4 不一致，
+        // 取决于它内部走了哪条分支），用例的实体计数断言因此不稳定；工具路径
+        // （OpenProjectCmd → dsengine_project_open → LoadScene(default_scene)）结果是确定的 4。
+        if (Services().bus) {
+            if (!Services().bus->dispatch(dse::editor::core::OpenProjectCmd{kUiTestProject},
+                                          *engine).ok) {
+                UiDiagLog("[startup] 打开测试工程失败（工具返回 !ok）");
+            }
+        }
+        entities = CountValidEntities();
+    }
+    UiDiagLog("[startup] cleared_autosave=%llu layout=default(no ini) entities=%d",
+              static_cast<unsigned long long>(removed), entities);
 }
 
 void UiDiagLog(const char* fmt, ...) {

@@ -34,21 +34,20 @@ int CountValidEntities();
 
 /// 打开仓库内置的 UI 测试示例工程（默认 scenes/main.scene.json，含 4 个实体）。
 ///
-/// 为什么要有：UI 测试壳运行时工程状态取决于进程外部条件。实测（summary 的
-/// startup_project_preexisting）启动时已有一个工程处于打开状态，但其场景是空的
-/// （startup_entities=0），于是依赖「场景里已有实体」的用例（Hierarchy 的
-/// duplicate/delete 先要求 before >= 1）必然失败。这里按与自动化框架完全相同的工具路径
-/// （OpenProjectCmd → dsengine_project_open）显式装载一个已知内容的工程，让用例的起步
-/// 状态可复现。注意：它并不能修正交互层用例（右键菜单点击等）自身的失败。
-/// @return 工程文件存在且工具返回 ok 时为 true；否则 false（用例照跑，便于区分环境/功能问题）。
-bool OpenUiTestProject();
+/// 为什么要有：UI 测试壳运行时工程状态此前取决于进程外部条件。实测启动时工程虽已打开
+/// （startup_project_preexisting=1），但用的是 0 实体的 automation/empty_project，于是依赖
+/// 「场景里已有实体」的用例（Hierarchy 的 duplicate/delete 先要求 before >= 1）必然失败。
+/// 现在由 EditorApp::Init 的 DSE_EDITOR_UI_TESTS 分支固定打开本工程（同一个路径常量），
+/// 本函数只做校验，不再重复 OpenProject（重复开工程会 CloseProject + 重载场景，反而引入抖动）。
+/// @return 工程已打开时为 true。
+bool UiTestProjectReady();
 
-/// 示例工程的仓库相对路径（OpenUiTestProject 使用；也供用例断言/诊断引用）。
+/// 示例工程的仓库相对路径（供 workflow/文档/诊断引用）。
 const char* UiTestProjectPath();
 
-/// 清掉会干扰 UI 测试的运行态残留：本工程的 autosave 恢复文件（否则下次启动弹
-/// "AutoSave Recovery" 抢焦点）与本机持久化布局（可能把面板排到视口外）。
-/// 由 harness 在装载起步工程后调用一次。
+/// 清掉会干扰 UI 测试的运行态残留并归一布局：ImGui 布局 ini 置空（不读不写）、重置为默认布局、
+/// 清本工程残留的 autosave 恢复文件（否则下次启动弹 "AutoSave Recovery" 抢焦点）。
+/// 由 harness 在起步校验后调用一次。
 void ClearUiTestRunState();
 
 /// 把全部面板可见性开关置真，让被隐藏的面板下一帧起被绘制（覆盖全部面板的前提）。

@@ -540,8 +540,9 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // Load AI configuration
     dse::editor::AIConfigManager::Instance().Load("bin/editor_ai_config.json");
 
-    // 尝试自动打开上次项目
-    if (!editor_settings.last_project_path.empty()) {
+    // 尝试自动打开上次项目（UI 测试模式跳过：见下方固定测试工程，
+    // 否则本机设置会让每次跑的起点不同）
+    if (!test_config_.run_ui_tests && !editor_settings.last_project_path.empty()) {
         std::filesystem::path dseproj = std::filesystem::path(editor_settings.last_project_path) / "project.dseproj";
         if (std::filesystem::exists(dseproj)) {
             dse::editor::ProjectManager::Get().OpenProject(dseproj);
@@ -549,11 +550,12 @@ bool EditorApp::Init(int argc, char* argv[]) {
     }
 
 #ifdef DSE_EDITOR_UI_TESTS
-    // UI 测试模式需要有项目打开，Hierarchy 等面板才会绘制（否则只显示 Project Hub）。
-    // 无上次项目时回退到仓内自动化空工程，保证 CI 无头跑可复现。
-    if (test_config_.run_ui_tests && !dse::editor::ProjectManager::Get().HasOpenProject()) {
+    // UI 测试模式固定使用仓内测试工程：Hierarchy/Inspector 等面板用例需要**场景里有实体**
+    //（此前用的是 0 实体的 automation/empty_project，导致 `before >= 1` 一类断言必失败），
+    // 且不能沿用「上次项目」——本机设置会让每次跑的起点不同，是套件抖动的来源之一。
+    if (test_config_.run_ui_tests) {
         std::filesystem::path ui_test_proj = GetProjectRootPath() /
-            "tests" / "automation" / "testdata" / "projects" / "empty_project" / "project.dseproj";
+            "tests" / "automation" / "testdata" / "projects" / "simple_2d_game" / "project.dseproj";
         if (std::filesystem::exists(ui_test_proj)) {
             dse::editor::ProjectManager::Get().OpenProject(ui_test_proj);
         } else {
@@ -1090,10 +1092,13 @@ void EditorApp::Shutdown() {
         editor_settings.cam_yaw = cam.yaw;
         editor_settings.cam_pitch = cam.pitch;
     }
-    dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
-    dse::editor::SaveEditorSettings(editor_settings);
-
-    dse::editor::AutoSaveManager::Get().OnExit();
+    // UI 测试运行不落盘编辑器状态：既避免测试之间串扰（下一轮从上一轮的布局/相机/最近场景
+    // 起步，是套件抖动的来源之一），也不污染开发者的本地设置与 autosave。
+    if (!test_config_.run_ui_tests) {
+        dse::editor::AddRecentFile(editor_settings, dse::editor::GetCurrentScenePath());
+        dse::editor::SaveEditorSettings(editor_settings);
+        dse::editor::AutoSaveManager::Get().OnExit();
+    }
 
     // 关闭当前项目（释放 .lock）
     dse::editor::ProjectManager::Get().CloseProject();

@@ -141,9 +141,9 @@
 必然崩在加载期（exit=150）。改为按数组下标回落到第一遍创建的实体。修复后该批处理用例通过，
 `SceneIO_*` 25 条往返测试仍全绿。
 
-已知仍未闭合（属独立后续项，见 §8.4）：编辑器 UI 测试套件跑批仍有抖动、`dse-console`/`dse-misc`
-以 exit=150 收场，故 L0b 暂不应判绿；结构性的「共享助手移动窗口导致面板类用例成片失败」已修复
-（绿色分组 7 → 20）。
+已知仍未闭合（属独立后续项，见 §8.6）：编辑器 UI 测试套件的跑批抖动与结构性根因已修
+（绿色分组 7 → 16，连续三次结果一致），但 `dse-console`/`dse-misc` 仍以 exit=150 收场、
+另有 4 例布局敏感的拖拽/点击用例与零星失败，故 L0b 暂不应判绿。
 
 ## 8. 附：编辑器 UI 测试套件（`DSE_EDITOR_UI_TESTS`）现状与修复
 
@@ -204,16 +204,54 @@ void 位置，于是**移动窗口**去造一个 void，待操作的窗口被挪
 | dse-panels | 35/36 | **36/36 PASS** |
 | 绿色分组总数 | 7 / 31 | **20 / 31** |
 
-### 8.4 仍未闭合（已定位，属独立后续项）
+### 8.4 第二轮：让每次运行 hermetic（消除跑批抖动）
 
-1. **跑批抖动**：同一构建连续跑同一组会得到不同结果——`dse-inspector-sections` 实测
-   2/10、10/10、2/10 三连，`dse-inspector` 也出现 17/17 与 15/17 两种结果。失败点集中在
-   `ui_tests_inspector_sections.cpp` 的 `NewSelectedEntity()` 返回 `entt::null`（菜单已开、
-   但菜单项点击偶发不生效）。怀疑与**跨进程持久化状态**（布局/设置/工程 `.editor`）和绘制顺序有关，
-   需要下一轮做「每次运行 hermetic（临时工程副本 + 不落盘设置）」来消除。
-2. **`dse-console` 硬退 exit=150 且不写摘要**（进程在组内直接死掉）；`dse-misc` 则 8/8 全过后
-   仍以 exit=150 收场。两者都会让 L0b 作业（检查进程退出码）判红。
-3. 仍有 6 个分组存在个别失败：`dse-layout` 1、`dse-scene` 1、`dse-graph` 1、`dse-2d-tools` 1、
+同一构建连跑同组曾得到不同结果（`dse-inspector-sections` 2/10、10/10、2/10 三连）。逐项查因后
+在测试路径上做四处归一，使每次运行的起点与终点都不留状态：
+
+| 措施 | 位置 | 解决的问题 |
+|---|---|---|
+| UI 测试模式固定打开仓内测试工程（含 4 实体的 `simple_2d_game`）且忽略「上次项目」 | `editor_app.cpp` | 此前固定开的是 **0 实体**的 `empty_project`，且会沿用本机 `last_project_path`，起点随机器而异 |
+| UI 测试运行不落盘设置、不跑 autosave OnExit | `editor_app.cpp` | 下一轮不会从上一轮的相机/最近场景起步，也不污染开发者本地设置 |
+| `ImGui::GetIO().IniFilename = nullptr` + `ResetEditorLayout()` | `ui_tests_common.cpp` | 布局 ini 既不读也不写：本地 ini 曾把面板排到视口外（Console 点击目标 `y=842` > 视口高 720），且每轮被测试改动后写回，形成跨轮串扰 |
+| 清 autosave 恢复文件、删派生 `.bin` 场景缓存、恒定走工具路径装载默认场景 | `ui_tests_common.cpp` | 消除 `AutoSave Recovery` 抢焦点与「从上一轮跑出来的场景缓存加载」 |
+
+实测效果（连续三次同一命令）：
+
+```text
+--run-ui-tests=dse-inspector-sections,dse-inspector,dse-hierarchy
+run1/run2/run3 → PASS 24/24，startup_entities=4 三次一致   ← 抖动消除
+```
+
+### 8.5 量化（第二轮，同机同构建）
+
+| | 修复前（round 0） | round 1 | round 2（hermetic） |
+|---|---|---|---|
+| 绿色分组 | 7 / 31 | 20 / 31（但严重抖动） | **16 / 31（三次连跑一致）** |
+| dse-inspector-sections | 2/10 | 2~10/10 抖动 | **10/10 稳定** |
+| dse-inspector | 2/17 | 15~17/17 抖动 | **17/17 稳定** |
+| dse-hierarchy | 0/6 | 7/7 | **7/7** |
+| dse-panels | 35/36 | 36/36 | **36/36** |
+| dse-components / dse-undo / dse-multiselect | 0/11 · 0/8 · 0/4 | 11/11 · 8/8 · 4/4 | 11/11 · 7/8 · 4/4 |
+| dse-blueprint | 28/28 | 28/28 | **28/28** |
+
+round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且都是**坐标/布局敏感**用例：
+
+- `dse-undo` / `dse-dragdrop` / `dse-negative`：断言 `ParentComponent`（Hierarchy 里把 A 拖到 B 上），
+  走 `ItemDragAndDrop` 的物理拖拽；
+- `dse-terrain`：地形笔刷模式按钮点击（`GetTerrainEditorState().brush_mode == Lower`）。
+
+它们在 round 1 通过，是因为当时**沿用了被历史测试改动过的持久化布局**，面板恰好摆在拖拽/点击能命中的位置——
+即属于「偶然通过」。现在布局恒为默认值，这 4 例需要各自修（把目标项滚入视野/先置顶再拖拽），
+而不是回退到「依赖上一轮遗留布局」。
+
+### 8.6 仍未闭合
+
+1. **`dse-console` 硬退 `exit=150` 且不写摘要**（进程在组内直接死掉）；`dse-misc` 则 8/8 全过后仍以
+   `exit=150` 收场。两者都会让 L0b 作业（检查进程退出码）判红，是恢复 CI 门禁的下一个阻塞点。
+2. 上述 4 例布局敏感用例需要逐个修（拖拽前把节点滚入视野并确认命中窗口）。
+3. 其余分组仍有零星失败：`dse-layout` 1~2、`dse-scene` 1、`dse-graph` 1、`dse-2d-tools` 1、
    `dse-features` 4、`dse-project` 1、`dse-tool-panels` 2。
 
-因此 L0b 目前**仍不应判绿**：结构性问题已修（这是本轮主要产出），但要恢复 CI 门禁还需处理上述 1、2。
+因此 L0b 目前**仍不应判绿**：结构性根因（共享助手移动窗口）与跑批抖动已修，剩下的是拖拽/点击命中与
+两个 exit=150。

@@ -49,14 +49,13 @@ void Init(ImGuiContext* ui_ctx, const UiTestServices& services, const std::strin
     SetServices(services);
     g_filter = filter;
 
-    // 先显式装载一个已知内容的起步工程（见 OpenUiTestProject 注释）；失败也继续，
-    // 用例会各自报错，便于区分「环境没准备好」与「功能坏了」。
+    // 起步状态校验 + 归一（工程由 EditorApp::Init 的 DSE_EDITOR_UI_TESTS 分支固定打开）。
     const bool had_project = dse::editor::ProjectManager::Get().HasOpenProject();
     g_startup_project_preexisting = had_project;
-    g_startup_project_open = OpenUiTestProject();
+    g_startup_project_open = UiTestProjectReady();
+    ClearUiTestRunState();
     g_startup_entities = CountValidEntities();
-    if (g_startup_project_open) ClearUiTestRunState();
-    std::printf("[ui-tests] startup had_project=%d project open=%s entities=%d (%s)\n",
+    std::printf("[ui-tests] startup had_project=%d project ready=%s entities=%d (%s)\n",
                 had_project ? 1 : 0, g_startup_project_open ? "ok" : "FAILED",
                 g_startup_entities, UiTestProjectPath());
     // 交互链诊断文件按进程清空（用例经 UiDiagLog 追加），避免上一次运行的残留混淆判断。
