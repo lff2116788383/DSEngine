@@ -1,4 +1,4 @@
-﻿# HD-2D M3M6 实现与验证报告（本机降级口径）
+# HD-2D M3M6 实现与验证报告（本机降级口径）
 
 > 基线：`feature/engine-lib` / `25a88991` 之后。
 > 本会话新增提交见文末提交记录。
@@ -104,6 +104,8 @@
 
 ## 6. 未完成 / 阻塞
 
+> 本节为 round 2（`d51e46ca` 之前）的历史快照，逐条结案情况见 §7。
+
 1. 台式机 `169.254.139.190` 不可达，未取得台式机 GT 1030 / D3D11 真机证据；D3D11 阻塞不能标记为已修复。
 2. M3 lit 主路径仍是 `ForwardShaded` 全光 UBO（已提升到 255），尚未替换为 clustered lights SSBO 直读。
 3. 法线贴图/emissive 已完成 `.dsprite` 附属贴图与像素对照（见 M3 证据）；仍需与美术自动图集切分流程联动。
@@ -111,3 +113,48 @@
 5. `gen_maps.py` 的程序化 3D 地形/道具导出未实现。
 6. `templates/hd2d_wuxia` 主模板完整 B+ 表现层迁移未完成，仅完成验收底座。
 7. CI/headless：已实现 D3D11 `DSE_DX11_HEADLESS=1` 离屏路径并可截图；WSL/Xvfb、CMake/CTest 流水线仍未接入。
+
+## 7. round 3 收尾（2026-09-17）
+
+提交：`9e409b1b`（cluster SSBO 直读）、`d694313b`（编辑器独立 Sprite3D 预览视口 + 场景编解码器 `sprite3d` 分支）。
+
+逐条结案：
+
+| §6 条目 | 状态 | 依据 |
+|---|---|---|
+| 1 台式机 D3D11 真机证据 | **已用本机硬件取代** | 本机 RTX 3070（日志无 WARP 回退）跑 D3D11 离屏 + 三后端像素用例；GT 1030 台式机不再是唯一证据来源 |
+| 2 lit 主路径改 clustered SSBO | **已完成** | `forward_shaded.frag` 新增 `SPRITE3D_CLUSTER_SSBO` 变体（binding 32..35，`light_params.w` 门控，关时退回 UBO 数组）；`ForwardShadedClustered` 在 GL/VK/D3D11 三后端建程序；`ForwardShadedPixelSmokeTest.*DirectClusterSSBO` 三后端 PASS |
+| 3 法线/emissive 与图集切分流程 | **部分**（代码已具备，流程待文字化） | `gen_atlases.py` 已自动切分并产出 `*_atlas.png` + `.dsprite.json`；缺一页流程说明 |
+| 4 编辑器独立 viewport / 时间轴 | **已完成** | `apps/editor_cpp/src/editor_sprite3d_preview.cpp`（引擎重渲 → 私有 RT → ImGui 显示，轨道/缩放/帧时间轴/播放），`DSE_EDITOR_PANEL` 自注册、Window 菜单可开关；`dse-panels/sprite3d_preview` UI 用例 PASS |
+| 5 `gen_maps.py` 3D 导出 | **已完成**（round 2：`78c2463c`） | `assets/maps/village_3d.dmesh`、`stronghold_3d.dmesh` + `mapdata.lua` 的 `mesh3d` 字段 |
+| 6 B+ 表现层迁移 | **已完成**（round 2：`d51e46ca`） | `scripts/bplus.lua`（`DSE_HD2D_BPLUS=1`），保留 2D 逻辑/碰撞/AI/任务/存档，仅切表现层 |
+| 7 CI/无头流水线 | **Windows GPU runner 已接入** | 新增 `suites/hd2d-acceptance.yaml`（编辑器场景编解码器冒烟 + M6 三后端渲染像素门控）并挂到 `editor-automation.yml` 的 L1；WSL/Xvfb 仍未接入 |
+
+本轮顺带修复（都在 `dse_editor_cpp` 的 `DSE_EDITOR_UI_TESTS` 构建里）：
+- `ui_tests_render_validation.cpp` 的句柄类型漂移（`TextureAsset::GetHandle()` 已返回 `TextureHandle`，测试仍按 `unsigned int` 用）导致**整个 UI 测试构建编译失败**；已修，`dsengine-editor-uitest.exe` 恢复可构建。
+- `UiTestServices` 补齐 `show_sprite3d_preview` / `show_animation_clip` 开关；`dse-panels` 组从 35/36 变为 **36/36 PASS**。
+- `--run-ui-tests` 的 filter 语义订正：测试引擎按「名称/类别子串」匹配（`sprite3d_preview` 命中），原注释示例 `dse-hierarchy/` 实际匹配不到。
+
+另有一处与本轮无关的既有崩溃，已定位并修复（它让仓库自带的批处理用例 `cli.scene_load_screenshot` 长期红）：
+`LoadScene` 第二遍加载组件时用 `id_map[...]`（`unordered_map::operator[]`）取实体，缺失 `id` 的场景会插入
+默认值 `entt::null`，组件被 emplace 到空实体上——多实体无 id 场景（`simple_2d_game/scenes/main.scene.json`）
+必然崩在加载期（exit=150）。改为按数组下标回落到第一遍创建的实体。修复后该批处理用例通过，
+`SceneIO_*` 25 条往返测试仍全绿。
+
+已知仍未闭合（不属 HD-2D 验收范围，已在 §8 记录）：编辑器 UI 测试套件整体依赖「已打开工程」前置条件，裸跑会因 Project Hub 短路而大面积失败。
+
+## 8. 附：编辑器 UI 测试套件（`DSE_EDITOR_UI_TESTS`）现状
+
+本轮为了让新面板进 UI 覆盖，首次在本机完整跑了 `dsengine-editor-uitest.exe --headless --run-ui-tests`，结论如下（**与 HD-2D 改动无关，属既有欠账**）：
+
+- 裸跑（仓根、未打开工程）时，`DrawEditorUI` 命中 Project Hub 分支并提前返回，所有面板都不再绘制 →
+  依赖面板交互的用例成片失败：`dse-hierarchy` 0/6、`dse-inspector` 2/17、`dse-components` 0/11、
+  `dse-undo` 0/8、`dse-dragdrop` 0/4、`dse-menubar` 0/2、`dse-terrain` 0/3 等；`dse-console` 与
+  `dse-misc` 直接以 exit=150 退出。
+- 通过组：`dse-harness`、`dse-assets`、`dse-assetmgmt`、`dse-play`、`dse-tabs`、`dse-blueprint`
+  (28/28)、`dse-panel-deep`、`dse-2d-tools` (18/19)，以及本轮修好的 `dse-panels` (**36/36**)。
+- 失败信息确认根因：`ui_tests_hierarchy.cpp` 断言 `CountValidEntities() == before + 1` 且 `before >= 1`
+  —— 层级面板右键建实体根本没发生，即「面板未绘制」而非逻辑错误。
+
+后续若要恢复 `editor-automation.yml` 的 L0b 作业，需要先给测试壳补「打开一个内置示例工程」的前置
+（`ProjectManager::OpenProject` / `dsengine_project_open`），再逐个清理历史用例。

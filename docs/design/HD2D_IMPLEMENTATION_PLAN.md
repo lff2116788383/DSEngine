@@ -162,10 +162,24 @@ ecs.set_post_process_tilt_shift(e, enabled, focus, range, blur)
 |---|---|---|---|---|
 | **[x] M1 精灵进 3D** | `Sprite3DComponent`+billboard shader+`Sprite3DPass`(depth test/write+alpha test)+Lua 绑定+最小 demo | `engine/ecs/components_3d_render.h`、`engine/render/shaders/src/sprite3d.*`、`engine/render/passes/`、`engine/scripting/lua/bindings/`、`tools/codegen/binding_defs.json`、`modules/gameplay_3d/rendering/mesh_render_system.cpp` | 台式机 GL 真机 behind 房子 mask 内=0/外=8121、front 内=54376；Vulkan 真机 behind 内=0、front 内=52939；D3D11 编译同步但真机 RHI 设备初始化失败 | 12 周 |
 | **[x] M2 排序/批处理** | view-space depth bucket、`sorting_bias` foreground pass、Sprite3D metrics、纹理合批、三后端管线状态 | `engine/render/passes/sprite3d_pass.*`、`engine/render/sprite_batch_renderer.*`、`engine/runtime/frame_pipeline.cpp`、`modules/runtime_bridge/*`、三后端 executor | 1000 精灵 + 10 盒 GL 真机 `draw_calls=7 < 100`、`get_sprite_count()=1000`；foreground 专项：normal blue=0、bias<0 blue>0；Vulkan smoke 通过 | 35 天 |
-| **[~] M3 光照/阴影** | M3.1 `SPRITE3D_LIT` + snapshot 点光/聚光已完成；CSM 接收、法线贴图、emissiveBloom、接地阴影、clustered lights 全量待做 | `engine/render/shaders/src/sprite3d_lit.*`、`engine/render/sprite_batch_renderer.{h,cpp}`、`engine/render/render_snapshot.h`、`engine/render/passes/builtin_passes.cpp` | GL/VK 真机点光开/关 hero 平均 RGB 明显提升；`_compat_test`/M1 behind 回归通过；D3D11 编译通过、真机不验 | 12 周 |
-| **M4 后处理/相机** | 精灵写深度DoF、Tilt-shift、体积光适配、正交/弱透视 3D 相机 | `builtin_passes_postfx.cpp`、`camera` 组件/控制器 | 移轴景深生效且 UI 不受影响 | 1 周 |
-| **M5 资产/工具** | `.dsprite.json`、AssetBuilder、程序化 3D 地形/道具导出、编辑器预览 | `engine/assets/`、`apps/tools/asset_builder/`、`templates/hd2d_wuxia/tools/` | `dse new hd2d` 直接产出 3D 地形+精灵工程 | 1 周 |
-| **M6 模板升级+验证** | `hd2d_wuxia` 切 B+ 架构（保留现有系统）、golden 截图回归、CI 无头渲染 | `templates/hd2d_wuxia/`、`tests/`、`scripts/` | 第 1 节 5 条验收全绿 | 1 周 |
+| **[x] M3 光照/阴影** | M3.1 `SPRITE3D_LIT` + snapshot 点光/聚光；CSM 接收、法线贴图、emissiveBloom、接地阴影、clustered lights **SSBO 直读**均已完成（直读见 §5.1） | `engine/render/shaders/src/forward_shaded.frag`（`SPRITE3D_CLUSTER_SSBO` 变体）、`engine/render/mesh_renderer_shaded.cpp`、`engine/render/passes/sprite3d_pass.cpp` | GL/VK 真机点光开/关 hero 平均 RGB 明显提升；`_compat_test`/M1 behind 回归通过；D3D11 已用本机硬件设备（RTX 3070，非 WARP）+ 离屏路径验证 | 12 周 |
+| **[x] M4 后处理/相机** | 精灵写深度 DoF、Tilt-shift、体积光适配、正交/弱透视 3D 相机 | `builtin_passes_postfx.cpp`、`camera` 组件/控制器 | 移轴景深生效且 UI 不受影响（`_hd2d_m4_test.lua` weak vs ortho 全图均值 34.61/32.31/25.93 → 11.96/20.94/12.42，PSNR=18.10dB） | 1 周 |
+| **[x] M5 资产/工具** | `.dsprite.json`、AssetBuilder、程序化 3D 地形/道具导出（`gen_maps.py` → `*_3d.dmesh`）、图集生成（`gen_atlases.py`）、编辑器预览（独立 Sprite3D 视口 + 时间轴 + 场景编解码器 `sprite3d` 分支） | `engine/assets/`、`apps/tools/asset_builder/`、`templates/hd2d_wuxia/tools/`、`apps/editor_cpp/src/editor_sprite3d_preview.cpp` | `dse new hd2d` 直接产出 3D 地形+精灵工程 | 1 周 |
+| **[x] M6 模板升级+验证** | `hd2d_wuxia` 切 B+ 架构（`scripts/bplus.lua` 开关，保留现有系统）、golden 截图回归、CI 无头渲染（`suites/hd2d-acceptance.yaml` + `run_hd2d_m6_acceptance.py --gate`） | `templates/hd2d_wuxia/`、`tests/`、`.github/workflows/editor-automation.yml` | 第 1 节 5 条验收全绿（三后端截图 + 像素门控） | 1 周 |
+
+### 5.1 收尾进展（round 3，2026-09-17）
+
+| 提交 | 内容 |
+|---|---|
+| `9e409b1b` | Sprite3D lit 生产路径切到**片段阶段直读** ClusterGrid/LightBuffer SSBO（`ForwardShadedClustered` + binding 32..35，`light_params.w` 门控，GL/VK/D3D11 三后端程序与描述符对齐） |
+| `d694313b` | 编辑器**独立 Sprite3D 预览视口**（引擎重渲 + 私有 RT + ImGui 显示 + 帧时间轴）与 `.dscene` 的 `sprite3d` 编解码分支 |
+
+证据（本机 Windows/MSVC + RTX 3070）：
+- `FragmentSSBOPixelSmokeTest`（0 号槽位 + 32 号高位槽位）、`ForwardShadedPixelSmokeTest.*DirectClusterSSBO` 三后端全 PASS。
+- `suites/hd2d-acceptance.yaml`：`cli.hd2d_m6_acceptance` 三后端 + D3D11 离屏渲染，`hd2d_pixel_stats.py --gate` PASS（mean_luma≈66 / bright_ratio≈0.20 / 跨后端 PSNR ≥ 11.98dB）。
+- `SceneIO_Sprite3DRoundTrip`（JSON + `.bin` 两条路径）PASS。
+
+仍待办（不阻断 M1M6 验收）：美术自动图集切分流程的文字化说明；WSL/Xvfb 无头渲染接入（当前 CI 门控跑在自托管 Windows GPU runner 上）。
 
 ---
 
