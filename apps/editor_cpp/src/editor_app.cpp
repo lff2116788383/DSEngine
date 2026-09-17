@@ -717,6 +717,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_undo_history         = &panels_.undo_history;
         ui_services.show_asset_browser        = &panels_.asset_browser;
         ui_services.show_animation_timeline   = &panels_.animation_timeline;
+        ui_services.show_animation_clip       = &panels_.animation_clip;
         ui_services.show_navmesh              = &panels_.navmesh;
         ui_services.show_shader_graph         = &panels_.shader_graph;
         ui_services.show_git                  = &panels_.git;
@@ -732,6 +733,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_blueprint            = &panels_.blueprint;
         ui_services.show_vegetation_brush     = &panels_.vegetation_brush;
         ui_services.show_sequencer            = &panels_.sequencer;
+        ui_services.show_sprite3d_preview     = &panels_.sprite3d_preview;
         dse::editor::uitest::Init(
             ImGui::GetCurrentContext(),
             ui_services,

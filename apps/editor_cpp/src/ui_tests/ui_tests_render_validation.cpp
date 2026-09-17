@@ -835,7 +835,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
 
         // Load textures early (before complex entity creation) so Play mode pump is clean
-        unsigned int kn_albedo_handle = 0, kn_normal_handle = 0;
+        // 句柄类型已收敛为 RHI 类型化句柄（TextureHandle），此处跟随 MeshRendererComponent 字段类型。
+        dse::render::TextureHandle kn_albedo_handle{}, kn_normal_handle{};
         {
             const std::string tex_dir = "c:/Users/Administrator/Desktop/Engine/DSEngine/examples/KF_Framework/assets/textures/";
             if (auto* am = Services().engine->asset_manager()) {
@@ -1029,11 +1030,11 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
             entt::registry* rp = &Reg(); entt::entity kn = cube;
             am->LoadTextureAsync(tex_path,
                 [rp,kn](std::shared_ptr<TextureAsset> t){
-                    if (t && t->GetHandle() != 0 && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn)) {
-                        fprintf(stderr, "[render_texture_albedo] albedo_handle=%u\n", t->GetHandle());
+                    if (t && t->GetHandle().raw() != 0 && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn)) {
+                        fprintf(stderr, "[render_texture_albedo] albedo_handle=%u\n", t->GetHandle().raw());
                     } else {
                         fprintf(stderr, "[render_texture_albedo] FAILED: t=%p handle=%u\n",
-                                t.get(), t ? t->GetHandle() : 0);
+                                t.get(), t ? t->GetHandle().raw() : 0u);
                     }
                 });
         }

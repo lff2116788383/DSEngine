@@ -59,7 +59,9 @@ void Init(ImGuiContext* ui_ctx, const UiTestServices& services, const std::strin
     ImGuiTestEngine_Start(g_engine, ui_ctx);
     g_started = true;
 
-    // 从命令行入队：空 filter 跑全部；filter 形如 "dse-hierarchy/" 可只跑子集。
+    // 从命令行入队：空 filter 跑全部；filter 为「测试名或类别」的大小写不敏感子串匹配
+    // （见 imgui_te_engine 的 ImGuiTestEngine_PassFilter），例如 "sprite3d_preview"
+    // 命中 dse-panels/sprite3d_preview，"dse-anim" 命中整个动画组；"-foo" 为排除。
     const char* filter_cstr = g_filter.empty() ? nullptr : g_filter.c_str();
     ImGuiTestEngine_QueueTests(g_engine, ImGuiTestGroup_Tests, filter_cstr,
                                ImGuiTestRunFlags_RunFromCommandLine);

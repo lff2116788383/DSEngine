@@ -73,6 +73,8 @@ constexpr PanelEntry kPanels[] = {
     {"world_partition",     "World Partition Editor"},
     {"plugin_hot_reload",   "Plugin Hot Reload"},
     {"version_control",     "Version Control"},
+    // HD-2D：独立 Sprite3D 预览视口（引擎重渲 + 私有 RT → ImGui 显示）
+    {"sprite3d_preview",    "Sprite3D Preview"},
 };
 
 } // namespace
