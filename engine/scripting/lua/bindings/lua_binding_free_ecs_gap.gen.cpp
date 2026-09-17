@@ -223,22 +223,39 @@ int L_dse_particle_system_3d_get_state(lua_State* L) {
     int _out_active = 0;
     int _out_max_particles = 0;
     float _out_emission_rate = 0;
-    uint32_t _out_texture_handle = 0;
-    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float _out_life[2] = {0,0};
-    float _out_size[2] = {0,0};
-    float _out_speed[2] = {0,0};
-    float _out_gravity[3] = {0,0,0};
-    float _out_color[4] = {0,0,0,0};
+    float _out_life[2] = {0, 0};
+    float _out_size[2] = {0, 0};
+    float _out_speed[2] = {0, 0};
+    float _out_gravity[3] = {0, 0, 0};
+    float _out_color[4] = {0, 0, 0, 0};
     char _out_tex[256] = {0};
     int _out_enabled = 0;
     int _out_initialized = 0;
-    dse_particle_system_3d_get_state(e, &_out_active, &_out_max_particles, &_out_emission_rate, _out_life, _out_size, _out_speed, _out_gravity, _out_color, _out_tex, sizeof(_out_tex), &_out_enabled, &_out_initialized, &_out_texture_handle);
+    uint32_t _out_texture_handle = 0;
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    int _ret = dse_particle_system_3d_get_state(e, &_out_active, &_out_max_particles, &_out_emission_rate, _out_life, _out_size, _out_speed, _out_gravity, _out_color, _out_tex, sizeof(_out_tex), &_out_enabled, &_out_initialized, &_out_texture_handle);
+    lua_pushinteger(L, _ret);
     lua_pushinteger(L, _out_active);
     lua_pushinteger(L, _out_max_particles);
     lua_pushnumber(L, _out_emission_rate);
+    lua_pushnumber(L, _out_life[0]);
+    lua_pushnumber(L, _out_life[1]);
+    lua_pushnumber(L, _out_size[0]);
+    lua_pushnumber(L, _out_size[1]);
+    lua_pushnumber(L, _out_speed[0]);
+    lua_pushnumber(L, _out_speed[1]);
+    lua_pushnumber(L, _out_gravity[0]);
+    lua_pushnumber(L, _out_gravity[1]);
+    lua_pushnumber(L, _out_gravity[2]);
+    lua_pushnumber(L, _out_color[0]);
+    lua_pushnumber(L, _out_color[1]);
+    lua_pushnumber(L, _out_color[2]);
+    lua_pushnumber(L, _out_color[3]);
+    lua_pushstring(L, _out_tex);
+    lua_pushinteger(L, _out_enabled);
+    lua_pushinteger(L, _out_initialized);
     lua_pushinteger(L, static_cast<lua_Integer>(_out_texture_handle));
-    return 4;
+    return 21;
 }
 
 int L_set_nav_agent(lua_State* L) {

@@ -4,7 +4,9 @@ local AnimationBasic3D = {}
 
 local function _anim_state_9(e)
     local n, t, sp, lp, tr, bc, hs = dse.ecs.anim3d_get_state(e)
-    return (n ~= nil), "?", n, t, sp, lp, tr, bc, hs
+    -- 绑定按 P1 口径返回 0/1 数字（不再是 boolean），这里统一归一成 boolean：
+    -- 否则调用侧的 `x == true` 恒为 false，日志会打出 has_skeleton=false（骨骼其实已加载）。
+    return (n ~= nil), "?", n, t, sp, (lp ~= 0), (tr ~= 0), bc, (hs ~= 0)
 end
 
 

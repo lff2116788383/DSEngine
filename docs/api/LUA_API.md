@@ -3528,7 +3528,7 @@ dse.ecs.add_audio_listener_2d(listener, 1.0)
 | `mesh_set_material` | int, string | — | `dse_mesh_set_material` | 设置mesh material |
 | `mesh_set_material_scalar` | int, string, float | — | `dse_mesh_set_material_scalar` | 设置mesh material scalar |
 | `mesh_set_texture_handle` | int, string, int | — | `dse_mesh_set_texture_handle` | 设置mesh texture handle |
-| `particle_system_3d_get_state` | int | 4值 | `dse_particle_system_3d_get_state` | 获取particle system 3d state |
+| `particle_system_3d_get_state` | int | 21值（ok + active/max/emission + life2/size2/speed2/gravity3/color4/texture_path/enabled/initialized/texture_handle） | `dse_particle_system_3d_get_state` | 获取particle system 3d state |
 | `rigidbody_3d_add_force_at_position` | int, float, float, float, float, float, float | — | `dse_rigidbody3d_add_force_at_position` | 添加rigidbody 3d force at position |
 | `rigidbody_3d_get_angular_damping` | int | 1值 | `dse_rigidbody3d_get_angular_damping` | 获取rigidbody 3d angular damping |
 | `rigidbody_3d_get_linear_damping` | int | 1值 | `dse_rigidbody3d_get_linear_damping` | 获取rigidbody 3d linear damping |

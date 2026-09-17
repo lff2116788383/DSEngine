@@ -663,37 +663,8 @@
               "type": "entity"
             }
           ],
-          "calls": [
-            {
-              "c_name": "dse_particle_system_3d_get_state",
-              "args": [
-                "e",
-                "&_out_active",
-                "&_out_max_particles",
-                "&_out_emission_rate",
-                "_out_life",
-                "_out_size",
-                "_out_speed",
-                "_out_gravity",
-                "_out_color",
-                "_out_tex",
-                "sizeof(_out_tex)",
-                "&_out_enabled",
-                "&_out_initialized",
-                "&_out_texture_handle"
-              ]
-            }
-          ],
-          "validators": [
-            "float _out_life[2] = {0,0};",
-            "float _out_size[2] = {0,0};",
-            "float _out_speed[2] = {0,0};",
-            "float _out_gravity[3] = {0,0,0};",
-            "float _out_color[4] = {0,0,0,0};",
-            "char _out_tex[256] = {0};",
-            "int _out_enabled = 0;",
-            "int _out_initialized = 0;"
-          ],
+          "calls": [],
+          "validators": [],
           "out_params": [
             {
               "name": "_out_active",
@@ -708,11 +679,47 @@
               "type": "float"
             },
             {
+              "name": "_out_life",
+              "type": "float2"
+            },
+            {
+              "name": "_out_size",
+              "type": "float2"
+            },
+            {
+              "name": "_out_speed",
+              "type": "float2"
+            },
+            {
+              "name": "_out_gravity",
+              "type": "float3"
+            },
+            {
+              "name": "_out_color",
+              "type": "float4"
+            },
+            {
+              "name": "_out_tex",
+              "type": "string"
+            },
+            {
+              "name": "_out_enabled",
+              "type": "int"
+            },
+            {
+              "name": "_out_initialized",
+              "type": "int"
+            },
+            {
               "name": "_out_texture_handle",
               "type": "uint32"
             }
           ],
-          "returns": []
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
         },
         {
           "lua_name": "set_nav_agent",

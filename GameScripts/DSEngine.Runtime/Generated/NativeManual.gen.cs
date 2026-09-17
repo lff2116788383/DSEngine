@@ -552,6 +552,33 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_sprite_sheet_get_frame_uv")]
     internal static partial void dse_sprite_sheet_get_frame_uv(int sheet, int frame, [Out] float[] outUv);
 
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_load", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_sprite_atlas_load(string path, int filter, int wrap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_path")]
+    internal static partial int dse_sprite_atlas_path(int atlas, [Out] byte[] outPath, int outSize);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_texture")]
+    internal static partial uint dse_sprite_atlas_texture(int atlas);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_normal_texture")]
+    internal static partial uint dse_sprite_atlas_normal_texture(int atlas);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_emissive_texture")]
+    internal static partial uint dse_sprite_atlas_emissive_texture(int atlas);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_clip_frame_count", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_sprite_atlas_clip_frame_count(int atlas, string clipName);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_clip_frame_uv", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_sprite_atlas_clip_frame_uv(int atlas, string clipName, int frame, [Out] float[] outUv);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_clip_fps", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial float dse_sprite_atlas_clip_fps(int atlas, string clipName);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sprite_atlas_clip_loop", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_sprite_atlas_clip_loop(int atlas, string clipName);
+
     [LibraryImport(Lib, EntryPoint = "dse_atlas_load", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_atlas_load(string path);
 

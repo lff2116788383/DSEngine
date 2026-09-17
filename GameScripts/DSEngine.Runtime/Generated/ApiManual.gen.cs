@@ -915,6 +915,15 @@ public static class Spline {
 }
 
 public static class Sprite {
+    public static int AtlasLoad(string path, int filter, int wrap) { return Native.dse_sprite_atlas_load(path, filter, wrap); }
+    public static int AtlasPath(int atlas, [Out] byte[] outPath, int outSize) { return Native.dse_sprite_atlas_path(atlas, outPath, outSize); }
+    public static uint AtlasTexture(int atlas) { return Native.dse_sprite_atlas_texture(atlas); }
+    public static uint AtlasNormalTexture(int atlas) { return Native.dse_sprite_atlas_normal_texture(atlas); }
+    public static uint AtlasEmissiveTexture(int atlas) { return Native.dse_sprite_atlas_emissive_texture(atlas); }
+    public static int AtlasClipFrameCount(int atlas, string clipName) { return Native.dse_sprite_atlas_clip_frame_count(atlas, clipName); }
+    public static void AtlasClipFrameUv(int atlas, string clipName, int frame, [Out] float[] outUv) { Native.dse_sprite_atlas_clip_frame_uv(atlas, clipName, frame, outUv); }
+    public static float AtlasClipFps(int atlas, string clipName) { return Native.dse_sprite_atlas_clip_fps(atlas, clipName); }
+    public static int AtlasClipLoop(int atlas, string clipName) { return Native.dse_sprite_atlas_clip_loop(atlas, clipName); }
     public static void Add(uint e, float r, float g, float b, float a, int orderInLayer, uint textureHandle) { Native.dse_sprite_add(e, r, g, b, a, orderInLayer, textureHandle); }
     public static void SetUvScroll(uint e, float sx, float sy) { Native.dse_sprite_set_uv_scroll(e, sx, sy); }
     public static void SetUvOffset(uint e, float ox, float oy) { Native.dse_sprite_set_uv_offset(e, ox, oy); }

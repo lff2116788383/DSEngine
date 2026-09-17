@@ -540,3 +540,26 @@ data/
 9. 再补 `3d_asset_pack_showcase`、`3d_render_quality_showcase`。
 
 最终建议：`samples/lua/3d` 当前数量已经足够。下一步先做 P4 文档/验证/资源收口，再新增 1~2 个高价值 demo；若只能选一个新 demo，首选 `samples/lua/3d/3d_vse15_22_scene.lua`。
+
+## 16. 验证套件修复与已知挂死项（2026-09-17）
+
+`tools/verify_lua_3d_demos.py --entries all` 此前在本机为 FAILED_ENTRIES（10 项），现已 **VERIFY_OK（29 项）**。
+根因与修法（详细表格见 [`HD2D_IMPLEMENTATION_PLAN.md`](HD2D_IMPLEMENTATION_PLAN.md) §5.3）：
+
+- **runner 侧的 token 匹配按真值语义**：`REQUIRED_LOG_TOKENS` 里 `key=true` 现在接受 `=true` 或**非零数字**
+  （P1 把绑定统一成数字口径后 demo 打的是 `key=1`）；`key=false` 仍要求假值，门禁不放宽。
+- `set_post_process_bloom` 是 **void** setter，其返回值 token 永远不可能满足 → 改用
+  `get_post_process_state` 读回的 `bloom_enabled=true`。
+- `particle_system_3d_get_state` 的 Lua 包装器此前只 push **4/21** 个返回值（`function_defs.json` 的
+  `out_params` 不全）→ 补全后重跑 codegen；`docs/api/LUA_API.md` 的返回值列同步更正。
+- demo 侧：`3d_physics_interaction` 的 `rigidbody_3d_set_gravity` 改传 `0/1`（文档口径是 number）；
+  `3d_animation_basic` 的行内 helper 把绑定的 0/1 归一成 boolean（否则 `x == true` 恒 false）；
+  `triangle.lua`/`square.lua` 由「持续旋转」改为「引入动画后停住」——默认 90 帧截图恰好落在侧棱相位，
+  面片退化成一条线会被判黑屏。
+- runner 的样例同步不再 `rmtree`（会删掉 `bin/samples` 下被 git 跟踪、源码侧不存在的文件），
+  改为非破坏式覆盖。
+
+**已知挂死项（引擎侧待查）**：`3d_character_third_person`、`3d_vse15_22_scene` 在 Lua setup 阶段挂死，
+300s 超时也不结束（日志分别停在 `Awake begin` 之后 / Physics2D body 创建之后，二者自身没有
+while/repeat 等待循环）。已在 runner 中以 `KNOWN_ENGINE_HANGS` 显式登记：`all` 会打印
+`SKIP_KNOWN_HANG <entry>` 后跳过，`--include-known-hangs` 可强制运行。

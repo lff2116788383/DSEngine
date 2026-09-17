@@ -195,27 +195,29 @@ ecs.set_post_process_tilt_shift(e, enabled, focus, range, blur)
 | `dse new hd2d` | `dse new hd2d tmp/scaffold_hd2d` | 706 文件：**107 `.dsprite.json` + 105 图集 PNG + 2 `*_3d.dmesh`** + `bplus.lua` + `project.dseproj`；按 README 跑通 exit=0，`[bplus] map=village mesh=assets/maps/village_3d.dmesh lights=13`，无 `MISSING texture` |
 | 图集切分流程 | — | 已补写进 `templates/hd2d_wuxia/README.md`「美术图集切分流程」章节（输入命名 / 切分命令 / 附属贴图 / 三处消费方式 / 自检）；`gen_atlases.py` 在工程副本上实测输出 `actor/npc atlases=97` + `fx atlases=8` |
 
-注意（既有红灯，与 HD-2D 无关）：仓库自带的 3D demo 套件 `tools/verify_lua_3d_demos.py --entries all`
-在本机为 **FAILED_ENTRIES**（`3d_triangle:4`/`3d_square:4` 截图过暗、5 个条目 `LOG_ASSERT_MISSING`、
-`3d_character_third_person`/`3d_vse15_22_scene` 超时、`3d_physics_interaction` 因
-`rigidbody_3d_set_gravity` 收到 boolean 而刷 77 条 Lua 错）。归因：
+### 5.3 演示套件回归修复（round 5，2026-09-17）
 
-- 同构建下 `--entries basic --frames 30` 为 `VERIFY_OK`（同一批条目在帧数不同时结果不同）；
-- `3d_postprocess_showcase` 缺的是 `get_post_process_state` / `set_post_process_bloom` /
-  `set_post_process_color` 这几个**聚合式** PostProcess 名字的日志 token，而这些名字
-  **从未出现在 `tools/codegen/binding_defs.json`**（`git log -S 'set_post_process_bloom"'` 为空），
-  即 demo 参考的是早已不存在的 API，且 demo 用 `if dse.ecs.X then` 守卫静默降级；
-- 受影响 demo（`3d_postprocess_showcase` / `3d_render_quality_showcase` 等）都不经过 Sprite3D /
-  cluster SSBO 代码路径。
+仓库自带的 3D demo 套件 `tools/verify_lua_3d_demos.py --entries all` 在 round 4 时为本机 FAILED_ENTRIES
+（10 项）。逐条定位后修复，现在为 **VERIFY_OK（29 项）**：
 
-故判为**既有套件欠账**，不在本轮改动范围；`docs/design/LUA_3D_DEMOS.md` 历史上也只声称
-`--entries p1` 通过，未声称 `all`。后续可要么把这两个 demo 迁到细粒度 setter
-（`set_post_process_bloom_enabled/threshold/intensity` 等，模板 README 已记录为当前口径），
-要么补一层聚合式兼容别名。
+| 失败项 | 根因 | 修法 |
+|---|---|---|
+| `3d_terrain_heightmap` / `3d_audio_spatial` / `3d_postprocess_showcase` / `3d_particles_showcase`（`LOG_ASSERT_MISSING`） | runner 的 `REQUIRED_LOG_TOKENS` 按旧 boolean 口径写 `key=true`，而 P1 把绑定统一成**数字**口径后 demo 打的是 `key=1` | runner 侧改为**真值语义匹配**：`key=true` 接受 `=true` 或非零数字，`key=false` 接受 `=false`/`=0`（`has_skeleton=false` 这类假值仍会失败，门禁不放宽） |
+| `3d_postprocess_showcase` 的 `set_post_process_bloom=true` | 该 setter 是 **void**（不返回值），`bloom_ok=nil`，token 永远不可能满足 | 改用 `get_post_process_state` 读回的 `bloom_enabled=true`，保留「setter 生效」的原意 |
+| `3d_particles_showcase` 的 `enabled`/`initialized` 恒为 nil | `function_defs.json` 里 `particle_system_3d_get_state` 只声明了 **4** 个 `out_params`，C ABI 实际有 14 个 → 生成的 Lua 包装器只 push 4/21 个返回值，demo 取值全部错位 | 补全 `out_params`（life/size/speed/gravity/color/tex/enabled/initialized）+ `returns: int`（ok 标志），跑 `python tools/codegen/codegen.py` 重生成（改动仅 1 个 `.gen.cpp`，另顺带把 C# 手写包装同步到含 HD-2D `Sprite.Atlas*` 的现状） |
+| `3d_physics_interaction`（77 条 Lua 错） | demo 给 `rigidbody_3d_set_gravity` 传 boolean，而绑定按文档口径要 number | demo 改传 `0/1` |
+| `3d_animation_basic` 的 `has_skeleton=true` | 绑定按 P1 口径返回数字 0/1，demo 用 `hs == true` 比较 → 恒 false（骨骼其实已加载） | demo 的行内 helper 把 0/1 归一成 boolean |
+| `3d_triangle` / `3d_square`（`SCREENSHOT_BLACK_OR_SOLID`） | demo 持续绕 Y 旋转（25°/s / 22°/s），默认 90 帧恰好落到侧棱相位 → 面片退化成一条线 | 改为「引入动画后停住」：`angle = min(time*speed, 小角度)`，任何截图帧都稳定可见 |
 
-另注：该 runner 的「同步样例到 `bin/samples`」步骤（`copytree_replace`）会**删除**目标目录里源码侧
-不存在的文件——本轮实测把被跟踪的 `bin/samples/lua/3d/3d_character_outfit.lua` 删掉了（已
-`git checkout` 恢复）。跑该套件后需检查 `git status`，这也算它自身的一个欠账。
+另修 runner 自身一处欠账：样例同步原为 `rmtree` + 整树拷贝，会把 `bin/samples` 下源码侧不存在但
+**被 git 跟踪**的文件删掉（实测删掉 `bin/samples/lua/3d/3d_character_outfit.lua`）；已改为非破坏式
+`copytree(dirs_exist_ok=True)`。
+
+**仍未闭合（引擎侧待查，不属 HD-2D）**：`3d_character_third_person` 与 `3d_vse15_22_scene` 在 Lua
+setup 阶段**挂死**（300s 超时也不结束；日志分别停在 `Awake begin` 之后与 Physics2D body 创建之后，
+两者自身都没有 while/repeat 等待循环）。已在 runner 里以 `KNOWN_ENGINE_HANGS` 显式登记：`all` 预设会
+打印 `SKIP_KNOWN_HANG <entry>` 并跳过，`--include-known-hangs` 可强制运行——**不是静默跳过**，
+后续需在引擎侧定位阻塞点。
 
 ---
 

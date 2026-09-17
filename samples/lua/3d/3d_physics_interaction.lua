@@ -218,14 +218,14 @@ local function phase_gravity()
     if not dse.ecs.rigidbody_3d_set_gravity then return end
 
     -- 先关闭重力
-    dse.ecs.rigidbody_3d_set_gravity(target.entity, false)
+    dse.ecs.rigidbody_3d_set_gravity(target.entity, 0)
     print(string.format("[3D][PhysicsInteraction] phase5a: gravity DISABLED for %s", target.name))
 
     -- 记录关闭后位置
     local x1, y1, z1 = dse.ecs.get_transform_position(target.entity)
 
     -- 立即恢复重力
-    dse.ecs.rigidbody_3d_set_gravity(target.entity, true)
+    dse.ecs.rigidbody_3d_set_gravity(target.entity, 1)
     print(string.format("[3D][PhysicsInteraction] phase5b: gravity RE-ENABLED for %s", target.name))
 
     state.gravity_test_done = true

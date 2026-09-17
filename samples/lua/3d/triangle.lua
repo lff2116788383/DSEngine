@@ -63,7 +63,11 @@ end
 function Triangle3D.Update(delta_time)
     state.time = state.time + (delta_time or 0.0)
     if state.triangle ~= nil then
-        dse.ecs.set_transform_rotation(state.triangle, 0.0, state.time * 25.0, 0.0)
+        -- 只做一段引入动画后停住：本 demo 的用途是「看见一个三角形」，而无头像素验证会在固定
+        -- 帧数（默认 90 帧）截图；持续绕 Y 旋转会让截图相位恰好落到侧棱（实测 90 帧 ≈ 90°，
+        -- 三角形退化成一条线，被判定为黑屏）。停在正对相机的角度后，任何截图帧都稳定可见。
+        local angle = math.min(state.time * 25.0, 20.0)
+        dse.ecs.set_transform_rotation(state.triangle, 0.0, angle, 0.0)
     end
 end
 

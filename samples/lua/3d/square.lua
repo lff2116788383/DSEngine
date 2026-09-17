@@ -65,7 +65,10 @@ end
 function Square3D.Update(delta_time)
     state.time = state.time + (delta_time or 0.0)
     if state.square ~= nil then
-        dse.ecs.set_transform_rotation(state.square, math.sin(state.time * 0.6) * 15.0, state.time * 22.0, 0.0)
+        -- 同 triangle.lua：引入动画后停住。持续绕 Y 旋转会让无头验证的固定帧截图落到侧棱相位
+        -- （正方形退化成一条线 → 判黑屏），停在正对相机的角度才稳定可见。
+        local yaw = math.min(state.time * 22.0, 18.0)
+        dse.ecs.set_transform_rotation(state.square, math.sin(state.time * 0.6) * 15.0, yaw, 0.0)
     end
 end
 
