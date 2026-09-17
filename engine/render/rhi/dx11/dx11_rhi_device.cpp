@@ -151,6 +151,13 @@ void DX11CommandBuffer::BindStorageBuffer(uint32_t slot, BufferHandle buffer_han
     device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle.raw(), offset, size);
 }
 
+void DX11CommandBuffer::BindStorageBuffer(ShaderStage stage, uint32_t slot,
+                                          BufferHandle buffer_handle,
+                                          uint32_t offset, uint32_t size) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindStorageBuffer(stage, slot, buffer_handle.raw(), offset, size);
+}
+
 void DX11CommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
     if (!device_) return;
     device_->draw_executor().PrimDrawIndexed(index_count, first_index, base_vertex,

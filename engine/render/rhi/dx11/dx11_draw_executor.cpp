@@ -626,8 +626,12 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
     // @SSBO_LOW_REGISTERS 落低位 t，同绑 PS 会覆盖 PS 纹理槽）。
     for (const auto& [slot, b] : prim_ssbos_) {
         ID3D11ShaderResourceView* srv = resource_mgr.GetSSBORangeSRV(b.handle, b.offset, b.size);
-        if (srv) {
+        if (!srv) continue;
+        if (static_cast<uint32_t>(b.stage & ShaderStage::Vertex) != 0) {
             dc->VSSetShaderResources(slot, 1, &srv);
+        }
+        if (static_cast<uint32_t>(b.stage & ShaderStage::Fragment) != 0) {
+            dc->PSSetShaderResources(slot, 1, &srv);
         }
     }
 
@@ -717,8 +721,14 @@ void DX11DrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_
 
 void DX11DrawExecutor::PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
                                              uint32_t offset, uint32_t size) {
-    // SSBO(ByteAddressBuffer SRV) 映射到 t<slot>；offset/size!=0 走子区间 SRV。
-    prim_ssbos_[slot] = PrimSSBOBinding{buffer_handle, offset, size};
+    PrimBindStorageBuffer(ShaderStage::Vertex, slot, buffer_handle, offset, size);
+}
+
+void DX11DrawExecutor::PrimBindStorageBuffer(ShaderStage stage, uint32_t slot,
+                                             unsigned int buffer_handle,
+                                             uint32_t offset, uint32_t size) {
+    // SSBO(ByteAddressBuffer SRV) 映射到 t<slot>；stage 决定 VS/PS 寄存器。
+    prim_ssbos_[slot] = PrimSSBOBinding{buffer_handle, offset, size, stage};
 }
 
 void DX11DrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex,
@@ -784,8 +794,12 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
     // 同绑 PS 会覆盖 PS 纹理槽（如反照率 t0）。VS 无纹理，故仅 VS 安全。
     for (const auto& [slot, b] : prim_ssbos_) {
         ID3D11ShaderResourceView* srv = resource_mgr.GetSSBORangeSRV(b.handle, b.offset, b.size);
-        if (srv) {
+        if (!srv) continue;
+        if (static_cast<uint32_t>(b.stage & ShaderStage::Vertex) != 0) {
             dc->VSSetShaderResources(slot, 1, &srv);
+        }
+        if (static_cast<uint32_t>(b.stage & ShaderStage::Fragment) != 0) {
+            dc->PSSetShaderResources(slot, 1, &srv);
         }
     }
 
@@ -867,8 +881,12 @@ void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uin
     // 图形阶段 SSBO 按 slot → t<slot>，仅绑 VS（与 PrimDrawIndexedInstanced 同语义）。
     for (const auto& [slot, b] : prim_ssbos_) {
         ID3D11ShaderResourceView* srv = resource_mgr.GetSSBORangeSRV(b.handle, b.offset, b.size);
-        if (srv) {
+        if (!srv) continue;
+        if (static_cast<uint32_t>(b.stage & ShaderStage::Vertex) != 0) {
             dc->VSSetShaderResources(slot, 1, &srv);
+        }
+        if (static_cast<uint32_t>(b.stage & ShaderStage::Fragment) != 0) {
+            dc->PSSetShaderResources(slot, 1, &srv);
         }
     }
 

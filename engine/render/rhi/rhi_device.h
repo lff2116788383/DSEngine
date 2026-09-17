@@ -94,6 +94,15 @@ public:
     virtual void BindStorageBuffer(uint32_t slot, BufferHandle buffer_handle,
                                    uint32_t offset = 0, uint32_t size = 0) = 0;
 
+    /// 阶段感知 storage buffer 绑定。GL/Vulkan 的 storage buffer 是全局绑定点，
+    /// 默认直接转发旧接口；D3D11 覆盖此接口，将 SRV 分别绑到 VS(t) 与 PS(t)，
+    /// 供 clustered forward 的 fragment shader 直读 ClusterGrid/LightBuffer。
+    virtual void BindStorageBuffer(ShaderStage stage, uint32_t slot, BufferHandle buffer_handle,
+                                   uint32_t offset = 0, uint32_t size = 0) {
+        (void)stage;
+        BindStorageBuffer(slot, buffer_handle, offset, size);
+    }
+
     /// 绑定组（契约 §2.3）：一次性绑定一组 UBO/纹理/SSBO，落实「更少、更批量的状态变更」。
     /// 默认实现逐 entry 转发到 BindUniformBuffer/BindTexture/BindStorageBuffer（语义与逐 slot 绑定
     /// 完全等价，是真实绑定而非 no-op）；各后端在延迟组装阶段已天然把这批绑定汇成一次提交

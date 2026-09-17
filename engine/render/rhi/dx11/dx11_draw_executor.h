@@ -125,6 +125,11 @@ public:
                                uint32_t offset, uint32_t size);
     void PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
                                uint32_t offset, uint32_t size);
+    /// Stage-aware overload used by the generic primitive contract on D3D11.
+    /// GL/Vulkan bind storage buffers globally; D3D11 needs to choose VS and/or
+    /// PS SRV registers explicitly for fragment-visible cluster/light SSBOs.
+    void PrimBindStorageBuffer(ShaderStage stage, uint32_t slot, unsigned int buffer_handle,
+                               uint32_t offset, uint32_t size);
     void PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex,
                          DX11ShaderManager& shader_mgr,
                          DX11ResourceManager& resource_mgr);
@@ -302,7 +307,12 @@ private:
     DXGI_FORMAT prim_index_format_ = DXGI_FORMAT_R16_UINT;  ///< 索引格式
     std::unordered_map<uint32_t, unsigned int> prim_textures_;  ///< slot → 2D 纹理句柄
     std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< slot → constant buffer 句柄
-    struct PrimSSBOBinding { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
+    struct PrimSSBOBinding {
+        unsigned int handle = 0;
+        uint32_t offset = 0;
+        uint32_t size = 0;
+        ShaderStage stage = ShaderStage::Vertex;
+    };
     std::unordered_map<uint32_t, PrimSSBOBinding> prim_ssbos_;  ///< slot → SSBO 句柄+子区间
     D3D11_PRIMITIVE_TOPOLOGY prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;  ///< 当前 PSO 拓扑（BindPipeline 推送）
 
