@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "texture": "bandit_d_hurt_atlas.png",
+  "width": 35,
+  "height": 46,
+  "frames": [
+    {
+      "name": "hurt_0",
+      "index": 0,
+      "pixel_rect": {
+        "x": 0,
+        "y": 0,
+        "w": 35,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    }
+  ],
+  "clips": {
+    "hurt": {
+      "frames": [
+        0
+      ],
+      "fps": 8.0,
+      "loop": false
+    }
+  }
+}

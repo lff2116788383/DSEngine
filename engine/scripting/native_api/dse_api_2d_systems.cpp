@@ -83,13 +83,21 @@ std::string ResolveRelativeToAtlas(const std::string& atlas_path, const std::str
 uint32_t LoadAtlasTexture(const std::string& atlas_path, const std::string& texture_path,
                           int filter, int wrap) {
     if (texture_path.empty()) return 0;
-    uint32_t handle = dse_assets_load_texture_ex(texture_path.c_str(), filter, wrap);
-    if (handle) return handle;
+    // The legacy .dsprite files store paths relative to the repo root, while
+    // the generated B+ atlases store a sibling file name.  Check the raw path
+    // first without logging, then try the atlas-relative path, and finally let
+    // the asset loader emit its diagnostic for a truly missing file.
+    std::error_code ec;
+    if (std::filesystem::exists(texture_path, ec)) {
+        return dse_assets_load_texture_ex(texture_path.c_str(), filter, wrap);
+    }
     const std::string resolved = ResolveRelativeToAtlas(atlas_path, texture_path);
     if (resolved != texture_path) {
-        return dse_assets_load_texture_ex(resolved.c_str(), filter, wrap);
+        if (uint32_t handle = dse_assets_load_texture_ex(resolved.c_str(), filter, wrap)) {
+            return handle;
+        }
     }
-    return 0;
+    return dse_assets_load_texture_ex(texture_path.c_str(), filter, wrap);
 }
 
 } // namespace

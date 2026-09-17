@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "texture": "hero_u_hurt_atlas.png",
+  "width": 80,
+  "height": 52,
+  "frames": [
+    {
+      "name": "hurt_0",
+      "index": 0,
+      "pixel_rect": {
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 52
+      },
+      "uv_rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    },
+    {
+      "name": "hurt_1",
+      "index": 1,
+      "pixel_rect": {
+        "x": 40,
+        "y": 0,
+        "w": 40,
+        "h": 52
+      },
+      "uv_rect": {
+        "x": 0.5,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    }
+  ],
+  "clips": {
+    "hurt": {
+      "frames": [
+        0,
+        1
+      ],
+      "fps": 8.0,
+      "loop": false
+    }
+  }
+}

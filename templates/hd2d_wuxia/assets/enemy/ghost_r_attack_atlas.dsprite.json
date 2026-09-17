@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "texture": "ghost_r_attack_atlas.png",
+  "width": 156,
+  "height": 46,
+  "frames": [
+    {
+      "name": "attack_0",
+      "index": 0,
+      "pixel_rect": {
+        "x": 0,
+        "y": 0,
+        "w": 39,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    },
+    {
+      "name": "attack_1",
+      "index": 1,
+      "pixel_rect": {
+        "x": 39,
+        "y": 0,
+        "w": 39,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.25,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    },
+    {
+      "name": "attack_2",
+      "index": 2,
+      "pixel_rect": {
+        "x": 78,
+        "y": 0,
+        "w": 39,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.5,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    },
+    {
+      "name": "attack_3",
+      "index": 3,
+      "pixel_rect": {
+        "x": 117,
+        "y": 0,
+        "w": 39,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.75,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    }
+  ],
+  "clips": {
+    "attack": {
+      "frames": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "fps": 16.0,
+      "loop": false
+    }
+  }
+}

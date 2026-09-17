@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "texture": "bandit_u_walk_atlas.png",
+  "width": 140,
+  "height": 46,
+  "frames": [
+    {
+      "name": "walk_0",
+      "index": 0,
+      "pixel_rect": {
+        "x": 0,
+        "y": 0,
+        "w": 35,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    },
+    {
+      "name": "walk_1",
+      "index": 1,
+      "pixel_rect": {
+        "x": 35,
+        "y": 0,
+        "w": 35,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.25,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    },
+    {
+      "name": "walk_2",
+      "index": 2,
+      "pixel_rect": {
+        "x": 70,
+        "y": 0,
+        "w": 35,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.5,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    },
+    {
+      "name": "walk_3",
+      "index": 3,
+      "pixel_rect": {
+        "x": 105,
+        "y": 0,
+        "w": 35,
+        "h": 46
+      },
+      "uv_rect": {
+        "x": 0.75,
+        "y": 0.0,
+        "w": 0.25,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    }
+  ],
+  "clips": {
+    "walk": {
+      "frames": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "fps": 10.0,
+      "loop": true
+    }
+  }
+}

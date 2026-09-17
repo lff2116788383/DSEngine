@@ -22,6 +22,7 @@ from gen_lib import (BANDIT_LOOK, C, ELDER_LOOK, HERO_LOOK, PAL, SMITH_LOOK,
                      new_img, paint_humanoid, paint_wolf, paint_ghost, pose_for,
                      px, px_ellipse, px_line, px_poly, px_rect, shade, thick_line)
 from gen_maps import generate_maps
+from gen_atlases import generate_all as generate_atlases
 
 random.seed(20260915)
 
@@ -313,6 +314,7 @@ def main():
     gen_ui(out)
     generate_fonts(out, TEXT_SAMPLES + scan_lua_texts(out))
     generate_maps(out)
+    generate_atlases(out)
     generate_audio(out)
     print("[done] assets -> %s" % os.path.join(out, "assets"))
 

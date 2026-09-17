@@ -9,6 +9,7 @@
 import math
 import os
 import random
+import struct
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
@@ -652,6 +653,7 @@ def render_map(spec, out_dir):
 
     data = {
         "id": spec["id"], "name": spec["name"], "w": W, "h": H, "tile": TILE,
+        "mesh3d": "%s_3d.dmesh" % spec["id"],
         "bg": names, "parallax": {"sky": 0.10, "far": 0.42},
         "spawn": {"x": spec["spawn"][0], "y": spec["spawn"][1]}, "collide": collide,
         "exits": spec.get("exits", []), "npcs": spec.get("npcs", []),
@@ -662,8 +664,230 @@ def render_map(spec, out_dir):
                     "b": col[2] / 255.0, "size": round(radius / TILE, 3)}
                    for (lx, ly, col, radius) in lights],
     }
+    write_dmesh(os.path.join(out_dir, data["mesh3d"]), build_3d_mesh(spec, grid))
     return data
 
+
+
+# ---------------------------------------------------------------------------
+# 3D collision/terrain export (.dmesh, v2 colored vertices)
+# ---------------------------------------------------------------------------
+def _v3_sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _v3_cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _v3_normalize(v):
+    ln = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    if ln <= 1e-8:
+        return (0.0, 1.0, 0.0)
+    return (v[0] / ln, v[1] / ln, v[2] / ln)
+
+
+def _col(r, g, b, a=1.0):
+    return (r / 255.0, g / 255.0, b / 255.0, a)
+
+
+MESH_COLORS = {
+    "grass": _col(99, 148, 76),
+    "grass_dark": _col(67, 111, 61),
+    "water": _col(56, 112, 158),
+    "water_deep": _col(34, 76, 121),
+    "dirt": _col(142, 105, 67),
+    "rock": _col(104, 108, 112),
+    "rock_top": _col(135, 139, 142),
+    "wall": _col(100, 77, 62),
+    "roof": _col(135, 65, 48),
+    "wood": _col(129, 89, 55),
+    "leaf": _col(55, 119, 61),
+    "leaf_light": _col(82, 151, 73),
+    "bamboo": _col(92, 154, 79),
+    "lantern": _col(246, 180, 86),
+    "stone": _col(132, 129, 124),
+    "chest": _col(125, 87, 48),
+    "metal": _col(176, 164, 127),
+    "bridge": _col(148, 107, 64),
+    "black": _col(20, 20, 24),
+}
+
+
+class _Mesh3DBuilder:
+    def __init__(self):
+        self.vertices = []
+        self.indices = []
+
+    def add_quad(self, p0, p1, p2, p3, color, uv=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))):
+        e1 = _v3_sub(p1, p0)
+        e2 = _v3_sub(p3, p0)
+        n = _v3_normalize(_v3_cross(e1, e2))
+        base = len(self.vertices)
+        for p, t in zip((p0, p1, p2, p3), uv):
+            self.vertices.append((
+                p[0], p[1], p[2],
+                n[0], n[1], n[2],
+                t[0], t[1],
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 1.0,
+                color[0], color[1], color[2], color[3],
+            ))
+        self.indices.extend((base, base + 1, base + 2, base, base + 2, base + 3))
+
+    def add_box(self, cx, y0, cz, sx, sy, sz, color, top_color=None):
+        x0, x1 = cx - sx * 0.5, cx + sx * 0.5
+        y1 = y0 + sy
+        z0, z1 = cz - sz * 0.5, cz + sz * 0.5
+        p000 = (x0, y0, z0); p100 = (x1, y0, z0); p110 = (x1, y1, z0); p010 = (x0, y1, z0)
+        p001 = (x0, y0, z1); p101 = (x1, y0, z1); p111 = (x1, y1, z1); p011 = (x0, y1, z1)
+        top = top_color or color
+        self.add_quad(p001, p101, p111, p011, color)   # +Z
+        self.add_quad(p100, p000, p010, p110, color)   # -Z
+        self.add_quad(p100, p110, p111, p101, color)   # +X
+        self.add_quad(p000, p001, p011, p010, color)   # -X
+        self.add_quad(p010, p011, p111, p110, top)     # +Y
+        self.add_quad(p000, p100, p101, p001, _col(35, 32, 30))  # -Y
+
+
+def _ground_kind(ch):
+    if ch in "wW":
+        return "water_deep" if ch == "W" else "water"
+    if ch in "pD":
+        return "bridge" if ch == "D" else "dirt"
+    if ch in "=TB":
+        return "grass_dark"
+    return "grass"
+
+
+def _ground_color(kind):
+    return MESH_COLORS[kind]
+
+
+def _ground_height(ch):
+    if ch == "W":
+        return -0.34
+    if ch == "w":
+        return -0.17
+    if ch == "D":
+        return 0.04
+    return 0.0
+
+
+def _feature_box(builder, ch, tx, ty):
+    cx = tx + 0.5
+    cz = -(ty + 0.5)
+    if ch == "T":
+        builder.add_box(cx, 0.0, cz, 0.26, 0.75, 0.26, MESH_COLORS["wood"])
+        builder.add_box(cx, 0.75, cz, 1.25, 0.95, 1.25, MESH_COLORS["leaf"],
+                        MESH_COLORS["leaf_light"])
+    elif ch == "B":
+        builder.add_box(cx, 0.0, cz, 0.16, 2.0, 0.16, MESH_COLORS["bamboo"])
+        builder.add_box(cx, 1.55, cz, 0.22, 0.3, 0.22, MESH_COLORS["leaf_light"])
+    elif ch == "f":
+        builder.add_box(cx, 0.0, cz, 0.95, 0.72, 0.13, MESH_COLORS["wood"])
+    elif ch == "l":
+        builder.add_box(cx, 0.0, cz, 0.12, 1.0, 0.12, MESH_COLORS["wood"])
+        builder.add_box(cx, 0.68, cz, 0.34, 0.36, 0.34, MESH_COLORS["lantern"])
+    elif ch == "o":
+        builder.add_box(cx, 0.0, cz, 0.9, 0.45, 0.9, MESH_COLORS["stone"])
+        builder.add_box(cx, 0.45, cz, 0.55, 0.08, 0.55, MESH_COLORS["black"])
+    elif ch == "c":
+        builder.add_box(cx, 0.0, cz, 0.8, 0.5, 0.55, MESH_COLORS["chest"])
+        builder.add_box(cx, 0.5, cz, 0.84, 0.08, 0.58, MESH_COLORS["metal"])
+    elif ch == "x":
+        builder.add_box(cx, 0.0, cz, 0.68, 0.36, 0.56, MESH_COLORS["stone"])
+    elif ch == "G":
+        # Gateway posts around the north/south map opening.
+        builder.add_box(cx - 0.35, 0.0, cz, 0.18, 1.2, 0.18, MESH_COLORS["stone"])
+        builder.add_box(cx + 0.35, 0.0, cz, 0.18, 1.2, 0.18, MESH_COLORS["stone"])
+
+
+def build_3d_mesh(spec, grid):
+    b = _Mesh3DBuilder()
+    W, H = spec["w"], spec["h"]
+
+    # Ground: run-length merge identical tile classes to keep the dmesh small.
+    for ty in range(H):
+        tx = 0
+        while tx < W:
+            kind = _ground_kind(grid[ty][tx])
+            tx2 = tx + 1
+            while tx2 < W and _ground_kind(grid[ty][tx2]) == kind:
+                tx2 += 1
+            y = _ground_height(grid[ty][tx])
+            z0 = -ty
+            z1 = -(ty + 1)
+            b.add_quad((tx, y, z0), (tx2, y, z0), (tx2, y, z1), (tx, y, z1), _ground_color(kind))
+            tx = tx2
+
+    # Houses from the feature spec (grid '=' tiles are the footprints and are
+    # deliberately not emitted as individual blocks).
+    for (hx, hy, hw, hh, style) in spec.get("houses", []):
+        x0, x1 = hx, hx + hw
+        z0, z1 = -hy, -(hy + hh)
+        z_lo, z_hi = min(z0, z1), max(z0, z1)
+        b.add_box((x0 + x1) * 0.5, 0.0, (z_lo + z_hi) * 0.5,
+                  max(0.2, x1 - x0), 1.05, max(0.2, z_hi - z_lo), MESH_COLORS["wall"])
+        # Overhang roof; style does not materially change collision.
+        roof_col = MESH_COLORS["roof"] if style != "temple" else _col(155, 72, 42)
+        b.add_box((x0 + x1) * 0.5, 1.05, (z_lo + z_hi) * 0.5,
+                  max(0.3, x1 - x0 + 0.3), 0.28, max(0.3, z_hi - z_lo + 0.3), roof_col)
+
+    # Cliffs: merge horizontal '#' runs into larger blocks.
+    for ty in range(H):
+        tx = 0
+        while tx < W:
+            if grid[ty][tx] == "#":
+                tx2 = tx + 1
+                while tx2 < W and grid[ty][tx2] == "#":
+                    tx2 += 1
+                b.add_box((tx + tx2) * 0.5, 0.0, -(ty + 0.5),
+                          max(0.2, tx2 - tx), 1.25, 1.0,
+                          MESH_COLORS["rock"], MESH_COLORS["rock_top"])
+                tx = tx2
+            else:
+                tx += 1
+
+    for ty in range(H):
+        for tx in range(W):
+            ch = grid[ty][tx]
+            if ch in "TBlfocxG":
+                _feature_box(b, ch, tx, ty)
+    return b
+
+
+def write_dmesh(path, builder):
+    verts = builder.vertices
+    indices = builder.indices
+    if not verts:
+        return False
+    if len(indices) > 65535:
+        # still 32-bit indices, runtime accepts them
+        pass
+    min_x = min(v[0] for v in verts); max_x = max(v[0] for v in verts)
+    min_y = min(v[1] for v in verts); max_y = max(v[1] for v in verts)
+    min_z = min(v[2] for v in verts); max_z = max(v[2] for v in verts)
+    submesh = struct.pack("<IIIIffffff", 0, len(indices), 0, 0,
+                          min_x, min_y, min_z, max_x, max_y, max_z)
+    header_size = 48
+    submesh_offset = header_size
+    vertex_offset = submesh_offset + len(submesh)
+    index_offset = vertex_offset + len(verts) * 24 * 4
+    header = struct.pack("<4sIIIIIQQQ", b"DSEM", 2, len(verts), len(indices), 1, 127,
+                         vertex_offset, index_offset, submesh_offset)
+    vertex_bytes = b"".join(struct.pack("<24f", *v) for v in verts)
+    index_bytes = b"".join(struct.pack("<I", i) for i in indices)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(header)
+        f.write(submesh)
+        f.write(vertex_bytes)
+        f.write(index_bytes)
+    return True
 
 def _lua_val(v, indent=0):
     pad = "  " * indent

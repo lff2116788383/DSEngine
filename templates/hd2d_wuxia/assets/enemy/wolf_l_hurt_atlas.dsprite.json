@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "texture": "wolf_l_hurt_atlas.png",
+  "width": 51,
+  "height": 34,
+  "frames": [
+    {
+      "name": "hurt_0",
+      "index": 0,
+      "pixel_rect": {
+        "x": 0,
+        "y": 0,
+        "w": 51,
+        "h": 34
+      },
+      "uv_rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 1.0
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.0
+      }
+    }
+  ],
+  "clips": {
+    "hurt": {
+      "frames": [
+        0
+      ],
+      "fps": 8.0,
+      "loop": false
+    }
+  }
+}

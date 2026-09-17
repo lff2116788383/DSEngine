@@ -6,6 +6,7 @@ return {
     w = 44,
     h = 30,
     tile = 32,
+    mesh3d = "village_3d.dmesh",
     bg = {
       sky = "village_sky.png",
       far = "village_far.png",
@@ -246,6 +247,7 @@ return {
     w = 44,
     h = 30,
     tile = 32,
+    mesh3d = "stronghold_3d.dmesh",
     bg = {
       sky = "stronghold_sky.png",
       far = "stronghold_far.png",
