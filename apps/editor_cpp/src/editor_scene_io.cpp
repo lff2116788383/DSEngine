@@ -2667,19 +2667,29 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
 
     registry.clear();
     // 第一遍：创建实体并建立 old_id -> entity 映射 (parent 引用需要)
+    std::vector<entt::entity> created;
+    created.reserve(doc.Size());
     std::unordered_map<uint32_t, entt::entity> id_map;
     id_map.reserve(doc.Size());
     for (auto& v : doc.GetArray()) {
         auto entity = registry.create();
+        created.push_back(entity);
         if (v.HasMember("id") && v["id"].IsUint()) {
             id_map[v["id"].GetUint()] = entity;
         }
     }
 
     // 第二遍：加载组件
+    // 无 id 的场景（历史 scene.json / 手写测试场景）必须按数组下标回落到第一遍创建的实体：
+    // 原先用 id_map[...]（unordered_map::operator[]）会为缺失的 key 插入默认值 entt::null，
+    // 于是组件被 emplace 到空实体上——多实体无 id 场景会直接崩在加载期。
     int index = 0;
     for (auto& v : doc.GetArray()) {
-        auto entity = id_map[v.HasMember("id") && v["id"].IsUint() ? v["id"].GetUint() : static_cast<uint32_t>(index)];
+        entt::entity entity = created[static_cast<size_t>(index)];
+        if (v.HasMember("id") && v["id"].IsUint()) {
+            const auto it = id_map.find(v["id"].GetUint());
+            if (it != id_map.end()) entity = it->second;
+        }
         ++index;
         for (const auto& io_entry : GetComponentJsonIORegistry()) {
             if (io_entry.load) {
