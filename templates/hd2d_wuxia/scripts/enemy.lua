@@ -7,6 +7,7 @@ local D = require("data")
 local W = require("world")
 local F = require("fx")
 local AU = require("audio")
+local B = require("bplus")
 
 local E = { list = {}, shots = {} }
 local ecs = dse.ecs
@@ -14,6 +15,10 @@ local ecs = dse.ecs
 local function set_dir(en, dir)
     if en.dir == dir then return end
     en.dir = dir
+    if B.enabled then
+        B.set_actor_dir(en.ent, dir)
+        return
+    end
     for _, a in ipairs({ "idle", "walk", "attack", "hurt", "die" }) do
         local fr = A.frames_for(en.kind, dir, a)
         if fr then
@@ -26,6 +31,11 @@ end
 local function play(en, name)
     if en.anim == name then return end
     en.anim = name
+    if B.enabled then
+        local loop = (name == "idle" or name == "walk")
+        B.play_actor(en.ent, en.kind, en.dir, name, B.ACTION_FPS[name] or 8.0, loop)
+        return
+    end
     ecs.play_animation(en.ent, name)
 end
 
@@ -36,8 +46,12 @@ function E.spawn(kind, x, y, patrol, map_id)
     local ent = ecs.create_entity()
     local w, h = cfg.size[1], cfg.size[2]
     ecs.add_transform(ent, x, y + h / 64.0, 0, w / 32, h / 32, 1)
-    ecs.add_sprite(ent, 1, 1, 1, 1, 200, A.frames_for(kind, dir, "idle")[1])
-    ecs.add_animator(ent)
+    if B.enabled then
+        B.register_actor(ent, kind, dir, "idle", w, h)
+    else
+        ecs.add_sprite(ent, 1, 1, 1, 1, 200, A.frames_for(kind, dir, "idle")[1])
+        ecs.add_animator(ent)
+    end
     local en = {
         kind = kind, cfg = cfg, ent = ent, x = x, y = y, home_x = x, home_y = y,
         hp = cfg.hp, hp_max = cfg.hp, dir = dir, anim = "", state = "patrol", t = math.random() * 6.28,
@@ -98,7 +112,11 @@ end
 function E.spawn_shot(en, target)
     local s = ecs.create_entity()
     ecs.add_transform(s, en.x, en.y + en.h / 64.0, 0, 0.7, 0.7, 1)
-    ecs.add_sprite(s, 0.8, 1.0, 1.0, 1.0, 800, A.tex["hit"][1])
+    if B.enabled then
+        B.register_fx_actor(s, "hit", "hit", 0.7 * 32, 0.7 * 32, 24, false)
+    else
+        ecs.add_sprite(s, 0.8, 1.0, 1.0, 1.0, 800, A.tex["hit"][1])
+    end
     local dx, dy = target.x - en.x, (target.y + 0.6) - (en.y + 0.5)
     local len = math.max(0.001, math.sqrt(dx * dx + dy * dy))
     E.shots[#E.shots + 1] = { e = s, x = en.x, y = en.y + 0.6, vx = dx / len * 6.5, vy = dy / len * 6.5,

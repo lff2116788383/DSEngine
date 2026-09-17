@@ -14,6 +14,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/tilemap.h"
 #include "engine/ecs/components_3d_render.h"
+#include "engine/ecs/sprite.h"
 #include "engine/ecs/transform.h"
 #include "engine/render/rhi/rhi_handle.h"
 #include <glm/gtx/quaternion.hpp>
@@ -449,6 +450,16 @@ int L_SetCameraOrtho3D(lua_State* L) {
     return 0;
 }
 
+int L_SetSpriteVisible(lua_State* L) {
+    World* world = dse_api_internal::GW();
+    if (!world) return 0;
+    const uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    auto* sprite = world->registry().try_get<SpriteRendererComponent>(
+        static_cast<entt::entity>(dse_api_internal::TE(e)));
+    if (sprite) sprite->visible = ToBoolish(L, 2, true);
+    return 0;
+}
+
 int L_SetPostProcessTiltShift(lua_State* L) {
     World* world = dse_api_internal::GW();
     if (!world) return 0;
@@ -487,6 +498,7 @@ void RegisterCompatBindings(lua_State* L) {
     Override(L, "ecs", "add_tilemap_ex", L_AddTilemapEx);
     Override(L, "ecs", "tilemap_set_colliders", L_TilemapSetColliders);
     Override(L, "ecs", "get_tile", L_GetTile);
+    Override(L, "ecs", "set_sprite_visible", L_SetSpriteVisible);
     // HD-2D M1 Sprite3D API
     Override(L, "ecs", "add_sprite3d", L_AddSprite3D);
     Override(L, "ecs", "set_sprite3d_uv_rect", L_Sprite3DSetUvRect);

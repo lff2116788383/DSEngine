@@ -6,6 +6,7 @@ local A = require("assets")
 local D = require("data")
 local W = require("world")
 local F = require("fx")
+local B = require("bplus")
 
 local P = {}
 
@@ -43,6 +44,11 @@ local INVULN_HIT = 0.65
 
 function P.setup(dir)
     P.dir = dir
+    if B.enabled then
+        B.set_actor_dir(P.ent, dir)
+        P.play("idle", true)
+        return
+    end
     for _, a in ipairs({ "idle", "walk", "attack", "dodge", "cast", "hurt", "die" }) do
         local fr = A.frames_for("hero", dir, a)
         if fr then ecs.add_animation_state(P.ent, a, a == "walk" and 10 or (a == "attack" and 16 or 8),
@@ -57,6 +63,11 @@ end
 function P.play(name, force)
     if P.anim == name and not force then return end
     P.anim = name
+    if B.enabled then
+        local loop = (name == "idle" or name == "walk" or name == "cast")
+        B.play_actor(P.ent, "hero", P.dir, name, B.ACTION_FPS[name] or 8.0, loop)
+        return
+    end
     ecs.play_animation(P.ent, name)
 end
 
@@ -74,9 +85,13 @@ function P.spawn(map)
     if not P.ent then
         P.ent = ecs.create_entity()
         ecs.add_transform(P.ent, P.x, P.y, 0, 40 / 32, 52 / 32, 1)
-        ecs.add_sprite(P.ent, 1, 1, 1, 1, 100, A.frames_for("hero", P.dir, "idle")[1])
-        ecs.add_animator(P.ent)
-        P.setup(P.dir)
+        if B.enabled then
+            B.register_actor(P.ent, "hero", P.dir, "idle", 40, 52)
+        else
+            ecs.add_sprite(P.ent, 1, 1, 1, 1, 100, A.frames_for("hero", P.dir, "idle")[1])
+            ecs.add_animator(P.ent)
+            P.setup(P.dir)
+        end
         W.register(P.ent)
     end
     local _, h = A.size_of("hero")
@@ -325,6 +340,13 @@ end
 function P.set_dir(dir)
     if P.dir == dir then return end
     P.dir = dir
+    if B.enabled then
+        B.set_actor_dir(P.ent, dir)
+        local a = P.anim
+        P.anim = ""
+        P.play(a == "" and "idle" or a, true)
+        return
+    end
     local a = P.anim
     P.anim = ""
     P.setup(dir)

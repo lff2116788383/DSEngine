@@ -4,6 +4,7 @@
 local core = require("core")
 local A = require("assets")
 local F = require("fx")
+local B = require("bplus")
 
 local W = {}
 W.cam = nil
@@ -20,6 +21,12 @@ local ecs = dse.ecs
 --  相机 
 local ORTHO = 6.25
 function W.setup_camera()
+    if B.enabled then
+        local cam = B.setup_camera()
+        W.cam = cam
+        F.init(cam, W.to_screen)
+        return cam
+    end
     local cam = ecs.create_entity()
     ecs.add_transform(cam, 0, 0, 0, 1, 1, 1)
     ecs.add_camera(cam, ORTHO)
@@ -44,17 +51,22 @@ end
 
 function W.follow(target)
     W.follow_target = target
+    if B.enabled then B.follow(target) return end
     if W.cam and target then
         ecs.set_camera_follow(W.cam, target, 0.14, 0.0, 0.0, 0.0, 0.35)
     end
 end
 
-function W.shake(v) if W.cam then ecs.camera_shake(W.cam, v) end end
-function W.zoom(z) if W.cam then ecs.camera_set_zoom(W.cam, z) end end
+function W.shake(v) if B.enabled then return end if W.cam then ecs.camera_shake(W.cam, v) end end
+function W.zoom(z) if B.enabled then return end if W.cam then ecs.camera_set_zoom(W.cam, z) end end
 
 -- 世界  屏幕（供 UI 飘字使用）
 local half_w, half_h = 1, 1
 function W.to_screen(wx, wy)
+    if B.enabled then
+        local sx, sy = B.project(wx, wy)
+        return sx or 0.0, sy or 0.0
+    end
     local cx, cy, _ = ecs.get_transform_position(W.cam)
     half_h = ORTHO
     half_w = ORTHO * core.SCREEN_W / core.SCREEN_H
@@ -65,6 +77,7 @@ end
 
 --  关卡 
 function W.clear()
+    if B.enabled then B.clear() end
     for _, e in ipairs(W.entities) do pcall(ecs.destroy_entity, e) end
     W.entities = {}
     W.glows = {}
@@ -84,6 +97,10 @@ function W.load_map(map)
     W.map = map
     W.grid = map.collide
     W.W, W.H = map.w, map.h
+    if B.enabled then
+        B.load_map(map)
+        return
+    end
     local bg = A.tex["bg_" .. map.id]
     -- 背景（被不透明地面遮住，保留以支持后续做"地图外围"表现）
     spawn_sprite(bg.sky, map.w * 0.5, map.h * 0.5, map.w, map.h, -40)
@@ -173,6 +190,7 @@ function W.line_clear(x0, y0, x1, y1, step)
 end
 
 function W.update(dt)
+    if B.enabled then B.update(dt) return end
     W.time = W.time + dt
     -- 灯火呼吸
     for _, g in ipairs(W.glows) do

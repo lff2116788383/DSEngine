@@ -65,6 +65,32 @@ python3 tools/_gen_maps_only.py      # 只重建地图与 mapdata.lua（调地�
 `gen_maps.py` 里 `MAP_SPECS` 用「特征列表」描述关卡（水面/崖壁/竹林/房屋/道路/灯笼/刷怪点/NPC/掉落），
 **同一份数据同时用于绘制美术与导出 `scripts/mapdata.lua` 的碰撞格子**，保证"看到的就是能撞到的"。
 
+## B+ 3D 表现层（可选）
+
+设置 `DSE_HD2D_BPLUS=1` 后，模板保留原有 2D 逻辑、碰撞、AI、任务与存档，仅把表现层切换为 HD-2D B+：
+
+- `gen_maps.py` 生成 `assets/maps/*_3d.dmesh` 程序化 3D 地形/道具；运行时由 `bplus.lua` 加载为 `MESH_LIT` 网格。
+- `gen_atlases.py` 为全部角色/敌人/NPC/FX 生成 `.dsprite.json` + `_atlas.png`；B+ presenter 用 Sprite3D 播片。
+- 2D 精灵会被隐藏，由 Sprite3D 镜面实体接管位置、朝向、翻面、接触阴影与动画；3D 相机跟随玩家，地图点光转成 3D 点光。
+- 2D 精灵加载顺序仍保留，未开启该环境变量时行为与旧 2D 模板完全一致。
+
+示例：
+
+```bat
+set DSE_HD2D_BPLUS=1
+set DSE_HD2D_AUTOSTART=1
+set DSE_MAX_FRAMES=180
+bin\dsengine_lua_debug.exe --script=templates\hd2d_wuxia\scripts\main.lua
+```
+
+重新生成 B+ 资产：
+
+```bash
+python3 tools/generate_assets.py       # 全量 PNG + dmesh + dsprite + 字体/音频
+python3 tools/_gen_maps_only.py        # 只重建地图与 maps/*_3d.dmesh
+python3 tools/gen_atlases.py .         # 只重建角色/敌人/NPC/FX 图集
+```
+
 ## 引擎约束（本模板已规避，改动前必读）
 
 1. **纹理加载顺序 = 世界精灵绘制顺序**。精灵批处理排序为 `sorting_layer  shader_variant  material 

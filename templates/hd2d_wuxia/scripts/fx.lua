@@ -3,6 +3,7 @@
 -- ============================================================================
 local core = require("core")
 local A = require("assets")
+local B = require("bplus")
 
 local F = { list = {}, pops = {}, toasts = {}, cam = nil, weather = nil }
 local to_screen_ref = nil
@@ -23,15 +24,23 @@ function F.spawn(kind, x, y, cfg)
     if not frames then return nil end
     local e = dse.ecs.create_entity()
     local s = cfg.scale or 1.0
-    dse.ecs.add_transform(e, x, y, 0.0, s, s, 1.0)
-    dse.ecs.add_sprite(e, cfg.r or 1, cfg.g or 1, cfg.b or 1, 1.0, cfg.order or 5000, frames[1])
-    dse.ecs.add_animator(e)
-    dse.ecs.add_animation_state(e, "play", cfg.fps or 20, false, frames)
-    dse.ecs.play_animation(e, "play")
+    if B.enabled then
+        e = B.add_fx(kind, x, y, {
+            scale = s, fps = cfg.fps or 20, r = cfg.r or 1, g = cfg.g or 1, b = cfg.b or 1,
+            base_w = cfg.base_w, base_h = cfg.base_h,
+        })
+        if not e then return nil end
+    else
+        dse.ecs.add_transform(e, x, y, 0.0, s, s, 1.0)
+        dse.ecs.add_sprite(e, cfg.r or 1, cfg.g or 1, cfg.b or 1, 1.0, cfg.order or 5000, frames[1])
+        dse.ecs.add_animator(e)
+        dse.ecs.add_animation_state(e, "play", cfg.fps or 20, false, frames)
+        dse.ecs.play_animation(e, "play")
+    end
     F.list[#F.list + 1] = {
         e = e, t = 0, life = cfg.life or 0.5, x = x, y = y,
         vx = cfg.vx or 0, vy = cfg.vy or 0, follow = cfg.follow,
-        sx = s, sy = s, spin = cfg.spin or 0,
+        sx = s, sy = s, spin = cfg.spin or 0, bplus = B.enabled,
     }
     return e
 end
@@ -51,7 +60,11 @@ end
 
 function F.qi(x, y, col)
     local e = F.spawn("qi", x, y, { scale = 1.2, life = 0.5, fps = 18 })
-    if e and col then dse.ecs.add_sprite(e, col[1], col[2], col[3], 1.0, 5000, A.tex.qi[1]) end
+    if e and col and not B.enabled then
+        dse.ecs.add_sprite(e, col[1], col[2], col[3], 1.0, 5000, A.tex.qi[1])
+    elseif e and col and B.enabled then
+        dse.ecs.set_sprite3d_color_tint(e, col[1], col[2], col[3], 1.0)
+    end
     return e
 end
 
@@ -103,11 +116,19 @@ function F.update_weather(dt, cam_x, cam_y)
         local item = F.list[#F.list]
         if item then item.vx = -0.5 - math.random() * 0.6 item.vy = -1.2 - math.random() * 0.8 end
     else
-        local e = dse.ecs.create_entity()
-        dse.ecs.add_transform(e, rx, ry - math.random() * 6.0, 0.0, 0.7, 0.7, 1.0)
-        dse.ecs.add_sprite(e, 1.0, 0.95, 0.75, 0.9, 5200, A.tex.firefly)
-        F.list[#F.list + 1] = { e = e, t = 0, life = 4.0, x = rx, y = ry, vx = (math.random() - 0.5) * 0.5,
-                                vy = (math.random() - 0.5) * 0.4, sx = 0.7, sy = 0.7 }
+        local yy = ry - math.random() * 6.0
+        local e
+        if B.enabled then
+            e = B.add_fx("firefly", rx, yy, { scale = 0.7, fps = 2.0 })
+        else
+            e = dse.ecs.create_entity()
+            dse.ecs.add_transform(e, rx, yy, 0.0, 0.7, 0.7, 1.0)
+            dse.ecs.add_sprite(e, 1.0, 0.95, 0.75, 0.9, 5200, A.tex.firefly)
+        end
+        if e then
+            F.list[#F.list + 1] = { e = e, t = 0, life = 4.0, x = rx, y = yy, vx = (math.random() - 0.5) * 0.5,
+                                    vy = (math.random() - 0.5) * 0.4, sx = 0.7, sy = 0.7, bplus = B.enabled }
+        end
     end
 end
 
@@ -121,13 +142,17 @@ function F.update(dt)
         end
         it.x = it.x + (it.vx or 0) * dt
         it.y = it.y + (it.vy or 0) * dt
-        dse.ecs.set_transform_position(it.e, it.x, it.y, 0.0)
-        if it.spin and it.spin ~= 0 then
-            dse.ecs.set_transform_rotation(it.e, 0.0, 0.0, (it.t * it.spin) % 360.0)
-        end
         local alpha = core.clamp(1.0 - it.t / it.life, 0.0, 1.0)
-        if i and it.e then
-            pcall(dse.ecs.add_sprite, it.e, 1.0, 1.0, 1.0, alpha, 5000, nil)
+        if B.enabled and it.bplus then
+            B.update_fx(it.e, it.x, it.y, alpha, it.spin, it.sx)
+        else
+            dse.ecs.set_transform_position(it.e, it.x, it.y, 0.0)
+            if it.spin and it.spin ~= 0 then
+                dse.ecs.set_transform_rotation(it.e, 0.0, 0.0, (it.t * it.spin) % 360.0)
+            end
+            if i and it.e then
+                pcall(dse.ecs.add_sprite, it.e, 1.0, 1.0, 1.0, alpha, 5000, nil)
+            end
         end
         if it.t >= it.life then
             pcall(dse.ecs.destroy_entity, it.e)

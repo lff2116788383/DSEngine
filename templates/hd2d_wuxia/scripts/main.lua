@@ -13,6 +13,7 @@ local P = require("player")
 local E = require("enemy")
 local AU = require("audio")
 local Save = require("save")
+local B = require("bplus")
 
 local MAPS = require("mapdata")
 local G = {
@@ -62,15 +63,23 @@ local function spawn_npc(n)
     local w, h = A.size_of(id)
     local e = dse.ecs.create_entity()
     dse.ecs.add_transform(e, n.x, n.y + h / 64.0, 0, w / 32, h / 32, 1)
-    dse.ecs.add_sprite(e, 1, 1, 1, 1, 300, A.frames_for(id, n.dir or "d", "idle")[1])
-    dse.ecs.add_animator(e)
-    dse.ecs.add_animation_state(e, "idle", 4, true, A.frames_for(id, n.dir or "d", "idle"))
-    dse.ecs.play_animation(e, "idle")
+    if B.enabled then
+        B.register_actor(e, id, n.dir or "d", "idle", w, h)
+    else
+        dse.ecs.add_sprite(e, 1, 1, 1, 1, 300, A.frames_for(id, n.dir or "d", "idle")[1])
+        dse.ecs.add_animator(e)
+        dse.ecs.add_animation_state(e, "idle", 4, true, A.frames_for(id, n.dir or "d", "idle"))
+        dse.ecs.play_animation(e, "idle")
+    end
     local marker = nil
     if n.dialog == "elder" or n.dialog == "villager" then
         marker = dse.ecs.create_entity()
         dse.ecs.add_transform(marker, n.x, n.y + h / 32 + 0.9, 0, 0.16, 0.16, 1)
-        dse.ecs.add_sprite(marker, 1, 1, 1, 1, 400, A.tex.quest_marker)
+        if B.enabled then
+            B.add_marker(marker, A.tex.quest_marker, 0.16 * 32, 0.16 * 32)
+        else
+            dse.ecs.add_sprite(marker, 1, 1, 1, 1, 400, A.tex.quest_marker)
+        end
     end
     local rec = { e = e, marker = marker, x = n.x, y = n.y, id = id, dialog = n.dialog }
     npcs[#npcs + 1] = rec
@@ -82,7 +91,11 @@ local function spawn_pickup(it)
                  (it.kind == "hp_potion") and A.tex.pickup_hp or A.tex.pickup_mp
     local e = dse.ecs.create_entity()
     dse.ecs.add_transform(e, it.x, it.y + 0.35, 0, 0.42, 0.42, 1)
-    dse.ecs.add_sprite(e, 1, 1, 1, 1, 350, icon)
+    if B.enabled then
+        B.add_pickup(e, icon, 0.42 * 32, 0.42 * 32)
+    else
+        dse.ecs.add_sprite(e, 1, 1, 1, 1, 350, icon)
+    end
     local rec = { e = e, x = it.x, y = it.y, kind = it.kind, t = math.random() * 6.28 }
     pickups[#pickups + 1] = rec
     return rec

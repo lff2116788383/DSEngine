@@ -22,6 +22,41 @@ void DrawSprite3DSection(EditorContext& context) {
     }
     ImGui::NextColumn();
 
+    if (!sprite.clip_uvs.empty()) {
+        const int frame_count = static_cast<int>(sprite.clip_uvs.size());
+        int frame = sprite.anim_frame;
+        if (frame < 0) frame = 0;
+        if (frame >= frame_count) frame = frame_count - 1;
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Timeline");
+        ImGui::NextColumn();
+        ImGui::BeginDisabled(context.read_only);
+        if (sprite.anim_playing) {
+            if (ImGui::Button("Pause")) sprite.anim_playing = false;
+        } else {
+            if (ImGui::Button("Play")) {
+                sprite.anim_playing = sprite.anim_fps > 0.0f;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("|<")) frame = 0;
+        ImGui::SameLine();
+        if (ImGui::Button("<")) frame = (frame - 1 + frame_count) % frame_count;
+        ImGui::SameLine();
+        if (ImGui::Button(">")) frame = (frame + 1) % frame_count;
+        ImGui::SameLine();
+        if (ImGui::Button(">|")) frame = frame_count - 1;
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::SliderInt("##sprite3d_timeline", &frame, 0, frame_count - 1, "frame %d")) {
+            sprite.anim_frame = frame;
+            sprite.uv_rect = sprite.clip_uvs[static_cast<size_t>(frame)];
+            sprite.anim_time = (sprite.anim_fps > 0.0f) ? (frame / sprite.anim_fps) : 0.0f;
+            sprite.anim_playing = false;
+        }
+        ImGui::EndDisabled();
+        ImGui::NextColumn();
+    }
+
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Atlas");
     ImGui::NextColumn();
