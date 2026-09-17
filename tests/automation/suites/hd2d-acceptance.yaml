@@ -1,0 +1,21 @@
+suite_id: hd2d-acceptance
+description: HD-2D 验收（编辑器场景编解码器冒烟 + M6/B+ 三后端无头渲染像素门控）
+
+# 需要真实 GPU 桌面会话（GL/Vulkan 需要窗口/驱动，D3D11 走 DSE_DX11_HEADLESS 离屏）。
+# 通过 envs/local-dse.yaml 取 EDITOR_EXE / WORK_ROOT；CI 由 workflow 注入同名环境变量。
+# 依赖：pillow + numpy（M6 的像素统计脚本）。
+env: tests/automation/envs/local-dse.yaml
+
+cases:
+  - tests/automation/cases/cli/sprite3d_scene_load.yaml
+  - tests/automation/cases/cli/hd2d_m6_acceptance.yaml
+
+# 单个 M6 case 要跑 4 次渲染（opengl/vulkan/d3d11/d3d11-headless），超时给足。
+case_delay_seconds: 1
+case_timeout_seconds: 300
+process_cleanup: true
+
+retry:
+  max_retries: 1
+  retry_delay_seconds: 5
+  retry_on_status: ["failed"]

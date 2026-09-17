@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Reproducible HD-2D M6 acceptance runner.
 
 Runs `_hd2d_m6_acceptance_test.lua` on the requested RHI backends, captures
@@ -9,6 +9,7 @@ Examples:
   python run_hd2d_m6_acceptance.py
   python run_hd2d_m6_acceptance.py --backends opengl,vulkan,d3d11
   python run_hd2d_m6_acceptance.py --backends d3d11 --headless-d3d11
+  python run_hd2d_m6_acceptance.py --out-dir out/m6 --gate   # CI：不污染基准图 + 阈值门控
 """
 from __future__ import annotations
 
@@ -24,12 +25,13 @@ STATS = ROOT / "templates" / "hd2d_wuxia" / "tools" / "hd2d_pixel_stats.py"
 SCRIPT = "templates/hd2d_wuxia/scripts/_hd2d_m6_acceptance_test.lua"
 
 
-def run_backend(binary: Path, backend: str, headless: bool, max_frames: int, shot_frame: int) -> Path:
+def run_backend(binary: Path, backend: str, headless: bool, max_frames: int, shot_frame: int,
+                out_dir: Path) -> Path:
     env = os.environ.copy()
     env["DSE_RHI_BACKEND"] = backend
     env["DSE_MAX_FRAMES"] = str(max_frames)
     env["DSE_SCREENSHOT_FRAME"] = str(shot_frame)
-    env["DSE_SCREENSHOT_PATH"] = str(SHOT_DIR / (f"m6_{backend}_headless.png" if headless else f"m6_{backend}.png"))
+    env["DSE_SCREENSHOT_PATH"] = str(out_dir / (f"m6_{backend}_headless.png" if headless else f"m6_{backend}.png"))
     env.pop("DSE_RENDER_PIPELINE_PROFILE", None)
     env.pop("DSE_M6_ORTHO", None)
     if headless:
@@ -55,21 +57,31 @@ def main() -> int:
     parser.add_argument("--headless-d3d11", action="store_true")
     parser.add_argument("--max-frames", type=int, default=18)
     parser.add_argument("--shot-frame", type=int, default=15)
+    # CI 用：截图落到指定目录（默认保持历史行为，写 docs/design/hd2d_m6_shots/），
+    # 并对像素统计启用保守阈值门控，避免「只断言文件存在」的假通过。
+    parser.add_argument("--out-dir", default=str(SHOT_DIR),
+                        help="截图输出目录（CI 传 report_root，避免污染已签入的基准图）")
+    parser.add_argument("--gate", action="store_true",
+                        help="调用 hd2d_pixel_stats.py --gate 做阈值判定")
     args = parser.parse_args()
 
     binary = (ROOT / args.binary).resolve()
     if not binary.exists():
         print(f"missing binary: {binary}", file=sys.stderr)
         return 2
-    SHOT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(args.out_dir)
+    if not out_dir.is_absolute():
+        out_dir = (ROOT / out_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     shots: list[Path] = []
     for backend in [b.strip() for b in args.backends.split(",") if b.strip()]:
-        shots.append(run_backend(binary, backend, False, args.max_frames, args.shot_frame))
+        shots.append(run_backend(binary, backend, False, args.max_frames, args.shot_frame, out_dir))
         if backend == "d3d11" and args.headless_d3d11:
-            shots.append(run_backend(binary, backend, True, args.max_frames, args.shot_frame))
+            shots.append(run_backend(binary, backend, True, args.max_frames, args.shot_frame, out_dir))
 
-    stats_cmd = [sys.executable, str(STATS)] + [str(p) for p in shots]
+    stats_cmd = [sys.executable, str(STATS)] + (["--gate"] if args.gate else []) + \
+        [str(p) for p in shots]
     subprocess.run(stats_cmd, cwd=ROOT, check=True)
     print("[m6] acceptance runner PASS")
     return 0

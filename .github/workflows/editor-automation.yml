@@ -179,6 +179,8 @@ jobs:
         run: |
           cmake --preset windows-x64-debug -DDSE_ENABLE_NET=OFF -DDSE_ENABLE_HTTP=OFF -DDSE_ENABLE_CSHARP=OFF
           cmake --build out/build/windows-x64-debug --target dse_editor_cpp
+          # HD-2D 验收用例跑 Lua 宿主，需要同时产出 bin/dsengine_lua_debug.exe
+          cmake --build out/build/windows-x64-debug --target dse_example_lua
 
       - uses: actions/setup-python@v5
         with:
@@ -197,12 +199,29 @@ jobs:
             --suite tests/automation/suites/editor-batch-smoke.yaml `
             --run-id ci_batch_smoke
 
+      - name: Run HD-2D Acceptance
+        shell: pwsh
+        env:
+          EDITOR_EXE: ${{ github.workspace }}/bin/dsengine-editor.exe
+          WORK_ROOT: ${{ runner.temp }}/dse-auto
+        run: |
+          python tests/automation/dse_auto.py run `
+            --suite tests/automation/suites/hd2d-acceptance.yaml `
+            --run-id ci_hd2d_acceptance
+
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: l1-batch-smoke-report
           path: ${{ runner.temp }}/dse-auto/reports/ci_batch_smoke
+
+      - name: Upload HD-2D report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l1-hd2d-acceptance-report
+          path: ${{ runner.temp }}/dse-auto/reports/ci_hd2d_acceptance
 
   # ── L2：API 全量回归（自托管 GPU runner）────────────────────────────────────
   l2-api-regression:

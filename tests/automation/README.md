@@ -80,7 +80,7 @@ python tests\automation\dse_auto.py soak `
 tests/automation/
 ├── dse_auto.py          # 主控制器
 ├── envs/                # 环境配置（local / ci）
-├── suites/              # 套件（batch-smoke / api-smoke / regression / nightly / stability / quarantine）
+├── suites/              # 套件（batch-smoke / hd2d-acceptance / api-smoke / regression / nightly / stability / quarantine）
 ├── cases/cli/           # 批处理类用例
 ├── cases/api/           # API 会话类用例
 ├── cases/soak/          # 驻留长稳用例
@@ -88,6 +88,25 @@ tests/automation/
 ├── quarantine/          # 隔离用例/数据
 ├── scripts/             # run_all.ps1 / setup_test_env.ps1
 └── reports/             # 报告输出（运行生成）
+```
+
+## HD-2D 验收套件（`hd2d-acceptance`）
+
+`suites/hd2d-acceptance.yaml` 是 HD-2D 表现层的回归门，需要真实 GPU 桌面会话：
+
+| 用例 | 断言 |
+|:-----|:-----|
+| `cli.sprite3d_scene_load` | 编辑器无头加载含 `sprite3d` 键的场景并正常退出（编解码器解析冒烟） |
+| `cli.hd2d_m6_acceptance` | `_hd2d_m6_acceptance_test.lua` 在 opengl/vulkan/d3d11(+离屏) 渲染并截图，`hd2d_pixel_stats.py --gate` 判定非黑屏、有高光像素、跨后端 PSNR 达标 |
+
+逐字段往返由 `tests/gtest/integration/editor/editor_functional_test.cpp` 的
+`SceneIO_Sprite3DRoundTrip` 覆盖；两者都不写仓库内已签入的基准图（截图落到
+`${report_root}`）。
+
+```powershell
+$env:EDITOR_EXE = "<repo>\bin\dsengine-editor.exe"
+$env:WORK_ROOT  = "<repo>\tmp\auto"
+python tests\automation\dse_auto.py run --suite tests\automation\suites\hd2d-acceptance.yaml --run-id local_hd2d
 ```
 
 ## 用例 DSL

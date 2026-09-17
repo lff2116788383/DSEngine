@@ -1,0 +1,26 @@
+case_id: cli.hd2d_m6_acceptance
+title: HD-2D M6 验收场景：三后端（含 D3D11 离屏）无头渲染 + 像素阈值门控
+
+# HD-2D 的表现层回归门：跑 templates/hd2d_wuxia/scripts/_hd2d_m6_acceptance_test.lua
+# （程序化 3D 地形 + Sprite3D 角色 + CSM/点光 + tilt-shift），逐后端截图后由
+# hd2d_pixel_stats.py --gate 判定非黑屏/有高光像素/跨后端画面大体一致。
+#
+# 截图输出到 report_root 而不是 docs/design/hd2d_m6_shots/：仓库里那批图是已签入的
+# 验收基准，CI 运行不应改写工作树。
+command:
+  type: cli
+  executable: "python"
+  args:
+    - "${repo_root}/templates/hd2d_wuxia/tools/run_hd2d_m6_acceptance.py"
+    - "--backends=opengl,vulkan,d3d11"
+    - "--headless-d3d11"
+    - "--out-dir=${report_root}/hd2d_m6"
+    - "--gate"
+
+assert:
+  exit_code: 0
+  files_exist:
+    - "${report_root}/hd2d_m6/m6_opengl.png"
+    - "${report_root}/hd2d_m6/m6_vulkan.png"
+    - "${report_root}/hd2d_m6/m6_d3d11.png"
+    - "${report_root}/hd2d_m6/m6_d3d11_headless.png"
