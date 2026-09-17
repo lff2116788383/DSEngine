@@ -1,10 +1,11 @@
-﻿/**
+/**
  * @file sprite3d_pass.cpp
  * @brief Sprite3DPass implementation.
  */
 
 #include "engine/render/passes/sprite3d_pass.h"
 
+#include "engine/core/env_config.h"
 #include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/world.h"
@@ -306,10 +307,14 @@ void Sprite3DPass::RenderLit(CommandBuffer& cmd, const FrameContext& frame,
         material.normal_tex = item.sprite3d_normal_handle;
         material.normal_strength = item.sprite3d_normal_strength;
         material.emissive_tex = item.sprite3d_emissive_handle;
+        const bool force_ubo = core::env::IsSet(core::env::names::kSprite3dForceUbo);
+        material.direct_cluster_lights =
+            !force_ubo && frame.light_buffer != nullptr && frame.cluster_grid != nullptr;
 
         frame.mesh_renderer->DrawShaded(cmd, *rhi_device_, vertices, indices, identity,
                                          frame.view, frame.projection, camera_pos,
-                                         material, light, point_lights, ShadedGI{}, spot_lights);
+                                         material, light, point_lights, ShadedGI{}, spot_lights,
+                                         frame.light_buffer, frame.cluster_grid);
     }
 }
 

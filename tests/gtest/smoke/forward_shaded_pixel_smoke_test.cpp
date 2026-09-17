@@ -20,12 +20,16 @@
 #include "rhi_pixel_harness.h"
 
 #include "engine/render/mesh_renderer.h"
+#include "engine/render/light_buffer.h"
+#include "engine/render/cluster_grid.h"
+#include "engine/render/render_scene_view.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
 
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <cmath>
 #include <vector>
 
 using namespace dse::render;
@@ -747,4 +751,153 @@ TEST(ForwardShadedPixelSmokeTest, ShadowVsNoShadow) {
     ASSERT_NE(off_e, nullptr);
     EXPECT_LT(on_c[0] + 30, off_c[0]) << "shadow darkens center vs no-shadow";
     EXPECT_NEAR(off_c[0], off_e[0], 40) << "no-shadow: center ~ edge (uniform lit)";
+}
+
+
+// ============================================================
+// HD-2D M3 direct-cluster path: ForwardShadedClustered reads the
+// LightBuffer/ClusterGrid SSBOs on the fragment stage.  The CPU-side point
+// light list is intentionally empty; only the SSBO path can brighten the quad.
+// ============================================================
+
+RenderTargetReadback RenderDirectCluster(RhiDevice& device, bool direct_cluster) {
+    RenderTargetDesc rt_desc{};
+    rt_desc.width = kRtSize;
+    rt_desc.height = kRtSize;
+    rt_desc.has_color = true;
+    rt_desc.has_depth = true;
+    const auto rt = device.CreateRenderTarget(rt_desc);
+    if (!rt) return {};
+
+    if (!device.GetBuiltinProgram(BuiltinProgram::ForwardShadedClustered)) {
+        device.DeleteRenderTarget(rt);
+        return {};
+    }
+
+    LightBuffer light_buffer;
+    light_buffer.Init(&device);
+    ClusterGrid cluster_grid;
+    cluster_grid.Init(&device);
+
+    RenderSceneView scene;
+    RenderPointLight pl;
+    pl.position = glm::vec3(0.0f, 0.0f, -0.5f);
+    pl.color = glm::vec3(1.0f, 0.0f, 0.0f);
+    pl.intensity = 8.0f;
+    pl.radius = 3.0f;
+    pl.falloff = 1.0f;
+    scene.point_lights.push_back(pl);
+
+    std::vector<MeshVertex> verts;
+    std::vector<uint16_t> indices;
+    MakeCenterQuad(verts, indices, /*winding_ccw=*/true);
+
+    ShadedMaterial material;
+    material.albedo = glm::vec3(0.8f);
+    material.roughness = 0.5f;
+    material.shading_mode = 0;
+    material.direct_cluster_lights = direct_cluster;
+
+    DirectionalLight dir_light;
+    dir_light.enabled = true;   // enables the lit branch; intensity 0 isolates the cluster SSBO
+    dir_light.intensity = 0.0f;
+    dir_light.ambient = 0.0f;
+
+    device.BeginFrame();
+    light_buffer.CollectLightsFromView(scene, glm::vec3(0.0f));
+    light_buffer.Upload();
+    const glm::mat4 view(1.0f);
+    const glm::mat4 raw_proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 10.0f);
+    cluster_grid.Build(view, raw_proj, 0.1f, 10.0f, kRtSize, kRtSize,
+                       light_buffer.point_lights(), light_buffer.spot_lights());
+    cluster_grid.Upload();
+
+    // CPU 侧分簇自检：中心片元所属 cluster 必须真的收录了这盏点光，否则像素断言
+    // 可能因「SSBO 绑定通了、但分簇列表为空」而假通过。
+    {
+        const int tx = (kRtSize / 2) / kClusterTileSize;
+        const int ty = (kRtSize / 2) / kClusterTileSize;
+        const float log_ratio = std::log(10.0f / 0.1f);
+        int tz = static_cast<int>(std::log(1.0f / 0.1f) / log_ratio * kClusterZSlices);
+        tz = std::max(0, std::min(tz, kClusterZSlices - 1));
+        const int ix = ((tz * (kRtSize / kClusterTileSize)) + ty) *
+                           (kRtSize / kClusterTileSize) + tx;
+        const auto& infos = cluster_grid.debug_cluster_infos();
+        if (static_cast<int>(infos.size()) > ix) {
+            EXPECT_GE(infos[static_cast<size_t>(ix)].point_count, 1u)
+                << "center cluster should contain the red point light";
+        } else {
+            ADD_FAILURE() << "cluster grid is missing the center cluster";
+        }
+    }
+
+    const glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+    const glm::mat4 proj = device.GetProjectionCorrection() * raw_proj;
+    const glm::vec3 cam_pos(0.0f, 0.0f, 0.0f);
+    MeshRenderer renderer;
+    auto cmd = device.CreateCommandBuffer();
+    if (cmd) {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        renderer.DrawShaded(*cmd, device, verts, indices, model, view, proj, cam_pos,
+                            material, dir_light, {}, ShadedGI{}, {},
+                            direct_cluster ? &light_buffer : nullptr,
+                            direct_cluster ? &cluster_grid : nullptr);
+        cmd->EndRenderPass();
+        device.Submit(cmd);
+    }
+    device.EndFrame();
+
+    RenderTargetReadback rb = device.ReadRenderTargetColorRgba8WithSize(rt);
+    renderer.Shutdown(device);
+    light_buffer.Shutdown();
+    cluster_grid.Shutdown();
+    device.DeleteRenderTarget(rt);
+    return rb;
+}
+
+void VerifyDirectCluster(const RenderTargetReadback& on,
+                         const RenderTargetReadback& off,
+                         const char* backend) {
+    ASSERT_EQ(on.width, kRtSize) << backend;
+    ASSERT_EQ(on.height, kRtSize) << backend;
+    ASSERT_EQ(on.pixels.size(), static_cast<size_t>(kRtSize) * kRtSize * 4) << backend;
+    ASSERT_EQ(off.width, kRtSize) << backend;
+    ASSERT_EQ(off.height, kRtSize) << backend;
+    ASSERT_EQ(off.pixels.size(), static_cast<size_t>(kRtSize) * kRtSize * 4) << backend;
+    const unsigned char* on_c = dse::test::PixelAt(on, kRtSize / 2, kRtSize / 2);
+    const unsigned char* off_c = dse::test::PixelAt(off, kRtSize / 2, kRtSize / 2);
+    ASSERT_NE(on_c, nullptr) << backend;
+    ASSERT_NE(off_c, nullptr) << backend;
+    EXPECT_GT(on_c[0], off_c[0] + 20) << backend
+        << " direct cluster should add red point-light energy";
+    EXPECT_GT(on_c[0], on_c[1] + 20) << backend
+        << " direct cluster red light should dominate G";
+}
+
+TEST(ForwardShadedPixelSmokeTest, OpenGLDirectClusterSSBO) {
+    auto on = dse::test::RunOpenGL([](RhiDevice& d) { return RenderDirectCluster(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShadedClustered unavailable (OpenGL)";
+    auto off = dse::test::RunOpenGL([](RhiDevice& d) { return RenderDirectCluster(d, false); });
+    VerifyDirectCluster(on.readback, off.readback, "OpenGL");
+}
+
+TEST(ForwardShadedPixelSmokeTest, D3D11DirectClusterSSBO) {
+    auto on = dse::test::RunD3D11([](RhiDevice& d) { return RenderDirectCluster(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShadedClustered unavailable (D3D11)";
+    auto off = dse::test::RunD3D11([](RhiDevice& d) { return RenderDirectCluster(d, false); });
+    VerifyDirectCluster(on.readback, off.readback, "D3D11");
+}
+
+TEST(ForwardShadedPixelSmokeTest, VulkanDirectClusterSSBO) {
+    auto on = dse::test::RunVulkan([](RhiDevice& d) { return RenderDirectCluster(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShadedClustered unavailable (Vulkan)";
+    auto off = dse::test::RunVulkan([](RhiDevice& d) { return RenderDirectCluster(d, false); });
+    VerifyDirectCluster(on.readback, off.readback, "Vulkan");
 }

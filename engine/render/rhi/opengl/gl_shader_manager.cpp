@@ -70,6 +70,7 @@
 #include "embed/forward_pbr_skinned_vert.gen.h"
 #include "embed/forward_pbr_instanced_vert.gen.h"
 #include "embed/forward_shaded_frag.gen.h"
+#include "embed/forward_shaded_sprite3d_cluster_ssbo_frag.gen.h"
 #include "embed/forward_shaded_skinned_vert.gen.h"
 #include "embed/forward_shaded_instanced_vert.gen.h"
 #include "embed/forward_shaded_skinned_instanced_vert.gen.h"
@@ -156,6 +157,7 @@
 #include "embed/hair_vert_reflect.gen.h"
 #include "embed/forward_pbr_instanced_vert_reflect.gen.h"
 #include "embed/forward_shaded_frag_reflect.gen.h"
+#include "embed/forward_shaded_sprite3d_cluster_ssbo_frag_reflect.gen.h"
 #include "embed/sprite_fx_vert_reflect.gen.h"
 #include "embed/gbuffer_frag_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
@@ -1010,6 +1012,34 @@ void GLShaderManager::InitForwardShadedShader() {
         gl_reflect::ComputeFlatTextureUnits(kforward_shaded_frag_reflection, tex_entries);
         glUseProgram(forward_shaded_shader_handle_);
         gl_reflect::BindSamplersOnce(forward_shaded_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+}
+
+
+void GLShaderManager::InitForwardShadedClusteredShader() {
+    if (forward_shaded_clustered_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    forward_shaded_clustered_shader_handle_ = CompileProgram(
+        DSE_SL(kforward_pbr_vert),
+        DSE_SL(kforward_shaded_sprite3d_cluster_ssbo_frag));
+    if (forward_shaded_clustered_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward shaded clustered shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_shaded_clustered_shader_handle_, kforward_pbr_vert_reflection);
+    BindUBOsFromReflection(forward_shaded_clustered_shader_handle_,
+                           kforward_shaded_sprite3d_cluster_ssbo_frag_reflection);
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(
+            kforward_shaded_sprite3d_cluster_ssbo_frag_reflection, tex_entries);
+        glUseProgram(forward_shaded_clustered_shader_handle_);
+        gl_reflect::BindSamplersOnce(forward_shaded_clustered_shader_handle_, tex_entries,
                                      glGetUniformLocation, glUniform1i);
         glUseProgram(0);
     }

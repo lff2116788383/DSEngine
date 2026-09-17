@@ -89,6 +89,16 @@ public:
     int tiles_y() const { return tiles_y_; }
     int total_clusters() const { return tiles_x_ * tiles_y_ * kClusterZSlices; }
 
+    /// Current per-in-flight SSBO handles for direct stage-aware binding from
+    /// render passes (fragment-stage cluster reads).  May be empty before the
+    /// first Upload().
+    BufferHandle cluster_info_buffer() const { return cluster_info_ssbo_; }
+    BufferHandle light_index_buffer() const { return light_index_ssbo_; }
+
+    // Diagnostic accessors (read-only): CPU-side build result before/after upload.
+    const std::vector<ClusterInfo>& debug_cluster_infos() const { return cluster_infos_; }
+    const std::vector<uint32_t>& debug_light_indices() const { return light_indices_; }
+
 private:
     /// 计算指定 cluster 在 view space 中的 AABB
     void ComputeClusterAABB(int tx, int ty, int tz,

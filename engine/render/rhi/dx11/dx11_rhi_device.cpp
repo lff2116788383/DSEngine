@@ -664,6 +664,7 @@ ShaderHandle DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::Particle3D: return shader_mgr_.particle3d_shader_handle();
         case BuiltinProgram::HairStrand: return shader_mgr_.hair_strand_shader_handle();
         case BuiltinProgram::ForwardShaded: return shader_mgr_.forward_shaded_shader_handle();
+        case BuiltinProgram::ForwardShadedClustered: return shader_mgr_.forward_shaded_clustered_shader_handle();
         case BuiltinProgram::ForwardSkinnedShaded: return shader_mgr_.forward_skinned_shaded_shader_handle();
         case BuiltinProgram::ForwardInstancedShaded: return shader_mgr_.forward_instanced_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedInstancedShaded: return shader_mgr_.forward_skinned_instanced_shaded_shader_handle();

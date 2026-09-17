@@ -631,7 +631,12 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
             ++tex_slot;
         } else if (b.type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
             VkDescriptorBufferInfo info = dummy_ssbo_info;
-            auto it = state.prim_ssbos.find(ssbo_slot);
+            // New stage-aware/high-binding callers can bind by the exact GLSL
+            // binding number (for example 32..35 for the ForwardShaded
+            // cluster variant).  Fall back to the historical ordinal lookup so
+            // existing BindStorageBuffer(0/1) consumers remain compatible.
+            auto it = state.prim_ssbos.find(b.binding);
+            if (it == state.prim_ssbos.end()) it = state.prim_ssbos.find(ssbo_slot);
             if (it != state.prim_ssbos.end()) {
                 const VulkanBuffer* sb = resource_mgr.GetSSBO(it->second.handle);
                 if (sb && sb->buffer) {

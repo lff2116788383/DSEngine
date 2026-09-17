@@ -4,6 +4,8 @@
  */
 
 #include "engine/render/mesh_renderer_internal.h"
+#include "engine/render/light_buffer.h"
+#include "engine/render/cluster_grid.h"
 
 using namespace dse::render::mesh_internal;
 
@@ -20,14 +22,32 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                               const DirectionalLight& light,
                               const std::vector<ShadedPointLight>& point_lights,
                               const ShadedGI& gi,
-                              const std::vector<ShadedSpotLight>& spot_lights) {
+                              const std::vector<ShadedSpotLight>& spot_lights,
+                              const LightBuffer* direct_light_buffer,
+                              const ClusterGrid* direct_cluster_grid) {
     if (vertices.empty() || indices.empty()) return;
 
-    // Shader Graph 自定义命名程序（仅 GL 有效）优先；否则用内建 ForwardShaded。
-    // 逐 draw 绑定的 PerFrame UBO / 贴图槽与内建路径共用，自定义程序按同一约定取数据。
-    ShaderHandle program = material.custom_program
-        ? material.custom_program
-        : device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
+    const bool cluster_handles_ready =
+        direct_light_buffer && direct_cluster_grid &&
+        direct_light_buffer->point_light_buffer() &&
+        direct_light_buffer->spot_light_buffer() &&
+        direct_cluster_grid->cluster_info_buffer() &&
+        direct_cluster_grid->light_index_buffer();
+    bool use_cluster_ssbo = material.direct_cluster_lights && cluster_handles_ready;
+
+    ShaderHandle program;
+    if (material.custom_program) {
+        program = material.custom_program;
+        use_cluster_ssbo = false;
+    } else if (use_cluster_ssbo) {
+        program = device.GetBuiltinProgram(BuiltinProgram::ForwardShadedClustered);
+        if (!program) {
+            use_cluster_ssbo = false;
+            program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
+        }
+    } else {
+        program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
+    }
     if (!program) return;  // 该后端未提供高级 shading 内建着色器
 
     EnsureResources(device);
@@ -73,9 +93,13 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
     // CSM 方向光阴影：从 device 全局渲染状态取级联矩阵/分裂/atlas 区域（与执行器 DrawMeshBatch 同源）。
     const auto& grs = device.GetGlobalRenderState();
+    // light_params.w = 1 时 forward_shaded.frag 的 SPRITE3D_CLUSTER_SSBO 变体才直读
+    // 32..35 号片段 SSBO；为 0 时同一程序退回 u_point_lights/u_spot_lights UBO 数组
+    // （两者在此路径下始终已绑定），因此程序选择与着色器分支永远一致。
     scene.light_params = glm::vec4(light.intensity,
                                    material.shadow_strength,
-                                   material.receive_shadow ? 1.0f : 0.0f, 0.0f);
+                                   material.receive_shadow ? 1.0f : 0.0f,
+                                   use_cluster_ssbo ? 1.0f : 0.0f);
     scene.cascade_splits = glm::vec4(grs.cascade_splits[0], grs.cascade_splits[1],
                                      grs.cascade_splits[2], 0.0f);
     for (int i = 0; i < 3; ++i) {
@@ -179,6 +203,19 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(5u, per_light_probe_ubo_);      // FwdLightProbe@ set5.b0ï¼ˆB2c-5ï¼‰
     cmd.BindUniformBuffer(6u, per_ddgi_ubo_);             // FwdDDGI      @ set6.b0ï¼ˆB2c-5ï¼‰
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_);      // FwdSpotLight @ set7.b1ï¼ˆFinal-Feat-4ï¼‰
+    if (use_cluster_ssbo) {
+        // ForwardShadedClustered fragment SSBOs.  Bindings 32..35 are chosen
+        // above all texture slots; they map to DX11 t32..t35, GL storage
+        // binding points 32..35, and exact Vulkan descriptor bindings 32..35.
+        cmd.BindStorageBuffer(ShaderStage::Fragment, 32u,
+                              direct_light_buffer->point_light_buffer(), 0u, 0u);
+        cmd.BindStorageBuffer(ShaderStage::Fragment, 33u,
+                              direct_light_buffer->spot_light_buffer(), 0u, 0u);
+        cmd.BindStorageBuffer(ShaderStage::Fragment, 34u,
+                              direct_cluster_grid->cluster_info_buffer(), 0u, 0u);
+        cmd.BindStorageBuffer(ShaderStage::Fragment, 35u,
+                              direct_cluster_grid->light_index_buffer(), 0u, 0u);
+    }
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);

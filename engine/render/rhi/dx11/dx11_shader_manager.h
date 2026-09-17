@@ -158,6 +158,10 @@ public:
     /// 高级 shading forward 着色器句柄（B2c-1；forward_pbr.vert + forward_shaded.frag + 扩展 PerMaterial\@b2 + 5 纹理槽 t0..t4）
     ShaderHandle forward_shaded_shader_handle() const { return ShaderHandle{forward_shaded_shader_handle_}; }
 
+    /// direct-cluster ForwardShaded 变体（forward_shaded_sprite3d_cluster_ssbo.frag + forward_pbr.vert）。
+    /// DXBC 在编译期嵌入，故与其它内建程序一致，在 InitBuiltinShaders 内一次性创建，无懒加载入口。
+    ShaderHandle forward_shaded_clustered_shader_handle() const { return ShaderHandle{forward_shaded_clustered_shader_handle_}; }
+
     /// 蒙皮 + 高级 shading 组合着色器句柄（Final-Feat-2；forward_shaded_skinned.vert + forward_shaded.frag + 骨骼 SSBO\@t0）
     ShaderHandle forward_skinned_shaded_shader_handle() const { return ShaderHandle{forward_skinned_shaded_shader_handle_}; }
 
@@ -212,6 +216,7 @@ private:
     unsigned int particle3d_shader_handle_ = 0;
     unsigned int hair_strand_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
+    unsigned int forward_shaded_clustered_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_instanced_shaded_shader_handle_ = 0;

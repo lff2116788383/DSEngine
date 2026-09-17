@@ -57,6 +57,8 @@ inline constexpr const char* kRenderReadbackDiag  = "DSE_RENDER_READBACK_DIAG";
 inline constexpr const char* kVulkanMaxPasses     = "DSE_VULKAN_MAX_PASSES";
 inline constexpr const char* kRenderPipeProfile   = "DSE_RENDER_PIPELINE_PROFILE";
 inline constexpr const char* kRenderPipeProfPath  = "DSE_RENDER_PIPELINE_PROFILE_PATH";
+// HD-2D
+inline constexpr const char* kSprite3dForceUbo    = "DSE_SPRITE3D_FORCE_UBO";
 } // namespace names
 
 /// 变量描述：用于自描述清单与诊断输出。

@@ -1,5 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
+// @VARIANTS: SPRITE3D_CLUSTER_SSBO
+// @SSBO_LOW_REGISTERS
 // B2c-1: 自包含「高级 shading」forward 片元着色器。
 // 复用 forward_pbr.vert（世界空间顶点 + vp）。在 forward_pbr.frag 基础上扩展 PerMaterial UBO，
 // 支持 shading_mode 0/2/3/4/5/6（PBR / HalfLambert-Skin / HalfLambert-Static / Toon / Watercolor /
@@ -80,6 +82,56 @@ layout(std140, set = 7, binding = 1) uniform FwdSpotLightUBO {
     int _slpad0, _slpad1, _slpad2;
     FwdSpotLight u_spot_lights[255];
 };
+
+#if defined(SPRITE3D_CLUSTER_SSBO)
+// HD-2D M3 direct-cluster variant. Bindings 32..35 are chosen so that
+// SPIRV-Cross HLSL emits t32..t35 (the // @SSBO_LOW_REGISTERS marker keeps
+// HLSL register = binding), clear of the albedo/normal/MR/emissive/AO t0..t4
+// texture slots as well as the splat t11..t15 slots.  The generic primitive
+// contract binds the same 32..35 slots on GL/DX11/Vulkan.
+//
+// 是否真的走直读由 light_params.w（PerScene.light_params.z 之后的 .w）门控：
+// MeshRenderer::DrawShaded 只有在确实选中 ForwardShadedClustered 程序时才置 1，
+// 故同一程序在 UBO 回退绑定下仍能安全地退回 u_point_lights/u_spot_lights 数组。
+struct FwdClusterInfoEntry {
+    uint offset;
+    uint point_count;
+    uint spot_count;
+    uint _pad;
+};
+
+layout(std430, set = 7, binding = 32) readonly buffer FwdClusterPointLightSSBO {
+    int count;
+    int _cpad0;
+    int _cpad1;
+    int _cpad2;
+    FwdPointLight lights[];
+} cluster_point_lights;
+
+layout(std430, set = 7, binding = 33) readonly buffer FwdClusterSpotLightSSBO {
+    int count;
+    int _cspad0;
+    int _cspad1;
+    int _cspad2;
+    FwdSpotLight lights[];
+} cluster_spot_lights;
+
+layout(std430, set = 7, binding = 34) readonly buffer FwdClusterInfoSSBO {
+    uint tiles_x;
+    uint tiles_y;
+    uint z_slices;
+    float near_plane;
+    float far_plane;
+    uint _cipad0;
+    uint _cipad1;
+    uint _cipad2;
+    FwdClusterInfoEntry infos[];
+} cluster_grid;
+
+layout(std430, set = 7, binding = 35) readonly buffer FwdLightIndexSSBO {
+    uint indices[];
+} cluster_light_indices;
+#endif
 
 layout(set = 2, binding = 1) uniform sampler2D u_texture;                  // albedo  -> flat unit 0
 layout(set = 2, binding = 2) uniform sampler2D u_normal_map;               // normal  -> flat unit 1
@@ -295,9 +347,100 @@ float PointShadow(int shadowIndex, vec3 worldPos, vec3 lightPos, float radius) {
     return (cur - bias) > closest ? light_params.y : 0.0;
 }
 
+#if defined(SPRITE3D_CLUSTER_SSBO)
+int ClusterIndexForFragment(vec3 world_pos) {
+    int tx = int(gl_FragCoord.x) / 16;  // kClusterTileSize
+    int ty = int(gl_FragCoord.y) / 16;
+    float linear_z = max(-(view * vec4(world_pos, 1.0)).z, 0.0001);
+    float log_ratio = log(cluster_grid.far_plane / max(cluster_grid.near_plane, 0.0001));
+    int tz = (log_ratio > 0.0)
+        ? clamp(int(log(linear_z / max(cluster_grid.near_plane, 0.0001)) / log_ratio * float(cluster_grid.z_slices)),
+                0, int(cluster_grid.z_slices) - 1)
+        : 0;
+    int idx = (tz * int(cluster_grid.tiles_y) + ty) * int(cluster_grid.tiles_x) + tx;
+    int total = int(cluster_grid.tiles_x) * int(cluster_grid.tiles_y) * int(cluster_grid.z_slices);
+    return clamp(idx, 0, max(total - 1, 0));
+}
+
+vec3 ClusterPointLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
+                          float roughness, float metallic, vec3 F0) {
+    vec3 sum = vec3(0.0);
+    int ci = ClusterIndexForFragment(world_pos);
+    uint offset = cluster_grid.infos[ci].offset;
+    uint point_count = cluster_grid.infos[ci].point_count;
+    for (uint k = 0u; k < point_count; ++k) {
+        int i = int(cluster_light_indices.indices[offset + k]);
+        if (i < 0 || i >= cluster_point_lights.count) continue;
+        vec3 d = cluster_point_lights.lights[i].position - world_pos;
+        float dist = length(d);
+        vec3 L = d / max(dist, 1e-4);
+        float r = max(cluster_point_lights.lights[i].radius, 1e-4);
+        float atten = clamp(1.0 - (dist * dist) / (r * r), 0.0, 1.0);
+        atten *= atten;
+        float psh = (cluster_point_lights.lights[i].cast_shadow != 0)
+            ? PointShadow(cluster_point_lights.lights[i].shadow_index, world_pos,
+                          cluster_point_lights.lights[i].position, r) : 0.0;
+        vec3 radiance = cluster_point_lights.lights[i].color *
+                        cluster_point_lights.lights[i].intensity * atten * (1.0 - psh);
+        vec3 H = normalize(V + L);
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+        vec3 specular = (NDF * G * F) /
+                        (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        sum += (kD * surface_albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
+    }
+    return sum;
+}
+
+vec3 ClusterSpotLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
+                         float roughness, float metallic, vec3 F0) {
+    vec3 sum = vec3(0.0);
+    int ci = ClusterIndexForFragment(world_pos);
+    uint offset = cluster_grid.infos[ci].offset;
+    uint point_count = cluster_grid.infos[ci].point_count;
+    uint spot_count = cluster_grid.infos[ci].spot_count;
+    for (uint k = 0u; k < spot_count; ++k) {
+        int i = int(cluster_light_indices.indices[offset + point_count + k]);
+        if (i < 0 || i >= cluster_spot_lights.count) continue;
+        vec3 d = cluster_spot_lights.lights[i].position - world_pos;
+        float dist = length(d);
+        vec3 L = d / max(dist, 1e-4);
+        float r = max(cluster_spot_lights.lights[i].radius, 1e-4);
+        float atten = clamp(1.0 - (dist * dist) / (r * r), 0.0, 1.0);
+        atten *= atten;
+        vec3 spotDir = normalize(-cluster_spot_lights.lights[i].direction);
+        float theta = dot(L, spotDir);
+        float innerCos = cos(radians(cluster_spot_lights.lights[i].inner_cone));
+        float outerCos = cos(radians(cluster_spot_lights.lights[i].outer_cone));
+        float cone = clamp((theta - outerCos) / max(innerCos - outerCos, 1e-4), 0.0, 1.0);
+        if (cone <= 0.0) continue;
+        float ssh = (cluster_spot_lights.lights[i].cast_shadow != 0)
+            ? SpotShadow(cluster_spot_lights.lights[i].shadow_index, world_pos, N, L) : 0.0;
+        vec3 radiance = cluster_spot_lights.lights[i].color *
+                        cluster_spot_lights.lights[i].intensity * atten * cone * (1.0 - ssh);
+        vec3 H = normalize(V + L);
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+        vec3 specular = (NDF * G * F) /
+                        (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        sum += (kD * surface_albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
+    }
+    return sum;
+}
+#endif
+
 // 点光源 Cook-Torrance 贡献（与生产 pbr.frag 点光循环一致：平方反比半径衰减）。
 vec3 PointLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
                    float roughness, float metallic, vec3 F0) {
+#if defined(SPRITE3D_CLUSTER_SSBO)
+    if (light_params.w > 0.5) {
+        return ClusterPointLightsLo(N, V, world_pos, surface_albedo, roughness, metallic, F0);
+    }
+#endif
     vec3 sum = vec3(0.0);
     for (int i = 0; i < u_point_light_count; ++i) {
         vec3 d = u_point_lights[i].position - world_pos;
@@ -327,6 +470,11 @@ vec3 PointLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
 // direction 为光线传播方向（光源→场景），故 L·(-dir) 衡量片元是否落在锥内。
 vec3 SpotLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
                   float roughness, float metallic, vec3 F0) {
+#if defined(SPRITE3D_CLUSTER_SSBO)
+    if (light_params.w > 0.5) {
+        return ClusterSpotLightsLo(N, V, world_pos, surface_albedo, roughness, metallic, F0);
+    }
+#endif
     vec3 sum = vec3(0.0);
     for (int i = 0; i < u_spot_light_count; ++i) {
         vec3 d = u_spot_lights[i].position - world_pos;

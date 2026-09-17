@@ -163,6 +163,10 @@ public:
     void InitForwardShadedShader();
     ShaderHandle forward_shaded_shader_handle() const { return ShaderHandle{forward_shaded_shader_handle_}; }
 
+    /// direct-cluster ForwardShaded 变体：forward_pbr.vert + forward_shaded_sprite3d_cluster_ssbo.frag
+    void InitForwardShadedClusteredShader();
+    ShaderHandle forward_shaded_clustered_shader_handle() const { return ShaderHandle{forward_shaded_clustered_shader_handle_}; }
+
     /// 初始化蒙皮 + 高级 shading 组合着色器（Final-Feat-2；forward_shaded_skinned.vert + forward_shaded.frag + 骨骼 SSBO\@set7.b0）
     void InitForwardSkinnedShadedShader();
     ShaderHandle forward_skinned_shaded_shader_handle() const { return ShaderHandle{forward_skinned_shaded_shader_handle_}; }
@@ -292,6 +296,7 @@ private:
     unsigned int particle3d_shader_handle_ = 0;
     unsigned int hair_strand_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
+    unsigned int forward_shaded_clustered_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_instanced_shaded_shader_handle_ = 0;

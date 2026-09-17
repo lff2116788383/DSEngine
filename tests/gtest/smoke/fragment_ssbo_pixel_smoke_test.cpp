@@ -6,7 +6,12 @@
  * D3D11 historically bound generic primitive SSBOs only to VS(t).  This test
  * is the live-consumer gate for the stage-aware RHI contract: the same SSBO is
  * never referenced by the vertex shader, and the pixel readback only succeeds
- * when the fragment bind reaches PS(t0).
+ * when the fragment bind reaches PS(t{binding}).
+ *
+ * 两个槽位都要覆盖：
+ *  - slot 0  —— 既有消费者（骨骼/实例 SSBO）使用的序号式绑定；
+ *  - slot 32 —— HD-2D ForwardShaded cluster 变体使用的高位号绑定（32..35），
+ *              它是 Vulkan 精确 binding 查表与 HLSL t32 寄存器路径的回归门。
  */
 #include <gtest/gtest.h>
 
@@ -38,12 +43,6 @@ void main() {
 }
 )";
 
-const char* kGlFrag = R"(#version 430
-layout(std430, binding = 0) readonly buffer ColorSSBO { vec4 color; };
-out vec4 FragColor;
-void main() { FragColor = color; }
-)";
-
 const char* kVkVert = R"(#version 450
 void main() {
     vec2 corners[4] = vec2[4](vec2(-1.0,-1.0), vec2(1.0,-1.0), vec2(1.0,1.0), vec2(-1.0,1.0));
@@ -51,29 +50,31 @@ void main() {
 }
 )";
 
-const char* kVkFrag = R"(#version 450
-layout(std430, set = 0, binding = 0) readonly buffer ColorSSBO { vec4 color; };
-layout(location = 0) out vec4 FragColor;
-void main() { FragColor = color; }
-)";
+std::string MakeGlFrag(int binding) {
+    return "#version 430\nlayout(std430, binding = " + std::to_string(binding) +
+           ") readonly buffer ColorSSBO { vec4 color; };\n"
+           "out vec4 FragColor;\nvoid main() { FragColor = color; }\n";
+}
 
-const char* kDx = R"(
-struct VSOut { float4 pos : SV_Position; };
-VSOut VSMain(uint vid : SV_VertexID) {
-    float2 corners[4] = { float2(-1.0,-1.0), float2(1.0,-1.0), float2(1.0,1.0), float2(-1.0,1.0) };
-    VSOut o;
-    o.pos = float4(corners[vid], 0.0, 1.0);
-    return o;
+std::string MakeVkFrag(int binding) {
+    return "#version 450\nlayout(std430, set = 0, binding = " + std::to_string(binding) +
+           ") readonly buffer ColorSSBO { vec4 color; };\n"
+           "layout(location = 0) out vec4 FragColor;\nvoid main() { FragColor = color; }\n";
 }
-ByteAddressBuffer colors : register(t0);
-float4 PSMain(VSOut i) : SV_Target {
-    return asfloat(colors.Load4(0));
+
+std::string MakeDx(int binding) {
+    return "struct VSOut { float4 pos : SV_Position; };\n"
+           "VSOut VSMain(uint vid : SV_VertexID) {\n"
+           "    float2 corners[4] = { float2(-1.0,-1.0), float2(1.0,-1.0), float2(1.0,1.0), float2(-1.0,1.0) };\n"
+           "    VSOut o;\n    o.pos = float4(corners[vid], 0.0, 1.0);\n    return o;\n}\n"
+           "ByteAddressBuffer colors : register(t" + std::to_string(binding) + ");\n"
+           "float4 PSMain(VSOut i) : SV_Target {\n    return asfloat(colors.Load4(0));\n}\n";
 }
-)";
 
 RenderTargetReadback RenderFragmentSSBO(RhiDevice& device,
                                         const std::string& vert_src,
-                                        const std::string& frag_src) {
+                                        const std::string& frag_src,
+                                        unsigned int slot) {
     RenderTargetDesc rt_desc{};
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
@@ -130,7 +131,7 @@ RenderTargetReadback RenderFragmentSSBO(RhiDevice& device,
         cmd->BindPipeline(device.GetGraphicsPipeline(pso, program));
         cmd->BindVertexBuffer(0u, vbo, sizeof(float) * 2, {});
         cmd->BindIndexBuffer(ibo, IndexType::UInt16);
-        cmd->BindStorageBuffer(ShaderStage::Fragment, 0, ssbo, 0, 0);
+        cmd->BindStorageBuffer(ShaderStage::Fragment, slot, ssbo, 0, 0);
         cmd->DrawIndexed(6, 0, 0);
         cmd->EndRenderPass();
         device.Submit(cmd);
@@ -164,7 +165,7 @@ void VerifyColor(const RenderTargetReadback& rb, const char* backend) {
 
 TEST(FragmentSSBOPixelSmokeTest, OpenGLFragmentReadsSSBO) {
     auto r = dse::test::RunOpenGL([](RhiDevice& d) {
-        return RenderFragmentSSBO(d, kGlVert, kGlFrag);
+        return RenderFragmentSSBO(d, kGlVert, MakeGlFrag(0), 0u);
     });
     if (!r.available) GTEST_SKIP() << r.skip_reason;
     VerifyColor(r.readback, "OpenGL");
@@ -172,7 +173,7 @@ TEST(FragmentSSBOPixelSmokeTest, OpenGLFragmentReadsSSBO) {
 
 TEST(FragmentSSBOPixelSmokeTest, D3D11FragmentReadsSSBO) {
     auto r = dse::test::RunD3D11([](RhiDevice& d) {
-        return RenderFragmentSSBO(d, kDx, kDx);
+        return RenderFragmentSSBO(d, MakeDx(0), MakeDx(0), 0u);
     });
     if (!r.available) GTEST_SKIP() << r.skip_reason;
     VerifyColor(r.readback, "D3D11");
@@ -180,7 +181,33 @@ TEST(FragmentSSBOPixelSmokeTest, D3D11FragmentReadsSSBO) {
 
 TEST(FragmentSSBOPixelSmokeTest, VulkanFragmentReadsSSBO) {
     auto r = dse::test::RunVulkan([](RhiDevice& d) {
-        return RenderFragmentSSBO(d, kVkVert, kVkFrag);
+        return RenderFragmentSSBO(d, kVkVert, MakeVkFrag(0), 0u);
+    });
+    if (!r.available) GTEST_SKIP() << r.skip_reason;
+    VerifyColor(r.readback, "Vulkan");
+}
+
+// HD-2D ForwardShaded cluster 变体走 32..35 高位号 SSBO：验证三后端在「槽位号 !=
+// 序号」时仍能按 GLSL binding 精确落位（Vulkan 精确 binding 查表 / HLSL t32 寄存器）。
+TEST(FragmentSSBOPixelSmokeTest, OpenGLFragmentReadsHighSlotSSBO) {
+    auto r = dse::test::RunOpenGL([](RhiDevice& d) {
+        return RenderFragmentSSBO(d, kGlVert, MakeGlFrag(32), 32u);
+    });
+    if (!r.available) GTEST_SKIP() << r.skip_reason;
+    VerifyColor(r.readback, "OpenGL");
+}
+
+TEST(FragmentSSBOPixelSmokeTest, D3D11FragmentReadsHighSlotSSBO) {
+    auto r = dse::test::RunD3D11([](RhiDevice& d) {
+        return RenderFragmentSSBO(d, MakeDx(32), MakeDx(32), 32u);
+    });
+    if (!r.available) GTEST_SKIP() << r.skip_reason;
+    VerifyColor(r.readback, "D3D11");
+}
+
+TEST(FragmentSSBOPixelSmokeTest, VulkanFragmentReadsHighSlotSSBO) {
+    auto r = dse::test::RunVulkan([](RhiDevice& d) {
+        return RenderFragmentSSBO(d, kVkVert, MakeVkFrag(32), 32u);
     });
     if (!r.available) GTEST_SKIP() << r.skip_reason;
     VerifyColor(r.readback, "Vulkan");

@@ -42,6 +42,7 @@ const std::vector<EnvVarDesc>& KnownEnvVars() {
         {names::kVulkanMaxPasses,     "Vulkan GPU-Driven 最大 Pass 数"},
         {names::kRenderPipeProfile,   "渲染管线剖面名称"},
         {names::kRenderPipeProfPath,  "渲染管线剖面文件路径"},
+        {names::kSprite3dForceUbo,    "HD-2D Sprite3D lit 强制走 UBO 光照回退（诊断用，关闭 cluster SSBO 直读）"},
     };
     return kVars;
 }

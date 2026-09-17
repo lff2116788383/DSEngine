@@ -33,6 +33,8 @@ namespace render {
 
 class CommandBuffer;
 class RhiDevice;
+class LightBuffer;
+class ClusterGrid;
 
 /// forward PBR 顶点（局部空间输入；MeshRenderer 内部按 model 预变换到世界空间）。
 /// 内存布局须与 forward_pbr.vert 输入一致：pos\@0 / color\@1 / uv\@2 / normal\@3 / tangent\@4。
@@ -154,6 +156,12 @@ struct ShadedMaterial {
     // Shader Graph 自定义命名程序（RHI 句柄）。非 0 时 DrawShaded 用它替换内建 ForwardShaded 程序。
     // 仅 OpenGL 有效（GLSL 源码只有 GL 后端能编译）；其余后端此值恒为 0 → 走内建。
     ShaderHandle custom_program;
+
+    /// HD-2D M3 direct-cluster path: when true and DrawShaded receives valid
+    /// LightBuffer/ClusterGrid handles, use ForwardShadedClustered and read the
+    /// per-cluster light index list from fragment-stage SSBOs instead of the
+    /// bounded PointLightUBO/SpotLightUBO fallback.
+    bool direct_cluster_lights = false;
 };
 
 /// 单方向光。
@@ -351,7 +359,9 @@ public:
                     const DirectionalLight& light,
                     const std::vector<ShadedPointLight>& point_lights = {},
                     const ShadedGI& gi = {},
-                    const std::vector<ShadedSpotLight>& spot_lights = {});
+                    const std::vector<ShadedSpotLight>& spot_lights = {},
+                    const LightBuffer* direct_light_buffer = nullptr,
+                    const ClusterGrid* direct_cluster_grid = nullptr);
 
     /// 记录一次蒙皮 + 高级 shading 网格绘制（Final-Feat-2）。融合 DrawSkinned 的骨骼
     /// 顶点装配（顶点局部/绑定空间，骨骼矩阵走 SSBO\@slot 0，VS 施骨骼混合 + vp）与

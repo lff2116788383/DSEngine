@@ -96,6 +96,12 @@ public:
     const std::vector<GPUPointLight>& point_lights() const { return point_lights_; }
     const std::vector<GPUSpotLight>&  spot_lights()  const { return spot_lights_; }
 
+    /// Current per-in-flight SSBO handles for direct stage-aware binding from
+    /// render passes (fragment-stage cluster/light reads).  May be empty before
+    /// the first Upload().
+    BufferHandle point_light_buffer() const { return point_light_ssbo_; }
+    BufferHandle spot_light_buffer() const { return spot_light_ssbo_; }
+
 private:
     RhiDevice* device_ = nullptr;
 

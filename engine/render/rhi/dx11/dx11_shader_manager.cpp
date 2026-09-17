@@ -20,6 +20,7 @@
 #include "engine/render/shaders/generated/embed/forward_pbr_skinned_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_instanced_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_frag.gen.h"
+#include "engine/render/shaders/generated/embed/forward_shaded_sprite3d_cluster_ssbo_frag.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_skinned_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_instanced_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_skinned_instanced_vert.gen.h"
@@ -591,6 +592,24 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(kforward_pbr_vert_reflection, fsh_layout);
         CreateInputLayoutForShader(forward_shaded_shader_handle_, fsh_layout.data(),
                                    static_cast<int>(fsh_layout.size()));
+    }
+    pulse();
+
+    // ---- direct-cluster ForwardShaded 变体：forward_pbr.vert + variant frag ----
+    forward_shaded_clustered_shader_handle_ = CreateProgramFromDXBC(
+        kforward_pbr_vert_dxbc, kforward_pbr_vert_dxbc_size,
+        kforward_shaded_sprite3d_cluster_ssbo_frag_dxbc,
+        kforward_shaded_sprite3d_cluster_ssbo_frag_dxbc_size);
+    if (forward_shaded_clustered_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin forward shaded clustered shader created (DXBC): {}",
+                       forward_shaded_clustered_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fshc_layout;
+        CreateInputLayoutFromReflection(kforward_pbr_vert_reflection, fshc_layout);
+        CreateInputLayoutForShader(forward_shaded_clustered_shader_handle_, fshc_layout.data(),
+                                   static_cast<int>(fshc_layout.size()));
+    } else {
+        DEBUG_LOG_ERROR("[D3D11] Builtin forward shaded clustered shader creation failed (DXBC)");
     }
     pulse();
 

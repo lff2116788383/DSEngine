@@ -1145,6 +1145,11 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
         "${SHADER_GEN_DIR}/embed/pbr_gpu_driven_vert.gen.h"
         "${SHADER_GEN_DIR}/embed/pbr_gpu_driven_vert_reflect.gen.h"
     )
+    # @VARIANTS: SPRITE3D_CLUSTER_SSBO 变体（forward_shaded.frag 直接读 ClusterGrid/LightBuffer）
+    list(APPEND GENERATED_SHADER_HEADERS
+        "${SHADER_GEN_DIR}/embed/forward_shaded_sprite3d_cluster_ssbo_frag.gen.h"
+        "${SHADER_GEN_DIR}/embed/forward_shaded_sprite3d_cluster_ssbo_frag_reflect.gen.h"
+    )
     # compute skinning shader（skinning.comp → skinning_comp.gen.h）
     list(APPEND GENERATED_SHADER_HEADERS
         "${SHADER_GEN_DIR}/embed/skinning_comp.gen.h"

@@ -37,6 +37,7 @@
 #include "embed/forward_pbr_skinned_vert.gen.h"
 #include "embed/forward_pbr_instanced_vert.gen.h"
 #include "embed/forward_shaded_frag.gen.h"
+#include "embed/forward_shaded_sprite3d_cluster_ssbo_frag.gen.h"
 #include "embed/forward_shaded_skinned_vert.gen.h"
 #include "embed/forward_shaded_instanced_vert.gen.h"
 #include "embed/forward_shaded_skinned_instanced_vert.gen.h"
@@ -812,6 +813,22 @@ void VulkanShaderManager::InitForwardShadedShader() {
         DEBUG_LOG_ERROR("Vulkan forward shaded shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan forward shaded shader created: handle={}", forward_shaded_shader_handle_);
+    }
+}
+
+
+void VulkanShaderManager::InitForwardShadedClusteredShader() {
+    if (forward_shaded_clustered_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    forward_shaded_clustered_shader_handle_ = CreateProgramFromSpirv(
+        kforward_pbr_vert_spv, kforward_pbr_vert_spv_size,
+        kforward_shaded_sprite3d_cluster_ssbo_frag_spv,
+        kforward_shaded_sprite3d_cluster_ssbo_frag_spv_size);
+    if (forward_shaded_clustered_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan forward shaded clustered shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan forward shaded clustered shader created: handle={}",
+                       forward_shaded_clustered_shader_handle_);
     }
 }
 
