@@ -179,7 +179,43 @@ ecs.set_post_process_tilt_shift(e, enabled, focus, range, blur)
 - `suites/hd2d-acceptance.yaml`：`cli.hd2d_m6_acceptance` 三后端 + D3D11 离屏渲染，`hd2d_pixel_stats.py --gate` PASS（mean_luma≈66 / bright_ratio≈0.20 / 跨后端 PSNR ≥ 11.98dB）。
 - `SceneIO_Sprite3DRoundTrip`（JSON + `.bin` 两条路径）PASS。
 
-仍待办（不阻断 M1M6 验收）：美术自动图集切分流程的文字化说明；WSL/Xvfb 无头渲染接入（当前 CI 门控跑在自托管 Windows GPU runner 上）。
+仍待办（不阻断 M1M6 验收）：WSL/Xvfb 无头渲染接入（当前 CI 门控跑在自托管 Windows GPU runner 上）。
+
+### 5.2 收尾验证（round 4，2026-09-17）
+
+第 1 节验收第 5 条「旧 `platformer_2d` / `topdown_3d` 行为不回退」与 M5 验收列「`dse new hd2d`
+直接产出 3D 地形+精灵工程」本轮实测：
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| `topdown_3d` 回归 | `DSE_RENDER_SCALE=0.25 DSE_MAX_FRAMES=5`，cwd=模板目录 | exit=0；与已签入基线 `docs/design/hd2d_m1m2_shots/topdown_3d_reg.png` **PSNR=99.00dB / SSIM=1.0000**（逐像素一致） |
+| `platformer_2d` 回归 | 同上（与基线同 recipe） | exit=0；**PSNR=35.17dB / SSIM=0.9985** |
+| `platformer_2d` 正确 data root | cwd=模板目录（模板 assets 生效） | exit=0；画面为真实美术（mean_luma 156 / warm_emissive 0.084）。与基线的差异已归因：**基线本身是「纹理未加载」时截的**——同 recipe 下无 data root 的复跑与基线一致（PSNR 35.17dB），且该次运行日志有 56 条 `Failed to read texture file` |
+| API 兼容 | `_compat_test.lua` | `[compat] OK: P1 bool/number + P2 精灵 API + P3 tilemap_ex + P4 中文字表`，exit=0 |
+| `dse new hd2d` | `dse new hd2d tmp/scaffold_hd2d` | 706 文件：**107 `.dsprite.json` + 105 图集 PNG + 2 `*_3d.dmesh`** + `bplus.lua` + `project.dseproj`；按 README 跑通 exit=0，`[bplus] map=village mesh=assets/maps/village_3d.dmesh lights=13`，无 `MISSING texture` |
+| 图集切分流程 | — | 已补写进 `templates/hd2d_wuxia/README.md`「美术图集切分流程」章节（输入命名 / 切分命令 / 附属贴图 / 三处消费方式 / 自检）；`gen_atlases.py` 在工程副本上实测输出 `actor/npc atlases=97` + `fx atlases=8` |
+
+注意（既有红灯，与 HD-2D 无关）：仓库自带的 3D demo 套件 `tools/verify_lua_3d_demos.py --entries all`
+在本机为 **FAILED_ENTRIES**（`3d_triangle:4`/`3d_square:4` 截图过暗、5 个条目 `LOG_ASSERT_MISSING`、
+`3d_character_third_person`/`3d_vse15_22_scene` 超时、`3d_physics_interaction` 因
+`rigidbody_3d_set_gravity` 收到 boolean 而刷 77 条 Lua 错）。归因：
+
+- 同构建下 `--entries basic --frames 30` 为 `VERIFY_OK`（同一批条目在帧数不同时结果不同）；
+- `3d_postprocess_showcase` 缺的是 `get_post_process_state` / `set_post_process_bloom` /
+  `set_post_process_color` 这几个**聚合式** PostProcess 名字的日志 token，而这些名字
+  **从未出现在 `tools/codegen/binding_defs.json`**（`git log -S 'set_post_process_bloom"'` 为空），
+  即 demo 参考的是早已不存在的 API，且 demo 用 `if dse.ecs.X then` 守卫静默降级；
+- 受影响 demo（`3d_postprocess_showcase` / `3d_render_quality_showcase` 等）都不经过 Sprite3D /
+  cluster SSBO 代码路径。
+
+故判为**既有套件欠账**，不在本轮改动范围；`docs/design/LUA_3D_DEMOS.md` 历史上也只声称
+`--entries p1` 通过，未声称 `all`。后续可要么把这两个 demo 迁到细粒度 setter
+（`set_post_process_bloom_enabled/threshold/intensity` 等，模板 README 已记录为当前口径），
+要么补一层聚合式兼容别名。
+
+另注：该 runner 的「同步样例到 `bin/samples`」步骤（`copytree_replace`）会**删除**目标目录里源码侧
+不存在的文件——本轮实测把被跟踪的 `bin/samples/lua/3d/3d_character_outfit.lua` 删掉了（已
+`git checkout` 恢复）。跑该套件后需检查 `git status`，这也算它自身的一个欠账。
 
 ---
 

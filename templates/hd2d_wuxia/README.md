@@ -91,6 +91,75 @@ python3 tools/_gen_maps_only.py        # 只重建地图与 maps/*_3d.dmesh
 python3 tools/gen_atlases.py .         # 只重建角色/敌人/NPC/FX 图集
 ```
 
+## 美术图集切分流程（gen_atlases.py）
+
+Sprite3D 播片不直接吃逐帧 PNG，而是吃**打包图集** `.dsprite.json`（`texture` + `frames[].uv_rect` +
+`clips{}.frames/fps/loop`）。切分由 `tools/gen_atlases.py` 完成，是「美术素材 → 运行时可播动画」的唯一入口。
+
+### 1) 输入：逐帧 PNG 的命名与落盘位置
+
+| 类别 | 目录 | 命名规则 | 例 |
+|---|---|---|---|
+| 角色/敌人 | `assets/char/<actor>/`、`assets/enemy/<actor>/` | `<prefix>_<dir>_<action>_<n>.png`（`n` 从 0 起，按序号排序） | `hero_d_walk_0.png` … `hero_d_walk_5.png` |
+| NPC | `assets/npc/<name>/` | `<name>_<dir>_idle_<n>.png` | `elder_d_idle_0.png` |
+| FX 序列 | `assets/fx/` | `<kind>_<n>.png` | `slash_0.png`、`slash_1.png` |
+| FX 单帧 | `assets/fx/` | `<kind>.png` | `glow_warm.png` |
+
+`dir` 取 `d/u/l/r`，`action` 取 `idle/walk/attack/dodge/cast/hurt/die`（各 actor 支持的集合见
+`ACTOR_SPECS` / `NPC_SPECS` / `FX_SEQUENCES`）。**素材由 `gen_lib.py` 程序化生成**，所以默认无需外部美术；
+若换成真实美术，只要按上表命名落盘即可，脚本无需改。
+
+### 2) 切分命令
+
+```bash
+python3 tools/gen_atlases.py .        # 参数是「输出根目录」，"." = 模板根（本目录）
+```
+
+脚本扫描上述目录 → 按 actor/方向/动作横向打包 → 写两个文件到素材同目录：
+
+- `<prefix>_<dir>_<action>_atlas.png`：打包后的图集（帧横向排列）；
+- `<prefix>_<dir>_<action>_atlas.dsprite.json`：`texture`（兄弟文件名，按图集目录解析）、
+  `width/height`、`frames[]`（`name/index/pixel_rect/uv_rect/pivot`）、`clips{<action>:{frames,fps,loop}}`。
+
+`fps/loop` 来自 `ACTION_FPS` / `ACTION_LOOP`（未列出则 10 帧/循环）；FX 序列按 20 帧非循环、`pivot_y=0.5`。
+
+### 3) 附属贴图（法线 / 自发光）
+
+若同目录存在 `<base>_normal.png` / `<base>_emissive.png`（`<base>` = 图集名去掉 `_atlas`），脚本会把
+`normal` / `emissive` 字段写进 json；运行时 `load_sprite_atlas` 会一并加载，Sprite3D lit 路径据此做
+法线扰动与 Bloom 自发光（验证用例：`_sprite3d_normal_emissive_test.lua`）。
+
+### 4) 消费方式（三处，任选其一即可让实体用上）
+
+```lua
+-- Lua（B+ presenter 走的就是这条）
+local atlas = dse.assets.load_sprite_atlas("assets/char/hero/hero_d_walk_atlas.dsprite.json")
+dse.ecs.set_sprite3d_atlas(e, atlas, "walk")
+dse.ecs.set_sprite3d_anim(e, "walk", { fps = 8.0, loop = true })
+```
+
+- **编辑器**：Inspector → Sprite3D → `Atlas` 填 `.dsprite.json` 路径、`Clip` 填片段名，缩略图与
+  **独立预览视口**（Window 菜单 → Sprite3D Preview）可直接看播片与时间轴。
+- **场景持久化**：`.dscene` 存 `atlas_path` + `clip_name`（不是裸 RHI 句柄），加载时经运行时 atlas
+  注册表重新解析纹理与逐帧 UV（`editor_scene_io.cpp` 的 `ResolveSprite3DAtlas`，与运行时
+  `scene_json_codec_custom.h` 同源）。
+
+### 5) 自检
+
+```bash
+python3 tools/gen_atlases.py .                          # 期望输出 [atlas] actor/npc atlases=97 / fx atlases=8
+dse AssetBuilder --sprite <x>.dsprite.json out.dsprite  # 期望 "N frames, M clips"
+```
+
+实测（本机 RTX 3070 / Windows，在 `dse new hd2d` 生成的工程副本上跑）：
+
+- 生成器输出 `[atlas] actor/npc atlases=97` + `[atlas] fx atlases=8` → 共 **105 张图集**；
+- 模板目录现有 **105 个 `*_atlas.dsprite.json` + 105 张 `*_atlas.png`**（另有 2 个手写
+  `.dsprite.json` 供 M3/M5 像素用例使用，故 `.dsprite.json` 总数为 107）；
+- `dse new hd2d` 产出的独立工程：**107 个 `.dsprite.json` + 105 张图集 PNG + 2 个 `*_3d.dmesh`**，
+  且按本 README「运行」章节跑通（日志 `[bplus] map=village mesh=assets/maps/village_3d.dmesh lights=13`，
+  无 `MISSING texture`）。
+
 ## 引擎约束（本模板已规避，改动前必读）
 
 1. **纹理加载顺序 = 世界精灵绘制顺序**。精灵批处理排序为 `sorting_layer  shader_variant  material 

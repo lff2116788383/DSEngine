@@ -124,7 +124,7 @@
 |---|---|---|
 | 1 台式机 D3D11 真机证据 | **已用本机硬件取代** | 本机 RTX 3070（日志无 WARP 回退）跑 D3D11 离屏 + 三后端像素用例；GT 1030 台式机不再是唯一证据来源 |
 | 2 lit 主路径改 clustered SSBO | **已完成** | `forward_shaded.frag` 新增 `SPRITE3D_CLUSTER_SSBO` 变体（binding 32..35，`light_params.w` 门控，关时退回 UBO 数组）；`ForwardShadedClustered` 在 GL/VK/D3D11 三后端建程序；`ForwardShadedPixelSmokeTest.*DirectClusterSSBO` 三后端 PASS |
-| 3 法线/emissive 与图集切分流程 | **部分**（代码已具备，流程待文字化） | `gen_atlases.py` 已自动切分并产出 `*_atlas.png` + `.dsprite.json`；缺一页流程说明 |
+| 3 法线/emissive 与图集切分流程 | **已完成** | `gen_atlases.py` 自动切分（实测 `actor/npc atlases=97` + `fx atlases=8`），流程已文字化进 `templates/hd2d_wuxia/README.md`「美术图集切分流程」章节（输入命名 / 切分命令 / 附属贴图 / 消费方式 / 自检） |
 | 4 编辑器独立 viewport / 时间轴 | **已完成** | `apps/editor_cpp/src/editor_sprite3d_preview.cpp`（引擎重渲 → 私有 RT → ImGui 显示，轨道/缩放/帧时间轴/播放），`DSE_EDITOR_PANEL` 自注册、Window 菜单可开关；`dse-panels/sprite3d_preview` UI 用例 PASS |
 | 5 `gen_maps.py` 3D 导出 | **已完成**（round 2：`78c2463c`） | `assets/maps/village_3d.dmesh`、`stronghold_3d.dmesh` + `mapdata.lua` 的 `mesh3d` 字段 |
 | 6 B+ 表现层迁移 | **已完成**（round 2：`d51e46ca`） | `scripts/bplus.lua`（`DSE_HD2D_BPLUS=1`），保留 2D 逻辑/碰撞/AI/任务/存档，仅切表现层 |
