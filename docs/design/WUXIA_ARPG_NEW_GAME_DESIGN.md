@@ -139,7 +139,23 @@ python games\wuxia_arpg\tools\run_r3_acceptance.py --backends d3d11 --out-dir tm
   - `_r4_logic_test.lua`：随机装备、战力、自动装备、存档 roundtrip。
   - `_r4_combat_test.lua`：三段连招、分花/紫霞、Boss 三阶段与击杀掉落。
   - `run_r4_acceptance.py`：三后端演示日志 + 受光对照。
-- R4 三后端结果：OpenGL / Vulkan / D3D11 均 `[r4] acceptance PASS`；受光 delta 约 60。## 9. 非目标
+- R4 三后端结果：OpenGL / Vulkan / D3D11 均 `[r4] acceptance PASS`；受光 delta 约 60。## 8.6 R5 三张地图与天气
+
+- `data.lua` 改为 `D.maps` 多地图模型：`qingxi_village` / `blackwind_stronghold` / `youhuang_valley`。
+- `D.load_map(id)` 切换当前地图，重建碰撞与实体列表。
+- 地图连接：
+  - 青溪村北 -> 黑风寨南；
+  - 黑风寨南 -> 青溪村北；
+  - 黑风寨北 -> 幽篁秘谷南；
+  - 幽篁秘谷南 -> 黑风寨北。
+- `DSE_WUXIA_TOUR=1` 可自动依次走完三张地图，日志输出 `transition from=... to=...`。
+- `weather.lua`：
+  - 天气：`clear` / `leaf` / `rain` / `storm` / `fog` / `snow`。
+  - 新生成天气粒子：雨、雪、雾、落叶。
+  - 天气影响方向光颜色/强度、灯笼点光强度/色温、曝光与 Bloom。
+  - 雷暴有周期性曝光脉冲。
+- 每张地图有默认天气与天气循环；R5 验收覆盖三图  OpenGL/Vulkan/D3D11。
+- R5 验收：`python games\wuxia_arpg\tools\run_r5_acceptance.py --backends opengl,vulkan,d3d11 --out-dir tmp\r5_final`。## 9. 非目标
 
 - 不使用 `templates/hd2d_wuxia` 或 `templates/topdown_3d` 的游戏素材。
 - 不新增第三方库。

@@ -50,26 +50,33 @@
 | 34 | `games/wuxia_arpg/assets/props/lantern.png` | 新生成 3D 道具贴图 | gen_assets.py | DSEngine Authors | Apache-2.0 | G1 | `551d3777efe8500f10a0e676c06dba042132dc20faba447f7045acd9958d3ff6` |
 | 35 | `games/wuxia_arpg/assets/props/rock.png` | 新生成 3D 道具贴图 | gen_assets.py | DSEngine Authors | Apache-2.0 | G1 | `b23016c200b19e66df647d5da3ea1918641ed7c15e9f06c7b0b20f93964857cd` |
 | 36 | `games/wuxia_arpg/assets/props/tree.png` | 新生成 3D 道具贴图 | gen_assets.py | DSEngine Authors | Apache-2.0 | G1 | `3fd72a8951721fd17015d4106b51aeb643800dd27846702709e0f01035f14d69` |
-| 37 | `games/wuxia_arpg/assets/ui/font.png` | 新生成字体图集/度量 | gen_assets.py + apps/editor_cpp/fonts/NotoSansSC-Regular.ttf | DSEngine Authors / Noto CJK contributors | Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源) | G1 | `cc942395650beafe7a83f98f3fdc161a89d2c492db20ff888bab6563853ebca7` |
-| 38 | `games/wuxia_arpg/README.md` | 文档/仓库配置 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `ccd9a5681781ad9b14e09cc9ba2079da8481c44a156f2f5ab25c04a2e8813320` |
-| 39 | `games/wuxia_arpg/scripts/_logic_test.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `9f7712009ad34c1a449cd91ee73373313c0a5a5c02cf572048a253c3d700fca2` |
-| 40 | `games/wuxia_arpg/scripts/_r4_combat_test.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `f162ee1e96675fc0026f31de37d788413f2b12bbd223a7377f313688e27cab1e` |
-| 41 | `games/wuxia_arpg/scripts/_r4_logic_test.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `79e5caeac25f17fbf85cf869c7085ad81bc5632f7e27b46a6dd16be7f2e7b069` |
-| 42 | `games/wuxia_arpg/scripts/assets.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `6e963032833b737bf9b608818b8815b45f4308fd698f16394f52283fa6842b6c` |
-| 43 | `games/wuxia_arpg/scripts/core.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `270ef8879e0ac57cb46d2dbb48c2262700cf7f1dc80c722be486a672d7979b64` |
-| 44 | `games/wuxia_arpg/scripts/data.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `d9e5fb4fd06732b6efe8b816fe06bbb7bf44a7b6e8fd99b1515f4977e87d6230` |
-| 45 | `games/wuxia_arpg/scripts/enemy.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `3da2d46b91cbaf91f23113d9060de0b024ef4ce25b8107865d6417ae52613582` |
-| 46 | `games/wuxia_arpg/scripts/font.lua` | 新生成字体图集/度量 | gen_assets.py + apps/editor_cpp/fonts/NotoSansSC-Regular.ttf | DSEngine Authors / Noto CJK contributors | Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源) | G1 | `4b5f6afb48562b4ce21fd0500b1ebaf5aae2eeedfebe4636a7a20362c2f4ae28` |
-| 47 | `games/wuxia_arpg/scripts/fx.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `8a18e7ddb3eae3b689bf3f44a9683209247ee9bcb0182c078cf53b82e88fe90e` |
-| 48 | `games/wuxia_arpg/scripts/loot.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `5bd8ee89b5e122bd42a8a96ca8dc60cac6c8d82c68c5846fc8cce1d265454f76` |
-| 49 | `games/wuxia_arpg/scripts/main.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `32865fb95255e16e4d461d99a3d9dcb43451090d273e1c52ed5924a2d0c40e52` |
-| 50 | `games/wuxia_arpg/scripts/player.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `1a25440b8c2886335ac0f529aa9271abd838e8d4ee4141faf5b223b9e6157383` |
-| 51 | `games/wuxia_arpg/scripts/rng.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `a24dad4f13b68dac840593fa4aba2da08d3c91d65e772bf6bd05ba1c7f8c3b1a` |
-| 52 | `games/wuxia_arpg/scripts/save.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `8ba170e6bb8baaed28fe9ae1dbf72068ffeacc28afe7266002dc132fbd4f0e56` |
-| 53 | `games/wuxia_arpg/scripts/terrain.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `e3fc77373a407694161e94eea15579851ceb9e941f75d28913dac2b0168a91ba` |
-| 54 | `games/wuxia_arpg/scripts/ui.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `8c42ab94a7553e5c6d807a4ffdf3fe9d0ab78308419ee6a7927b7f93e803b9a7` |
-| 55 | `games/wuxia_arpg/tools/gen_assets.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `a44d1511884bc3717e2de0b5c97f19834988a0aac447fd99b25e68b68ae96d61` |
-| 56 | `games/wuxia_arpg/tools/gen_ledger.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `fb0a21f4a2f4bc6aa9581a429000040f12b9ccb0fedd080e74c33e169978425c` |
-| 57 | `games/wuxia_arpg/tools/pixel_stats.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `70f84e1b2080e067c0af3e0140df9f345d281e59f0421dba859b3531e998c0e7` |
-| 58 | `games/wuxia_arpg/tools/run_r3_acceptance.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `999db8aac5ea25a3a3a771beacf0509e3f4b0da609408576d99c0bbf528bcdac` |
-| 59 | `games/wuxia_arpg/tools/run_r4_acceptance.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `7050fa5d53ccaf0756f95572f531dce30b715d3701fa4442678ff703d378dd1e` |
+| 37 | `games/wuxia_arpg/assets/ui/font.png` | 新生成字体图集/度量 | gen_assets.py + apps/editor_cpp/fonts/NotoSansSC-Regular.ttf | DSEngine Authors / Noto CJK contributors | Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源) | G1 | `58051dd1b1d22226bff691f5cea7d04cdcf18ab08e803a6e6d86b6a6f4414e4a` |
+| 38 | `games/wuxia_arpg/assets/weather/fog.png` | 新生成天气粒子贴图 | gen_assets.py | DSEngine Authors | Apache-2.0 | G1 | `0e0f8177912ce3c1d0cdcd3ba109e649c75358eecafb1696ec0b9c3706b59092` |
+| 39 | `games/wuxia_arpg/assets/weather/leaf.png` | 新生成天气粒子贴图 | gen_assets.py | DSEngine Authors | Apache-2.0 | G1 | `9e2eda1170bb4aa7494b835085d9f7b90acac114744f71f1083f009537261b75` |
+| 40 | `games/wuxia_arpg/assets/weather/rain.png` | 新生成天气粒子贴图 | gen_assets.py | DSEngine Authors | Apache-2.0 | G1 | `d6ef7e6b1fa6fddf9e0dbfac6f8bf308f2a8c52646f37f62b5990c74fc664f2d` |
+| 41 | `games/wuxia_arpg/assets/weather/snow.png` | 新生成天气粒子贴图 | gen_assets.py | DSEngine Authors | Apache-2.0 | G1 | `919435fa915e2de1babdeed3bb26f6a7a82d0c940fb4237d3ed62797213d6ad2` |
+| 42 | `games/wuxia_arpg/README.md` | 文档/仓库配置 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `cb3f18259120b8ebee23c5c37d195a52f78e5ebbc6096e124069fb90dc2d78fa` |
+| 43 | `games/wuxia_arpg/scripts/_logic_test.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `9f7712009ad34c1a449cd91ee73373313c0a5a5c02cf572048a253c3d700fca2` |
+| 44 | `games/wuxia_arpg/scripts/_r4_combat_test.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `f162ee1e96675fc0026f31de37d788413f2b12bbd223a7377f313688e27cab1e` |
+| 45 | `games/wuxia_arpg/scripts/_r4_logic_test.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `79e5caeac25f17fbf85cf869c7085ad81bc5632f7e27b46a6dd16be7f2e7b069` |
+| 46 | `games/wuxia_arpg/scripts/_r5_maps_test.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `e46cfad7b9162dd0d1b623ac3413df7ec8c8e1b6f1120efc5656a4368d27c590` |
+| 47 | `games/wuxia_arpg/scripts/assets.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `e8bda1b30957d16e1f76c5bc4b5df227bf4302ecf1a283c91813bdd83e5a83f5` |
+| 48 | `games/wuxia_arpg/scripts/core.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `270ef8879e0ac57cb46d2dbb48c2262700cf7f1dc80c722be486a672d7979b64` |
+| 49 | `games/wuxia_arpg/scripts/data.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `5d35d0adb94251ae014917eb7e6dd661b2c3e1c950384a4fc3b6d23a112ead94` |
+| 50 | `games/wuxia_arpg/scripts/enemy.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `f789a059a2329d22320c5f2329d2a577d1fbbbfd8edff7e2062e67f1e98c4b8b` |
+| 51 | `games/wuxia_arpg/scripts/font.lua` | 新生成字体图集/度量 | gen_assets.py + apps/editor_cpp/fonts/NotoSansSC-Regular.ttf | DSEngine Authors / Noto CJK contributors | Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源) | G1 | `bdb0c3075432d58ef0b6c17d100157826827dba853646096b95e6eeb34ba50b2` |
+| 52 | `games/wuxia_arpg/scripts/fx.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `8a18e7ddb3eae3b689bf3f44a9683209247ee9bcb0182c078cf53b82e88fe90e` |
+| 53 | `games/wuxia_arpg/scripts/loot.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `5bd8ee89b5e122bd42a8a96ca8dc60cac6c8d82c68c5846fc8cce1d265454f76` |
+| 54 | `games/wuxia_arpg/scripts/main.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `240251baa586332b85ce0dab015f8860930a84088dc6d5281cecb6f86964625c` |
+| 55 | `games/wuxia_arpg/scripts/player.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `c8943cfd0d2e607b58a2238d4e770287eb127fdb8b304c2ff6708c373c68f4ca` |
+| 56 | `games/wuxia_arpg/scripts/rng.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `a24dad4f13b68dac840593fa4aba2da08d3c91d65e772bf6bd05ba1c7f8c3b1a` |
+| 57 | `games/wuxia_arpg/scripts/save.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `8ba170e6bb8baaed28fe9ae1dbf72068ffeacc28afe7266002dc132fbd4f0e56` |
+| 58 | `games/wuxia_arpg/scripts/terrain.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `a5a4ae34471ce79986fd764028cdfb52c11db97d3714d89fae3fa69796ce57c4` |
+| 59 | `games/wuxia_arpg/scripts/ui.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `8d1a8c1ec53b5206a657229b67c29859a3f272372fc7494d364ededef16167c4` |
+| 60 | `games/wuxia_arpg/scripts/weather.lua` | 新游戏 Lua 源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `cfe02c2ca078324070a04bf3d6bb67909b2e1aff0f7c50e5628094de8e3c0b7e` |
+| 61 | `games/wuxia_arpg/tools/gen_assets.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `244e3f382d444d126e8255b75764808e144789af2260d3be7fc6bc03cafd7c4b` |
+| 62 | `games/wuxia_arpg/tools/gen_ledger.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `abea6960b021d1a108f65a4d858c71f9896ed3693a7eb9e4bb0201e4869de67f` |
+| 63 | `games/wuxia_arpg/tools/pixel_stats.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `70f84e1b2080e067c0af3e0140df9f345d281e59f0421dba859b3531e998c0e7` |
+| 64 | `games/wuxia_arpg/tools/run_r3_acceptance.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `999db8aac5ea25a3a3a771beacf0509e3f4b0da609408576d99c0bbf528bcdac` |
+| 65 | `games/wuxia_arpg/tools/run_r4_acceptance.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `7050fa5d53ccaf0756f95572f531dce30b715d3701fa4442678ff703d378dd1e` |
+| 66 | `games/wuxia_arpg/tools/run_r5_acceptance.py` | 生成/验收工具源码 | 仓库手写 | DSEngine Authors | Apache-2.0 | HAND | `9f8a11de4a4b8f72c6e59f97b85361b06b4b3a1d1215a43cc41ae241d6a955b5` |

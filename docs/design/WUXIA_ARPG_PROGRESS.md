@@ -7,10 +7,10 @@ goal:
   objective: "用 DSEngine 制作 HD-2D 武侠刷子 ARPG（暗黑 2 式，3 张地图）"
   status: in_progress
   max_goal_rounds: 12
-  current_round: R5
+  current_round: R6
   attempt: 1
-  completed_rounds: [R1, R2, R3, R4]
-  next_round: R5
+  completed_rounds: [R1, R2, R3, R4, R5]
+  next_round: R6
   branch: feature/hd2d-wuxia-arpg
   baseline: feature/engine-lib @ 0a8fc8b0
   contract: docs/design/WUXIA_ARPG_PLAN.md
@@ -26,7 +26,7 @@ goal:
 | R2 | 素材清单 + 完整设计 | 已完成（门禁通过） | 本文 3 |
 | R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 已完成（新游戏门禁通过） | 本文 5 |
 | R4 | 战斗与成长 | 已完成（门禁通过） | 本文 7 |
-| R5 | 另两张地图 + 天气与光影打磨 | 未开始 |  |
+| R5 | 另两张地图 + 天气与光影打磨 | 已完成（门禁通过） | 本文 8 |
 | R6 | 收尾验证与交付 | 未开始 |  |
 
 ## 2. R1 能力审计
@@ -456,10 +456,81 @@ python games\wuxia_arpg\tools\run_r4_acceptance.py --backends d3d11 --out-dir tm
 
 R4 结论：`已通过`。下一轮 R5：在 `games/wuxia_arpg` 上追加 2 张新地图（合计 3 张）与天气/光影打磨。
 
-## 8. R5 入口条件
+## 8. R5 三图与天气/光影打磨
+
+### 8.1 R5 开工基线
+
+- 构建：`cmake --build --preset windows-x64-debug`，exit=0，19.8s。
+- gtest：`ctest --preset windows-x64-debug`，exit=0，52.6s，5/5 通过，0 失败。
+- 继续只改 `games/wuxia_arpg/`。
+
+### 8.2 R5 实现
+
+- `data.lua` 改为多地图模型：
+  - `qingxi_village`：暮色青溪村，默认落叶，北 -> 黑风寨。
+  - `blackwind_stronghold`：夜雨黑风寨，默认雷暴，南 -> 青溪村，北 -> 幽篁秘谷。
+  - `youhuang_valley`：幽篁秘谷，默认雾，南 -> 黑风寨。
+- 三图共 3 条连通边；`DSE_WUXIA_TOUR=1` 可自动走完三图。
+- `weather.lua` 新天气系统：
+  - 天气：晴 / 落叶 / 雨 / 雷暴 / 雾 / 雪。
+  - 新生成雨、雪、雾、落叶粒子贴图。
+  - 天气影响方向光颜色/强度、灯笼点光强度/色温、曝光与 Bloom。
+  - 雷暴含周期性闪电曝光脉冲。
+- `terrain.lua` 支持 `clear/build`，真实销毁/重建三图地形和道具。
+- `main.lua` 支持 `DSE_WUXIA_MAP` / `DSE_WUXIA_WEATHER` / `DSE_WUXIA_TOUR`，并保留 R4 战斗成长。
+- 新素材：三图共用的天气粒子、字体图集扩充到 222 glyphs；新资产台账由 `gen_ledger.py` 自动更新，共 66 条。
+
+### 8.3 R5 自动化验收
+
+命令：
+
+```powershell
+python games\wuxia_arpg\tools\run_r5_acceptance.py --backends opengl,vulkan,d3d11 --out-dir tmp\r5_final
+```
+
+结果：`已通过`，exit=0，耗时 123.5s。
+
+覆盖：
+- R4 逻辑/战斗回归：`PASS`。
+- `_r5_maps_test.lua`：`[r5-maps] PASS maps=3 weather=落叶/雷暴/雾`。
+- 三后端  4 个地图/天气用例：
+  - `qingxi_village/leaf`
+  - `blackwind_stronghold/storm`
+  - `youhuang_valley/fog`
+  - `youhuang_valley/snow`
+- 三后端自动巡图 `DSE_WUXIA_TOUR=1`：均依次经过 `qingxi_village -> blackwind_stronghold -> youhuang_valley`。
+
+真实像素统计示例：
+
+| 后端/地图/天气 | mean_luma | bright_ratio |
+|---|---:|---:|
+| OpenGL 青溪村/落叶 | 60.50 | 0.00000 |
+| OpenGL 黑风寨/雷暴 | 60.43 | 0.00000 |
+| OpenGL 幽篁谷/雾 | 57.34 | 0.00000 |
+| OpenGL 幽篁谷/雪 | 60.71 | 0.00400 |
+| Vulkan 幽篁谷/雪 | 60.31 | 0.00263 |
+| D3D11 幽篁谷/雪 | 60.67 | 0.00400 |
+
+日志：`tmp/r5_runner_all.log`；截图：`tmp/r5_final/r5_{backend}_{map}_{weather}.png`（tmp 被忽略，数值已记录）。
+
+### 8.4 R5 门禁结论
+
+| 门禁 | 结论 | 说明 |
+|---|---|---|
+| 3 张地图 | 已通过 | `qingxi_village` / `blackwind_stronghold` / `youhuang_valley` |
+| 地图连通 | 已通过 | tour 日志真实走完三图 |
+| 天气系统 | 已通过 | 晴/落叶/雨/雷暴/雾/雪；粒子 + 光影 |
+| 三后端覆盖 | 已通过 | OpenGL/Vulkan/D3D11 三图用例全部 PASS |
+| R4 回归 | 已通过 | R4 逻辑/战斗测试仍 PASS |
+| 新素材/台账 | 已通过 | 天气粒子与字体图集已进入 `WUXIA_ARPG_NEW_ASSET_LEDGER.*` |
+| GT 1030 真机 | 环境暂缓 | 仍不可达，不得冒充 |
+
+R5 结论：`已通过`。下一轮 R6：收尾验证与交付，重点做全量三图三后端、存档/读档、发布整理和最终资产审计。
+
+## 9. R6 入口条件
 
 - 分支保持 `feature/hd2d-wuxia-arpg`。
-- 只改 `games/wuxia_arpg/`；禁止把 `templates/hd2d_wuxia` 作为底座。
-- R5 目标：新游戏从 1 张地图扩展到 3 张地图，并完成天气/光影打磨。
-- 新增地图/素材必须由 `gen_assets.py` 或新生成器产出，并更新 `WUXIA_ARPG_NEW_ASSET_LEDGER.*`。
-- R5 先跑 R4 三后端验收作为回归基线，再新增地图。
+- 只做验证、修复、文档、交付整理，不新增完整地图/大系统。
+- R6 先跑 R5 验收作为回归基线，再执行三图  三后端全矩阵。
+- 必须给出存档/读档、资产台账、三后端截图/统计、git/push 状态。
+- 不 push `master`。
