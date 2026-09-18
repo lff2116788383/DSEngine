@@ -213,8 +213,11 @@ void RegisterTerrainTilemapTests(ImGuiTestEngine* e) {
             // 保证单独跑这条用例（没有前面用例预热面板）时几何与焦点也是确定的。
             if (ImGuiWindow* tw = FindActiveWindow("Terrain Brush")) {
                 ImGui::SetWindowCollapsed(tw, false);
-                ImGui::SetWindowPos(tw, ImVec2(180.0f, 70.0f), ImGuiCond_Always);
-                ImGui::SetWindowSize(tw, ImVec2(940.0f, 580.0f), ImGuiCond_Always);
+                ImGui::SetScrollY(tw, 0.0f);   // 笔刷按钮在面板顶部，先滚到顶再点
+                // 位置/尺寸只设一次（Once）：用 Always 会让窗口每帧重定位，
+                // 测试引擎"取条目矩形 → 投递点击"之间窗口已经跳走，点击随机落空（实测抖动）。
+                ImGui::SetWindowPos(tw, ImVec2(180.0f, 70.0f), ImGuiCond_Once);
+                ImGui::SetWindowSize(tw, ImVec2(940.0f, 580.0f), ImGuiCond_Once);
             }
             ctx->Yield(2);
             ctx->WindowFocus("//Terrain Brush");

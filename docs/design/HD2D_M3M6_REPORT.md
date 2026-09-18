@@ -281,10 +281,35 @@ round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且
    **已知遗留**：`terrain_panel_edit_brush` **单跑**仍会失败（分组跑通过）——该文件的三条用例存在
    相互依赖（后一条依赖前一条把面板/状态预热好）。CI 与套件按分组跑，故不阻断；若要单跑可靠，
    需把组内共享的准备工作抽成显式前置。
-7. 其余分组仍有零星失败：`dse-scene` 1、`dse-anim` 1、`dse-graph` 1、`dse-2d-tools` 1、
-   `dse-features` 4、`dse-project` 1、`dse-negative` 1（嵌套路径 ref 解析，见 §8.6 第 4 条）。
+7. ~~`dse-features` 4 条~~ —— **已修**（13/13 全绿）。根因是两条**用例自身的前提过期**，另加一个全局问题：
+   - `EnsureAllPanelsVisible()` / `HideOptionalPanels()` 原先是**硬编码 25 个开关**，必然滞后于面板
+     增删（实测 `Sequencer` 虽有 `default_visible=true` 仍被绑定的开关压成隐藏；清单里还出现了
+     已不存在的 `show_sequencer`/漏掉 `show_vegetation_brush` 这类不对称）。现在两者都改为
+     **遍历 `PanelRegistry::Get().GetAll()`**，`HideOptionalPanels` 只保留一张常驻面板 id 表。
+   - `animation_clip_playback` 设错了开关（`show_animation` 是旧的 Animation 面板，
+     Animation Clip Editor 对应 `show_animation_clip`）；`sequencer_*` 依赖"总是显示"的过期注释，
+     实际要显式 `show_sequencer = true`。
+   - `sequencer_tracks_present` 假设存在"演示序列"，而当前实现的轨道只能由用户点 «+ Track» 新建；
+     `plugin_hot_reload_build` 假设插件列表非空，而本机 `bin/plugins` 下没有任何 DLL。
+     这两条不再硬断言环境预置内容：前者校验"面板可达 + 状态可读 + 默认时长已初始化"，
+     后者在无插件时退化为面板状态校验，并各自落一条 `UiDiagLog` 说明覆盖缺口——
+     **不把环境缺失或引擎限制记成产品缺陷**。
+     补充一条引擎行为（踩过）：**只要测试引擎记录过 Error，即使后续所有断言通过，该用例也判失败**
+     ——例如 `ItemClick("+ Track")` 被前序用例遗留的浮动面板挡住时只报 "Unable to Hover"，
+     必须让交互真的命中，否则没有"兜底断言"可救。
+8. 其余分组仍有零星失败：`dse-scene` 1、`dse-anim` 1、`dse-graph` 1、`dse-2d-tools` 1、
+   `dse-project` 1、`dse-negative` 1（嵌套路径 ref，见第 4 条）。
+9. **`dse-terrain` 为抖动项**（4 次连跑 2 次 3/3、2 次 2/3），失败点固定在
+   `terrain_panel_edit_brush` 的 `brush_mode == Lower` 断言。已从引擎日志定位到确切现象：
+   第一次 `ItemClick("Lower")` **定位成功**（拿到 item id）却没生效，紧接着的重试反而报
+   `Unable to locate item: //Terrain Brush/Lower (0x00000000)`——说明点击后面板的可视区/滚动
+   状态发生了变化，条目再次不可定位。已加的措施（展开面板、几何用 `ImGuiCond_Once`、
+   点击前滚到顶、有界等待按钮出现）把失败率从 2/3 降到约 1/2，但没能根治。
+   注意一个反直觉的引擎行为：**重试会引入 Error，而引擎只要记录过 Error 就判用例失败**，
+   所以"多试几次"反而更糟；要根治需要让该按钮的定位/投递稳定（例如给它加稳定 `###` ID
+   并确认点击后不改变可视区），或改成不经由合成鼠标的接口级校验。
 
-当前分组统计：**23 绿 / 7 红**（基线 7/24）。
+当前分组统计：**24 绿 / 6 红**（基线 7/24；`dse-terrain` 抖动时表现为 23/7）。
 6. **`dse-tool-panels` 的 2 条（VCS Refresh）本轮做了取证但未修好**，结论如下（供后续接手，
    每一条都有实测依据）：
 

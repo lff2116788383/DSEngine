@@ -30,7 +30,8 @@
 #include "../editor_project.h"  // ProjectManager
 #include "../editor_scene_io.h"  // LoadScene / SetCurrentScenePath（起步显式加载场景）
 #include "../editor_selection.h"  // SelectionManager (ResetUiState)
-#include "../editor_shell.h"      // ResetEditorLayout（起步复位布局）
+#include "../editor_shell.h"
+#include "../editor_panel_registry.h"   // EnsureAllPanelsVisible/HideOptionalPanels 改为遍历注册表      // ResetEditorLayout（起步复位布局）
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -123,35 +124,34 @@ int CountValidEntities() {
 }
 
 void EnsureAllPanelsVisible() {
-    const UiTestServices& s = Services();
-    bool* const toggles[] = {
-        s.show_localization_preview, s.show_profiler, s.show_animation,
-        s.show_tile_palette, s.show_terrain_editor, s.show_lua_console,
-        s.show_undo_history, s.show_asset_browser, s.show_animation_timeline,
-        s.show_navmesh, s.show_shader_graph, s.show_git, s.show_multi_viewport,
-        s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
-        s.show_curve_editor, s.show_anim_retarget,
-        s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
-        s.show_vegetation_brush, s.show_sprite3d_preview, s.show_animation_clip,
-    };
-    for (bool* p : toggles)
-        if (p) *p = true;
+    // 遍历注册表里**真实存在**的面板，而不是硬编码开关清单：后者随面板增删而滞后
+    // （实测 Sequencer 虽有 default_visible=true 仍被绑定的 show_ 开关压成隐藏，
+    //  Animation Clip Editor / Plugin Hot Reload 的开关也对不上，对应用例直接报
+    //  "FindActiveWindow(...) == nullptr"，整组 4 条挂着）。
+    for (const auto& p : PanelRegistry::Get().GetAll()) {
+        if (p.visible) *p.visible = true;
+    }
 }
 
+namespace {
+/// UI 测试期间始终保持可见的"常驻"面板 id（HideOptionalPanels 不关它们）。
+const char* const kAlwaysVisiblePanelIds[] = {
+    "hierarchy", "inspector", "scene", "game", "console", "project", "toolbar", "material",
+};
+}  // namespace
+
 void HideOptionalPanels() {
-    const UiTestServices& s = Services();
-    bool* const toggles[] = {
-        s.show_localization_preview, s.show_profiler, s.show_animation,
-        s.show_tile_palette, s.show_terrain_editor, s.show_lua_console,
-        s.show_undo_history, s.show_asset_browser, s.show_animation_timeline,
-        s.show_navmesh, s.show_shader_graph, s.show_git, s.show_multi_viewport,
-        s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
-        s.show_curve_editor, s.show_anim_retarget,
-        s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
-        s.show_sequencer, s.show_sprite3d_preview, s.show_animation_clip,
-    };
-    for (bool* p : toggles)
-        if (p) *p = false;
+    // 与 EnsureAllPanelsVisible 互逆：同样按注册表遍历，只留常驻面板。
+    // 之前是硬编码清单，既漏（有的面板关不掉，压在 Hierarchy 上干扰屏幕坐标拖拽）
+    // 又多（清单里有已不存在的开关）。
+    for (const auto& p : PanelRegistry::Get().GetAll()) {
+        if (!p.visible) continue;
+        bool keep = false;
+        for (const char* id : kAlwaysVisiblePanelIds) {
+            if (p.id == id) { keep = true; break; }
+        }
+        if (!keep) *p.visible = false;
+    }
 }
 
 ImGuiWindow* FindActiveWindow(const char* name_or_substr) {
