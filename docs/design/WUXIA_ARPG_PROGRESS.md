@@ -525,6 +525,16 @@ python games\wuxia_arpg\tools\run_r5_acceptance.py --backends opengl,vulkan,d3d1
 | 新素材/台账 | 已通过 | 天气粒子与字体图集已进入 `WUXIA_ARPG_NEW_ASSET_LEDGER.*` |
 | GT 1030 真机 | 环境暂缓 | 仍不可达，不得冒充 |
 
+### 8.5 R5 提交与推送状态
+
+- 本地提交：
+  - `aceaedef feat(game): add R5 three maps and weather system`
+  - `690145e6 docs(wuxia): record R5 maps weather verification`
+- `git push origin feature/hd2d-wuxia-arpg` 当前结果：`环境暂缓`。
+- 失败现象：
+  - `OpenSSL SSL_read: Connection was reset, errno 10054`
+  - `Failed to connect to github.com port 443: Timed out`
+- 本地领先远端 2 个提交；未 push `master`。R6 开工后继续重试补推。
 R5 结论：`已通过`。下一轮 R6：收尾验证与交付，重点做全量三图三后端、存档/读档、发布整理和最终资产审计。
 
 ## 9. R6 入口条件
