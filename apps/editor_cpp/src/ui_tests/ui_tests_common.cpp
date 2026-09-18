@@ -284,6 +284,43 @@ void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst
     ctx->Yield(3);
 }
 
+bool DragHierarchyNode(ImGuiTestContext* ctx, const char* src_ref, const char* dst_ref) {
+    // 用 RectClipped（引擎已按窗口 ClipRect 裁过）而不是 RectFull 算落点：Hierarchy 停靠后常常
+    // 只有两百来像素宽，TreeNode 的 RectFull 会超出窗口右边界，RectFull 中心（实测 x=273）
+    // 落在窗口（x∈[41,271]）外 → 拖拽每一帧 IsWindowHovered() 都是 0，drop target 收不到 payload。
+    const ImGuiTestItemInfo src = ctx->ItemInfo(src_ref);
+    const ImGuiTestItemInfo dst = ctx->ItemInfo(dst_ref);
+    if (src.ID == 0 || dst.ID == 0) {
+        UiDiagLog("[dnd] ref 定位失败 src_id=%u dst_id=%u", src.ID, dst.ID);
+        return false;
+    }
+    auto visible_rect = [](const ImGuiTestItemInfo& info) {
+        const ImRect& r = info.RectClipped.GetWidth() > 1.0f ? info.RectClipped : info.RectFull;
+        return r;
+    };
+    const ImRect sr = visible_rect(src);
+    const ImRect dr = visible_rect(dst);
+    // 还要把落点钳进 Hierarchy 窗口的可见矩形：RectClipped 是按窗口的 **ClipRect** 裁的，
+    // 停靠很窄时它仍会超出窗口本身（实测窗口 x∈[41,271]，而源行 RectClipped 一直到 x=391，
+    // 算出的落点 x=294 落在窗口外 → 拖拽全程 hover 不到 Hierarchy，drop 不触发）。
+    const ImGuiTestItemInfo win = ctx->WindowInfo("//Hierarchy", ImGuiTestOpFlags_NoError);
+    const ImRect wr = win.RectFull.GetWidth() > 1.0f ? win.RectFull : ImRect(ImVec2(0, 0), ImVec2(FLT_MAX, FLT_MAX));
+    auto clamp_pt = [&wr](const ImVec2& p) {
+        return ImVec2(ImClamp(p.x, wr.Min.x + 4.0f, wr.Max.x - 4.0f),
+                      ImClamp(p.y, wr.Min.y + 4.0f, wr.Max.y - 4.0f));
+    };
+    // 拖拽起点取源行的左侧（缩进/箭头/标签所在处）；落点取目标行的垂直 25% 处
+    // （避开行中缝的"插入兄弟"落区，直接命中行本身 → reparent）。
+    const ImVec2 from = clamp_pt(ImVec2(sr.Min.x + 6.0f, sr.GetCenter().y));
+    const ImVec2 to = clamp_pt(ImVec2(ImClamp(dr.GetCenter().x, dr.Min.x + 6.0f, dr.Max.x - 4.0f),
+                                       dr.Min.y + dr.GetHeight() * 0.25f));
+    UiDiagLog("[dnd] src=(%.1f,%.1f) dst=(%.1f,%.1f) src_clip=(%.1f,%.1f)-(%.1f,%.1f) win=(%.1f,%.1f)-(%.1f,%.1f)",
+              from.x, from.y, to.x, to.y, sr.Min.x, sr.Min.y, sr.Max.x, sr.Max.y,
+              wr.Min.x, wr.Min.y, wr.Max.x, wr.Max.y);
+    ManualMouseDrag(ctx, from, to);
+    return true;
+}
+
 std::string ProjectAssetBaseDir() {
     namespace fs = std::filesystem;
     auto& pm = ProjectManager::Get();

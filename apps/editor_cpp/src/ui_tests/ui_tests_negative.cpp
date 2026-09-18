@@ -96,10 +96,11 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
                 const ImGuiTestItemInfo bi = ctx->ItemInfo(b_ref);
                 const ImGuiTestItemInfo ai = ctx->ItemInfo(a_ref);
                 IM_CHECK(bi.ID != 0 && ai.ID != 0);
-                const ImVec2 src(bi.RectFull.GetCenter().x, bi.RectFull.Min.y + bi.RectFull.GetHeight() * 0.5f);
                 ctx->KeyPress(ImGuiKey_Escape);
                 ctx->Yield();
-                ManualMouseDrag(ctx, src, NodeDropPos(ai));
+                // 落点用共享辅助（RectClipped 计算 + 钳制进窗口）：原先按 RectFull 中心算出的点
+                // 会落在窄窗口之外，拖拽每一帧都不 hover 到 Hierarchy，drop 永远不触发。
+                DragHierarchyNode(ctx, b_ref, a_ref);
             }
             IM_CHECK(reg.all_of<ParentComponent>(b) && reg.get<ParentComponent>(b).parent == a);
 
@@ -141,10 +142,9 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
                 const ImGuiTestItemInfo ai = ctx->ItemInfo(a_ref);
                 const ImGuiTestItemInfo bci = ctx->ItemInfo(b_child_ref, ImGuiTestOpFlags_NoError);
                 IM_CHECK(ai.ID != 0 && bci.ID != 0);
-                const ImVec2 src(ai.RectFull.GetCenter().x, ai.RectFull.Min.y + ai.RectFull.GetHeight() * 0.5f);
                 ctx->KeyPress(ImGuiKey_Escape);
                 ctx->Yield();
-                ManualMouseDrag(ctx, src, NodeDropPos(bci));
+                DragHierarchyNode(ctx, a_ref, b_child_ref);
             }
 
             // 层级未变：A 仍为根，B 仍是 A 的子。

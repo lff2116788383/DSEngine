@@ -274,7 +274,7 @@ void RegisterUndoTests(ImGuiTestEngine* e) {
             ctx->Yield(4);
 
             // Deselect All 已清除 gizmo 覆盖窗，可直接用 ItemDragAndDrop。
-            ctx->ItemDragAndDrop(src_ref, dst_ref);
+            DragHierarchyNode(ctx, src_ref, dst_ref);
 
             IM_CHECK(reg.all_of<ParentComponent>(a));
             IM_CHECK(reg.get<ParentComponent>(a).parent == b);

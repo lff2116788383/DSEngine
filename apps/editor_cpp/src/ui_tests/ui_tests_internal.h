@@ -88,6 +88,17 @@ void UndockPanel(ImGuiTestContext* ctx, const char* window_name);
 /// 全屏 "gizmo" 覆盖窗（NoTitleBar 不可拖动）挪不开会致落点漂移；手动逐帧 Yield 更可靠。
 void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst);
 
+/// 在 Hierarchy 里把 src_ref 节点拖到 dst_ref 节点上（改父子）。
+///
+/// 为什么不能直接用 `ctx->ItemDragAndDrop` 或 `RectFull`：Hierarchy 停靠后往往很窄
+/// （实测窗口仅 x∈[41,271]），而 TreeNode 的 `RectFull` 会超出窗口右边界，按它算出的落点
+/// 中心（实测 x=273）就落到窗口外 —— 合成拖拽的每一帧 `IsWindowHovered()` 都是 0，
+/// `BeginDragDropTarget()` 永远收不到 payload，表现为「拖了没反应」。
+/// 本函数改用 `RectClipped`（引擎已按窗口 ClipRect 裁过）算落点，并再钳制进窗口矩形，
+/// 然后走 ManualMouseDrag 逐帧投递。
+/// @return 两个 ref 都定位成功且拖拽已投递时返回 true。
+bool DragHierarchyNode(ImGuiTestContext* ctx, const char* src_ref, const char* dst_ref);
+
 /// 当前项目资产根目录（无项目时回退 <cwd>/samples/lua/data，与 Project 面板列目录一致）。
 /// 用例在拖拽/列出资源前把测试文件落到这里。
 std::string ProjectAssetBaseDir();
