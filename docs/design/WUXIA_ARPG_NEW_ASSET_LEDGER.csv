@@ -8,6 +8,14 @@ games/wuxia_arpg/assets/actor/bandit_r_atlas.dsprite.json,新生成角色图集,
 games/wuxia_arpg/assets/actor/bandit_r_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,7fdabdbaf506edc7acfd7c9d01138595a07f9f8a758afbc2d3eadbb1902a532b
 games/wuxia_arpg/assets/actor/bandit_u_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,7b1136cc8da277a1362a50615c3589a061c7976f629dc5f18b754f8783ba9c5e
 games/wuxia_arpg/assets/actor/bandit_u_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,4e3e91d25266552792f28045809091d7793dad17c995a6ca0efe01472432bc6f
+games/wuxia_arpg/assets/actor/boss_d_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,1944480a3bdd88c1d9dbfcce287668a9008638f2080062babb0599d73b82f4bb
+games/wuxia_arpg/assets/actor/boss_d_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,3f45d6a4fc21e1c374b2b9972ad1cc789ecd8ff7739a25c3cdd3db1811d7ce20
+games/wuxia_arpg/assets/actor/boss_l_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,fc34a563eef3310c1a8b9f4ebe78440f3c145260a088feeef7ad058002a69435
+games/wuxia_arpg/assets/actor/boss_l_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,8caabd07e1992b374473d9bcce88671a504c23c3f94dd271318160f7a48d12b8
+games/wuxia_arpg/assets/actor/boss_r_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,6e43124f01d1fea7ad969e8efb9111d324f4b5e96fea85f85fa84b2b00fbf486
+games/wuxia_arpg/assets/actor/boss_r_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,5b6e84df6faf6bc9a597a6b8dbc89396f4689c3c58055d508e9e714c82c3add6
+games/wuxia_arpg/assets/actor/boss_u_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,204f6d2f4a2170046008d26468aedb74691dce06e9dc5d0b76c11beb4e73c397
+games/wuxia_arpg/assets/actor/boss_u_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,0078aa096ed5088956e1837f647252cfcda698af44555cf20e9733591e30b8fb
 games/wuxia_arpg/assets/actor/hero_d_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,9e69fd523cff08995ef310f0a1be690690df8350396ef7bcfe3a536b3b6df320
 games/wuxia_arpg/assets/actor/hero_d_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,bf5f463ea5f5f992ca63ca5d70f949aa0dfe20550c30c47f79b2952623a436d8
 games/wuxia_arpg/assets/actor/hero_l_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,0bbf35fd43a1ed9619226d529aaa56c45e4b3cc7995bde18b449c9703afbb730
@@ -27,22 +35,26 @@ games/wuxia_arpg/assets/props/house.png,新生成 3D 道具贴图,gen_assets.py,
 games/wuxia_arpg/assets/props/lantern.png,新生成 3D 道具贴图,gen_assets.py,DSEngine Authors,Apache-2.0,G1,551d3777efe8500f10a0e676c06dba042132dc20faba447f7045acd9958d3ff6
 games/wuxia_arpg/assets/props/rock.png,新生成 3D 道具贴图,gen_assets.py,DSEngine Authors,Apache-2.0,G1,b23016c200b19e66df647d5da3ea1918641ed7c15e9f06c7b0b20f93964857cd
 games/wuxia_arpg/assets/props/tree.png,新生成 3D 道具贴图,gen_assets.py,DSEngine Authors,Apache-2.0,G1,3fd72a8951721fd17015d4106b51aeb643800dd27846702709e0f01035f14d69
-games/wuxia_arpg/assets/ui/font.png,新生成字体图集/度量,gen_assets.py + NotoSansSC-Regular.ttf,DSEngine Authors / Noto CJK contributors,Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源),G1,f251bb9e212b51c7381f74f20d226f99d28b4e4a036f46eb226586ba64c75bb7
-games/wuxia_arpg/README.md,文档/仓库配置,仓库手写,DSEngine Authors,Apache-2.0,HAND,d3d32375fb2bf85d00c57dba64430768d28b7bc5d413e9bf7df254de2b5f4288
+games/wuxia_arpg/assets/ui/font.png,新生成字体图集/度量,gen_assets.py + apps/editor_cpp/fonts/NotoSansSC-Regular.ttf,DSEngine Authors / Noto CJK contributors,Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源),G1,cc942395650beafe7a83f98f3fdc161a89d2c492db20ff888bab6563853ebca7
+games/wuxia_arpg/README.md,文档/仓库配置,仓库手写,DSEngine Authors,Apache-2.0,HAND,ccd9a5681781ad9b14e09cc9ba2079da8481c44a156f2f5ab25c04a2e8813320
 games/wuxia_arpg/scripts/_logic_test.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,9f7712009ad34c1a449cd91ee73373313c0a5a5c02cf572048a253c3d700fca2
-games/wuxia_arpg/scripts/assets.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,823859eabfef8d7dae9fb72f43c5ac545cffb44119ff0c78f883c597a4432757
+games/wuxia_arpg/scripts/_r4_combat_test.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,f162ee1e96675fc0026f31de37d788413f2b12bbd223a7377f313688e27cab1e
+games/wuxia_arpg/scripts/_r4_logic_test.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,79e5caeac25f17fbf85cf869c7085ad81bc5632f7e27b46a6dd16be7f2e7b069
+games/wuxia_arpg/scripts/assets.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,6e963032833b737bf9b608818b8815b45f4308fd698f16394f52283fa6842b6c
 games/wuxia_arpg/scripts/core.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,270ef8879e0ac57cb46d2dbb48c2262700cf7f1dc80c722be486a672d7979b64
-games/wuxia_arpg/scripts/data.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,81951023ace214e36bf180d194d9c3d86e07f9c45be09fc41284234af2a31973
-games/wuxia_arpg/scripts/enemy.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,132cb5a94c4495811558df27656870a4779ee8b2d5f0e9f74db56c4abe4e8837
-games/wuxia_arpg/scripts/font.lua,新生成字体图集/度量,gen_assets.py + NotoSansSC-Regular.ttf,DSEngine Authors / Noto CJK contributors,Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源),G1,6f8d0861a19aefa5584c1430ac97b881c5d13cd63bac00b0a777e415645c2692
+games/wuxia_arpg/scripts/data.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,d9e5fb4fd06732b6efe8b816fe06bbb7bf44a7b6e8fd99b1515f4977e87d6230
+games/wuxia_arpg/scripts/enemy.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,3da2d46b91cbaf91f23113d9060de0b024ef4ce25b8107865d6417ae52613582
+games/wuxia_arpg/scripts/font.lua,新生成字体图集/度量,gen_assets.py + apps/editor_cpp/fonts/NotoSansSC-Regular.ttf,DSEngine Authors / Noto CJK contributors,Apache-2.0 (生成输出) + SIL OFL 1.1 (字形来源),G1,4b5f6afb48562b4ce21fd0500b1ebaf5aae2eeedfebe4636a7a20362c2f4ae28
 games/wuxia_arpg/scripts/fx.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,8a18e7ddb3eae3b689bf3f44a9683209247ee9bcb0182c078cf53b82e88fe90e
-games/wuxia_arpg/scripts/loot.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,6ebe51599f8932df2f7ea8e91b195d7622bee1f733fda06da31d49db8c66bab7
-games/wuxia_arpg/scripts/main.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,dfa987946be79c7d48b739bb9b42fb122c288d06566f07190bbddf1f62a69886
-games/wuxia_arpg/scripts/player.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,8059f6331542ef297af759484644d6d3a2e5090024146c9ba312ed109bef26ec
+games/wuxia_arpg/scripts/loot.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,5bd8ee89b5e122bd42a8a96ca8dc60cac6c8d82c68c5846fc8cce1d265454f76
+games/wuxia_arpg/scripts/main.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,32865fb95255e16e4d461d99a3d9dcb43451090d273e1c52ed5924a2d0c40e52
+games/wuxia_arpg/scripts/player.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,1a25440b8c2886335ac0f529aa9271abd838e8d4ee4141faf5b223b9e6157383
 games/wuxia_arpg/scripts/rng.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,a24dad4f13b68dac840593fa4aba2da08d3c91d65e772bf6bd05ba1c7f8c3b1a
-games/wuxia_arpg/scripts/save.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,422106d5f1353f95103c2ebce40fe9cb79039920f5d3efdbc71b5c96621a57ce
+games/wuxia_arpg/scripts/save.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,8ba170e6bb8baaed28fe9ae1dbf72068ffeacc28afe7266002dc132fbd4f0e56
 games/wuxia_arpg/scripts/terrain.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,e3fc77373a407694161e94eea15579851ceb9e941f75d28913dac2b0168a91ba
-games/wuxia_arpg/scripts/ui.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,165fed04e30b94d3601f4aa940892748cfaf01b00fce405f997952698a8b9408
-games/wuxia_arpg/tools/gen_assets.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,b45b5e57aa61eabc4466d5d31c3482bcd8e46149eff314b13cdc409eb98e8b60
+games/wuxia_arpg/scripts/ui.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,8c42ab94a7553e5c6d807a4ffdf3fe9d0ab78308419ee6a7927b7f93e803b9a7
+games/wuxia_arpg/tools/gen_assets.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,a44d1511884bc3717e2de0b5c97f19834988a0aac447fd99b25e68b68ae96d61
+games/wuxia_arpg/tools/gen_ledger.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,fb0a21f4a2f4bc6aa9581a429000040f12b9ccb0fedd080e74c33e169978425c
 games/wuxia_arpg/tools/pixel_stats.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,70f84e1b2080e067c0af3e0140df9f345d281e59f0421dba859b3531e998c0e7
 games/wuxia_arpg/tools/run_r3_acceptance.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,999db8aac5ea25a3a3a771beacf0509e3f4b0da609408576d99c0bbf528bcdac
+games/wuxia_arpg/tools/run_r4_acceptance.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,7050fa5d53ccaf0756f95572f531dce30b715d3701fa4442678ff703d378dd1e

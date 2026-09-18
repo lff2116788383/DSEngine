@@ -7,10 +7,10 @@ goal:
   objective: "用 DSEngine 制作 HD-2D 武侠刷子 ARPG（暗黑 2 式，3 张地图）"
   status: in_progress
   max_goal_rounds: 12
-  current_round: R4
+  current_round: R5
   attempt: 1
-  completed_rounds: [R1, R2, R3]
-  next_round: R4
+  completed_rounds: [R1, R2, R3, R4]
+  next_round: R5
   branch: feature/hd2d-wuxia-arpg
   baseline: feature/engine-lib @ 0a8fc8b0
   contract: docs/design/WUXIA_ARPG_PLAN.md
@@ -25,7 +25,7 @@ goal:
 | R1 | 能力审计 | 已完成（审计通过） | 本文 2 |
 | R2 | 素材清单 + 完整设计 | 已完成（门禁通过） | 本文 3 |
 | R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 已完成（新游戏门禁通过） | 本文 5 |
-| R4 | 战斗与成长 | 未开始 |  |
+| R4 | 战斗与成长 | 已完成（门禁通过） | 本文 7 |
 | R5 | 另两张地图 + 天气与光影打磨 | 未开始 |  |
 | R6 | 收尾验证与交付 | 未开始 |  |
 
@@ -367,10 +367,99 @@ python games\wuxia_arpg\tools\run_r3_acceptance.py --backends d3d11 --out-dir tm
 
 R3 结论：`已通过`。下一轮 R4：在新游戏 `games/wuxia_arpg` 上深化战斗与成长，不触碰模板。
 
-## 6. R4 入口条件
+## 7. R4 战斗与成长
+
+### 7.1 R4 开工基线
+
+- 构建：`cmake --build --preset windows-x64-debug`，exit=0，13.0s。
+- gtest：`ctest --preset windows-x64-debug`，exit=0，52.3s，5/5 通过，0 失败。
+- 只改 `games/wuxia_arpg/`，继续不使用模板。
+
+### 7.2 R4 实现
+
+- 三段连招：`combo=1/2/3`，第三段高伤、暴击与更大范围。
+- 技能：`U` 分花拂柳 AoE；`I` 紫霞真气治疗 + 攻击增益。
+- 敌人 rank：normal / elite / champion / boss。
+- Boss `boss_blood_blade`：320 HP，66%/33% 触发 phase 2/3，必掉装备。
+- 装备：6 种基底、4 档稀有度、9 类随机词缀，计算战力并自动装备。
+- 背包：`Tab` 打开，`W/S` 选择，`J` 装备；`run_r4` 不要求人工操作。
+- 存档：装备实例与装备槽 `uid` roundtrip 后重新链接。
+- 新素材：Boss 4 方向图集（新生成），字体图集扩充到 210 glyphs；均更新到新资产台账。`WUXIA_ARPG_NEW_ASSET_LEDGER.*` 由 `gen_ledger.py` 自动生成，共 59 条。
+
+### 7.3 R4 自动化验收
+
+逻辑测试：
+
+```powershell
+bin\dsengine_lua_debug.exe --script=games\wuxia_arpg\scripts\_r4_logic_test.lua
+```
+
+结果：`已通过`，exit=0：
+```text
+[r4-logic] PASS power=35.6 items=1 equip=armor
+```
+
+战斗测试：
+
+```powershell
+bin\dsengine_lua_debug.exe --script=games\wuxia_arpg\scripts\_r4_combat_test.lua
+```
+
+结果：`已通过`，exit=0：
+```text
+[wuxia] skill=zixia hp=102 buff=1.35
+[r4-combat] PASS combo=3 d1=18 d3=28 boss_phase=3 items=1
+```
+
+### 7.4 R4 三后端演示验收
+
+命令（每个后端单独执行）：
+
+```powershell
+python games\wuxia_arpg\tools\run_r4_acceptance.py --backends opengl --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
+python games\wuxia_arpg\tools\run_r4_acceptance.py --backends vulkan --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
+python games\wuxia_arpg\tools\run_r4_acceptance.py --backends d3d11 --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
+```
+
+全部 `已通过`，exit=0，`[r4] acceptance PASS`。
+
+| 后端 | lit-on luma | lit-off luma | delta | 游戏截图 luma | 结论 |
+|---|---:|---:|---:|---:|---|
+| OpenGL | 68.67 | 8.50 | 60.17 | 72.19 | 已通过 |
+| Vulkan | 68.60 | 8.16 | 60.44 | 72.00 | 已通过 |
+| D3D11 | 68.60 | 8.50 | 60.10 | 72.19 | 已通过 |
+
+演示日志真实出现：
+- `[wuxia] combo=2` / `[wuxia] combo=3`
+- `[wuxia] skill=fenhua`
+- `[wuxia] attack combo=3`
+- `[wuxia] boss_phase=2` / `[wuxia] boss_phase=3`
+- `[wuxia] boss_dead kind=boss_blood_blade`
+- `[wuxia] equip slot=weapon/armor`
+- `[wuxia] autosave ok=true`
+
+日志：`tmp/r4_runner_opengl.log`、`tmp/r4_runner_vulkan.log`、`tmp/r4_runner_d3d11.log`。
+截图数值与路径：`tmp/r4_final/r4_game_{opengl,vulkan,d3d11}.png`（tmp 被忽略）。
+
+### 7.5 R4 门禁结论
+
+| 门禁 | 结论 | 说明 |
+|---|---|---|
+| 三段连招/技能 | 已通过 | logic + combat test + demo 日志 |
+| 装备/词缀/成长 | 已通过 | 随机装备、战力、自动装备、存档 roundtrip |
+| 精英/冠军/Boss | 已通过 | elite/champion 掉落，Boss 三阶段/击杀 |
+| 三后端无回归 | 已通过 | OpenGL/Vulkan/D3D11 全部 PASS |
+| 受光未回归 | 已通过 | lit delta 约 60 |
+| 新素材许可 | 已通过 | Boss 图集/新字体图集进入 `WUXIA_ARPG_NEW_ASSET_LEDGER.*` |
+| 第 3 张地图/天气 | 未执行 | 属 R5 |
+| GT 1030 真机 | 环境暂缓 | 仍不可达，不得冒充 |
+
+R4 结论：`已通过`。下一轮 R5：在 `games/wuxia_arpg` 上追加 2 张新地图（合计 3 张）与天气/光影打磨。
+
+## 8. R5 入口条件
 
 - 分支保持 `feature/hd2d-wuxia-arpg`。
-- 只改 `games/wuxia_arpg/`；禁止修改或复用 `templates/hd2d_wuxia` 作为游戏底座。
-- 新增/修改素材必须由 `games/wuxia_arpg/tools/gen_assets.py` 生成或提供许可清晰来源，并更新 `WUXIA_ARPG_NEW_ASSET_LEDGER.*`。
-- R4 先 grep 真实 Lua 绑定后再写代码；不新增第三方库。
-- R4 只深化战斗/成长/装备/技能/Boss，不提前做第 2/3 张完整地图。
+- 只改 `games/wuxia_arpg/`；禁止把 `templates/hd2d_wuxia` 作为底座。
+- R5 目标：新游戏从 1 张地图扩展到 3 张地图，并完成天气/光影打磨。
+- 新增地图/素材必须由 `gen_assets.py` 或新生成器产出，并更新 `WUXIA_ARPG_NEW_ASSET_LEDGER.*`。
+- R5 先跑 R4 三后端验收作为回归基线，再新增地图。

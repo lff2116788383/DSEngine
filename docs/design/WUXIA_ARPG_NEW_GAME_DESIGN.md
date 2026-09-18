@@ -118,7 +118,28 @@ python games\wuxia_arpg\tools\run_r3_acceptance.py --backends d3d11 --out-dir tm
 - R5：再新增 2 张新地图（总计 3 张）、天气/光影打磨、地图连接与刷子难度。
 - R6：全量验收、性能、文档、交付。
 
-## 9. 非目标
+## 8.5 R4 战斗与成长实现
+
+- 三段连招：J 键，第三段高伤、较高暴击；`combo=1/2/3` 有日志证据。
+- 技能：
+  - `U` 分花拂柳：AoE，消耗内力，4s CD。
+  - `I` 紫霞真气：治疗 35% 最大生命 + 攻击增益 8s，10s CD。
+- 敌人 rank：
+  - normal：普通山贼。
+  - elite：生命/伤害/掉落提高，带蓝色 emissive。
+  - champion：更高生命/伤害/掉落，带金色 emissive。
+  - boss：寨主血刀，三阶段，66%/33% 生命阈值强化，必掉装备。
+- 装备：
+  - 基底：铁剑/青锋剑/布衣/皮甲/玉佩/虎符。
+  - 稀有度：普通/魔法/稀有/传奇。
+  - 随机词缀：攻击/防御/生命/内力/暴击/身法/吸血/幸运/回气。
+  - 自动比较战力并装备更强物品；背包 `Tab` 可查看与手动装备。
+- 存档：装备实例与槽位经 `dse.serialize` 持久化，读档后按 `uid` 重新链接。
+- 自动化验收：
+  - `_r4_logic_test.lua`：随机装备、战力、自动装备、存档 roundtrip。
+  - `_r4_combat_test.lua`：三段连招、分花/紫霞、Boss 三阶段与击杀掉落。
+  - `run_r4_acceptance.py`：三后端演示日志 + 受光对照。
+- R4 三后端结果：OpenGL / Vulkan / D3D11 均 `[r4] acceptance PASS`；受光 delta 约 60。## 9. 非目标
 
 - 不使用 `templates/hd2d_wuxia` 或 `templates/topdown_3d` 的游戏素材。
 - 不新增第三方库。
