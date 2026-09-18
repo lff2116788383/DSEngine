@@ -39,3 +39,11 @@
 start docs\design\wuxia_arpg_gallery\contact_sheet.png
 start docs\design\wuxia_arpg_gallery
 ```
+
+## 外部 CC0 素材替换对比
+
+- 对比图：`09_ninja_character_compare.png`
+- 替换前：`01_village_leaf.png`（程序化小图）
+- 替换后：`08_ninja_village_leaf.png`（Ninja Adventure CC0 素材）
+- 平均 RGB 绝对差：0.83
+- 新素材为 1616 专业像素角色帧，替换程序化 3248 平涂角色；BGM 改为 OGG 音乐。

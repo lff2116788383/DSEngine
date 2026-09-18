@@ -82,13 +82,13 @@ python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d1
 | D3D11 幽篁谷/雪 | 60.67 | 0.00400 |
 
 截图路径：`tmp/r6_final/r5_{backend}_{map}_{weather}.png`（tmp 被忽略，统计写入本报告与 PROGRESS）。
-可浏览 Gallery：`docs/design/wuxia_arpg_gallery/gallery.html`（含 contact_sheet.png 与 7 张实机截图）。
+可浏览 Gallery：`docs/design/wuxia_arpg_gallery/gallery.html`（含 contact_sheet.png、实机截图与替换前后对比图）。
 截图分析：`docs/design/WUXIA_ARPG_SCREENSHOT_ANALYSIS.md`。
 
 ## 3. 资产与合规
 
-- 逐条资产台账：`docs/design/WUXIA_ARPG_NEW_ASSET_LEDGER.md` 与 `.csv`，当前 68 条。
-- 所有游戏美术/音频由 `games/wuxia_arpg/tools/gen_assets.py` 新生成。
+- 逐条资产台账：`docs/design/WUXIA_ARPG_NEW_ASSET_LEDGER.md` 与 `.csv`，当前 98 条。
+- 程序化地形/天气/UI 图集由 `games/wuxia_arpg/tools/gen_assets.py` 生成。\n- 角色与 BGM 使用 CC0「Ninja Adventure Asset Pack」（Pixel-Boy / AAA）导入；见 `WUXIA_ARPG_EXTERNAL_ASSETS.md`。
 - 字体图集输入：`apps/editor_cpp/fonts/NotoSansSC-Regular.ttf`，SIL OFL 1.1。
 - 静态审计：未发现 `SimHei`、`逸剑风云决`、商业游戏解包引用。
 - 未使用 `templates/hd2d_wuxia` 的代码或素材。
@@ -114,6 +114,29 @@ bin\dsengine_lua_debug.exe --script=games\wuxia_arpg\scripts\main.lua
 - GitHub 网络环境不可达，R5/R6 提交暂未 push；`master` 未 push。
 - 发布级打包和签名未在本轮范围内。
 
+## 5.1 CC0 外部素材升级
+
+用户选择方案 B 后，已导入 CC0「Ninja Adventure Asset Pack」：
+
+- 作者：Pixel-Boy / AAA
+- 许可：CC0 1.0
+- 来源：https://pixel-boy.itch.io/ninja-adventure-asset-pack
+- 导入内容：
+  - `hero`  samurai_blue
+  - `bandit`  samurai_green
+  - `boss`  ninja_blue
+  - 4 向 1616 角色帧重切为 11 帧 `.dsprite.json`
+  - `theme_plain.ogg` / `theme_swamp.ogg` / `theme_lost_village.ogg` / `theme_dream.ogg`
+- 新游戏 `assets.lua` 优先加载外部图集与 OGG BGM，缺失时回退到程序化素材。
+- 导入后重新执行 R6 最终验收：
+
+```powershell
+python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d11 --out-dir tmp\r7_ninja_accept
+```
+
+结果：`已通过`，exit=0，191s，`[r6] acceptance PASS`；资产审计 `rows=98`。
+
+对比截图：`docs/design/wuxia_arpg_gallery/09_ninja_character_compare.png`。
 ## 6. 结论
 
 R6 最终验证：三图、三后端、存档/读档、战斗成长、天气光影、资产审计均已通过。

@@ -565,6 +565,26 @@ python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d1
 截图 Gallery：`docs/design/wuxia_arpg_gallery/gallery.html`；截图分析：`docs/design/WUXIA_ARPG_SCREENSHOT_ANALYSIS.md`。
 逐条资产台账：`docs/design/WUXIA_ARPG_NEW_ASSET_LEDGER.md` / `.csv`，当前 68 条。
 
+### 10.3 外部 CC0 素材升级（用户选择 B）
+
+用户指出程序化素材质量不足并选择方案 B。已导入 CC0「Ninja Adventure Asset Pack」：
+
+- 作者：Pixel-Boy / AAA；许可：CC0 1.0
+- 来源：https://pixel-boy.itch.io/ninja-adventure-asset-pack
+- 导入工具：`games/wuxia_arpg/tools/import_ninja_adventure.py`
+- 导入内容：
+  - `hero` / `bandit` / `boss` 角色图集（4 向 1616 切帧，11 帧 `.dsprite.json`）
+  - 4 首 OGG BGM
+- 运行时 `assets.lua` 优先加载外部图集/BGM，缺失时回退程序化素材。
+- 导入后重新跑 R6 最终验收：
+
+```powershell
+python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d11 --out-dir tmp\r7_ninja_accept
+```
+
+结果：`已通过`，exit=0，191s，`[r6] acceptance PASS`，资产审计 `rows=98`。
+对比截图：`docs/design/wuxia_arpg_gallery/09_ninja_character_compare.png`。
+来源说明：`docs/design/WUXIA_ARPG_EXTERNAL_ASSETS.md`。
 ### 10.3 R6 门禁结论
 
 | 门禁 | 结论 | 说明 |
