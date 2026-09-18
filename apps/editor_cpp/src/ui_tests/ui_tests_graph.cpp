@@ -93,21 +93,60 @@ void RegisterGraphTests(ImGuiTestEngine* e) {
             const int base_links = ShaderGraphLinkCount();
 
             // Float（仅 1 输出 Value）+ Add（2 输入 A/B、1 输出）。
-            const ImVec2 m_float(300.0f, 360.0f);
-            const ImVec2 m_add  (620.0f, 360.0f);
-            OpenCanvasCreateMenu(ctx, m_float);
+            // 位置取画布**左下角**：Shader Graph 面板还会额外开 Node Properties / GLSL Preview /
+            // Shader Preview 三个**独立窗口**，它们默认压在画布右上区域，会让画布不满足
+            // IsWindowHovered()（实测 rect_hit=1 而 win_hovered=0），引脚按下/松开判定直接失效。
+            ImVec2 p_float(300.0f, 500.0f);
+            ImVec2 p_add(620.0f, 500.0f);
+            if (ImGuiWindow* gw0 = FindActiveWindow("Shader Graph")) {
+                ctx->SetRef((std::string("//") + gw0->Name).c_str());
+                const ImGuiTestItemInfo ci0 = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
+                if (ci0.ID != 0 && ci0.RectClipped.GetWidth() > 40.0f) {
+                    p_float = ImVec2(ci0.RectClipped.Min.x + 60.0f, ci0.RectClipped.Max.y - 120.0f);
+                    p_add   = ImVec2(p_float.x + 320.0f, p_float.y);
+                }
+            }
+            OpenCanvasCreateMenu(ctx, p_float);
             ctx->ItemClick("Float");
             ctx->Yield(2);
-            OpenCanvasCreateMenu(ctx, m_add);
-            ctx->ItemClick("Add");
+            // 第二次右键前先 Esc 清掉可能残留的 popup，再在同一个（左下）区域建第二个节点。
+            ctx->KeyPress(ImGuiKey_Escape);
+            ctx->Yield(2);
+            OpenCanvasCreateMenu(ctx, p_add);
+            ctx->SetRef("//$FOCUSED");
+            ctx->ItemClick("**/Add");
             ctx->Yield(2);
             ctx->SetRef("");
             IM_CHECK(ShaderGraphNodeCount() == 6);
 
-            // 拖拽：Float.Value(输出, 左上+(180,39)) → Add.A(输入, 左上+(0,39))。
-            ManualMouseDrag(ctx,
-                            ImVec2(m_float.x + 180.0f, m_float.y + 39.0f),
-                            ImVec2(m_add.x + 0.0f,    m_add.y + 39.0f));
+            // 拖拽：Float.Value(输出引脚 0) → Add.A(输入引脚 0)。
+            // 必须取**引脚的实际屏幕坐标**（ShaderGraphPinScreenPos）：引脚不是节点的固定偏移
+            // （输出排在所有输入之下），且画布平移/缩放会改变位置。
+            // 画布在建节点后会**自动平移取景**（实测画布矩形由 (188,143)-(1112,642) 变为
+            // (-519,143)-(405,642)），若立刻读引脚坐标会拿到平移前的值、拖拽必然落空 ——
+            // 先等若干帧让取景稳定下来再取坐标。
+            // 画布在建节点后会**逐帧缓动平移取景**，固定等几帧仍可能没停 → 改为轮询
+            // 「引脚屏幕坐标连续两帧不变」再拖，避免用过期坐标导致连线落空。
+            const int n = ShaderGraphNodeCount();
+            float fx = 0.0f, fy = 0.0f, ax = 0.0f, ay = 0.0f;
+            bool have_pos = false;
+            for (int i = 0; i < 40; ++i) {
+                float nfx = 0.0f, nfy = 0.0f, nax = 0.0f, nay = 0.0f;
+                const bool got = ShaderGraphPinScreenPos(n - 2, /*is_output=*/true, 0, &nfx, &nfy) &&
+                                 ShaderGraphPinScreenPos(n - 1, /*is_output=*/false, 0, &nax, &nay);
+                if (got) {
+                    const bool stable = i > 0 && std::abs(nfx - fx) < 0.5f && std::abs(nfy - fy) < 0.5f &&
+                                        std::abs(nax - ax) < 0.5f && std::abs(nay - ay) < 0.5f;
+                    fx = nfx; fy = nfy; ax = nax; ay = nay;
+                    have_pos = true;
+                    if (stable) break;
+                }
+                ctx->Yield();
+            }
+            IM_CHECK(have_pos);
+            UiDiagLog("[graph] float_out=(%.0f,%.0f) add_in=(%.0f,%.0f) nodes=%d links=%d",
+                      fx, fy, ax, ay, ShaderGraphNodeCount(), ShaderGraphLinkCount());
+            ManualMouseDrag(ctx, ImVec2(fx, fy), ImVec2(ax, ay));
             ctx->Yield(2);
             IM_CHECK(ShaderGraphLinkCount() == base_links + 1);
 

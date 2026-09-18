@@ -21,6 +21,8 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <fstream>
+#include <filesystem>
 #include <chrono>
 #include <random>
 #include <unordered_map>
@@ -39,6 +41,12 @@
 namespace dse::editor {
 
 namespace {
+
+// 测试用：每个节点本帧的屏幕左上角（含画布平移/缩放），由 DrawShaderGraphPanel 每帧刷新，
+// 经 ShaderGraphNodeScreenPos() 暴露给 UI 测试 —— 画布取景/滚动后写死屏幕坐标必然失准。
+std::vector<ImVec2> s_node_screen_pos;
+/// 画布本帧的平移量：GetPinPos() 返回的是图坐标，屏幕坐标 = 图坐标 + 该偏移。
+ImVec2 s_last_canvas_offset(0.0f, 0.0f);
 
 // ─── 唯一着色器名称生成器 ─────────────────────────────────────────────────────
 
@@ -604,6 +612,24 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
 
 int ShaderGraphNodeCount() { return static_cast<int>(GetState().nodes.size()); }
 int ShaderGraphLinkCount() { return static_cast<int>(GetState().links.size()); }
+bool ShaderGraphNodeScreenPos(int index, float* out_x, float* out_y) {
+    if (index < 0 || index >= static_cast<int>(s_node_screen_pos.size())) return false;
+    if (out_x) *out_x = s_node_screen_pos[index].x;
+    if (out_y) *out_y = s_node_screen_pos[index].y;
+    return true;
+}
+
+bool ShaderGraphPinScreenPos(int node_index, bool is_output, int pin_index, float* out_x, float* out_y) {
+    auto& s = GetState();
+    if (node_index < 0 || node_index >= static_cast<int>(s.nodes.size())) return false;
+    const Node& node = s.nodes[node_index];
+    const std::vector<Pin>& pins = is_output ? node.outputs : node.inputs;
+    if (pin_index < 0 || pin_index >= static_cast<int>(pins.size())) return false;
+    const ImVec2 p = GetPinPos(node, pins[pin_index], is_output);
+    if (out_x) *out_x = p.x + s_last_canvas_offset.x;
+    if (out_y) *out_y = p.y + s_last_canvas_offset.y;
+    return true;
+}
 void ShaderGraphResetGraph() {
     auto& s = GetState();
     s = ShaderGraphState{};
@@ -818,7 +844,16 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
                             ImGuiButtonFlags_MouseButtonLeft |
                             ImGuiButtonFlags_MouseButtonRight |
                             ImGuiButtonFlags_MouseButtonMiddle);
-    bool canvas_hovered = ImGui::IsItemHovered();
+    // 用**画布矩形 + 窗口 hover**判定，而不是 IsItemHovered()：鼠标在画布上按下后，这个
+    // InvisibleButton 成为 ActiveId，IsItemHovered()（即便带 AllowWhenBlockedByActiveItem）
+    // 在按住期间整段时间都返回 false（实测 down=1 的每一帧 hovered=0）；而引脚连线正是
+    // 「在源引脚按下 → 拖到目标引脚 → 松开」，release 分支于是永远不执行 —— 连线功能实际
+    // 不可用（UI 测试 shader_graph_connect_pins 一直红就是这个原因）。
+    const ImRect canvas_rect(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y));
+    const bool rect_hit = ImGui::IsMouseHoveringRect(canvas_rect.Min, canvas_rect.Max);
+    const bool win_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                                   ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+    bool canvas_hovered = rect_hit && win_hovered;
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
@@ -841,6 +876,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
 
     // Offset for scrolling
     ImVec2 offset(canvas_pos.x + state.scroll_offset.x, canvas_pos.y + state.scroll_offset.y);
+    s_last_canvas_offset = offset;   // 供 ShaderGraphPinScreenPos() 把图坐标换算成屏幕坐标
 
     // Draw links first (behind nodes)
     for (auto& link : state.links) {
@@ -877,9 +913,13 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
     }
 
     // Draw nodes
+    // 测试用：记录每个节点本帧的屏幕左上角（已含画布平移/缩放），供 UI 测试计算引脚坐标。
+    // 画布建节点后会取景/滚动，测试里写死屏幕坐标必然失准。
+    s_node_screen_pos.assign(state.nodes.size(), ImVec2(0.0f, 0.0f));
     for (int ni = 0; ni < static_cast<int>(state.nodes.size()); ni++) {
         auto& node = state.nodes[ni];
         ImVec2 node_pos(node.position.x + offset.x, node.position.y + offset.y);
+        if (ni < static_cast<int>(s_node_screen_pos.size())) s_node_screen_pos[ni] = node_pos;
 
         float header_h = 24.0f;
         float pin_h = 22.0f;

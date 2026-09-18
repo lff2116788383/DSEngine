@@ -308,10 +308,25 @@ round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且
     ——条目**存在**（给了 ID）却定位不到；改成两步（先 `MenuClick("File/Recent Projects")` 展开子菜单，
     再按子菜单窗口名 `//Recent Projects###Menu_01` + `**/` 通配点条目）后通过。另外让测试辅助先清空
     最近项目列表，避免本机遗留的一长串记录把子菜单撑长、把目标条目挤出可视区。
-12. 其余分组仍有零星失败：`dse-scene` 1（场景页签查找）、`dse-graph` 1（画布建节点后
-    `ShaderGraphNodeCount() == 6`）、`dse-2d-tools` 1（`ok`）、`dse-negative` 1（嵌套路径 ref）。
+13. ~~`dse-scene` 1 条~~ —— **已修**（5/5）。与 `dse-project` 完全同类：`File → Recent Scenes → <文件>`
+    两级菜单路径报 `Unable to locate item: //Recent Scenes###Menu_01/<名字> (0x…)`，按同一配方
+    （先展开子菜单 → 按子菜单窗口名/`$FOCUSED` + `**/` 点条目）修好。
+14. ~~`dse-2d-tools` 1 条~~ —— **已修**（19/19）。`atlas_packer_basic` 传的输入 `sprites/*.png` 在
+    磁盘上并不存在，而 `PackAtlas` 用 `stbi_info(path)` 直接读文件（相对路径按进程 CWD 解析）→
+    必然返回 false。用例改为先落盘 4 张最小 PNG 夹具（测试内嵌确定性字节）再传绝对路径。
+15. `dse-graph` 1 条（**部分修复**）：`shader_graph_connect_pins` 的**建节点**部分已修好
+    （画布是窗口内的 `InvisibleButton("canvas")`，建第一个节点后画布会平移取景，固定屏幕坐标
+    会落到画布外 → 改为按画布条目矩形取点；节点数断言 `== 6` 已通过）。同时修掉一个**真产品缺陷**：
+    画布的 hover 判定原为 `ImGui::IsItemHovered()`，鼠标在画布上按下后该 InvisibleButton 成为
+    ActiveId，按住期间每一帧都返回 false，而引脚连线正是「按下 → 拖到目标引脚 → 松开」，
+    release 分支永不执行 —— **连线功能实际不可用**；现改为「画布矩形 + 窗口 hover」判定。
+    **仍未通过**：引脚拖拽本身（实测 `rect_hit=1` 但 `win_hovered=0`，画布被同面板的
+    Node Properties / GLSL Preview 等**兄弟浮窗**压住；且画布取景是逐帧缓动的，引脚坐标会过期）。
+    已加两个测试访问器 `ShaderGraphNodeScreenPos` / `ShaderGraphPinScreenPos`（复用面板自己的
+    引脚布局公式），后续可据此继续收敛。
+16. ~~`dse-negative` 1 条~~ —— 见第 4 条（嵌套路径 ref），仍未修。
 
-当前分组统计：**26 绿 / 4 红**（基线 7/24；`dse-terrain` 抖动时表现为 25/5）。
+当前分组统计：**28 绿 / 2 红**（基线 7/24；`dse-terrain` 抖动时 27/3）。
 9. **`dse-terrain` 为抖动项**（4 次连跑 2 次 3/3、2 次 2/3），失败点固定在
    `terrain_panel_edit_brush` 的 `brush_mode == Lower` 断言。已从引擎日志定位到确切现象：
    第一次 `ItemClick("Lower")` **定位成功**（拿到 item id）却没生效，紧接着的重试反而报

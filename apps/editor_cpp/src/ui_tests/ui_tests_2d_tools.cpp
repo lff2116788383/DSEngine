@@ -17,7 +17,38 @@
 
 #include "../editor_2d_tools.h"
 
+#include <filesystem>
+#include <fstream>
+
 namespace dse::editor::uitest {
+
+namespace {
+
+// 4x4 纯红 RGBA PNG（确定性字节，供 Atlas Packer 用例当输入素材）
+static const unsigned char kTestPng[] = {
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0xa9, 0xf1, 0x9e, 0x7e, 0x00, 0x00, 0x00,
+    0x12, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0xf8, 0xcf, 0xc0, 0xf0,
+    0x1f, 0x19, 0x33, 0x90, 0x2e, 0x00, 0x00, 0x3c, 0x40, 0x1f, 0xe1, 0x1a,
+    0xf3, 0xa5, 0x48, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
+};
+
+/// 把小 PNG 写到 dir/name，返回绝对路径。
+/// 为什么需要：`PackAtlas` 用 `stbi_info(path)` 直接读文件，传 "sprites/xxx.png" 这种
+/// 相对路径会以进程 CWD 解析 —— 仓库里并没有这些文件，于是 PackAtlas 返回 false，
+/// `atlas_packer_basic` 用例必然挂在 `IM_CHECK(ok)`。测试夹具必须自己落盘。
+std::string WriteTestPng(const std::string& dir, const char* name) {
+    namespace fs = std::filesystem;
+    fs::create_directories(dir);
+    const fs::path p = fs::path(dir) / name;
+    std::ofstream f(p, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(kTestPng), sizeof(kTestPng));
+    return p.string();
+}
+
+}  // namespace
 
 void Register2DToolsTests(ImGuiTestEngine* e) {
 
@@ -125,8 +156,10 @@ void Register2DToolsTests(ImGuiTestEngine* e) {
             st.current_atlas.power_of_two = true;
 
             std::vector<std::string> inputs = {
-                "sprites/hero.png", "sprites/enemy.png",
-                "sprites/bullet.png", "sprites/powerup.png"
+                WriteTestPng((std::filesystem::temp_directory_path() / "dse_ui_tests" / "atlas_in").string(), "hero.png"),
+                WriteTestPng((std::filesystem::temp_directory_path() / "dse_ui_tests" / "atlas_in").string(), "enemy.png"),
+                WriteTestPng((std::filesystem::temp_directory_path() / "dse_ui_tests" / "atlas_in").string(), "bullet.png"),
+                WriteTestPng((std::filesystem::temp_directory_path() / "dse_ui_tests" / "atlas_in").string(), "powerup.png"),
             };
 
             bool ok = PackAtlas(st.current_atlas, inputs);

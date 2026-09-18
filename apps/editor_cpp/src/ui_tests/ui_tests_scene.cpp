@@ -283,10 +283,19 @@ void RegisterSceneTests(ImGuiTestEngine* e) {
             }
 
             // 走 File → Recent Scenes → <文件名> 菜单真实打开该场景。
-            const std::string recent_item =
-                std::string("File/Recent Scenes/") + scene.filename().string();
+            // 分两步而不是一次给两级路径：引擎的 MenuAction 对两级路径不可靠（实测报
+            // "Unable to locate item: //Recent Scenes###Menu_01/<名字> (0x…)"，条目存在却定位不到），
+            // 先展开子菜单，再按子菜单的真实窗口名 + **/ 通配点条目。
+            const std::string scene_name = scene.filename().string();
             ctx->SetRef("//DSEngineRoot");
-            ctx->MenuClick(recent_item.c_str());
+            ctx->MenuClick("File/Recent Scenes");
+            ctx->Yield(2);
+            ctx->SetRef("//$FOCUSED");
+            if (ctx->ItemInfo(scene_name.c_str(), ImGuiTestOpFlags_NoError).ID == 0) {
+                ctx->SetRef("//Recent Scenes###Menu_01");
+            }
+            ctx->ItemClick(("**/" + scene_name).c_str());
+            ctx->Yield(2);
 
             // 断言：Recent 菜单触发 OpenScene(path)，场景被打开、激活并从磁盘加载出探针。
             // 页签 ID 已稳定化（###SceneTab<stableId>），多页签下打开场景内容不再串台；轮询数帧让
