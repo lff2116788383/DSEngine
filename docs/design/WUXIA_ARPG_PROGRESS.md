@@ -258,7 +258,19 @@ $texts | Select-String -Pattern '逸剑风云决|解包素材|商业游戏|unpac
 | 玩法实现 | 未执行 | 属 R3-R6，R3 只做 1 张地图垂直切片 |
 | GT 1030 真机 | 环境暂缓 | 远程机不可达，不得冒充 |
 
-R2 结论：`已通过`。下一轮进入 R3：只做 village 垂直切片 + HD-2D 受光生效。
+### 3.7 R2 提交与推送状态
+
+- 本地提交：
+  - `941463b4 fix(tools): use OFL Noto Sans SC for wuxia font atlas`
+  - `0a9c1fdd docs(wuxia): add R2 design and asset ledger`
+- `git push` 命令：`git push origin feature/hd2d-wuxia-arpg`
+- 结果：`已失败（环境暂缓）`。连续 6 次尝试均无法连接 GitHub：
+  - `OpenSSL SSL_read: Connection was reset, errno 10054`
+  - `Failed to connect to github.com port 443 after 21050 ms: Timed out`
+- 本地分支领先远端 2 个提交：远端最后提交为 `ba0a6505`。
+- 未 push `master`；R3 开工后继续重试 push，若恢复则补推这两个提交。
+
+R2 结论：设计/台账门禁 `已通过`；push 为 `环境暂缓`。下一轮进入 R3：只做 village 垂直切片 + HD-2D 受光生效，并在 R3 开工时重试 push。
 
 ## 4. R3 入口条件
 
