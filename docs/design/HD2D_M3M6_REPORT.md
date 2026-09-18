@@ -247,11 +247,29 @@ round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且
 
 ### 8.6 仍未闭合
 
-1. **`dse-console` 硬退 `exit=150` 且不写摘要**（进程在组内直接死掉）；`dse-misc` 则 8/8 全过后仍以
-   `exit=150` 收场。两者都会让 L0b 作业（检查进程退出码）判红，是恢复 CI 门禁的下一个阻塞点。
-2. 上述 4 例布局敏感用例需要逐个修（拖拽前把节点滚入视野并确认命中窗口）。
-3. 其余分组仍有零星失败：`dse-layout` 1~2、`dse-scene` 1、`dse-graph` 1、`dse-2d-tools` 1、
-   `dse-features` 4、`dse-project` 1、`dse-tool-panels` 2。
+后续轮次又修掉两个 exit=150 崩溃与一条设置持久化 bug（详见对应提交）：
 
-因此 L0b 目前**仍不应判绿**：结构性根因（共享助手移动窗口）与跑批抖动已修，剩下的是拖拽/点击命中与
-两个 exit=150。
+1. ~~`dse-console` / `dse-misc` 的 `exit=150`~~ —— **已修**。前者是 `editor_console_panel.cpp` 的
+   `toggle_button` 用「点击翻转后」的 `enabled` 判断 `PopStyleColor`，导致 ImGui 样式色栈失衡
+   （同反模式另有 5 处：动画层 mute/solo、视口 Phys/ColEdit/Light）；后者是
+   `PanelRegistry::ShutdownAll()` 从未被调用，面板 `shutdown` 钩子（含 Build Game 后台线程
+   join）成了死代码，静态析构 `std::thread::~thread` 触发 `std::terminate`。两个分组现均
+   `exit=0` 全绿。
+2. ~~`dse-layout` 1/3~~ —— **已修**：偏好设置是防抖落盘，而「关闭面板时强制保存」是死代码
+   （注册表在 `*visible==false` 时跳过 draw），改完设置很快退出会静默丢设置。现 3/3 全绿。
+3. ~~`dse-undo` / `dse-dragdrop` 的拖拽改父子~~ —— **已修**：Hierarchy 停靠后仅 200 余像素宽，
+   用例按 `ItemInfo().RectFull` 中心算出的落点落在窗口外（实测窗口 x∈[41,271]、落点 x=273），
+   拖拽全程 hover 不到 Hierarchy。新增共享辅助 `DragHierarchyNode()`（`RectClipped` + 钳制进窗口 +
+   逐帧 `ManualMouseDrag`）后两组全绿。**注意**：落点 y 必须取行中心，取 25% 会落到行下方那条 4px
+   高的「插入兄弟」落区，那条分支对根实体只写 `sibling_index`、不写 `ParentComponent`。
+4. **`dse-negative/circular_parenting_rejected` 仍红**（6 例中 5 过）：Step 1 拖拽已正常，
+   Step 2「把 A 拖到其子孙 B 上应被环检测拒绝」的落点被解析到了**另一行**（打点显示
+   `accepted target=3 dragged=4`，而预期目标是嵌套行 B），因此环检测没被触发。下一步需查
+   `ItemInfo("//Hierarchy/Scene/<a>/<b>")` 这类**嵌套路径 ref** 的解析，以及树的行顺序
+   （EnTT 反序迭代时嵌套行与其后续兄弟行的相邻关系）。
+5. 其余分组仍有零星失败：`dse-terrain` 1、`dse-scene` 1、`dse-anim` 1、`dse-graph` 1、
+   `dse-2d-tools` 1、`dse-features` 4、`dse-project` 1、`dse-tool-panels` 2
+   （其中 tool-panels 两条是「按钮在面板可视区外」，可复用 `ScrollToItem*`/`WindowResize` 修）。
+
+当前分组统计：**21 绿 / 9 红**（基线 7/24）。因此 L0b 仍**不应判绿**，但已从「结构性问题 + 抖动」
+收敛为「若干条各自独立的用例断言」。

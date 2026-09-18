@@ -309,11 +309,16 @@ bool DragHierarchyNode(ImGuiTestContext* ctx, const char* src_ref, const char* d
         return ImVec2(ImClamp(p.x, wr.Min.x + 4.0f, wr.Max.x - 4.0f),
                       ImClamp(p.y, wr.Min.y + 4.0f, wr.Max.y - 4.0f));
     };
-    // 拖拽起点取源行的左侧（缩进/箭头/标签所在处）；落点取目标行的垂直 25% 处
-    // （避开行中缝的"插入兄弟"落区，直接命中行本身 → reparent）。
+    // 拖拽起点取源行的左侧（缩进/箭头/标签所在处）；落点取目标行的**垂直中心**。
+    // 注意不要用行的上部（25%）：每行下方还有一条 4px 高的"插入兄弟"落区（##insert_*），
+    // 行高约 16px 时 25% 恰好在它与上一行插入区的交界上，会落到插入分支——那条分支对根实体
+    // 只写 sibling_index、不写 ParentComponent，于是"拖拽改父子"的断言必然失败。
     const ImVec2 from = clamp_pt(ImVec2(sr.Min.x + 6.0f, sr.GetCenter().y));
-    const ImVec2 to = clamp_pt(ImVec2(ImClamp(dr.GetCenter().x, dr.Min.x + 6.0f, dr.Max.x - 4.0f),
-                                       dr.Min.y + dr.GetHeight() * 0.25f));
+    // x 也取行的左侧标签区（与拖拽起点一致）：行的可悬停区域是 TreeNode/Selectable 的标签区，
+    // 光用行中心 x 时，实测 undo/negative 两个用例的 drop 从未被任何 drop target 接受
+    // （诊断只有 source_active、没有 accepted），而 dragdrop 用中心 x 时能接受——把 x 收敛到
+    // 标签区可让三条用例走同一条确定路径。
+    const ImVec2 to = clamp_pt(ImVec2(dr.Min.x + 6.0f, dr.GetCenter().y));
     UiDiagLog("[dnd] src=(%.1f,%.1f) dst=(%.1f,%.1f) src_clip=(%.1f,%.1f)-(%.1f,%.1f) win=(%.1f,%.1f)-(%.1f,%.1f)",
               from.x, from.y, to.x, to.y, sr.Min.x, sr.Min.y, sr.Max.x, sr.Max.y,
               wr.Min.x, wr.Min.y, wr.Max.x, wr.Max.y);
