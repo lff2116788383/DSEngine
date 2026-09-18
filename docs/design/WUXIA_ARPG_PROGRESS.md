@@ -10,7 +10,7 @@ goal:
   current_round: R6
   attempt: 1
   completed_rounds: [R1, R2, R3, R4, R5]
-  next_round: R6
+  next_round: R6-push
   branch: feature/hd2d-wuxia-arpg
   baseline: feature/engine-lib @ 0a8fc8b0
   contract: docs/design/WUXIA_ARPG_PLAN.md
@@ -27,7 +27,7 @@ goal:
 | R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 已完成（新游戏门禁通过） | 本文 5 |
 | R4 | 战斗与成长 | 已完成（门禁通过） | 本文 7 |
 | R5 | 另两张地图 + 天气与光影打磨 | 已完成（门禁通过） | 本文 8 |
-| R6 | 收尾验证与交付 | 未开始 |  |
+| R6 | 收尾验证与交付 | 已完成验收；push 环境暂缓 | 本文 10 |
 
 ## 2. R1 能力审计
 
@@ -537,10 +537,44 @@ python games\wuxia_arpg\tools\run_r5_acceptance.py --backends opengl,vulkan,d3d1
 - 本地领先远端 2 个提交；未 push `master`。R6 开工后继续重试补推。
 R5 结论：`已通过`。下一轮 R6：收尾验证与交付，重点做全量三图三后端、存档/读档、发布整理和最终资产审计。
 
-## 9. R6 入口条件
+## 10. R6 收尾验证与交付
 
-- 分支保持 `feature/hd2d-wuxia-arpg`。
-- 只做验证、修复、文档、交付整理，不新增完整地图/大系统。
-- R6 先跑 R5 验收作为回归基线，再执行三图  三后端全矩阵。
-- 必须给出存档/读档、资产台账、三后端截图/统计、git/push 状态。
-- 不 push `master`。
+### 10.1 R6 基线
+
+- 构建：`cmake --build --preset windows-x64-debug`，exit=0，13.8s。
+- gtest：`ctest --preset windows-x64-debug`，exit=0，51.9s，5/5，0 失败。
+
+### 10.2 最终验收
+
+```powershell
+python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d11 --out-dir tmp\r6_final
+```
+
+结果：`已通过`，exit=0，127.2s，`[r6] acceptance PASS`。
+
+覆盖真实结果：
+- `[r6-save] PASS map=blackwind_stronghold weather=storm items=1`
+- `[r4-logic] PASS`
+- `[r4-combat] PASS`
+- `[r5-maps] PASS maps=3 weather=落叶/雷暴/雾`
+- 三后端  4 个地图/天气用例：全部 PASS
+- 三后端自动巡图：全部 PASS
+- 资产审计：`PASS`，未发现 `SimHei` / `逸剑风云决` / commercial game 引用
+
+完整报告：`docs/design/WUXIA_ARPG_R6_FINAL_REPORT.md`。
+逐条资产台账：`docs/design/WUXIA_ARPG_NEW_ASSET_LEDGER.md` / `.csv`，当前 68 条。
+
+### 10.3 R6 门禁结论
+
+| 门禁 | 结论 | 说明 |
+|---|---|---|
+| 三图  三后端全矩阵 | 已通过 | R6 runner 真实 exit=0 |
+| 存档/读档 | 已通过 | `_r6_save_test.lua` 验证玩家/装备/地图/天气元数据 |
+| 战斗成长回归 | 已通过 | R4 logic + combat |
+| 天气光影回归 | 已通过 | R5 matrix + tour |
+| 资产审计 | 已通过 | 68 条台账，无商业/SimHei 引用 |
+| GT 1030 真机 | 环境暂缓 | 远程机不可达，不得冒充 |
+| push | 环境暂缓 | GitHub 443 超时，本地领先 5 个提交；未 push master |
+
+R6 验收结论：`已通过`。
+唯一未完成项是 push，属于网络环境暂缓；恢复网络后应直接补推 `feature/hd2d-wuxia-arpg`，不得 push `master`。
