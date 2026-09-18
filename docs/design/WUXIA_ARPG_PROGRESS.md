@@ -7,9 +7,9 @@ goal:
   objective: "用 DSEngine 制作 HD-2D 武侠刷子 ARPG（暗黑 2 式，3 张地图）"
   status: in_progress
   max_goal_rounds: 12
-  current_round: R1
+  current_round: R2
   attempt: 1
-  completed_rounds: []
+  completed_rounds: [R1]
   next_round: R2
   branch: feature/hd2d-wuxia-arpg
   baseline: feature/engine-lib @ 0a8fc8b0
@@ -22,7 +22,7 @@ goal:
 
 | 轮次 | 阶段 | 状态 | 过门证据 |
 |---|---|---|---|
-| R1 | 能力审计 | 进行中 | 本文 2 |
+| R1 | 能力审计 | 已完成（审计通过） | 本文 2 |
 | R2 | 素材清单 + 完整设计 | 未开始 |  |
 | R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 未开始 |  |
 | R4 | 战斗与成长 | 未开始 |  |
