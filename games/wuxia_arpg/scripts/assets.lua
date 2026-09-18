@@ -12,7 +12,7 @@ function A.load()
     end
     A.tex.font = tex("assets/ui/font.png")
     A.font = require("font")
-    for _,actor in ipairs({"hero","bandit"}) do
+    for _,actor in ipairs({"hero","bandit","boss"}) do
         for _,dir in ipairs({"d","u","l","r"}) do
             local h = actor_atlas(actor, dir)
             if not h or h < 0 then print("[assets] missing atlas "..actor.."_"..dir) end

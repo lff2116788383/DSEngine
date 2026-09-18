@@ -52,6 +52,23 @@ $env:DSE_WUXIA_LIGHTS='0'
 python games\wuxia_arpg\tools\gen_assets.py
 ```
 
+## R4 战斗与成长
+
+- J：三段连招（第三段高伤/暴击）。
+- K：闪避。
+- U：分花拂柳（AoE，消耗内力）。
+- I：紫霞真气（治疗 + 攻击增益）。
+- Tab：背包/装备面板；W/S 选择，J 装备选中物品。
+- 敌人 rank：normal / elite / champion / boss。
+- Boss：寨主血刀，三阶段，半血/残血会强化。
+- 装备：新生成基底 + 稀有度 + 随机词缀，装备后实时改变攻击/防御/生命/内力/暴击等。
+- R4 验收：
+
+```powershell
+python games\wuxia_arpg\tools\run_r4_acceptance.py --backends opengl --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
+python games\wuxia_arpg\tools\run_r4_acceptance.py --backends vulkan --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
+python games\wuxia_arpg\tools\run_r4_acceptance.py --backends d3d11 --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
+```
 ## 许可
 
 新生成素材与脚本为 DSEngine Authors 原创，随仓库顶层 `LICENSE` 以 Apache-2.0 发布。

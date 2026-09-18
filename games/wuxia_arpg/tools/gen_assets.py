@@ -59,13 +59,20 @@ HERO = dict(robe=(54, 96, 162, 255), robe_d=(30, 54, 104, 255), trim=(226, 226, 
 BANDIT = dict(robe=(126, 54, 48, 255), robe_d=(74, 32, 30, 255), trim=(206, 174, 130, 255),
               belt=(96, 66, 38, 255), hair=(28, 20, 18, 255), skin=(226, 178, 142, 255),
               blade=(198, 206, 214, 255), boot=(48, 40, 38, 255))
+BOSS = dict(robe=(72, 22, 28, 255), robe_d=(42, 12, 16, 255), trim=(218, 176, 86, 255),
+            belt=(132, 96, 40, 255), hair=(20, 14, 12, 255), skin=(224, 176, 140, 255),
+            blade=(224, 214, 188, 255), boot=(30, 22, 22, 255))
 
 
 def human(kind, direction, action, i, n):
-    w, h = (32, 48) if kind == "hero" else (30, 44)
+    if kind == "hero": w, h = 32, 48
+    elif kind == "bandit": w, h = 30, 44
+    else: w, h = 44, 62
     im = img(w, h)
     d = ImageDraw.Draw(im)
-    pal = HERO if kind == "hero" else BANDIT
+    if kind == "hero": pal = HERO
+    elif kind == "bandit": pal = BANDIT
+    else: pal = BOSS
     cx = w // 2
     foot = h - 2
     side = direction in ("l", "r")
@@ -263,9 +270,10 @@ def gen_props():
 
 def gen_font():
     chars = set(chr(i) for i in range(32, 127))
-    text = ("青溪问剑 生命 内力 体力 等级 金币 攻击 防御 闪避 技能 连招 山贼 侠客 "
+    text = ("青溪问剑 生命 内力 体力 等级 金币 攻击 防御 暴击 闪避 技能 连招 山贼 侠客 精英 首领 寨主 血刀 "
             "开始游戏 读取存档 已保存 读档成功 获得 升级 消灭 暂停 继续 退出 按 WASD 移动 J 攻击 K 闪避 U 技能 I 治疗 "
-            "铁剑 布衣 玉佩 稀有 魔法 传奇 普通 铜钱 掉落 伤害 暴击 未命中 已装备 背包 天气 落叶 村庄 夜雨")
+            "铁剑 青锋剑 布衣 皮甲 玉佩 虎符 稀有 魔法 传奇 普通 铜钱 掉落 伤害 未命中 已装备 背包 天气 落叶 村庄 夜雨 "
+            "战力 分花 拂柳 紫霞 真气 冷却 内力不足 战斗 成长")
     chars.update(text)
     chars = sorted(chars)
     font_path = NOTO
@@ -350,6 +358,7 @@ def main():
     random.seed(20260918)
     gen_actor("hero")
     gen_actor("bandit")
+    gen_actor("boss")
     gen_props()
     gen_font()
     gen_audio()
