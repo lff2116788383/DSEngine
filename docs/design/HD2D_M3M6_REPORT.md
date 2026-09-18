@@ -268,8 +268,27 @@ round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且
    `ItemInfo("//Hierarchy/Scene/<a>/<b>")` 这类**嵌套路径 ref** 的解析，以及树的行顺序
    （EnTT 反序迭代时嵌套行与其后续兄弟行的相邻关系）。
 5. 其余分组仍有零星失败：`dse-terrain` 1、`dse-scene` 1、`dse-anim` 1、`dse-graph` 1、
-   `dse-2d-tools` 1、`dse-features` 4、`dse-project` 1、`dse-tool-panels` 2
-   （其中 tool-panels 两条是「按钮在面板可视区外」，可复用 `ScrollToItem*`/`WindowResize` 修）。
+   `dse-2d-tools` 1、`dse-features` 4、`dse-project` 1、`dse-tool-panels` 2。
+6. **`dse-tool-panels` 的 2 条（VCS Refresh）本轮做了取证但未修好**，结论如下（供后续接手，
+   每一条都有实测依据）：
+
+   - 默认 dock 布局只安排 8 个常驻窗口（`editor_shell.cpp` 的 `BuildDefaultDockLayout` 只 dock
+     Toolbar/Hierarchy/Inspector/Material/Project/Console/Scene/Game），因此 Version Control 面板
+     **未被 dock、是浮动窗口**；它原先没有初始尺寸，实测打开时只有 **32×42 像素、内容区高 0**，
+     页签与 Refresh/Commit/Stage All 全被裁掉。已在 `editor_version_control.cpp` 里补
+     `SetNextWindowSize(680×460, FirstUseEver)`（真实用户可见的修复；对测试无副作用：
+     `dse-panels` 36/36、`dse-misc` 8/8、gtest 5/5 均不变）。
+   - 但两条用例**仍然红**：Refresh 按钮位于 «Changes» 页的**最底部**（上面是变更文件列表，本仓库
+     变更多时很长），且页面选择由 ImGui 管理（面板里的 `g.active_tab` 只是镜像变量，实测恒为 0，
+     不代表真实选中项）。测试引擎对这类**长列表底部 / tab bar 容器内**的条目报
+     `Unable to locate item ... (0x00000000)`（找不到）或带 ID 的不可定位。
+   - 已试过且**无效**的路径（避免重复踩）：从测试里调 `PanelRegistry::ToggleMaximize()` —— 它用
+     `current_panel_id_` 记录目标面板，而该变量只在面板自身绘制期间有效，测试里调用等于空操作；
+     `ctx->ScrollToBottom(w->Name)` —— 引擎解析窗口 ref 失败（`window != nullptr` 断言）；
+     `ctx->ItemClick("<图标> Changes")` —— 带图标前缀的页签标签解析不到（ID 0）。
+   - 建议的下一步：给该面板的 Refresh/Commit 行加**稳定的 `###` 后缀 ID**（例如
+     `MDI_ICON_REFRESH " Refresh###vc_refresh"`），让测试按 ID 定位而不依赖标签与可见性；
+     这比继续和测试引擎的 ref 解析较劲更省事。
 
 当前分组统计：**21 绿 / 9 红**（基线 7/24）。因此 L0b 仍**不应判绿**，但已从「结构性问题 + 抖动」
 收敛为「若干条各自独立的用例断言」。

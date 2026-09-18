@@ -363,6 +363,11 @@ void DrawConflictsTab() {
 void DrawVersionControlPanel(EditorContext& /*ctx*/) {
     EnsureInit();
 
+    // 默认 dock 布局只安排了 8 个常驻窗口（Toolbar/Hierarchy/Inspector/Material/Project/
+    // Console/Scene/Game），本面板未 dock、是浮动窗口；不设初始尺寸时它只按首帧内容自适应，
+    // 实测只有 32x42 像素、内容区高 0 —— 页签与 Refresh/Commit 等按钮全部被裁掉，用户看到的是
+    // 一个点不动的细条（UI 测试也因此报 "Unable to locate item: ... Refresh"）。
+    ImGui::SetNextWindowSize(ImVec2(680.0f, 460.0f), ImGuiCond_FirstUseEver);
     ImGui::Begin(MDI_ICON_SOURCE_BRANCH "  Version Control", PanelRegistry::Get().GetCurrentPanelOpen());
     PanelRegistry::Get().DrawMaximizeRestoreButton();
 
