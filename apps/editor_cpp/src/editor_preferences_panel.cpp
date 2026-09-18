@@ -32,8 +32,14 @@ namespace {
 
     void FlushPreferencesIfNeeded(float dt) {
         if (!s_dirty) return;
+        // 拖拽类控件仍在被操作时不落盘（避免每帧写文件）；一旦交互结束就立刻落盘。
+        // 只按「累计 dt >= 0.5s」判断是不够的：面板注册表在 *visible==false 时会跳过 draw
+        // （editor_panel_registry.cpp），于是「改完设置 → 关掉面板 → 很快退出」会丢掉设置——
+        // DrawPreferencesPanel 里那段「关闭时强制保存」分支实际是死代码。UI 测试因此也会失败
+        // （改完主题/吸附值后立即读磁盘，读到的是旧值）。
+        const bool interacting = ImGui::IsAnyItemActive();
         s_save_timer -= dt;
-        if (s_save_timer > 0.0f) return;
+        if (interacting && s_save_timer > 0.0f) return;
         s_dirty = false;
 
         EditorSettings settings = LoadEditorSettings();
