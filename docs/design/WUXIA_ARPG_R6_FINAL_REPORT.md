@@ -82,6 +82,8 @@ python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d1
 | D3D11 幽篁谷/雪 | 60.67 | 0.00400 |
 
 截图路径：`tmp/r6_final/r5_{backend}_{map}_{weather}.png`（tmp 被忽略，统计写入本报告与 PROGRESS）。
+可浏览 Gallery：`docs/design/wuxia_arpg_gallery/gallery.html`（含 contact_sheet.png 与 7 张实机截图）。
+截图分析：`docs/design/WUXIA_ARPG_SCREENSHOT_ANALYSIS.md`。
 
 ## 3. 资产与合规
 

@@ -562,6 +562,7 @@ python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d1
 - 资产审计：`PASS`，未发现 `SimHei` / `逸剑风云决` / commercial game 引用
 
 完整报告：`docs/design/WUXIA_ARPG_R6_FINAL_REPORT.md`。
+截图 Gallery：`docs/design/wuxia_arpg_gallery/gallery.html`；截图分析：`docs/design/WUXIA_ARPG_SCREENSHOT_ANALYSIS.md`。
 逐条资产台账：`docs/design/WUXIA_ARPG_NEW_ASSET_LEDGER.md` / `.csv`，当前 68 条。
 
 ### 10.3 R6 门禁结论
