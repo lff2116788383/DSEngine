@@ -2,10 +2,11 @@
 local core = require("core")
 local S = {}
 local FILE = core.ROOT .. "wuxia_arpg_save.dat"
-function S.save(P, seed)
+function S.save(P, seed, extra)
     local data = {ver=1, seed=seed, x=P.x, z=P.z, hp=P.hp, mp=P.mp, hp_max=P.hp_max, mp_max=P.mp_max,
                   level=P.level, exp=P.exp, exp_next=P.exp_next, gold=P.gold, atk=P.atk, def=P.def,
-                  items=P.items, item_seq=P.item_seq, equip=P.equip}
+                  items=P.items, item_seq=P.item_seq, equip=P.equip,
+                  map_id=extra and extra.map_id, weather=extra and extra.weather}
     local ok, blob = pcall(dse.serialize.encode, data)
     if not ok then return false, "encode" end
     local f = io.open(FILE, "wb")
@@ -30,6 +31,6 @@ function S.load(P)
             end
         else P.equip[slot] = nil end
     end
-    return true, data.seed
+    return true, data.seed, data
 end
 return S
