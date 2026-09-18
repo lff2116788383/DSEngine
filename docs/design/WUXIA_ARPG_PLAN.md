@@ -1,6 +1,6 @@
 # HD-2D 武侠刷子 ARPG 轮次契约 (WUXIA_ARPG_PLAN)
 
-> 文档版本：v1.0
+> 文档版本：v1.1（R3 用户修正）
 > 建立日期：2026-09-18（R1 审计时补建；见 PROGRESS 的缺失说明）
 > 目标分支：`feature/hd2d-wuxia-arpg`
 > 基线分支/提交：`feature/engine-lib` @ `0a8fc8b0`
@@ -120,3 +120,15 @@
 - Lua 绑定：`tools/codegen/binding_defs.json` + 107 个绑定源文件（92 个 `*.gen.cpp` + 15 个手写 `.cpp`）；`ecs.add_sprite3d`、`set_sprite3d_lit`、`assets.load_sprite_atlas` 等已在 `lua_binding_compat.cpp` 证实。
 - 素材：模板 README 声称美术/音频全部脚本程序化生成、不依赖第三方素材；当前缺少逐条资产许可台账，R2 补。
 - 主缺口：地图 2/3；装备与掉落深度不足；天气仅落叶/萤火；完整 B+ 游戏层仍需端到端验收；GT 1030 台式机证据环境暂缓。
+## 8. R3 用户修正：新游戏、全新素材（覆盖早期模板方案）
+
+> 2026-09-18 用户明确：**不要使用游戏模板**，`templates/hd2d_wuxia` 是垃圾素材/有 bug；必须做**新游戏**，素材也要全新。
+
+从 R3 起覆盖以下契约：
+- 游戏工程目录改为 `games/wuxia_arpg/`，不再把 `templates/hd2d_wuxia` 作为游戏底座。
+- 代码重写：不使用模板的 `main/player/enemy/bplus/ui/save` 等脚本；只参考已验证的引擎 API。
+- 素材全新：由 `games/wuxia_arpg/tools/gen_assets.py` 程序化生成；禁止复制 `templates/hd2d_wuxia` 的 PNG/WAV/DSprite/DSLua。
+- 唯一外部输入为 OFL 字体 `apps/editor_cpp/fonts/NotoSansSC-Regular.ttf`；字体图集是 R3 新生成输出。
+- R3 交付：`games/wuxia_arpg` 的 1 张地图可玩 + HD-2D lit + 掉落/升级/存档最小闭环。
+- R2 的 `WUXIA_ARPG_DESIGN.md` / `WUXIA_ARPG_ASSET_LEDGER.*` 视为早期模板审计产物，不再作为后续实现依据；新游戏逐条台账为 `WUXIA_ARPG_NEW_ASSET_LEDGER.*`。
+- R4 起继续以 `games/wuxia_arpg` 为唯一实现目录；R5 在验证后的新工程上增加地图与天气，不得回退到模板。

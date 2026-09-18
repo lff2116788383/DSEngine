@@ -7,10 +7,10 @@ goal:
   objective: "用 DSEngine 制作 HD-2D 武侠刷子 ARPG（暗黑 2 式，3 张地图）"
   status: in_progress
   max_goal_rounds: 12
-  current_round: R3
+  current_round: R4
   attempt: 1
-  completed_rounds: [R1, R2]
-  next_round: R3
+  completed_rounds: [R1, R2, R3]
+  next_round: R4
   branch: feature/hd2d-wuxia-arpg
   baseline: feature/engine-lib @ 0a8fc8b0
   contract: docs/design/WUXIA_ARPG_PLAN.md
@@ -24,7 +24,7 @@ goal:
 |---|---|---|---|
 | R1 | 能力审计 | 已完成（审计通过） | 本文 2 |
 | R2 | 素材清单 + 完整设计 | 已完成（门禁通过） | 本文 3 |
-| R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 未开始 |  |
+| R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 已完成（新游戏门禁通过） | 本文 5 |
 | R4 | 战斗与成长 | 未开始 |  |
 | R5 | 另两张地图 + 天气与光影打磨 | 未开始 |  |
 | R6 | 收尾验证与交付 | 未开始 |  |
@@ -258,25 +258,112 @@ $texts | Select-String -Pattern '逸剑风云决|解包素材|商业游戏|unpac
 | 玩法实现 | 未执行 | 属 R3-R6，R3 只做 1 张地图垂直切片 |
 | GT 1030 真机 | 环境暂缓 | 远程机不可达，不得冒充 |
 
-### 3.7 R2 提交与推送状态
+### 3.7 R2 提交与推送状态（已恢复）
 
 - 本地提交：
   - `941463b4 fix(tools): use OFL Noto Sans SC for wuxia font atlas`
   - `0a9c1fdd docs(wuxia): add R2 design and asset ledger`
-- `git push` 命令：`git push origin feature/hd2d-wuxia-arpg`
-- 结果：`已失败（环境暂缓）`。连续 6 次尝试均无法连接 GitHub：
-  - `OpenSSL SSL_read: Connection was reset, errno 10054`
-  - `Failed to connect to github.com port 443 after 21050 ms: Timed out`
-- 本地分支领先远端 2 个提交：远端最后提交为 `ba0a6505`。
-- 未 push `master`；R3 开工后继续重试 push，若恢复则补推这两个提交。
+  - `79d51a8b docs(wuxia): record R2 push environment status`
+- 后续网络恢复后重试成功：`git push` 返回 0，`ba0a6505..79d51a8b feature/hd2d-wuxia-arpg`。
+- 结果：`已通过`。远端 `origin/feature/hd2d-wuxia-arpg` 与本地一致；未 push `master`。
+- 注：R2 的模板设计/台账仍是历史产物；用户 R3 修正后，后续实现以新游戏和 `WUXIA_ARPG_NEW_ASSET_LEDGER.*` 为准。
 
-R2 结论：设计/台账门禁 `已通过`；push 为 `环境暂缓`。下一轮进入 R3：只做 village 垂直切片 + HD-2D 受光生效，并在 R3 开工时重试 push。
+R2 结论：设计/台账门禁 `已通过`，push `已通过`。
 
-## 4. R3 入口条件
+## 5. R3 新游戏垂直切片（用户修正后）
+
+### 5.1 修正说明
+
+R3 开工时用户明确指示：**不要使用游戏模板**，`templates/hd2d_wuxia` 素材垃圾且有 bug；必须做新游戏，素材也要全新。
+因此已：
+- 丢弃/回滚 R3 对 `templates/hd2d_wuxia` 的所有未提交改动；
+- 新建独立游戏工程 `games/wuxia_arpg/`；
+- 新建素材生成器 `games/wuxia_arpg/tools/gen_assets.py`，全部素材重新生成；
+- 不使用 `templates/hd2d_wuxia` 的任何 PNG/WAV/DSprite/Lua/Bplus/UI/Save 代码；
+- 唯一外部输入为 OFL 字体 `apps/editor_cpp/fonts/NotoSansSC-Regular.ttf`（新字体图集为 R3 生成输出）。
+
+### 5.2 R3 基线
+
+- 构建：`cmake --build --preset windows-x64-debug`（VS2022 BuildTools dev env），exit=0，13.6s。
+- gtest：`ctest --preset windows-x64-debug`，exit=0，52.9s，5/5 通过，0 失败。
+- R3 改动只增加 Lua/PNG/WAV/Python 资产与脚本，无 C++/CMake 改动。
+
+### 5.3 新素材生成
+
+```powershell
+python games\wuxia_arpg\tools\gen_assets.py
+```
+
+结果：`已通过`，exit=0。生成：
+- 4 方向主角/山贼图集：8 个 `.dsprite.json` + 8 张 atlas PNG（每套 18 帧，含 idle/walk/attack/dodge/hurt/die）
+- 5 张程序化 3D 道具贴图：tree/bamboo/house/lantern/rock
+- 1 张新字体图集 `assets/ui/font.png` + `scripts/font.lua`（183 glyphs，Noto Sans SC OFL 输入）
+- 6 个新 WAV：5 个 SFX + 1 个 BGM loop
+- 不依赖 `templates/hd2d_wuxia` 的任何资产。
+
+新游戏资产台账：`docs/design/WUXIA_ARPG_NEW_ASSET_LEDGER.md` / `.csv`（47 条，含 SHA-256）。
+
+### 5.4 R3 逻辑验收
+
+```powershell
+bin\dsengine_lua_debug.exe --script=games\wuxia_arpg\scripts\_logic_test.lua
+```
+
+结果：`已通过`，exit=0，输出：
+```text
+[r3-logic] PASS rng=3336926330 items=30 save_items=30
+```
+覆盖：确定性 xorshift RNG、随机装备原型、`dse.serialize` 存档/读档 roundtrip。
+
+### 5.5 R3 三后端验收
+
+命令（每个后端单独执行）：
+
+```powershell
+python games\wuxia_arpg\tools\run_r3_acceptance.py --backends opengl --out-dir tmp\r3_new_game --max-frames 240 --shot-frame 210
+python games\wuxia_arpg\tools\run_r3_acceptance.py --backends vulkan --out-dir tmp\r3_new_game --max-frames 240 --shot-frame 210
+python games\wuxia_arpg\tools\run_r3_acceptance.py --backends d3d11 --out-dir tmp\r3_new_game --max-frames 240 --shot-frame 210
+```
+
+结果：`已通过`，三个后端 exit=0，`[r3] new-game acceptance PASS`。
+
+| 后端 | lit-on mean_luma | lit-off mean_luma | delta | 游戏截图 mean_luma | 结论 |
+|---|---:|---:|---:|---:|---|
+| OpenGL | 68.24 | 8.11 | 60.13 | 72.94 | 已通过 |
+| Vulkan | 68.10 | 7.63 | 60.47 | 72.69 | 已通过 |
+| D3D11 | 68.16 | 8.11 | 60.05 | 72.94 | 已通过 |
+
+游戏演示自动完成并输出以下真实标记：
+- `[wuxia] map=qingxi_village`
+- `[wuxia] attack dir=... targets=...`
+- `[wuxia] exp+...`
+- `[wuxia] gold+...`
+- `[wuxia] drop uid=... name=... rarity=...`
+- `[wuxia] autosave ok=true`
+- `DSE_SCREENSHOT_WRITTEN ... 1280x720`
+- 日志：`tmp/r3_new_opengl.log`、`tmp/r3_new_vulkan.log`、`tmp/r3_new_d3d11.log`
+- 截图：`tmp/r3_new_game/r3_game_{opengl,vulkan,d3d11}.png`（tmp 被忽略，数值已写入本文件）
+
+### 5.6 R3 门禁结论
+
+| 门禁 | 结论 | 说明 |
+|---|---|---|
+| 新游戏独立于模板 | 已通过 | 代码/素材全在 `games/wuxia_arpg`，未使用模板 |
+| 1 张地图可玩 | 已通过 | `qingxi_village` 移动/攻击/碰撞/敌人/死亡/掉落/升级/存档 |
+| HD-2D 受光生效 | 已通过 | 三后端 lit on/off luma delta 约 60 |
+| 掉落/升级/存档闭环 | 已通过 | 逻辑测试 + 演示日志 `drop/exp/levelup/autosave` |
+| 三后端 | 已通过 | OpenGL/Vulkan/D3D11 均 exit=0 且出图 |
+| 新素材许可 | 已通过 | 新台账逐条记录；字体输入为 OFL Noto |
+| 禁止商业解包 | 已通过 | 未引用任何商业游戏素材 |
+| 第 2/3 张地图 | 未执行 | 属 R5 |
+| Boss/完整战斗成长 | 未执行 | 属 R4 |
+
+R3 结论：`已通过`。下一轮 R4：在新游戏 `games/wuxia_arpg` 上深化战斗与成长，不触碰模板。
+
+## 6. R4 入口条件
 
 - 分支保持 `feature/hd2d-wuxia-arpg`。
-- 先读 `WUXIA_ARPG_DESIGN.md`、`WUXIA_ARPG_ASSET_LEDGER.md` 和 PLAN。
-- R3 只实现 1 张地图的端到端切片；不得提前加入第 2/3 张完整地图。
-- R3 开始必须先跑基线构建与 gtest。
-- 新增/修改素材必须同步更新资产台账；不得引入任何商业游戏解包素材。
-- 任何 Lua API 先 grep `lua_binding_*` 确认；任何渲染改动先确认 GL/VK/D3D11 三后端路径。
+- 只改 `games/wuxia_arpg/`；禁止修改或复用 `templates/hd2d_wuxia` 作为游戏底座。
+- 新增/修改素材必须由 `games/wuxia_arpg/tools/gen_assets.py` 生成或提供许可清晰来源，并更新 `WUXIA_ARPG_NEW_ASSET_LEDGER.*`。
+- R4 先 grep 真实 Lua 绑定后再写代码；不新增第三方库。
+- R4 只深化战斗/成长/装备/技能/Boss，不提前做第 2/3 张完整地图。
