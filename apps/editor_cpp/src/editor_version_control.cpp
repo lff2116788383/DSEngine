@@ -255,7 +255,7 @@ void DrawChangesTab() {
     ImGui::SameLine();
     if (ImGui::Button("Stage All")) ApplyResult(g.client.StageAll(), "staged all");
     ImGui::SameLine();
-    if (ImGui::Button(MDI_ICON_REFRESH " Refresh")) Refresh();
+    if (ImGui::Button(MDI_ICON_REFRESH " Refresh###vc_refresh")) Refresh();
 }
 
 void DrawHistoryTab() {
@@ -400,10 +400,12 @@ void DrawVersionControlPanel(EditorContext& /*ctx*/) {
     ImGui::Separator();
 
     if (ImGui::BeginTabBar("VCTabs")) {
-        if (ImGui::BeginTabItem(MDI_ICON_FILE_DOCUMENT_EDIT " Changes")) { DrawChangesTab(); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem(MDI_ICON_HISTORY " History"))           { DrawHistoryTab(); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem(MDI_ICON_SOURCE_BRANCH " Branches"))    { DrawBranchesTab(); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem(MDI_ICON_ALERT " Conflicts"))          { DrawConflictsTab(); ImGui::EndTabItem(); }
+        // 页签带稳定的 ### ID：UI 测试按 ID 定位（"###vc_tab_changes"），避免依赖
+        // 带图标前缀的显示标签（测试引擎对这类标签会解析不到，实测 item ID 0）。
+        if (ImGui::BeginTabItem(MDI_ICON_FILE_DOCUMENT_EDIT " Changes###vc_tab_changes")) { DrawChangesTab(); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(MDI_ICON_HISTORY " History###vc_tab_history"))           { DrawHistoryTab(); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(MDI_ICON_SOURCE_BRANCH " Branches###vc_tab_branches"))    { DrawBranchesTab(); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(MDI_ICON_ALERT " Conflicts###vc_tab_conflicts"))          { DrawConflictsTab(); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 
