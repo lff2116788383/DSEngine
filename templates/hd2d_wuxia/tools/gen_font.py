@@ -12,9 +12,9 @@ import re
 from PIL import Image, ImageDraw, ImageFont
 
 FONT_CANDIDATES = [
-    os.path.join(os.path.dirname(__file__), "..", "assets", "font", "SimHei.ttf"),
-    os.path.join(os.path.dirname(__file__), "..", "..", "topdown_3d", "assets", "font", "SimHei.ttf"),
-    "/mnt/e/Engine/DSEngine/templates/topdown_3d/assets/font/SimHei.ttf",
+    os.path.join(os.path.dirname(__file__), "..", "assets", "font", "NotoSansSC-Regular.ttf"),
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "apps", "editor_cpp", "fonts",
+                 "NotoSansSC-Regular.ttf"),
 ]
 
 CJK_PUNCT = "　、。，．《》〈〉【】（）！？：；「」～％＋－＝"
@@ -35,7 +35,7 @@ def _find_font():
         p = os.path.abspath(p)
         if os.path.exists(p):
             return p
-    raise SystemExit("找不到中文字体 SimHei.ttf，请放到 assets/font/ 下")
+    raise SystemExit("找不到 OFL 中文字体 NotoSansSC-Regular.ttf，请放到 assets/font/ 或 apps/editor_cpp/fonts/ 下")
 
 
 def build_atlas(chars, size, out_png, out_lua, font_path, name):
@@ -82,8 +82,8 @@ def build_atlas(chars, size, out_png, out_lua, font_path, name):
             ch = '\\"'
         elif ch == "\\":
             ch = "\\\\"
-        lines.append('    [%d]={u0=%.5f,v0=%.5f,u1=%.5f,v1=%.5f,w=%d,h=%d,adv=%d,ox=%d,oy=%d}, -- %s'
-                     % (cp, u0, v0, u1, v1, gw, gh, adv, ox, oy, ch))
+        lines.append(('    [%d]={u0=%.5f,v0=%.5f,u1=%.5f,v1=%.5f,w=%d,h=%d,adv=%d,ox=%d,oy=%d}, -- %s'
+                      % (cp, u0, v0, u1, v1, gw, gh, adv, ox, oy, ch)).rstrip())
     lines.append("  },")
     lines.append("}")
     with open(out_lua, "w", encoding="utf-8") as f:
