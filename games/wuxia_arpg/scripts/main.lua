@@ -48,6 +48,8 @@ local function load_map(id, entry, weather_override)
     for _,s in ipairs(D.spawns or {}) do E.spawn(s.kind, s.x, s.z) end
     local weather = weather_override or D.weather or "clear"
     Weather.set(weather, true)
+    local tracks = { qingxi_village="plain", blackwind_stronghold="swamp", youhuang_valley="lost" }
+    A.play_bgm(tracks[D.current_id] or "plain")
     G.transition_cd = 1.0
     core.accept_log("map=%s weather=%s spawn=%.1f,%.1f enemies=%d", D.current_id, weather, P.x, P.z, #E.list)
     if os.getenv("DSE_WUXIA_TOUR") == "1" then G.tour_wait = 0.35 end

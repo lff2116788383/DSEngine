@@ -34,6 +34,15 @@ def classify(path: Path):
     r = rel(path)
     if r.endswith(".gitignore") or r.endswith("README.md"):
         return ("文档/仓库配置", "仓库手写", "DSEngine Authors", "Apache-2.0", "HAND")
+    if "/assets/external/ninja_adventure/actor/" in r:
+        return ("外部 CC0 角色图集", "import_ninja_adventure.py",
+                "Pixel-Boy / AAA (Ninja Adventure Asset Pack)", "CC0 1.0", "EXT1")
+    if "/assets/external/ninja_adventure/audio/" in r:
+        return ("外部 CC0 音乐", "import_ninja_adventure.py",
+                "Pixel-Boy / AAA (Ninja Adventure Asset Pack)", "CC0 1.0", "EXT1")
+    if r.endswith("/assets/external/ninja_adventure/SOURCE.md"):
+        return ("外部素材来源说明", "import_ninja_adventure.py",
+                "Pixel-Boy / AAA (Ninja Adventure Asset Pack)", "CC0 1.0", "EXT1")
     if "/assets/actor/" in r:
         return ("新生成角色图集", GENERATED_ACTOR, "DSEngine Authors", "Apache-2.0", "G1")
     if "/assets/weather/" in r:

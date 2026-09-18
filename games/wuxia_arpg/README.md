@@ -88,6 +88,16 @@ python games\wuxia_arpg\tools\run_r4_acceptance.py --backends d3d11 --out-dir tm
 ```powershell
 python games\wuxia_arpg\tools\run_r5_acceptance.py --backends opengl,vulkan,d3d11 --out-dir tmp\r5_final
 ```
+## 外部 CC0 素材升级
+
+角色与 BGM 已优先使用 CC0「Ninja Adventure Asset Pack」：
+
+- 作者：Pixel-Boy / AAA
+- 许可：CC0 1.0
+- 来源：https://pixel-boy.itch.io/ninja-adventure-asset-pack
+- 导入：`python games\wuxia_arpg\tools\import_ninja_adventure.py --source <解压目录>`
+- 运行时优先路径：`games/wuxia_arpg/assets/external/ninja_adventure/`
+- 缺失时回退到程序化素材。
 ## 许可
 
 新生成素材与脚本为 DSEngine Authors 原创，随仓库顶层 `LICENSE` 以 Apache-2.0 发布。
