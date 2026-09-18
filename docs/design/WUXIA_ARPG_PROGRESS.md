@@ -5,12 +5,12 @@
 ```yaml
 goal:
   objective: "用 DSEngine 制作 HD-2D 武侠刷子 ARPG（暗黑 2 式，3 张地图）"
-  status: in_progress
+  status: done
   max_goal_rounds: 12
   current_round: R6
   attempt: 1
-  completed_rounds: [R1, R2, R3, R4, R5]
-  next_round: R6-push
+  completed_rounds: [R1, R2, R3, R4, R5, R6]
+  next_round: null
   branch: feature/hd2d-wuxia-arpg
   baseline: feature/engine-lib @ 0a8fc8b0
   contract: docs/design/WUXIA_ARPG_PLAN.md
@@ -27,7 +27,7 @@ goal:
 | R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 已完成（新游戏门禁通过） | 本文 5 |
 | R4 | 战斗与成长 | 已完成（门禁通过） | 本文 7 |
 | R5 | 另两张地图 + 天气与光影打磨 | 已完成（门禁通过） | 本文 8 |
-| R6 | 收尾验证与交付 | 已完成验收；push 环境暂缓 | 本文 10 |
+| R6 | 收尾验证与交付 | 已完成（含外部素材升级与 push） | 本文 10 |
 
 ## 2. R1 能力审计
 
@@ -530,11 +530,11 @@ python games\wuxia_arpg\tools\run_r5_acceptance.py --backends opengl,vulkan,d3d1
 - 本地提交：
   - `aceaedef feat(game): add R5 three maps and weather system`
   - `690145e6 docs(wuxia): record R5 maps weather verification`
-- `git push origin feature/hd2d-wuxia-arpg` 当前结果：`环境暂缓`。
+- `git push origin feature/hd2d-wuxia-arpg` 最终结果：`已通过`。
 - 失败现象：
   - `OpenSSL SSL_read: Connection was reset, errno 10054`
   - `Failed to connect to github.com port 443: Timed out`
-- 本地领先远端 2 个提交；未 push `master`。R6 开工后继续重试补推。
+- 网络恢复后补推成功：`1efb0af5..ff33a723`；未 push `master`。
 R5 结论：`已通过`。下一轮 R6：收尾验证与交付，重点做全量三图三后端、存档/读档、发布整理和最终资产审计。
 
 ## 10. R6 收尾验证与交付
@@ -595,7 +595,7 @@ python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d1
 | 天气光影回归 | 已通过 | R5 matrix + tour |
 | 资产审计 | 已通过 | 68 条台账，无商业/SimHei 引用 |
 | GT 1030 真机 | 环境暂缓 | 远程机不可达，不得冒充 |
-| push | 环境暂缓 | GitHub 443 超时，本地领先 5 个提交；未 push master |
+| push | 已通过 | 本地提交已推送到 `origin/feature/hd2d-wuxia-arpg`；未 push master |
 
 R6 验收结论：`已通过`。
-唯一未完成项是 push，属于网络环境暂缓；恢复网络后应直接补推 `feature/hd2d-wuxia-arpg`，不得 push `master`。
+push 已通过；当前 `feature/hd2d-wuxia-arpg` 与远端一致，`master` 未 push。

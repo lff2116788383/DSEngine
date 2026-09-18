@@ -2,7 +2,7 @@
 
 > 分支：`feature/hd2d-wuxia-arpg`
 > 工程：`games/wuxia_arpg/`
-> 状态：代码/资产/验收已完成；push 为环境暂缓（GitHub 网络不可达）
+> 状态：代码/资产/验收已完成；本地提交已 push 到 `origin/feature/hd2d-wuxia-arpg`
 > 日期：2026-09-18
 
 ## 1. 交付内容
@@ -111,7 +111,7 @@ bin\dsengine_lua_debug.exe --script=games\wuxia_arpg\scripts\main.lua
 ## 5. 已知限制
 
 - 远程 GT 1030 台式机仍不可达，未取得 GT 1030 真机证据；不得把本机 RTX 3070 结果冒充 GT 1030。
-- GitHub 网络环境不可达，R5/R6 提交暂未 push；`master` 未 push。
+- R5/R6 提交已补推成功；`master` 未 push。
 - 发布级打包和签名未在本轮范围内。
 
 ## 5.1 CC0 外部素材升级
@@ -140,4 +140,4 @@ python games\wuxia_arpg\tools\run_r6_acceptance.py --backends opengl,vulkan,d3d1
 ## 6. 结论
 
 R6 最终验证：三图、三后端、存档/读档、战斗成长、天气光影、资产审计均已通过。
-唯一未完成项为 push，原因是环境网络不可达，已按 `环境暂缓` 记录；恢复网络后应补推 `feature/hd2d-wuxia-arpg`。
+push 已通过：`1efb0af5..ff33a723 feature/hd2d-wuxia-arpg`；`master` 未 push。
