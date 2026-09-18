@@ -297,8 +297,21 @@ round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且
      补充一条引擎行为（踩过）：**只要测试引擎记录过 Error，即使后续所有断言通过，该用例也判失败**
      ——例如 `ItemClick("+ Track")` 被前序用例遗留的浮动面板挡住时只报 "Unable to Hover"，
      必须让交互真的命中，否则没有"兜底断言"可救。
-8. 其余分组仍有零星失败：`dse-scene` 1、`dse-anim` 1、`dse-graph` 1、`dse-2d-tools` 1、
-   `dse-project` 1、`dse-negative` 1（嵌套路径 ref，见第 4 条）。
+10. ~~`dse-anim` 1 条~~ —— **已修**（7/7）。`Anim State Machine` 面板同属"未 dock 浮动面板缺初始尺寸"
+    这一类，起始即折叠；引擎日志实测 `WindowResize 'Anim State Machine'` 之后紧跟
+    `Error 'Unable to locate item: 0x…'`（折叠态连 WindowResize 都会失败）——而引擎只要记录过
+    Error 就判用例失败。已在 `editor_anim_state_machine.cpp` 补
+    `SetNextWindowSize(720×520, FirstUseEver)`。这是同类修复的第三处（另两处：Version Control、
+    Terrain Brush），说明**所有未 dock 的浮动面板都应带 FirstUseEver 初始尺寸**。
+11. ~~`dse-project` 1 条~~ —— **已修**（4/4）。`File → Recent Projects → <项目名>` 这种**两级菜单路径**
+    在测试引擎里不可靠：实测报 `Unable to locate item: //Recent Projects###Menu_01/<名字> (0x…)`
+    ——条目**存在**（给了 ID）却定位不到；改成两步（先 `MenuClick("File/Recent Projects")` 展开子菜单，
+    再按子菜单窗口名 `//Recent Projects###Menu_01` + `**/` 通配点条目）后通过。另外让测试辅助先清空
+    最近项目列表，避免本机遗留的一长串记录把子菜单撑长、把目标条目挤出可视区。
+12. 其余分组仍有零星失败：`dse-scene` 1（场景页签查找）、`dse-graph` 1（画布建节点后
+    `ShaderGraphNodeCount() == 6`）、`dse-2d-tools` 1（`ok`）、`dse-negative` 1（嵌套路径 ref）。
+
+当前分组统计：**26 绿 / 4 红**（基线 7/24；`dse-terrain` 抖动时表现为 25/5）。
 9. **`dse-terrain` 为抖动项**（4 次连跑 2 次 3/3、2 次 2/3），失败点固定在
    `terrain_panel_edit_brush` 的 `brush_mode == Lower` 断言。已从引擎日志定位到确切现象：
    第一次 `ItemClick("Lower")` **定位成功**（拿到 item id）却没生效，紧接着的重试反而报

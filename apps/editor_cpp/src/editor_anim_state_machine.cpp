@@ -254,6 +254,11 @@ void DrawSelectedStateInspector(dse::gameplay3d::AnimationStateMachine& asm_ref,
 } // namespace
 
 void DrawAnimStateMachinePanel(EditorContext& ctx) {
+    // 与 Version Control / Terrain Brush 同类：默认 dock 布局只安排 8 个常驻窗口，
+    // 未 dock 的浮动面板不设初始尺寸时会小到内容区 0 高甚至呈折叠态；折叠态下
+    // 连 WindowResize 都会失败（实测 UI 测试报 "Unable to locate item: 0x…"），
+    // 而测试引擎只要记录过 Error 就判用例失败。
+    ImGui::SetNextWindowSize(ImVec2(720.0f, 520.0f), ImGuiCond_FirstUseEver);
     ImGui::Begin("Anim State Machine", PanelRegistry::Get().GetCurrentPanelOpen());
     PanelRegistry::Get().DrawMaximizeRestoreButton();
 

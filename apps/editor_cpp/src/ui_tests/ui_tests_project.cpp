@@ -58,6 +58,10 @@ void EnsureTestProjectOnDiskAndRecent() {
         pm.CreateProject(TestParent(), kProjName, ProjectTemplate::Empty);
     }
     EditorSettings s = LoadEditorSettings();
+    // 先清空最近项目列表，只留本次需要的条目：本机遗留的一长串最近项目会把
+    // «File → Recent Projects» 子菜单撑长，目标条目落到可视区外，测试引擎报
+    // "Unable to locate item: //Recent Projects###Menu_01/<名字> (0x…)"，菜单点击随之失效。
+    s.recent_projects.clear();
     AddRecentProject(s, root.string());
     SaveEditorSettings(s);
 }
@@ -169,7 +173,23 @@ void RegisterProjectTests(ImGuiTestEngine* e) {
 
             ctx->SetRef("//DSEngineRoot");
             // Recent 子菜单项标签 = 项目根目录的文件夹名（无图标），即 kProjName。
-            ctx->MenuClick("File/Recent Projects/DSEUiTestProject");
+            // 分两步：先展开 «Recent Projects» 子菜单，再点子菜单里的条目。
+            // 引擎的 MenuAction 对两级路径不可靠（实测报
+            // "Unable to locate item: //Recent Projects###Menu_01/<名字> (0x…)"，
+            // 条目确实存在却定位不到），两步走可把子菜单当作当前聚焦窗口处理。
+            ctx->MenuClick("File/Recent Projects");
+            ctx->Yield(2);
+            // 子菜单是独立 popup 窗口，ref 还停在菜单栏（//DSEngineRoot）→ 必须切到当前
+            // 聚焦窗口再点，否则只会在菜单栏里找一个名字叫 DSEUiTestProject 的条目。
+            ctx->SetRef("//$FOCUSED");
+            // 引擎日志显示该条目的真实宿主窗口名是 "Recent Projects###Menu_01"
+            // （用两级 MenuClick 时错误信息里出现过这个路径）——子菜单并不总是成为 $FOCUSED，
+            // 所以显式按窗口名下单。
+            if (ctx->ItemInfo("DSEUiTestProject", ImGuiTestOpFlags_NoError).ID == 0) {
+                ctx->SetRef("//Recent Projects###Menu_01");
+            }
+            // 条目在 popup 的子容器里，用 **/ 通配向下找。
+            ctx->ItemClick("**/DSEUiTestProject");
             ctx->Yield(2);
 
             IM_CHECK(pm.HasOpenProject());
