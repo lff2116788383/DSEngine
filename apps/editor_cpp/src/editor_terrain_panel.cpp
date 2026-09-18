@@ -1,4 +1,6 @@
 #include "editor_terrain_panel.h"
+#include <fstream>
+#include <filesystem>
 #include "editor_terrain_panel_core.h"
 #include "editor_context.h"
 
@@ -36,6 +38,9 @@ TerrainEditorState& GetTerrainEditorState() {
 void DrawTerrainEditorPanel(EditorContext& ctx) {
     auto& registry = ctx.registry;
     auto selected_entity = ctx.selected_entity;
+    // 未 dock 的浮动面板必须给初始尺寸：默认布局只 dock 了 8 个常驻窗口，本面板不设尺寸时
+    // 只按首帧内容自适应（实测会小到内容区 0 高、甚至呈折叠态），页签/按钮全部不绘制。
+    ImGui::SetNextWindowSize(ImVec2(560.0f, 620.0f), ImGuiCond_FirstUseEver);
     ImGui::Begin("Terrain Brush", PanelRegistry::Get().GetCurrentPanelOpen());
     PanelRegistry::Get().DrawMaximizeRestoreButton();
 

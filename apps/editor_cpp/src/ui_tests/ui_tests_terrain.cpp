@@ -208,8 +208,27 @@ void RegisterTerrainTilemapTests(ImGuiTestEngine* e) {
             DeselectAll(ctx);
             ShowFloatingPanel(ctx, Services().show_terrain_editor, "//Terrain Brush");
             ctx->SetRef("//Terrain Brush");
+            // 未 dock 的浮动面板可能处于折叠态：折叠时 body 不绘制 → 按钮不存在、点击静默失效。
+            // 折叠态的 WindowMove/Resize 不生效，所以这里展开后用 ImGuiCond_Always 重新落位，
+            // 保证单独跑这条用例（没有前面用例预热面板）时几何与焦点也是确定的。
+            if (ImGuiWindow* tw = FindActiveWindow("Terrain Brush")) {
+                ImGui::SetWindowCollapsed(tw, false);
+                ImGui::SetWindowPos(tw, ImVec2(180.0f, 70.0f), ImGuiCond_Always);
+                ImGui::SetWindowSize(tw, ImVec2(940.0f, 580.0f), ImGuiCond_Always);
+            }
+            ctx->Yield(2);
+            ctx->WindowFocus("//Terrain Brush");
+            ctx->Yield(2);
 
-            // 切笔刷模式 Lower。
+            // 切笔刷模式 Lower。等按钮真正被绘制再点：面板刚 ShowFloatingPanel 出来时
+            // （尤其单独跑这条用例、没有前面用例预热面板时）可能还差一两帧才提交按钮，
+            // 此时点击会静默落空、断言随之失败。
+            bool lower_ready = false;
+            for (int i = 0; i < 30 && !lower_ready; ++i) {
+                lower_ready = ctx->ItemInfo("Lower", ImGuiTestOpFlags_NoError).ID != 0;
+                ctx->Yield();
+            }
+            IM_CHECK(lower_ready);
             ctx->ItemClick("Lower");
             ctx->Yield(2);
             IM_CHECK(GetTerrainEditorState().brush_mode == TerrainBrushMode::Lower);

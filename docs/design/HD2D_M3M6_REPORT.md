@@ -267,8 +267,24 @@ round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且
    `accepted target=3 dragged=4`，而预期目标是嵌套行 B），因此环检测没被触发。下一步需查
    `ItemInfo("//Hierarchy/Scene/<a>/<b>")` 这类**嵌套路径 ref** 的解析，以及树的行顺序
    （EnTT 反序迭代时嵌套行与其后续兄弟行的相邻关系）。
-5. 其余分组仍有零星失败：`dse-terrain` 1、`dse-scene` 1、`dse-anim` 1、`dse-graph` 1、
-   `dse-2d-tools` 1、`dse-features` 4、`dse-project` 1、`dse-tool-panels` 2。
+5. ~~`dse-tool-panels` 2 条（VCS Refresh）~~ —— **已修**（12/12 全绿）。最终定位到三个叠加问题，
+   修复配方对其它"面板里的控件点不到"的用例同样适用：
+   - 窗口 ref 必须带 `//`（`//` + `w->Name`）；裸名字会被引擎当成相对标签，之后所有
+     `ItemClick` 都报 `Unable to locate item (0x00000000)`——而 `FindActiveWindow` 只能证明窗口
+     存在（它按 `WasActive` 匹配），发现不了这一点；
+   - 嵌在 tab bar 等子容器里的条目要 `**/` 通配；
+   - 给控件加稳定 `###` ID（`###vc_tab_changes` / `###vc_refresh`），不依赖带图标前缀的显示标签。
+6. ~~`dse-terrain`~~ —— **分组已修**（3/3）。根因与 VCS 同类：默认 dock 布局只安排 8 个常驻窗口，
+   未 dock 的面板若没有初始尺寸，会小到内容区 0 高甚至呈折叠态——折叠窗 body 不绘制、按钮不存在，
+   点击静默落空。已在 `editor_terrain_panel.cpp` 补 `SetNextWindowSize(560×620, FirstUseEver)`，
+   测试侧再补"展开 + 无条件落位/尺寸 + 等按钮出现"。
+   **已知遗留**：`terrain_panel_edit_brush` **单跑**仍会失败（分组跑通过）——该文件的三条用例存在
+   相互依赖（后一条依赖前一条把面板/状态预热好）。CI 与套件按分组跑，故不阻断；若要单跑可靠，
+   需把组内共享的准备工作抽成显式前置。
+7. 其余分组仍有零星失败：`dse-scene` 1、`dse-anim` 1、`dse-graph` 1、`dse-2d-tools` 1、
+   `dse-features` 4、`dse-project` 1、`dse-negative` 1（嵌套路径 ref 解析，见 §8.6 第 4 条）。
+
+当前分组统计：**23 绿 / 7 红**（基线 7/24）。
 6. **`dse-tool-panels` 的 2 条（VCS Refresh）本轮做了取证但未修好**，结论如下（供后续接手，
    每一条都有实测依据）：
 
