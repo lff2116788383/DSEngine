@@ -68,57 +68,97 @@ def human(kind, direction, action, i, n):
     pal = HERO if kind == "hero" else BANDIT
     cx = w // 2
     foot = h - 2
-    bob = -1 if action == "idle" and i % 2 else 0
-    if action == "walk":
-        bob = -1 if i % 2 else 0
-    if action == "attack":
-        lean = 1 if i >= n // 2 else 0
-    else:
-        lean = 0
-    if action == "dodge":
-        bob = 2
-    if action == "hurt":
-        bob = 1
+    side = direction in ("l", "r")
+    facing_left = direction == "l"
 
-    # legs / boots
+    # Animation offsets: keep the silhouette readable, no split central blade.
+    bob = -1 if action in ("idle", "walk") and i % 2 else 0
+    crouch = 2 if action == "dodge" else (1 if action == "hurt" else 0)
+    if action == "attack":
+        bob = -1 if i >= n // 2 else 0
+
+    hip = foot - 18 + bob + crouch
+    shoulder = foot - 33 + bob + crouch
+    head_bot = shoulder - 1
+    head_top = head_bot - 11
+    hair_top = head_top - 4
+
+    if action == "die":
+        # fallen silhouette, one horizontal body
+        rect(d, 5, foot - 12, w - 6, foot - 6, pal["robe_d"])
+        rect(d, 7, foot - 17, w - 9, foot - 12, pal["robe"])
+        rect(d, w - 10, foot - 22, w - 4, foot - 16, pal["skin"])
+        rect(d, w - 12, foot - 25, w - 5, foot - 20, pal["hair"])
+        return im
+
+    # Boots/legs: close together and mostly covered by robe.
     step = 0
     if action == "walk":
         step = -2 if i % 2 == 0 else 2
-    if action == "die":
-        # fallen body: horizontal silhouette
-        rect(d, 5, foot - 10, w - 6, foot - 6, pal["robe_d"])
-        rect(d, 7, foot - 15, w - 9, foot - 10, pal["robe"])
-        rect(d, w - 10, foot - 20, w - 4, foot - 14, pal["skin"])
-        rect(d, w - 12, foot - 22, w - 5, foot - 18, pal["hair"])
-        return im
-    rect(d, cx - 6, foot - 12 + bob, cx - 2, foot, pal["boot"])
-    rect(d, cx + 1 + step, foot - 12 + bob, cx + 5 + step, foot, pal["boot"])
-    # robe / body
-    rect(d, cx - 8, foot - 32 + bob, cx + 8, foot - 10 + bob, pal["robe"])
-    rect(d, cx - 8, foot - 32 + bob, cx + 8, foot - 29 + bob, pal["robe_d"])
-    rect(d, cx - 6, foot - 25 + bob, cx + 6, foot - 23 + bob, pal["belt"])
-    rect(d, cx - 2, foot - 32 + bob, cx + 3, foot - 10 + bob, pal["trim"])
-    # head / hair
-    rect(d, cx - 6, foot - 44 + bob, cx + 6, foot - 32 + bob, pal["skin"])
-    rect(d, cx - 7, foot - 46 + bob, cx + 7, foot - 40 + bob, pal["hair"])
-    if direction == "u":
-        rect(d, cx - 6, foot - 43 + bob, cx + 6, foot - 34 + bob, pal["hair"])
-    elif direction == "l":
-        rect(d, cx - 7, foot - 43 + bob, cx - 2, foot - 35 + bob, pal["hair"])
-    elif direction == "r":
-        rect(d, cx + 2, foot - 43 + bob, cx + 7, foot - 35 + bob, pal["hair"])
-    # arms / weapon
-    ax = cx + (7 if direction != "l" else -7)
-    if action == "attack" and i >= n // 2:
-        if direction == "l":
-            rect(d, cx - 14, foot - 30 + bob, cx - 2, foot - 27 + bob, pal["blade"])
-            rect(d, cx - 16, foot - 32 + bob, cx - 13, foot - 25 + bob, pal["blade"])
-        elif direction == "r":
-            rect(d, cx + 2, foot - 30 + bob, cx + 14, foot - 27 + bob, pal["blade"])
-        else:
-            rect(d, cx - 10, foot - 36 + bob, cx + 10, foot - 33 + bob, pal["blade"])
+    if side:
+        rect(d, cx - 4 + step, foot - 7, cx + 2 + step, foot, pal["boot"])
+        rect(d, cx - 2 - step, foot - 6, cx + 4 - step, foot, pal["boot"])
     else:
-        rect(d, ax - 2, foot - 31 + bob, ax + 2, foot - 18 + bob, pal["skin"])
+        rect(d, cx - 6 - step, foot - 7, cx - 2 - step, foot, pal["boot"])
+        rect(d, cx + 2 + step, foot - 7, cx + 6 + step, foot, pal["boot"])
+
+    # Robe/body: one continuous shape; side view is narrower.
+    if side:
+        bx0, bx1 = cx - 5, cx + 5
+    else:
+        bx0, bx1 = cx - 9, cx + 9
+    d.polygon([(bx0 + 1, shoulder), (bx1 - 1, shoulder), (bx1, hip),
+               (bx1 - 1, foot - 8), (bx0 + 1, foot - 8), (bx0, hip)], fill=pal["robe"])
+    rect(d, bx0, foot - 33 + bob + crouch, bx1, foot - 30 + bob + crouch, pal["robe_d"])
+    rect(d, bx0 + 1, hip - 1, bx1 - 1, hip + 1, pal["belt"])
+
+    # Arms/weapon: blade at the side, never through the body center.
+    if side:
+        if facing_left:
+            arm_x0, arm_x1 = cx - 6, cx - 4
+        else:
+            arm_x0, arm_x1 = cx + 4, cx + 6
+        rect(d, arm_x0, shoulder + 2, arm_x1, hip - 2, pal["skin"])
+        if action == "attack" and i >= n // 2:
+            if facing_left:
+                rect(d, cx - 15, shoulder + 2, cx - 5, shoulder + 4, pal["blade"])
+            else:
+                rect(d, cx + 5, shoulder + 2, cx + 15, shoulder + 4, pal["blade"])
+        else:
+            if facing_left:
+                rect(d, cx - 8, shoulder + 1, cx - 6, hip - 1, pal["blade"])
+            else:
+                rect(d, cx + 6, shoulder + 1, cx + 8, hip - 1, pal["blade"])
+    else:
+        arm_x = cx + 8
+        rect(d, arm_x - 2, shoulder + 2, arm_x + 2, hip - 2, pal["skin"])
+        if action == "attack" and i >= n // 2:
+            rect(d, cx - 11, shoulder - 1, cx + 11, shoulder + 2, pal["blade"])
+        else:
+            rect(d, cx + 8, shoulder + 1, cx + 10, hip - 1, pal["blade"])
+
+    # Head: front/back vs profile.
+    if side:
+        if facing_left:
+            head_x0, head_x1 = cx - 6, cx + 3
+            hair_x0, hair_x1 = cx - 7, cx + 3
+        else:
+            head_x0, head_x1 = cx - 3, cx + 6
+            hair_x0, hair_x1 = cx - 3, cx + 7
+    else:
+        head_x0, head_x1 = cx - 6, cx + 6
+        hair_x0, hair_x1 = cx - 7, cx + 7
+    rect(d, head_x0, head_top, head_x1, head_bot, pal["skin"])
+    if direction == "u" or side:
+        rect(d, hair_x0, hair_top, hair_x1, head_bot - 3, pal["hair"])
+    else:
+        rect(d, hair_x0, hair_top, hair_x1, head_top + 3, pal["hair"])
+    if side:
+        # keep a visible face patch in the direction of travel
+        if facing_left:
+            rect(d, cx - 1, head_top + 4, cx + 2, head_bot - 2, pal["skin"])
+        else:
+            rect(d, cx - 2, head_top + 4, cx + 1, head_bot - 2, pal["skin"])
     return im
 
 
