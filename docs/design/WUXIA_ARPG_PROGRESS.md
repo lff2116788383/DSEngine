@@ -7,10 +7,10 @@ goal:
   objective: "用 DSEngine 制作 HD-2D 武侠刷子 ARPG（暗黑 2 式，3 张地图）"
   status: in_progress
   max_goal_rounds: 12
-  current_round: R2
+  current_round: R3
   attempt: 1
-  completed_rounds: [R1]
-  next_round: R2
+  completed_rounds: [R1, R2]
+  next_round: R3
   branch: feature/hd2d-wuxia-arpg
   baseline: feature/engine-lib @ 0a8fc8b0
   contract: docs/design/WUXIA_ARPG_PLAN.md
@@ -23,7 +23,7 @@ goal:
 | 轮次 | 阶段 | 状态 | 过门证据 |
 |---|---|---|---|
 | R1 | 能力审计 | 已完成（审计通过） | 本文 2 |
-| R2 | 素材清单 + 完整设计 | 未开始 |  |
+| R2 | 素材清单 + 完整设计 | 已完成（门禁通过） | 本文 3 |
 | R3 | 垂直切片（1 张地图可玩 + HD-2D 受光生效） | 未开始 |  |
 | R4 | 战斗与成长 | 未开始 |  |
 | R5 | 另两张地图 + 天气与光影打磨 | 未开始 |  |
@@ -169,9 +169,102 @@ python -m py_compile templates\hd2d_wuxia\tools\*.py
 
 R1 审计结论：`已通过`。下一轮进入 R2：先产出完整设计和逐条素材许可清单，不进入大规模玩法实现。
 
-## 3. R2 入口条件
+## 3. R2 素材清单 + 完整设计
+
+### 3.1 R2 开工基线
+
+- 分支：`feature/hd2d-wuxia-arpg`，开始时工作区 clean。
+- 构建：
+  - `cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 >nul && cmake --build --preset windows-x64-debug'`
+  - 结果：`已通过`，exit=0，12.9s。
+- gtest：
+  - `cmd /c 'call "...\VsDevCmd.bat" -arch=x64 >nul && ctest --preset windows-x64-debug'`
+  - 结果：`已通过`，exit=0，49.90s，5/5 通过，0 失败。
+
+### 3.2 R2 产物
+
+| 产物 | 路径 | 规模 |
+|---|---|---:|
+| 完整设计 | `docs/design/WUXIA_ARPG_DESIGN.md` | 19,451 bytes / 216 行 |
+| 逐条资产台账 Markdown | `docs/design/WUXIA_ARPG_ASSET_LEDGER.md` | 120,452 bytes / 746 行 |
+| 逐条资产台账 CSV（含 SHA-256） | `docs/design/WUXIA_ARPG_ASSET_LEDGER.csv` | 149,294 bytes / 713 行（含表头） |
+
+资产台账逐条统计：712 条受版本控制的模板文件，其中：
+- 角色/敌人/NPC/FX 序列帧 PNG：408
+- 图集描述/图集 PNG：210
+- UI 素材 PNG：27
+- Lua 游戏源码：23
+- 音频素材 WAV：17
+- 素材生成/验收工具源码：9
+- 地图分层/程序化 PNG：8
+- 手写/测试 `.dsprite.json`：2
+- 字体度量 Lua（生成）：2
+- 3D 地图网格：2
+- 中文位图字体图集 PNG：2
+- 文档：1
+- 地图数据 Lua（生成）：1
+
+### 3.3 R2 许可合规修复：字体图集改用 OFL 字体
+
+R2 审计发现 `templates/hd2d_wuxia/tools/gen_font.py` 原先从 `templates/topdown_3d/assets/font/SimHei.ttf` 取字形，来源与再分发许可不清晰。R2 已修复：
+
+- `gen_font.py` 的 `FONT_CANDIDATES` 现在只引用：
+  - `templates/hd2d_wuxia/assets/font/NotoSansSC-Regular.ttf`（可选本地覆盖）
+  - `apps/editor_cpp/fonts/NotoSansSC-Regular.ttf`（仓库内 OFL 字体）
+- 不再引用 `SimHei.ttf`；找不到 OFL 字体时脚本直接报错，避免静默回退到不明字体。
+- 已用 Noto Sans SC Regular 重新生成：
+  - `templates/hd2d_wuxia/assets/ui/font_small.png`
+  - `templates/hd2d_wuxia/assets/ui/font_big.png`
+  - `templates/hd2d_wuxia/scripts/font_small.lua`
+  - `templates/hd2d_wuxia/scripts/font_big.lua`
+- 重新生成输出：small=642 glyphs，big=642 glyphs。
+- 字体后烟测：`bin\dsengine_lua_debug.exe` 以 `DSE_HD2D_BPLUS=1` 跑 village 12 帧，exit=0，截图写出。
+- `python -m py_compile templates\hd2d_wuxia\tools\gen_font.py` exit=0。
+
+### 3.4 设计覆盖检查
+
+| R2 要求 | 设计覆盖 | 结论 |
+|---|---|---|
+| 3 张地图 | village / stronghold / youhuang，含尺寸、出口、敌人、Boss、天气、光照、掉落档次 | 已覆盖 |
+| 随机词缀装备 | 基底、稀有度权重、前后缀池、ilvl/tier、确定性 RNG、装备槽与 UI | 已覆盖 |
+| 战斗与成长 | 三段连招、闪避、6 技能、精英/冠军/Boss 三阶段、等级成长 | 已覆盖 |
+| 刷子循环 | 刷怪 -> 掉落 -> 换装 -> 精英/冠军/Boss -> 再刷；悬赏可重复 | 已覆盖 |
+| 任务/NPC/存档 | 5 段主线 + 可选悬赏；扩展 `dse.serialize` 存档结构 | 已覆盖 |
+| HD-2D 渲染 | lit Sprite3D、MESH_LIT 地形、灯光、接触阴影、Bloom/后处理、相机 | 已覆盖 |
+| 天气 | clear/leaf/light_rain/rain/storm/fog_firefly/snow，含过渡与光照联动 | 已覆盖 |
+| API 真实性 | 20+ 真实 API 证据表，逐条列 `文件:行` | 已覆盖 |
+| 测试矩阵 | T-BUILD/T-GTEST/T-R3-GAME/T-R3-LIT/T-R4-LOOT/T-R4-COMBAT/T-R5-MAPS/T-R5-WEATHER/T-R6-M6/T-R6-FULL | 已覆盖 |
+| 资产许可 | 712 条逐条记录 source/author/license/command，CSV 带 SHA-256 | 已覆盖 |
+| 禁止商业素材 | 静态检查命令与结果 `NO_HITS` | 已通过 |
+
+### 3.5 静态合规检查
+
+```powershell
+$texts = Get-ChildItem templates\hd2d_wuxia -Recurse -File -Include *.py,*.lua,*.md,*.json
+$texts | Select-String -Pattern '逸剑风云决|解包素材|商业游戏|unpack|commercial game' -CaseSensitive:$false
+```
+
+结果：`NO_HITS`。R2 未发现《逸剑风云决》或其他商业游戏解包素材引用。
+
+### 3.6 R2 门禁结论
+
+| 门禁 | 结论 | 说明 |
+|---|---|---|
+| 完整设计 | 已通过 | 3 图、刷子装备、战斗成长、Boss、天气、UI、存档、测试矩阵全部设计 |
+| 逐条素材台账 | 已通过 | 712 条 source/author/license/command，CSV 带 SHA-256 |
+| 字体许可修复 | 已通过 | SimHei 已替换为 Noto Sans SC（SIL OFL 1.1），字体重新生成并烟测 |
+| API 幻觉检查 | 已通过 | 设计只使用 `lua_binding_*` 已证实 API，附 `文件:行` |
+| 商业素材静态检查 | 已通过 | `NO_HITS` |
+| 玩法实现 | 未执行 | 属 R3-R6，R3 只做 1 张地图垂直切片 |
+| GT 1030 真机 | 环境暂缓 | 远程机不可达，不得冒充 |
+
+R2 结论：`已通过`。下一轮进入 R3：只做 village 垂直切片 + HD-2D 受光生效。
+
+## 4. R3 入口条件
 
 - 分支保持 `feature/hd2d-wuxia-arpg`。
-- R2 只做设计资产台账，不改 C++ 渲染核心、不新增第三方库。
-- R2 设计必须引用已 grep 证实存在的 Lua/C++ API；未证实 API 不能写进设计作为实现依据。
-- R2 资产台账必须逐条覆盖现有与新增素材，明确来源/作者/许可/生成命令。
+- 先读 `WUXIA_ARPG_DESIGN.md`、`WUXIA_ARPG_ASSET_LEDGER.md` 和 PLAN。
+- R3 只实现 1 张地图的端到端切片；不得提前加入第 2/3 张完整地图。
+- R3 开始必须先跑基线构建与 gtest。
+- 新增/修改素材必须同步更新资产台账；不得引入任何商业游戏解包素材。
+- 任何 Lua API 先 grep `lua_binding_*` 确认；任何渲染改动先确认 GL/VK/D3D11 三后端路径。
