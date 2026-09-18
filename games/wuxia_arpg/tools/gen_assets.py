@@ -26,13 +26,14 @@ ACTOR_DIR = os.path.join(ASSETS, "actor")
 PROP_DIR = os.path.join(ASSETS, "props")
 UI_DIR = os.path.join(ASSETS, "ui")
 AUDIO_DIR = os.path.join(ASSETS, "audio")
+WEATHER_DIR = os.path.join(ASSETS, "weather")
 SCRIPT_DIR = os.path.join(ROOT, "scripts")
 NOTO = os.path.abspath(os.path.join(ROOT, "..", "..", "apps", "editor_cpp", "fonts",
                                                 "NotoSansSC-Regular.ttf"))
 
 
 def ensure_dirs():
-    for d in (ACTOR_DIR, PROP_DIR, UI_DIR, AUDIO_DIR, SCRIPT_DIR):
+    for d in (ACTOR_DIR, PROP_DIR, UI_DIR, AUDIO_DIR, WEATHER_DIR, SCRIPT_DIR):
         os.makedirs(d, exist_ok=True)
 
 
@@ -268,12 +269,30 @@ def gen_props():
         print("[prop]", name)
 
 
+
+def gen_weather():
+    # Rain: thin vertical streak
+    im = img(4, 16); d = ImageDraw.Draw(im)
+    rect(d, 1, 0, 2, 15, (188, 214, 255, 220)); im.save(os.path.join(WEATHER_DIR, "rain.png"))
+    # Snow: soft white flake
+    im = img(8, 8); d = ImageDraw.Draw(im)
+    d.ellipse([1,1,6,6], fill=(245,248,255,235)); im.save(os.path.join(WEATHER_DIR, "snow.png"))
+    # Fog: soft translucent puff
+    im = img(64, 32); d = ImageDraw.Draw(im)
+    for x,y,r in ((16,16,14),(34,15,17),(50,17,12)):
+        d.ellipse([x-r,y-r,x+r,y+r], fill=(210,220,225,60))
+    im.save(os.path.join(WEATHER_DIR, "fog.png"))
+    # Leaf: small autumn particle
+    im = img(8, 8); d = ImageDraw.Draw(im)
+    d.polygon([(1,4),(4,1),(7,4),(4,7)], fill=(196,162,70,230))
+    im.save(os.path.join(WEATHER_DIR, "leaf.png"))
+    print("[weather] rain/snow/fog/leaf")
 def gen_font():
     chars = set(chr(i) for i in range(32, 127))
     text = ("青溪问剑 生命 内力 体力 等级 金币 攻击 防御 暴击 闪避 技能 连招 山贼 侠客 精英 首领 寨主 血刀 "
             "开始游戏 读取存档 已保存 读档成功 获得 升级 消灭 暂停 继续 退出 按 WASD 移动 J 攻击 K 闪避 U 技能 I 治疗 "
             "铁剑 青锋剑 布衣 皮甲 玉佩 虎符 稀有 魔法 传奇 普通 铜钱 掉落 伤害 未命中 已装备 背包 天气 落叶 村庄 夜雨 "
-            "战力 分花 拂柳 紫霞 真气 冷却 内力不足 战斗 成长")
+            "战力 分花 拂柳 紫霞 真气 冷却 内力不足 战斗 成长 天气 晴 雨 雷暴 雾 雪 暮色青溪村 夜雨黑风寨 幽篁秘谷")
     chars.update(text)
     chars = sorted(chars)
     font_path = NOTO
@@ -360,6 +379,7 @@ def main():
     gen_actor("bandit")
     gen_actor("boss")
     gen_props()
+    gen_weather()
     gen_font()
     gen_audio()
     print("[done] new wuxia assets")

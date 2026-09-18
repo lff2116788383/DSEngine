@@ -10,7 +10,9 @@ function A.load()
     for _,k in ipairs({"tree","bamboo","house","lantern","rock"}) do
         A.tex[k] = tex("assets/props/"..k..".png")
     end
-    A.tex.font = tex("assets/ui/font.png")
+    for _,k in ipairs({"rain","snow","fog","leaf"}) do
+        A.tex["weather_"..k] = tex("assets/weather/"..k..".png")
+    end    A.tex.font = tex("assets/ui/font.png")
     A.font = require("font")
     for _,actor in ipairs({"hero","bandit","boss"}) do
         for _,dir in ipairs({"d","u","l","r"}) do

@@ -36,6 +36,8 @@ def classify(path: Path):
         return ("文档/仓库配置", "仓库手写", "DSEngine Authors", "Apache-2.0", "HAND")
     if "/assets/actor/" in r:
         return ("新生成角色图集", GENERATED_ACTOR, "DSEngine Authors", "Apache-2.0", "G1")
+    if "/assets/weather/" in r:
+        return ("新生成天气粒子贴图", GENERATED_PROP, "DSEngine Authors", "Apache-2.0", "G1")
     if "/assets/props/" in r:
         return ("新生成 3D 道具贴图", GENERATED_PROP, "DSEngine Authors", "Apache-2.0", "G1")
     if "/assets/audio/" in r:

@@ -69,6 +69,25 @@ python games\wuxia_arpg\tools\run_r4_acceptance.py --backends opengl --out-dir t
 python games\wuxia_arpg\tools\run_r4_acceptance.py --backends vulkan --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
 python games\wuxia_arpg\tools\run_r4_acceptance.py --backends d3d11 --out-dir tmp\r4_final --max-frames 600 --shot-frame 560
 ```
+## R5 三张地图与天气
+
+| 地图 id | 名称 | 默认天气 | 出口 |
+|---|---|---|---|
+| `qingxi_village` | 暮色青溪村 | 落叶 | 北 -> 黑风寨 |
+| `blackwind_stronghold` | 夜雨黑风寨 | 雷暴 | 南 -> 青溪村；北 -> 幽篁秘谷 |
+| `youhuang_valley` | 幽篁秘谷 | 雾 | 南 -> 黑风寨 |
+
+- 天气：晴 / 落叶 / 雨 / 雷暴 / 雾 / 雪，含粒子、方向光、灯笼色温、曝光/Bloom 调整。
+- 雷暴有闪电曝光脉冲；雾/雨/雪会改变环境色调与点光强度。
+- 环境变量调试：
+  - `DSE_WUXIA_MAP=blackwind_stronghold`
+  - `DSE_WUXIA_WEATHER=storm`
+  - `DSE_WUXIA_TOUR=1`：自动依次走完三张地图。
+- R5 验收：
+
+```powershell
+python games\wuxia_arpg\tools\run_r5_acceptance.py --backends opengl,vulkan,d3d11 --out-dir tmp\r5_final
+```
 ## 许可
 
 新生成素材与脚本为 DSEngine Authors 原创，随仓库顶层 `LICENSE` 以 Apache-2.0 发布。

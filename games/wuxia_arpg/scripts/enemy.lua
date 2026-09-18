@@ -99,4 +99,10 @@ function E.update(dt,P)
         end
     end
 end
+function E.clear()
+    for _,e in ipairs(E.list) do
+        if e.ent then pcall(ecs.destroy_entity, e.ent) end
+    end
+    E.list = {}
+end
 return E

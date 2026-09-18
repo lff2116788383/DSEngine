@@ -98,6 +98,15 @@ function P.spawn()
     P.play("idle", true)
     ecs.set_transform_position(P.ent, P.x, 0, P.z)
 end
+function P.teleport(x,z)
+    P.x, P.z = x, z
+    P.vx, P.vy = 0, 0
+    P.attack_t, P.dodge_t, P.invuln = -1.0, -1.0, 0.0
+    P.combo, P.combo_t = 0, 0.0
+    P.attack_hit, P.skill_hit = nil, nil
+    if P.ent then ecs.set_transform_position(P.ent, P.x, 0, P.z) end
+    P.play("idle", true)
+end
 function P.add_equipment(item)
     if not item then return end
     P.item_seq = P.item_seq + 1

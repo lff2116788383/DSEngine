@@ -1,5 +1,7 @@
 -- New game HUD text using the generated bitmap font atlas (R4: equipment + inventory).
 local A = require("assets")
+local D = require("data")
+local Weather = require("weather")
 local Fx = require("fx")
 local U = { texts = {} }
 local ecs = dse.ecs
@@ -38,6 +40,7 @@ function U.init()
     U.mp = Text.new(24, 650, 0.55,0.75,1.0, 100000)
     U.info = Text.new(24, 620, 1.0,0.92,0.70, 100000)
     U.combat = Text.new(24, 590, 0.85,0.95,0.75, 100000)
+    U.map = Text.new(24, 560, 0.90,0.95,0.85, 100000)
     U.toast = Text.new(420, 84, 1.0,0.88,0.55, 100001)
     U.title = Text.new(24, 34, 1.0,0.95,0.80, 100000)
     U.inv_title = Text.new(400, 560, 1.0,0.95,0.75, 100002)
@@ -54,7 +57,8 @@ function U.update(dt, P, state)
     U.combat:set(string.format("连招 %d  分花 %0.1f  紫霞 %0.1f  装备 %d",
         P.combo, P.skill_cd.fenhua, P.skill_cd.zixia, #P.items))
     U.toast:set(Fx.msg_t > 0 and Fx.msg or "")
-    U.title:set("青溪问剑  R4 战斗与成长")
+    U.title:set("青溪问剑  R5 三图与天气")
+    U.map:set(string.format("%s  %s", D.name or D.current_id or "", Weather.name(Weather.current)))
     if state and state.inventory_open then
         U.inv_title:set(string.format("背包 %d 件", #P.items))
         for i,line in ipairs(U.inv_lines) do
