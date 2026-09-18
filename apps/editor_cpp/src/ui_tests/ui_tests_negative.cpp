@@ -140,11 +140,22 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
             ctx->Yield(2);
             {
                 const ImGuiTestItemInfo ai = ctx->ItemInfo(a_ref);
-                const ImGuiTestItemInfo bci = ctx->ItemInfo(b_child_ref, ImGuiTestOpFlags_NoError);
-                IM_CHECK(ai.ID != 0 && bci.ID != 0);
+                IM_CHECK(ai.ID != 0);
+                // 目标行用**几何定位**而不是 ref：
+                //   - 裸 b_ref（//Hierarchy/Scene/$$(ptr)0xB）对嵌套行解析不到（实测 ID 0）；
+                //   - 带父前缀的嵌套 ref（.../$$(ptr)0xA/$$(ptr)0xB）会解析到别的行（打点显示落点
+                //     被 entity 3 接受，于是 A 被挂到别的实体下、环没形成、环检测不触发）。
+                // A 展开后其子行就在 A 行正下方一行处、并缩进约 20px，直接按几何落点。
+                const float row_h = ai.RectClipped.GetHeight() + 2.0f;
+                const ImVec2 b_child_pos(ai.RectClipped.Min.x + 26.0f,
+                                         ai.RectClipped.Max.y + row_h * 0.4f);
+                UiDiagLog("[neg] step2 a_row=(%.0f,%.0f)-(%.0f,%.0f) drop=(%.0f,%.0f)",
+                          ai.RectClipped.Min.x, ai.RectClipped.Min.y, ai.RectClipped.Max.x, ai.RectClipped.Max.y,
+                          b_child_pos.x, b_child_pos.y);
                 ctx->KeyPress(ImGuiKey_Escape);
                 ctx->Yield();
-                DragHierarchyNode(ctx, a_ref, b_child_ref);
+                const ImVec2 a_src(ai.RectClipped.Min.x + 6.0f, ai.RectClipped.GetCenter().y);
+                ManualMouseDrag(ctx, a_src, b_child_pos);
             }
 
             // 层级未变：A 仍为根，B 仍是 A 的子。

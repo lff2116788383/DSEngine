@@ -324,9 +324,20 @@ round 2 比 round 1 少 4 个全绿分组，原因是这 4 组各差 1 例，且
     Node Properties / GLSL Preview 等**兄弟浮窗**压住；且画布取景是逐帧缓动的，引脚坐标会过期）。
     已加两个测试访问器 `ShaderGraphNodeScreenPos` / `ShaderGraphPinScreenPos`（复用面板自己的
     引脚布局公式），后续可据此继续收敛。
-16. ~~`dse-negative` 1 条~~ —— 见第 4 条（嵌套路径 ref），仍未修。
+16. ~~`dse-negative` 1 条~~ —— **已修**（6/6）。`circular_parenting_rejected` 的 Step 2 要把实体 A
+    拖到自己的子孙 B 上、验证环检测拒绝。失败根因是**定位嵌套行的那两种 ref 都不好使**：
+    裸 ref（`//Hierarchy/Scene/$$(ptr)0xB`）对嵌套行解析不到（实测 ID 0）；带父前缀的嵌套 ref
+    （`.../$$(ptr)0xA/$$(ptr)0xB`）虽能拿到 ID，但落点被**另一行**（entity 3）接受 —— 于是 A 被挂到
+    别的实体下、环根本没形成，环检测自然不触发。改为**几何定位**：A 展开后其子行就在 A 行正下方
+    一行处、并缩进约 20px，落点由 A 行矩形推算（实测 `drop=(287,442)`，A 行 `(261,419)-(455,435)`）。
+    注意产品侧的环检测本身是好的，这条纯属测试定位问题。
+17. `dse-graph` 1 条（**仍红，已大幅推进**）：见第 15 条。本轮又补了「建第一个节点后重新查询画布
+    矩形再算第二个落点 + 引脚坐标连续 6 帧不变才拖」的稳定性处理，但 `shader_graph_connect_pins`
+    仍未通过；产品侧已修真缺陷（画布 hover 判定），测试侧已具备 `ShaderGraphNodeScreenPos` /
+    `ShaderGraphPinScreenPos` 两个访问器，后续可据此继续收敛（建议：改为在默认图上直接拖两个既有
+    节点的引脚，绕开"建节点 → 画布缓动取景"这段不确定因素）。
 
-当前分组统计：**28 绿 / 2 红**（基线 7/24；`dse-terrain` 抖动时 27/3）。
+当前分组统计：**29 绿 / 1 红**（基线 7/24；`dse-terrain` 抖动时 28/2）。
 9. **`dse-terrain` 为抖动项**（4 次连跑 2 次 3/3、2 次 2/3），失败点固定在
    `terrain_panel_edit_brush` 的 `brush_mode == Lower` 断言。已从引擎日志定位到确切现象：
    第一次 `ItemClick("Lower")` **定位成功**（拿到 item id）却没生效，紧接着的重试反而报

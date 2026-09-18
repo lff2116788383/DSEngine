@@ -96,23 +96,32 @@ void RegisterGraphTests(ImGuiTestEngine* e) {
             // 位置取画布**左下角**：Shader Graph 面板还会额外开 Node Properties / GLSL Preview /
             // Shader Preview 三个**独立窗口**，它们默认压在画布右上区域，会让画布不满足
             // IsWindowHovered()（实测 rect_hit=1 而 win_hovered=0），引脚按下/松开判定直接失效。
+            auto canvas_rect_now = [&](void) -> bool {
+                ImGuiWindow* gw = FindActiveWindow("Shader Graph");
+                if (!gw) return false;
+                ctx->SetRef((std::string("//") + gw->Name).c_str());
+                const ImGuiTestItemInfo ci = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
+                return ci.ID != 0 && ci.RectClipped.GetWidth() > 40.0f;
+            };
             ImVec2 p_float(300.0f, 500.0f);
-            ImVec2 p_add(620.0f, 500.0f);
-            if (ImGuiWindow* gw0 = FindActiveWindow("Shader Graph")) {
-                ctx->SetRef((std::string("//") + gw0->Name).c_str());
+            if (canvas_rect_now()) {
                 const ImGuiTestItemInfo ci0 = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
-                if (ci0.ID != 0 && ci0.RectClipped.GetWidth() > 40.0f) {
-                    p_float = ImVec2(ci0.RectClipped.Min.x + 60.0f, ci0.RectClipped.Max.y - 120.0f);
-                    p_add   = ImVec2(p_float.x + 320.0f, p_float.y);
-                }
+                p_float = ImVec2(ci0.RectClipped.Min.x + 60.0f, ci0.RectClipped.Max.y - 120.0f);
             }
             OpenCanvasCreateMenu(ctx, p_float);
             ctx->ItemClick("Float");
             ctx->Yield(2);
-            // 第二次右键前先 Esc 清掉可能残留的 popup，再在同一个（左下）区域建第二个节点。
             ctx->KeyPress(ImGuiKey_Escape);
             ctx->Yield(2);
-            OpenCanvasCreateMenu(ctx, p_add);
+            // 第二次右键落在画布**可见矩形中心**：实测这样能稳定弹出创建菜单（改用左下角等其他
+            // 位置时，建完第一个节点后的画布缓动取景会让右键落空，报
+            // "Unable to locate item: //$FOCUSED/**/Add"）。
+            if (canvas_rect_now()) {
+                const ImGuiTestItemInfo ci1 = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
+                ctx->MouseMoveToPos(ci1.RectClipped.GetCenter());
+                ctx->MouseClick(ImGuiMouseButton_Right);
+                ctx->Yield(2);
+            }
             ctx->SetRef("//$FOCUSED");
             ctx->ItemClick("**/Add");
             ctx->Yield(2);
@@ -130,16 +139,19 @@ void RegisterGraphTests(ImGuiTestEngine* e) {
             const int n = ShaderGraphNodeCount();
             float fx = 0.0f, fy = 0.0f, ax = 0.0f, ay = 0.0f;
             bool have_pos = false;
-            for (int i = 0; i < 40; ++i) {
+            int stable_frames = 0;
+            for (int i = 0; i < 80; ++i) {
                 float nfx = 0.0f, nfy = 0.0f, nax = 0.0f, nay = 0.0f;
                 const bool got = ShaderGraphPinScreenPos(n - 2, /*is_output=*/true, 0, &nfx, &nfy) &&
                                  ShaderGraphPinScreenPos(n - 1, /*is_output=*/false, 0, &nax, &nay);
                 if (got) {
-                    const bool stable = i > 0 && std::abs(nfx - fx) < 0.5f && std::abs(nfy - fy) < 0.5f &&
-                                        std::abs(nax - ax) < 0.5f && std::abs(nay - ay) < 0.5f;
+                    const bool same = std::abs(nfx - fx) < 0.5f && std::abs(nfy - fy) < 0.5f &&
+                                      std::abs(nax - ax) < 0.5f && std::abs(nay - ay) < 0.5f;
+                    stable_frames = same ? stable_frames + 1 : 0;
                     fx = nfx; fy = nfy; ax = nax; ay = nay;
                     have_pos = true;
-                    if (stable) break;
+                    // 画布取景是缓动的，要求连续 6 帧不变才算真的停下（2 帧会在缓动的短暂停顿处误判）
+                    if (stable_frames >= 6) break;
                 }
                 ctx->Yield();
             }
