@@ -91,73 +91,52 @@ void RegisterGraphTests(ImGuiTestEngine* e) {
             ShowFloatingPanel(ctx, Services().show_shader_graph, "//Shader Graph");
             ctx->Yield(2);
             const int base_links = ShaderGraphLinkCount();
+            IM_CHECK(ShaderGraphNodeCount() == 4);   // 默认图：PBR Output / Texture Sample / Color / Float
 
-            // Float（仅 1 输出 Value）+ Add（2 输入 A/B、1 输出）。
-            // 位置取画布**左下角**：Shader Graph 面板还会额外开 Node Properties / GLSL Preview /
-            // Shader Preview 三个**独立窗口**，它们默认压在画布右上区域，会让画布不满足
-            // IsWindowHovered()（实测 rect_hit=1 而 win_hovered=0），引脚按下/松开判定直接失效。
-            auto canvas_rect_now = [&](void) -> bool {
-                ImGuiWindow* gw = FindActiveWindow("Shader Graph");
-                if (!gw) return false;
-                ctx->SetRef((std::string("//") + gw->Name).c_str());
-                const ImGuiTestItemInfo ci = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
-                return ci.ID != 0 && ci.RectClipped.GetWidth() > 40.0f;
-            };
-            ImVec2 p_float(300.0f, 500.0f);
-            if (canvas_rect_now()) {
-                const ImGuiTestItemInfo ci0 = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
-                p_float = ImVec2(ci0.RectClipped.Min.x + 60.0f, ci0.RectClipped.Max.y - 120.0f);
-            }
-            OpenCanvasCreateMenu(ctx, p_float);
-            ctx->ItemClick("Float");
-            ctx->Yield(2);
-            ctx->KeyPress(ImGuiKey_Escape);
-            ctx->Yield(2);
-            // 第二次右键落在画布**可见矩形中心**：实测这样能稳定弹出创建菜单（改用左下角等其他
-            // 位置时，建完第一个节点后的画布缓动取景会让右键落空，报
-            // "Unable to locate item: //$FOCUSED/**/Add"）。
-            if (canvas_rect_now()) {
-                const ImGuiTestItemInfo ci1 = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
-                ctx->MouseMoveToPos(ci1.RectClipped.GetCenter());
-                ctx->MouseClick(ImGuiMouseButton_Right);
-                ctx->Yield(2);
-            }
-            ctx->SetRef("//$FOCUSED");
-            ctx->ItemClick("**/Add");
-            ctx->Yield(2);
-            ctx->SetRef("");
-            IM_CHECK(ShaderGraphNodeCount() == 6);
+            // 连线目标用**默认图里既有的两个节点**，不再经由"右键菜单建节点"：
+            // 建节点会让画布逐帧缓动取景，可视区与坐标都在变，是这条用例长期不稳定的主因。
+            // 选 node2 «Color».Color（Color 输出） → node0 «PBR Output».Emission（Color 输入）：
+            // 类型一致、不像 Base Color 那样已被默认连线占用，且两节点都在画布可视区内。
+            const int src_node = 2, src_pin = 0;      // Color.Color（输出）
+            const int dst_node = 0, dst_pin = 4;      // PBR Output.Emission（输入）
 
-            // 拖拽：Float.Value(输出引脚 0) → Add.A(输入引脚 0)。
-            // 必须取**引脚的实际屏幕坐标**（ShaderGraphPinScreenPos）：引脚不是节点的固定偏移
-            // （输出排在所有输入之下），且画布平移/缩放会改变位置。
-            // 画布在建节点后会**自动平移取景**（实测画布矩形由 (188,143)-(1112,642) 变为
-            // (-519,143)-(405,642)），若立刻读引脚坐标会拿到平移前的值、拖拽必然落空 ——
-            // 先等若干帧让取景稳定下来再取坐标。
-            // 画布在建节点后会**逐帧缓动平移取景**，固定等几帧仍可能没停 → 改为轮询
-            // 「引脚屏幕坐标连续两帧不变」再拖，避免用过期坐标导致连线落空。
-            const int n = ShaderGraphNodeCount();
+            // 画布取景是缓动的：轮询到引脚屏幕坐标**连续 6 帧不变**再拖，避免用过期坐标。
             float fx = 0.0f, fy = 0.0f, ax = 0.0f, ay = 0.0f;
             bool have_pos = false;
             int stable_frames = 0;
             for (int i = 0; i < 80; ++i) {
                 float nfx = 0.0f, nfy = 0.0f, nax = 0.0f, nay = 0.0f;
-                const bool got = ShaderGraphPinScreenPos(n - 2, /*is_output=*/true, 0, &nfx, &nfy) &&
-                                 ShaderGraphPinScreenPos(n - 1, /*is_output=*/false, 0, &nax, &nay);
+                const bool got = ShaderGraphPinScreenPos(src_node, /*is_output=*/true, src_pin, &nfx, &nfy) &&
+                                 ShaderGraphPinScreenPos(dst_node, /*is_output=*/false, dst_pin, &nax, &nay);
                 if (got) {
                     const bool same = std::abs(nfx - fx) < 0.5f && std::abs(nfy - fy) < 0.5f &&
                                       std::abs(nax - ax) < 0.5f && std::abs(nay - ay) < 0.5f;
                     stable_frames = same ? stable_frames + 1 : 0;
                     fx = nfx; fy = nfy; ax = nax; ay = nay;
                     have_pos = true;
-                    // 画布取景是缓动的，要求连续 6 帧不变才算真的停下（2 帧会在缓动的短暂停顿处误判）
                     if (stable_frames >= 6) break;
                 }
                 ctx->Yield();
             }
             IM_CHECK(have_pos);
-            UiDiagLog("[graph] float_out=(%.0f,%.0f) add_in=(%.0f,%.0f) nodes=%d links=%d",
-                      fx, fy, ax, ay, ShaderGraphNodeCount(), ShaderGraphLinkCount());
+            {
+                ImGuiWindow* gw = FindActiveWindow("Shader Graph");
+                bool canvas_ok = false;
+                if (gw) {
+                    ctx->SetRef((std::string("//") + gw->Name).c_str());
+                    const ImGuiTestItemInfo ci = ctx->ItemInfo("canvas", ImGuiTestOpFlags_NoError);
+                    if (ci.ID != 0) {
+                        const ImRect cr(ci.RectClipped.Min, ci.RectClipped.Max);
+                        canvas_ok = cr.Contains(ImVec2(fx, fy)) && cr.Contains(ImVec2(ax, ay));
+                    }
+                    ctx->SetRef("");
+                }
+                UiDiagLog("[graph] src=%d/%d=(%.0f,%.0f) dst=%d/%d=(%.0f,%.0f) canvas_ok=%d links=%d",
+                          src_node, src_pin, fx, fy, dst_node, dst_pin, ax, ay,
+                          canvas_ok ? 1 : 0, ShaderGraphLinkCount());
+                // 两个引脚都必须在画布可视区内，否则按下/松开判定会被"画布不 hover"吞掉
+                IM_CHECK(canvas_ok);
+            }
             ManualMouseDrag(ctx, ImVec2(fx, fy), ImVec2(ax, ay));
             ctx->Yield(2);
             IM_CHECK(ShaderGraphLinkCount() == base_links + 1);

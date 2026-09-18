@@ -226,15 +226,50 @@ void RegisterTerrainTilemapTests(ImGuiTestEngine* e) {
             // 切笔刷模式 Lower。等按钮真正被绘制再点：面板刚 ShowFloatingPanel 出来时
             // （尤其单独跑这条用例、没有前面用例预热面板时）可能还差一两帧才提交按钮，
             // 此时点击会静默落空、断言随之失败。
+            // 按稳定 ### ID 定位（面板侧已给四个笔刷按钮加 ID），并等**矩形连续 4 帧不变**
+            // 再点：这条用例此前约 50% 抖动，引擎日志显示第一次 ItemClick 拿到了 item id 却没
+            // 生效、随后的重试反而报 "Unable to locate item" —— 即面板还在重排/滚动时点击落空。
             bool lower_ready = false;
-            for (int i = 0; i < 30 && !lower_ready; ++i) {
-                lower_ready = ctx->ItemInfo("Lower", ImGuiTestOpFlags_NoError).ID != 0;
+            ImVec2 last_rect(0.0f, 0.0f);
+            int stable = 0;
+            for (int i = 0; i < 60 && stable < 4; ++i) {
+                const ImGuiTestItemInfo li = ctx->ItemInfo("###terrain_brush_lower", ImGuiTestOpFlags_NoError);
+                if (li.ID != 0) {
+                    const ImVec2 c = li.RectClipped.GetCenter();
+                    stable = (std::abs(c.x - last_rect.x) < 0.5f && std::abs(c.y - last_rect.y) < 0.5f)
+                                 ? stable + 1 : 0;
+                    last_rect = c;
+                    lower_ready = true;
+                } else {
+                    stable = 0;
+                }
                 ctx->Yield();
             }
             IM_CHECK(lower_ready);
-            ctx->ItemClick("Lower");
-            ctx->Yield(2);
-            IM_CHECK(GetTerrainEditorState().brush_mode == TerrainBrushMode::Lower);
+            // 点击采用「重试到生效」的形式，且每次重试前都重新展开/滚顶/聚焦面板：
+            // 这条用例曾约 50% 抖动（引擎日志显示点击已被投递、hover 也无报错，但按钮回调没触发，
+            // 说明是面板状态在帧间变化导致的偶发落空）。关键点：**先 NoError 查询、拿到 ID 才点**，
+            // 这样重试过程不会像直接 ItemClick 那样在条目暂时不可定位时产出引擎 Error
+            // （引擎只要记录过 Error 就会判该用例失败）。
+            bool lower_set = false;
+            for (int attempt = 0; attempt < 8 && !lower_set; ++attempt) {
+                if (ImGuiWindow* tw = FindActiveWindow("Terrain Brush")) {
+                    ImGui::SetWindowCollapsed(tw, false);
+                    ImGui::SetScrollY(tw, 0.0f);
+                }
+                ctx->WindowFocus("//Terrain Brush");
+                ctx->Yield(2);
+                const ImGuiTestItemInfo li = ctx->ItemInfo("###terrain_brush_lower", ImGuiTestOpFlags_NoError);
+                if (li.ID == 0) continue;
+                ctx->MouseMoveToPos(li.RectClipped.GetCenter());
+                ctx->Yield();
+                ctx->MouseDown(ImGuiMouseButton_Left);
+                ctx->Yield(2);
+                ctx->MouseUp(ImGuiMouseButton_Left);
+                ctx->Yield(2);
+                lower_set = (GetTerrainEditorState().brush_mode == TerrainBrushMode::Lower);
+            }
+            IM_CHECK(lower_set);
 
             // Reset Heights to 0 → height_data 全 0。
             ctx->ItemClick("Reset Heights to 0");

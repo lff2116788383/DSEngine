@@ -1,6 +1,4 @@
 #include "editor_terrain_panel.h"
-#include <fstream>
-#include <filesystem>
 #include "editor_terrain_panel_core.h"
 #include "editor_context.h"
 
@@ -80,11 +78,17 @@ void DrawTerrainEditorPanel(EditorContext& ctx) {
             {TerrainBrushMode::Smooth,  "Smooth",  ImVec4(0.4f, 0.8f, 0.4f, 1.0f)},
             {TerrainBrushMode::Flatten, "Flatten", ImVec4(0.8f, 0.7f, 0.3f, 1.0f)},
         };
+        // 笔刷模式按钮带稳定 ### ID：UI 测试按 ID 定位（"###terrain_brush_lower"），
+        // 不依赖显示标签，也不会因面板重排时的标签匹配失败而点空。
+        static const char* const kBrushButtonIds[] = {
+            "###terrain_brush_raise", "###terrain_brush_lower",
+            "###terrain_brush_smooth", "###terrain_brush_flatten",
+        };
         for (int i = 0; i < 4; i++) {
             if (i > 0) ImGui::SameLine();
             bool active = (state.brush_mode == tools[i].mode);
             if (active) ImGui::PushStyleColor(ImGuiCol_Button, tools[i].color);
-            if (ImGui::Button(tools[i].label, ImVec2(65, 24))) {
+            if (ImGui::Button((std::string(tools[i].label) + kBrushButtonIds[i]).c_str(), ImVec2(65, 24))) {
                 state.brush_mode = tools[i].mode;
             }
             if (active) ImGui::PopStyleColor();
