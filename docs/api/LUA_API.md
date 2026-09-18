@@ -1455,7 +1455,6 @@ dssl.apply_material(entity, 0, inst)
 | `ecs.nav_agent_arrived(e)` | entity | `bool` | 查询是否到达目标 |
 | `ecs.get_nav_agent(e)` | entity | `table` / nil | 获取导航代理配置（无则 nil） |
 | `ecs.get_nav_destination(e)` | entity | `x, y, z` | 获取导航目标位置 |
-| `ecs.nav_agent_has_path(e)` | entity | `bool` | 查询是否已规划出路径 |
 
 **`ecs.get_nav_agent(e)` 返回表字段：**
 
@@ -1467,7 +1466,7 @@ dssl.apply_material(entity, 0, inst)
 | `radius` | number | 代理半径 |
 | `height` | number | 代理高度 |
 | `dest_x` / `dest_y` / `dest_z` | number | 当前目标位置 |
-| `has_path` | bool | 是否已规划出路径（与 `nav_agent_has_path` 一致） |
+| `has_path` | bool | 是否已规划出路径（由 `ecs.nav_agent_get` 的第 10 个返回值给出） |
 | `path_pending` | bool | 是否正在等待重新规划路径 |
 | `arrived` | bool | 是否已到达目标 |
 | `current_waypoint` | integer | 当前路径点索引（从 0 开始） |
@@ -3750,3 +3749,123 @@ dse.ecs.add_audio_listener_2d(listener, 1.0)
 | 绑定名 | 参数 | 返回 | C-ABI | 说明 |
 |--------|------|------|-------|------|
 | `mark_rendered` | int, int, int, int | — | `dse_vsm_mark_page_rendered` | 标记 |
+---
+
+## 附 A. 对象方法 API（userdata 上的 `:` 调用）
+
+本附录覆盖那些**不在 `dse.*` / `ecs.*` 自由函数表里**、而是挂在 userdata 对象上的方法。
+补齐原因：`tools/audit/lua_api_audit.py` 的「已绑定未文档」清单里长期有 40 项属于这一类
+（`tilemap.*` / `pathfinding.*` / `jiggle_*`），而它们的说明此前只存在于绑定源码的注释里。
+
+### A.1 Tilemap 对象（`dse.tilemap.create(world, entity)`）
+
+```lua
+API:
+  -- 创建/配置
+  local tm = dse.tilemap.create(world, entity)
+  tm:set_grid(width, height, tile_size)
+  tm:get_width() -> int
+  tm:get_tile_size() -> float
+  tm:set_tileset(texture_path, cols, rows)
+
+  -- 单层模式（兼容旧 API）
+  tm:set_tile(x, y, tile_id)
+  tm:get_tile(x, y) -> tile_id
+  tm:fill(tile_id)
+  tm:clear()
+  tm:mark_dirty()
+
+  -- 多层模式
+  local layer_idx = tm:add_layer(name)
+  tm:set_layer_tile(layer_idx, x, y, tile_id)
+  tm:get_layer_tile(layer_idx, x, y) -> tile_id
+  tm:set_layer_visible(layer_idx, visible)
+  tm:set_layer_opacity(layer_idx, opacity)
+  tm:layer_count() -> int
+
+  -- 动画瓦片
+  tm:add_animation(tile_id, frames_table, loop)
+  -- frames_table: { {id=1, dur=0.2}, {id=2, dur=0.2}, ... }
+
+  -- 瓦片属性
+  tm:set_tile_property(tile_id, {
+      solid = true,
+      collision_type = 1,
+      friction = 0.4,
+      restitution = 0.0,
+      custom = { key = "value", ... }
+  })
+  tm:get_tile_property(tile_id) -> table
+
+  -- 动画时间
+  tm:set_animation_time(t)
+  tm:get_animation_time() -> float
+
+  -- 序列化
+  local data = dse.tilemap.save(tm, "path/to/tileset.png")
+  -- data: 二进制字符串
+  dse.tilemap.save_to_file(filepath, tm, tileset_path)
+  local tm2 = dse.tilemap.load(data)  -- 从二进制字符串加载
+  local tm3 = dse.tilemap.load_from_file(filepath)
+```
+
+### A.2 GridPathfinding 对象（`dse.pathfinding.create()`）
+
+```lua
+API:
+  -- 创建寻路器
+  local pf = dse.pathfinding.create()
+
+  -- 从网格数据构建
+  pf:build_from_grid(width, height, cell_size, walkable_table)
+  -- walkable_table: {true, false, true, ...} true=可走, false=障碍
+
+  -- 从 Tilemap 数据构建
+  pf:build_from_tilemap(width, height, cell_size, tiles_table, blocked_ids_table)
+  -- tiles_table: {1, 0, 2, 3, ...} tile_id, 0=空/障碍
+  -- blocked_ids_table: 可选, {2, 5} 表示 tile_id 2和5也是障碍
+
+  -- 动态障碍
+  pf:set_blocked(x, y, true)      -- 设置障碍
+  pf:is_blocked(x, y)             -- 查询
+  pf:is_blocked_at(world_x, world_y)
+  pf:clear_blocks()               -- 清除所有障碍
+
+  -- 寻路
+  local path = pf:find_path(sx, sy, ex, ey [, opts])
+  -- opts: { mode=4|8, diagonal="no_corner"|"always"|"never" }
+  -- path: { {x=, y=}, {x=, y=}, ... } 世界坐标点列表
+  -- 返回 nil 表示无路径
+
+  -- 网格坐标寻路
+  local grid_path = pf:find_path_grid(sx, sy, ex, ey [, opts])
+  -- grid_path: { {x=, y=}, ... } 网格坐标点列表
+
+  -- 坐标转换
+  local gx, gy = pf:world_to_grid(world_x, world_y)
+  local wx, wy = pf:grid_to_world(gx, gy)
+
+  -- 查询
+  pf:is_ready()
+  pf:get_width()
+  pf:get_height()
+  pf:get_cell_size()
+```
+
+### A.3 Jiggle 多骨骼辅助 API（`ecs.jiggle_*`）
+
+> 与上面 18.50 节的组件字段（`get_jiggle_*` / `set_jiggle_*`）是两套 API：这一套用于给同一实体
+> 挂多根 jiggle 骨骼与碰撞球。签名取自 `engine/scripting/lua/bindings/lua_binding_ecs.cpp`。
+
+| 函数 | 参数 | 返回 | 说明 |
+|------|------|------|------|
+| `ecs.jiggle_add_component(e)` | entity | — | 添加 Jiggle 组件 |
+| `ecs.jiggle_remove_component(e)` | entity | — | 移除 Jiggle 组件 |
+| `ecs.jiggle_clear_bones(e)` | entity | — | 清空全部 jiggle 骨骼 |
+| `ecs.jiggle_clear_colliders(e)` | entity | — | 清空全部碰撞球 |
+| `ecs.jiggle_get_bone_count(e)` | entity | `int` | 骨骼数量 |
+| `ecs.jiggle_get_collider_count(e)` | entity | `int` | 碰撞球数量 |
+| `ecs.jiggle_add_bone(e, name [, stiffness, damping, gravity, bone_length])` | entity, string, float... | `index` | 添加一根骨骼，返回索引 |
+| `ecs.jiggle_set_bone_params(e, index [, stiffness, damping, gravity, bone_length])` | entity, int, float... | — | 改骨骼参数 |
+| `ecs.jiggle_set_bone_gravity_dir(e, index, x, y, z)` | entity, int, float, float, float | — | 改骨骼重力方向 |
+| `ecs.jiggle_add_collider(e, name, cx, cy, cz [, radius])` | entity, string, float... | `index` | 添加碰撞球，返回索引 |

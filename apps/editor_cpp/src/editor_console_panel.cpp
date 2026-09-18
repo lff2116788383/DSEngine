@@ -332,13 +332,17 @@ void DrawConsolePanelImpl() {
     ImGui::SameLine();
 
     auto toggle_button = [](const char* label, bool& enabled, const ImVec4& active_color) {
-        if (enabled) {
+        // Push/Pop 必须由**进入时**的状态决定：不能在中间改完 enabled 再用它判断 Pop，
+        // 否则点击就是「push 了不 pop」或「没 push 却 pop」——ImGui 样式色栈失衡，
+        // 实测点击 Console 的等级过滤按钮会让编辑器进程直接退出(exit=150)。
+        const bool pushed = enabled;
+        if (pushed) {
             ImGui::PushStyleColor(ImGuiCol_Button, active_color);
         }
         if (ImGui::Button(label)) {
             enabled = !enabled;
         }
-        if (enabled) {
+        if (pushed) {
             ImGui::PopStyleColor();
         }
         ImGui::SameLine();

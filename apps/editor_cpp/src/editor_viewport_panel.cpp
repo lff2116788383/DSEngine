@@ -933,23 +933,28 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             DrawSceneViewModeSelector();
             ImGui::SameLine();
 
+            // 与 Console 的 toggle_button 同一坑：Push/Pop 由进入时的状态决定，点击后不得再用
+            // 翻转过的值判断 Pop，否则 ImGui 样式色栈失衡（见 editor_console_panel.cpp 注释）。
             bool& phys_dbg = GetPhysicsDebugEnabled();
-            if (phys_dbg) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 0.8f));
+            const bool phys_pushed = phys_dbg;
+            if (phys_pushed) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 0.8f));
             if (ImGui::SmallButton("Phys")) phys_dbg = !phys_dbg;
-            if (phys_dbg) ImGui::PopStyleColor();
+            if (phys_pushed) ImGui::PopStyleColor();
             ImGui::SameLine();
 
             bool& col_edit = GetColliderEditEnabled();
-            if (col_edit) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.45f, 0.5f, 0.8f));
+            const bool col_pushed = col_edit;
+            if (col_pushed) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.45f, 0.5f, 0.8f));
             if (ImGui::SmallButton("ColEdit")) col_edit = !col_edit;
-            if (col_edit) ImGui::PopStyleColor();
+            if (col_pushed) ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Drag-edit selected collider size/offset"));
             ImGui::SameLine();
 
             bool& light_giz = GetLightingGizmosEnabled();
-            if (light_giz) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.4f, 0.0f, 0.8f));
+            const bool light_pushed = light_giz;
+            if (light_pushed) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.4f, 0.0f, 0.8f));
             if (ImGui::SmallButton("Light")) light_giz = !light_giz;
-            if (light_giz) ImGui::PopStyleColor();
+            if (light_pushed) ImGui::PopStyleColor();
 
             ImGui::PopStyleColor();
             ImGui::PopStyleVar(2);

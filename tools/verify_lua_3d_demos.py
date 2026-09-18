@@ -73,7 +73,6 @@ P3_3D_ENTRIES = [
 P4_3D_ENTRIES = [
     "3d_character_controller",
     "3d_physics_interaction",
-    "3d_vse15_22_scene",
 ]
 
 REQUIRED_LOG_TOKENS = {
@@ -252,41 +251,6 @@ REQUIRED_LOG_TOKENS = {
         "[3D][CharacterController]",
         "character_controller_api=true",
     ],
-    "3d_vse15_22_scene": [
-        "p4_vse15_22_scene",
-        "full_scene_replica=true",
-        "camera_replica",
-        "vse_camera_pos=(0,900,900)",
-        "ocean_plane_replica",
-        "vse_asset=NewOceanPlane.STMODEL",
-        "monster_replica index=1",
-        "monster_replica index=6",
-        "p4_character_setup",
-        "character_count=6",
-        "vse_positions=(-300,0,300)|(0,0,300)|(300,0,300)|(-300,0,-300)|(0,0,-300)|(300,0,-300)",
-        "vse_states=Idle,Walk,Attack,Attack2,Pos,AddtiveAnim",
-        "p4_animation_resource",
-        "cooked_fbx=true",
-        "mesh_path=vse_demo/15_22/cooked/Monster.dmesh",
-        "idle_danim=vse_demo/15_22/cooked/Monster.danim",
-        "walk_danim=vse_demo/15_22/cooked/Walk.danim",
-        "attack_danim=vse_demo/15_22/cooked/Attack.danim",
-        "attack2_danim=vse_demo/15_22/cooked/Attack2.danim",
-        "pos_danim=vse_demo/15_22/cooked/Monster.danim",
-        "additive_danim=vse_demo/15_22/cooked/Monster.danim",
-        "dskel=vse_demo/15_22/cooked/Monster.dskel",
-        "runtime_animation",
-        "final_bones=48",
-        "has_skeleton=true",
-        "runtime_environment",
-        "PointLight=true",
-        "OceanPlane=true",
-        "point_shadow=true",
-        "pbr_material=true",
-        "cooked_ocean=true",
-        "texture_bind_summary",
-        "loaded_slots=4",
-    ],
 }
 
 VISUAL_SUBJECT_CHECKS = {
@@ -297,21 +261,16 @@ VISUAL_SUBJECT_CHECKS = {
     "3d_metrics_debug": {"min_subject_ratio": 0.040, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
     "3d_physics_triggers": {"min_subject_ratio": 0.035, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
     "3d_audio_complete": {"min_subject_ratio": 0.035, "min_edge_ratio": 0.0010, "min_luma_std": 4.0},
-    "3d_vse15_22_scene": {"min_subject_ratio": 0.080, "min_edge_ratio": 0.0020, "min_luma_std": 8.0},
 }
 
-# 不进 `all` 预设的条目及原因（跑 `--include-excluded` 可强制包含；跳过时会打印 SKIP_EXCLUDED，
-# 不做静默跳过）。条目仍留在预设列表里，实现/修复落地后只需从本表删除即可恢复门禁。
-EXCLUDED_ENTRIES = {
-    # 实测（2026-09-17，本机 RTX 3070 / Debug）：该 demo 的 Lua 模块**从未提交**，
-    # 运行日志为 `[main] require('3d.3d_vse15_22_scene') failed: module ... not found` →
-    # `[main] 未知 demo: 3d_vse15_22_scene, fallback to phase1_2d_physics_showcase`，随后进程挂住。
-    # 它本是 docs/design/LUA_3D_DEMOS.md §15 的规划项（"新增 3d_vse15_22_scene"），
-    # 仓库里只有烘焙脚本 tools/cook_vse15_22_assets.bat，没有 demo 本体，故不该作为门禁项。
-    "3d_vse15_22_scene":
-        "Lua 模块未提交（仅规划项，仓库只有 tools/cook_vse15_22_assets.bat）；"
-        "加载失败后回落到 phase1_2d_physics_showcase 并挂住",
-}
+# 说明：3d_vse15_22_scene（旧引擎 VSE 15.22 场景复刻）已在 32d9ad44
+# 「samples/lua 清理: 移除非引擎功能验证demo + 3D分类索引」中有意删除；该提交同时清理了
+# config.lua/main.lua，但漏了本脚本 —— 于是留下一个永远无法满足的门禁项
+# （实测 require('3d.3d_vse15_22_scene') failed → 回落 phase1_2d_physics_showcase）。
+# 本脚本已同步删除该条目（预设 / 必填 token / 视觉阈值三者一起），不再需要跳过机制。
+# 复活方式（若产品上要重新纳入）：git checkout 1ca7a286 -- samples/lua/3d/3d_vse15_22_scene.lua，
+# 再把条目加回 P4_3D_ENTRIES 与 REQUIRED_LOG_TOKENS；data/vse_demo/15_22 的 cooked 资源、
+# README 与 tools/cook_vse15_22_assets.bat 都还在树内。
 
 ENTRY_PRESETS = {
     "basic": BASIC_3D_ENTRIES,
@@ -642,9 +601,6 @@ def run_entry(root: pathlib.Path, exe: pathlib.Path, config_path: pathlib.Path, 
         return 2
 
     max_rgb, avg_rgb = extract_render_readback_metrics(output)
-    if entry == "3d_vse15_22_scene" and (max_rgb is None or avg_rgb is None or max_rgb < 40 or avg_rgb < 18):
-        print(f"SCREENSHOT_TOO_DARK {entry}: max_rgb={max_rgb} avg_rgb={avg_rgb} min_max_rgb=40 min_avg_rgb=18", flush=True)
-        return 4
 
     # 截图黑屏/纯色检测（所有 demo 通用）
     screenshot_ok, screenshot_detail = check_screenshot_not_black(png_path)
@@ -691,8 +647,6 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=90, help="Timeout seconds per demo. Default: 90")
     parser.add_argument("--out-dir", default="tmp/lua_3d_verify", help="Output directory for screenshots/logs. Default: tmp/lua_3d_verify")
     parser.add_argument("--no-sync", action="store_true", help="Do not copy samples to bin/samples before running")
-    parser.add_argument("--include-excluded", action="store_true",
-                        help="强制包含 EXCLUDED_ENTRIES 里的条目（默认 all 预设跳过并打印 SKIP_EXCLUDED）")
     args = parser.parse_args()
 
     root = pathlib.Path.cwd()
@@ -721,12 +675,6 @@ def main() -> int:
 
     original_config = config_path.read_text(encoding="utf-8-sig")
     entries = expand_entries(args.entries)
-    # 排除项：默认跳过并打印原因（不静默跳过，避免把门禁做虚）。
-    if not args.include_excluded:
-        skipped = [e for e in entries if e in EXCLUDED_ENTRIES]
-        for e in skipped:
-            print(f"SKIP_EXCLUDED {e}: {EXCLUDED_ENTRIES[e]}；用 --include-excluded 强制运行", flush=True)
-        entries = [e for e in entries if e not in EXCLUDED_ENTRIES]
     print(f"EXE={exe}", flush=True)
     print(f"CONFIG={config_path}", flush=True)
     print(f"OUT_DIR={out_dir}", flush=True)

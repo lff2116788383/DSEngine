@@ -1106,6 +1106,12 @@ void EditorApp::Shutdown() {
     // 停止所有插件
     plugin_manager_.StopAll();
 
+    // 面板关闭钩子：必须在引擎服务与 ImGui 之前跑完。
+    // 之前这里只调了插件管理器的 ShutdownAll，面板注册表的 ShutdownAll 从未被调用，
+    // 于是 e.shutdown 全是死代码——Build Game 的后台构建线程因此保持 joinable，
+    // 静态析构时 std::thread::~thread 触发 std::terminate（实测 UI 测试退出码 150）。
+    dse::editor::PanelRegistry::Get().ShutdownAll();
+
     // 卸载 DLL 插件（EditorPluginManager 的 on_shutdown + 清理）
     dse::editor::EditorPluginManager::Instance().ShutdownAll();
 

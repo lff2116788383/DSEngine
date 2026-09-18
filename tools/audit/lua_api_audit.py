@@ -59,9 +59,22 @@ for m in re.finditer(r'([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_]+)\s*\(', doc):
 
 bound_names = set(bound.keys())
 
-undocumented = sorted(n for n in bound_names if n not in doc_tokens)
+# 元方法（__gc / __index / __eq …）是 Lua 语言级钩子，不是给用户调的 API，
+# 不要求出现在 API 文档里；否则清单里会长期挂着 __gc 这类噪声。
+def is_metamethod(name: str) -> bool:
+    return name.startswith("__")
+
+undocumented = sorted(n for n in bound_names if n not in doc_tokens and not is_metamethod(n))
 phantom = sorted(n for n in doc_call_names
                  if n not in bound_names and re.match(r'^[a-z]', n))
+
+# 「文档里有、绑定里没有」分两类，避免把正文/代码片段里的普通标识符也算成文档债：
+#   - actionable：名字成对出现在 markdown 表格行的反引号里（=真的写了一行 API 文档却没实现）
+#   - prose：只出现在正文/代码块里（多为示例里的变量名、参数名、已删除能力的叙述）
+table_rows = [l for l in doc.split("\n") if l.strip().startswith("|")]
+row_text = "\n".join(table_rows)
+phantom_actionable = [n for n in phantom if re.search(r"`" + re.escape(n) + r"`", row_text)]
+phantom_prose = [n for n in phantom if n not in phantom_actionable]
 
 print("== TOTAL bound function names:", len(bound_names))
 print("== TOTAL doc tokens:", len(doc_tokens))
@@ -70,8 +83,12 @@ print("== BOUND but NOT in doc (", len(undocumented), ") ==")
 for n in undocumented:
     print(f"  {n:40s} <- {sorted(bound[n])}")
 print()
-print("== In doc but NOT bound (possible phantom/stale) (", len(phantom), ") ==")
-for n in phantom:
+print("== In doc but NOT bound — 表格行条目（真过期，可执行） (", len(phantom_actionable), ") ==")
+for n in phantom_actionable:
+    print(f"  {n}")
+print()
+print("== In doc but NOT bound — 仅正文/代码片段（信息项，非文档债） (", len(phantom_prose), ") ==")
+for n in phantom_prose:
     print(f"  {n}")
 
 # dump full bound inventory per file

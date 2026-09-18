@@ -374,13 +374,17 @@ void DrawAnimationClipEditor(EditorContext& /*ctx*/) {
         ImGui::SetNextItemWidth(60);
         ImGui::SliderFloat("##wt", &layer.weight, 0.0f, 1.0f, "%.2f");
         ImGui::SameLine();
-        if (layer.muted) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 80, 80, 255));
+        // 与 Console 的 toggle_button 同一坑：Push/Pop 必须用进入时的状态判断，
+        // 否则点击「点一下翻转标记」的按钮会让 ImGui 样式色栈失衡（见 editor_console_panel.cpp 注释）。
+        const bool muted_pushed = layer.muted;
+        if (muted_pushed) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 80, 80, 255));
         if (ImGui::SmallButton(layer.muted ? "M" : "m")) layer.muted = !layer.muted;
-        if (layer.muted) ImGui::PopStyleColor();
+        if (muted_pushed) ImGui::PopStyleColor();
         ImGui::SameLine();
-        if (layer.solo) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(80, 200, 255, 255));
+        const bool solo_pushed = layer.solo;
+        if (solo_pushed) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(80, 200, 255, 255));
         if (ImGui::SmallButton(layer.solo ? "S" : "s")) layer.solo = !layer.solo;
-        if (layer.solo) ImGui::PopStyleColor();
+        if (solo_pushed) ImGui::PopStyleColor();
         ImGui::PopID();
     }
     ImGui::EndChild();
