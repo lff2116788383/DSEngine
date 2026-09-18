@@ -1,21 +1,21 @@
 path,type,source,author,license,generation_command,sha256
 games/wuxia_arpg/.gitignore,文档/仓库配置,仓库手写,DSEngine Authors,Apache-2.0,HAND,e42f5b3d286ee5c9747fdaeba4351308637c6aace64076840c32c372cc4bfbba
 games/wuxia_arpg/assets/actor/bandit_d_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,e8cdbb13ba401a7957f0103df6548d32ba58c1b6e7a143bfb0ed984521f0195b
-games/wuxia_arpg/assets/actor/bandit_d_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,b5ee8b4acd747af433d8e101ffc74371b7f5dcaa63a862b23384cadcf4c9eb50
+games/wuxia_arpg/assets/actor/bandit_d_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,d0540cf53ed8198e84efcce8dd1e5c660837aa6e6f9a02036709a8fb3a730262
 games/wuxia_arpg/assets/actor/bandit_l_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,5677b5ccf7716333dce5ed9861dcf869b6019330fcd903faa61b65a1cdc21112
-games/wuxia_arpg/assets/actor/bandit_l_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,b553bbe6f81a23db3a24057e8f8df00aed8716948501d05d16e09146c67d9a27
+games/wuxia_arpg/assets/actor/bandit_l_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,7b7ee4fc23126bd1eb1aff6ea9a2005c37e86caa673a59dea45aa54425e90ef6
 games/wuxia_arpg/assets/actor/bandit_r_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,67e71d134e8ca457fe9518dfc420c632dc3926920f24bf307e732103fc66a694
-games/wuxia_arpg/assets/actor/bandit_r_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,3849be1700d1bb4dc6c20376efaf717eab5fbd14ec261962241608af1ffa34f0
+games/wuxia_arpg/assets/actor/bandit_r_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,7fdabdbaf506edc7acfd7c9d01138595a07f9f8a758afbc2d3eadbb1902a532b
 games/wuxia_arpg/assets/actor/bandit_u_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,7b1136cc8da277a1362a50615c3589a061c7976f629dc5f18b754f8783ba9c5e
-games/wuxia_arpg/assets/actor/bandit_u_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,facf11cc69b118180f673155ff3ff53f7b5ab0a9dd139c7001feb38c0130d598
+games/wuxia_arpg/assets/actor/bandit_u_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,4e3e91d25266552792f28045809091d7793dad17c995a6ca0efe01472432bc6f
 games/wuxia_arpg/assets/actor/hero_d_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,9e69fd523cff08995ef310f0a1be690690df8350396ef7bcfe3a536b3b6df320
-games/wuxia_arpg/assets/actor/hero_d_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,4dda68b4737a6fe306fd078f11eaa48f6edb63b69dcdd2443a809617a36e5485
+games/wuxia_arpg/assets/actor/hero_d_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,bf5f463ea5f5f992ca63ca5d70f949aa0dfe20550c30c47f79b2952623a436d8
 games/wuxia_arpg/assets/actor/hero_l_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,0bbf35fd43a1ed9619226d529aaa56c45e4b3cc7995bde18b449c9703afbb730
-games/wuxia_arpg/assets/actor/hero_l_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,09ca1a64764c22b0bf25d14ca72d8954f35c9c15fbc8c9ded13fc44d4601aade
+games/wuxia_arpg/assets/actor/hero_l_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,bd8f6eb9741a8352aa366be0eb4401fc41bf035f619bc873a5ac82e2c94252c6
 games/wuxia_arpg/assets/actor/hero_r_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,aee3270a33c306c47ed40ee845c53f94b2c4497787edfb0404734afa6f0de174
-games/wuxia_arpg/assets/actor/hero_r_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,33a1a95509055139e35ed9d2aa827bf8f8a9373aef5567927882927674add0e4
+games/wuxia_arpg/assets/actor/hero_r_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,b35cccee02e8580807429eb8fa5796044cf53d0fda782634b18fb00cdd612c6e
 games/wuxia_arpg/assets/actor/hero_u_atlas.dsprite.json,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,d10f9bb9f92afb41e040132d3116a49972b0f55edb2dafb47e4e663495d1217d
-games/wuxia_arpg/assets/actor/hero_u_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,61d6e7eb0574a49a6c1b2917832cfde80b6e4cf10220e931adf626cdb2f06864
+games/wuxia_arpg/assets/actor/hero_u_atlas.png,新生成角色图集,gen_assets.py,DSEngine Authors,Apache-2.0,G1,ac1d6bc6d86d3f98a18029cdcdbbde99e2ed3791647831c5c9e553936e3deb80
 games/wuxia_arpg/assets/audio/bgm_loop.wav,新生成音频,gen_assets.py,DSEngine Authors,Apache-2.0,G1,11f75b7b2692a4d49929703594abab2740610f2d9e9185e55de05b45b2aea033
 games/wuxia_arpg/assets/audio/sfx_click.wav,新生成音频,gen_assets.py,DSEngine Authors,Apache-2.0,G1,eeb06a1e3002fa069e8db8753331ef4fae7dd588a75d1711896a022baff48f7a
 games/wuxia_arpg/assets/audio/sfx_hit.wav,新生成音频,gen_assets.py,DSEngine Authors,Apache-2.0,G1,849090dd5ed7a3410ec96f25a83304865925c05bd13592a53a72f33258935d52
@@ -43,6 +43,6 @@ games/wuxia_arpg/scripts/rng.lua,新游戏 Lua 源码,仓库手写,DSEngine Auth
 games/wuxia_arpg/scripts/save.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,422106d5f1353f95103c2ebce40fe9cb79039920f5d3efdbc71b5c96621a57ce
 games/wuxia_arpg/scripts/terrain.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,e3fc77373a407694161e94eea15579851ceb9e941f75d28913dac2b0168a91ba
 games/wuxia_arpg/scripts/ui.lua,新游戏 Lua 源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,165fed04e30b94d3601f4aa940892748cfaf01b00fce405f997952698a8b9408
-games/wuxia_arpg/tools/gen_assets.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,0ad23498780c298bc9c54f7dda0cd2e4e52d1ab95dd2556254ff5a0a0750ba1a
+games/wuxia_arpg/tools/gen_assets.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,b45b5e57aa61eabc4466d5d31c3482bcd8e46149eff314b13cdc409eb98e8b60
 games/wuxia_arpg/tools/pixel_stats.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,70f84e1b2080e067c0af3e0140df9f345d281e59f0421dba859b3531e998c0e7
 games/wuxia_arpg/tools/run_r3_acceptance.py,生成/验收工具源码,仓库手写,DSEngine Authors,Apache-2.0,HAND,999db8aac5ea25a3a3a771beacf0509e3f4b0da609408576d99c0bbf528bcdac

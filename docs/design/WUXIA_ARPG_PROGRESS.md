@@ -329,9 +329,9 @@ python games\wuxia_arpg\tools\run_r3_acceptance.py --backends d3d11 --out-dir tm
 
 | 后端 | lit-on mean_luma | lit-off mean_luma | delta | 游戏截图 mean_luma | 结论 |
 |---|---:|---:|---:|---:|---|
-| OpenGL | 68.24 | 8.11 | 60.13 | 72.94 | 已通过 |
-| Vulkan | 68.10 | 7.63 | 60.47 | 72.69 | 已通过 |
-| D3D11 | 68.16 | 8.11 | 60.05 | 72.94 | 已通过 |
+| OpenGL | 68.13 | 7.80 | 60.33 | 72.88 | 已通过 |
+| Vulkan | 67.99 | 7.37 | 60.62 | 72.63 | 已通过 |
+| D3D11 | 67.80 | 7.80 | 60.00 | 72.87 | 已通过 |
 
 游戏演示自动完成并输出以下真实标记：
 - `[wuxia] map=qingxi_village`
@@ -344,7 +344,14 @@ python games\wuxia_arpg\tools\run_r3_acceptance.py --backends d3d11 --out-dir tm
 - 日志：`tmp/r3_new_opengl.log`、`tmp/r3_new_vulkan.log`、`tmp/r3_new_d3d11.log`
 - 截图：`tmp/r3_new_game/r3_game_{opengl,vulkan,d3d11}.png`（tmp 被忽略，数值已写入本文件）
 
-### 5.6 R3 门禁结论
+### 5.6 侧身造型修复
+
+- 用户反馈：人物侧身造型看起来像三个。
+- 根因：`games/wuxia_arpg/tools/gen_assets.py` 早期侧身帧复用了正面躯干，剑刃从身体正中穿过、双腿分离，导致视觉上出现多个竖直人形轮廓。
+- 修复：重写 `human()` 的侧身绘制，改为更窄的侧向躯干、单侧持剑/持械、连续衣摆和单腿/前后脚轮廓；重新生成全部 actor 图集。
+- 复验：三个后端重新执行 `run_r3_acceptance.py`，均 `new-game acceptance PASS`；受光 luma delta 仍约 60。
+- 新生成器与资产仍在 `games/wuxia_arpg/`，未使用模板素材。
+### 5.7 R3 门禁结论
 
 | 门禁 | 结论 | 说明 |
 |---|---|---|
